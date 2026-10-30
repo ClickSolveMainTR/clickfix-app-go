@@ -174,6 +174,25 @@ func TestCheckoutAndConfirm(t *testing.T) {
 	}
 }
 
+// iyzico answers amounts with eight decimals but signs them as JavaScript
+// prints them (shape of a real sandbox checkout form retrieve).
+func TestConfirmVerifiesEightDecimalAmounts(t *testing.T) {
+	ref := "d4e5b87d428545e3c950e53dd45cafa6"
+	p := fake(t, func(string, map[string]any) (int, any) {
+		return 200, map[string]any{
+			"status": "success", "paymentStatus": "SUCCESS", "paymentId": "38584245", "phase": "AUTH",
+			"price": json.Number("3600.00000000"), "paidPrice": json.Number("3600.00000000"), "currency": "TRY",
+			"basketId": ref, "conversationId": ref, "token": "tok-1", "fraudStatus": 1,
+			"iyziCommissionRateAmount": json.Number("125.64000000"), "merchantCommissionRate": json.Number("0E-8"),
+			"signature": iyzico.ResponseSignature(secret, "SUCCESS", "38584245", "TRY", ref, ref, "3600", "3600", "tok-1"),
+		}
+	})
+	n, err := p.Confirm(context.Background(), account(), ref, "tok-1")
+	if err != nil || n.Status != payments.StatusSucceeded || money.New(n.Amount).String() != "3600.00" || money.New(n.PaidAmount).String() != "3600.00" {
+		t.Fatalf("%+v %v", n, err)
+	}
+}
+
 func TestWebhookIsOnlyAReference(t *testing.T) {
 	p := iyzico.New("http://unused", nil)
 	n, err := p.ParseNotification(nil, []byte(`{"paymentConversationId":"abc123","token":"tok-1","status":"SUCCESS","iyziEventType":"CHECKOUT_FORM_AUTH","merchantId":1}`))
