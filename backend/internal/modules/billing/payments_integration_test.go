@@ -584,6 +584,44 @@ func TestReconciliationMismatchReportsOnceWithoutSettling(t *testing.T) {
 	})
 }
 
+type unverifiedGateway struct{ *payments.Fake }
+
+func (*unverifiedGateway) Confirm(context.Context, payments.Account, string, string) (payments.Notification, error) {
+	return payments.Notification{}, payments.ErrInvalidSignature
+}
+
+// A stale page whose answer never verifies is reported once and stays
+// pending instead of failing every provider sync.
+func TestStaleUnverifiedCheckoutReportsOnceWithoutFailingSync(t *testing.T) {
+	f := fixture(t)
+	g := &unverifiedGateway{payments.NewFake("https://example.test")}
+	configureGateway(t, f, g)
+	invoice := invoiceFixture(t, f, "open", f.sub.PeriodEnd)
+	_, err := f.svc.Checkout(f.ctx, f.org, usecase.CheckoutInput{InvoiceUUID: invoice.Uuid, Provider: "fake", IdempotencyKey: "unverified"}, payments.Buyer{Name: "Buyer", Email: "buyer@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.pool.Exec(f.ctx, "UPDATE billing_payments SET created_at=now()-interval '2 hours' WHERE organization_id=$1", f.org); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err = f.svc.ReconcilePending(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var reports int
+	var status string
+	if err = f.pool.QueryRow(f.ctx, "SELECT (SELECT count(*) FROM billing_reconciliation_mismatches WHERE organization_id=$1 AND reason='provider_signature_invalid'),status FROM billing_payments WHERE organization_id=$1", f.org).Scan(&reports, &status); err != nil {
+		t.Fatal(err)
+	}
+	if reports != 1 || status != "pending" {
+		t.Fatalf("reports=%d status=%s", reports, status)
+	}
+	t.Cleanup(func() {
+		_, _ = f.pool.Exec(f.ctx, "UPDATE billing_payments SET status='failed',failure_code='fixture_cleanup',completed_at=now() WHERE organization_id=$1", f.org)
+	})
+}
+
 func TestMissingTrialInvoiceDoesNotBlockOtherLifecycleDeadlines(t *testing.T) {
 	f := fixture(t)
 	g := &renewalGateway{Fake: payments.NewFake("https://example.test")}
