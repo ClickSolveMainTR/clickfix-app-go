@@ -63,13 +63,16 @@ func (p *Provider) InitThreeDS(ctx context.Context, a payments.Account, in payme
 }
 
 // numberForms ports Rentopia's normalization of signed decimal amounts.
+// iyzico answers amounts with eight decimals (3600.00000000) but signs them
+// as JavaScript prints them (3600), so the shortest form comes first and the
+// money forms derive from it; the raw text is kept as a fallback.
 func numberForms(v any) []string {
-	raw := jsText(v)
-	if n, ok := v.(json.Number); ok {
-		raw = n.String()
+	short := jsText(v)
+	out := []string{short}
+	if n, ok := v.(json.Number); ok && n.String() != short {
+		out = append(out, n.String())
 	}
-	out := []string{raw}
-	m, err := money.Parse(raw)
+	m, err := money.Parse(short)
 	if err != nil {
 		return out
 	}
