@@ -466,14 +466,25 @@ func (p *Provider) Confirm(ctx context.Context, account payments.Account, orderR
 	}
 	// Only an answer about our reference counts (a token of another
 	// payment sent to this one's return address is refused).
-	if out.BasketID != "" && out.BasketID != orderRef || out.Status == "success" && out.BasketID == "" {
+	if out.BasketID != "" && out.BasketID != orderRef {
 		return payments.Notification{}, payments.ErrInvalidSignature
 	}
-	// A successful payment is only believed with iyzico's response signature
-	// (HMAC-SHA256 over paymentStatus, paymentId, currency, basketId,
-	// conversationId, paidPrice, price, token): it is what credits an account.
-	if out.Status == "success" && (out.Signature != "" || out.PaymentStatus == "SUCCESS") && !validPaymentSignature(account.Credentials["secret_key"], out, true) {
-		return payments.Notification{}, payments.ErrInvalidSignature
+	if out.Status == "success" {
+		// A successful payment is only believed with our basket and iyzico's
+		// response signature (HMAC-SHA256 over paymentStatus, paymentId,
+		// currency, basketId, conversationId, paidPrice, price, token): it is
+		// what credits an account.
+		if out.PaymentStatus == "SUCCESS" {
+			if out.BasketID == "" || !validPaymentSignature(account.Credentials["secret_key"], out, true) {
+				return payments.Notification{}, payments.ErrInvalidSignature
+			}
+		} else if out.BasketID == "" || out.Signature != "" && !validPaymentSignature(account.Credentials["secret_key"], out, true) {
+			// An unfinished or abandoned form answers without our basket (or
+			// with a result that does not verify): no result yet. Pending
+			// neither credits nor fails a payment, and lets a stale checkout
+			// expire.
+			return payments.Notification{OrderRef: orderRef, Token: token, Status: payments.StatusPending, Test: account.Mode != "live"}, nil
+		}
 	}
 
 	return notification(account, orderRef, out)
