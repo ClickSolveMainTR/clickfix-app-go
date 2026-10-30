@@ -360,7 +360,7 @@ var localePattern = regexp.MustCompile(`^[a-z]{2}(-[A-Z]{2})?$`)
 
 func (s *Service) Copilot(ctx context.Context, org, actor int64, id uuid.UUID, in model.CopilotInput) (core.RunResult, error) {
 	instruction, ok := map[string]string{
-		"suggest_reply": "Draft a reply grounded in public knowledge, include source chunk IDs. Do not send anything.",
+		"suggest_reply": "Draft a reply grounded in public knowledge. Do not send anything.",
 		"summarize":     "Summarize the support conversation and pending commitments.",
 		"rewrite":       "Rewrite the agent draft clearly without changing facts or commitments.",
 		"translate":     "Translate the agent draft faithfully into the requested locale.",
@@ -409,7 +409,20 @@ func (s *Service) Copilot(ctx context.Context, org, actor int64, id uuid.UUID, i
 	if strings.HasPrefix(in.Locale, "en") {
 		locale = "en"
 	}
-	return s.Engine.RunAgent(ctx, org, actor, coremodel.RunInput{Task: "reply", Input: input, Locale: locale, Retrieve: in.Operation == "suggest_reply" || in.Operation == "ask", MaxTokens: 2048}, core.AgentOptions{Purpose: "copilot", ConversationID: conv.ID, Instructions: instruction + " Output language: " + in.Locale + ". Return suggestions only; never execute or claim to execute actions."})
+	result, err := s.Engine.RunAgent(ctx, org, actor, coremodel.RunInput{Task: "reply", Input: input, Locale: locale, Retrieve: in.Operation == "suggest_reply" || in.Operation == "ask", MaxTokens: 2048}, core.AgentOptions{Purpose: "copilot", ConversationID: conv.ID, Schema: copilotSchema,
+		Instructions: instruction + " Output language: " + in.Locale + ". Return suggestions only; never execute or claim to execute actions. " + copilotOutputRule})
+	if err != nil {
+		return result, err
+	}
+	// The composer inserts text as is, so only the schema's text field leaves here.
+	var answer struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal([]byte(result.Text), &answer) != nil || strings.TrimSpace(answer.Text) == "" {
+		return result, ai.ErrInvalidOutput
+	}
+	result.Text = strings.TrimSpace(answer.Text)
+	return result, nil
 }
 
 // An AI resolution is counted once per conversation, only after resolution and

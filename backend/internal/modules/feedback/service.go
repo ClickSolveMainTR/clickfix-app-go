@@ -158,6 +158,12 @@ type Suggestion struct {
 	IsRequest bool       `json:"is_request"`
 }
 
+// suggestionSchema makes the provider return the suggestion itself (no prose).
+var suggestionSchema = map[string]any{"type": "object", "additionalProperties": false, "required": []string{"is_request", "title", "body", "existing_uuid"}, "properties": map[string]any{
+	"is_request": map[string]any{"type": "boolean"}, "title": map[string]any{"type": "string", "maxLength": 200}, "body": map[string]any{"type": "string", "maxLength": 16000},
+	"existing_uuid": map[string]any{"anyOf": []any{map[string]any{"type": "string", "format": "uuid"}, map[string]any{"type": "null"}}},
+}}
+
 func (s *Service) Extract(ctx context.Context, org, actor int64, conversation uuid.UUID) (Suggestion, error) {
 	var out Suggestion
 	if s.AI == nil {
@@ -176,7 +182,7 @@ func (s *Service) Extract(ctx context.Context, org, actor int64, conversation uu
 		candidates = append(candidates, map[string]any{"uuid": e.Uuid, "title": e.Title})
 	}
 	b, _ := json.Marshal(candidates)
-	result, err := s.AI.RunAgent(ctx, org, actor, aimodel.RunInput{Task: "triage", Input: text + "\nExisting requests:\n" + string(b), MaxTokens: 1024}, aiusecase.AgentOptions{Instructions: "Identify a product feature request. Return JSON {is_request:boolean,title:string,body:string,existing_uuid:UUID|null}. Suggest only; do not perform actions. Do not include customer personal data in title or body."})
+	result, err := s.AI.RunAgent(ctx, org, actor, aimodel.RunInput{Task: "triage", Input: text + "\nExisting requests:\n" + string(b), MaxTokens: 1024}, aiusecase.AgentOptions{Instructions: "Identify a product feature request. Return JSON {is_request:boolean,title:string,body:string,existing_uuid:UUID|null}. Suggest only; do not perform actions. Do not include customer personal data in title or body.", Schema: suggestionSchema})
 	if err != nil {
 		return out, err
 	}
