@@ -91,7 +91,9 @@ func TestMeteringDeliveryAndPeriodClose(t *testing.T) {
 		t.Fatalf("daily %+v %v", daily, err)
 	}
 	// Source event from a past month is aggregated by occurrence, not ingestion.
-	past := time.Now().AddDate(0, -1, 0)
+	// Mid-month of the previous month: AddDate(0, -1, 0) on the 31st normalizes back into this month.
+	now := time.Now().UTC()
+	past := time.Date(now.Year(), now.Month()-1, 15, 12, 0, 0, 0, time.UTC)
 	_, err = f.ent.ConsumeAt(f.ctx, f.org, "sms", 2, "past-event", past)
 	if err != nil {
 		t.Fatal(err)

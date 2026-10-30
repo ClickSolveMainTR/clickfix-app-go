@@ -132,6 +132,27 @@ func TestCheckoutAndConfirm(t *testing.T) {
 	if _, err := p.Confirm(ctx, account(), ref, "tok-1"); !errors.Is(err, payments.ErrInvalidSignature) {
 		t.Fatalf("other basket: %v", err)
 	}
+	// A success without our basket is refused.
+	answer = signed(map[string]any{
+		"status": "success", "paymentStatus": "SUCCESS", "paymentId": "22416035", "price": 1250.5, "paidPrice": 1250.5,
+		"currency": "TRY", "conversationId": ref, "token": "tok-1",
+	})
+	if _, err := p.Confirm(ctx, account(), ref, "tok-1"); !errors.Is(err, payments.ErrInvalidSignature) {
+		t.Fatalf("success without basket: %v", err)
+	}
+	// An abandoned form (no basket, no payment result): pending, not an error.
+	answer = map[string]any{"status": "success", "token": "tok-1", "callbackUrl": "https://takwim.link/pay/return/iyzico/" + ref, "conversationId": ref}
+	if n, err := p.Confirm(ctx, account(), ref, "tok-1"); err != nil || n.Status != payments.StatusPending || n.OrderRef != ref {
+		t.Fatalf("abandoned: %+v %v", n, err)
+	}
+	// A failure that does not verify is not believed: pending.
+	answer = map[string]any{
+		"status": "success", "paymentStatus": "FAILURE", "price": 1250.5, "paidPrice": 1250.5, "currency": "TRY",
+		"basketId": ref, "conversationId": ref, "token": "tok-1", "signature": "00",
+	}
+	if n, err := p.Confirm(ctx, account(), ref, "tok-1"); err != nil || n.Status != payments.StatusPending {
+		t.Fatalf("unverified failure: %+v %v", n, err)
+	}
 	// 3-D Secure still open: pending.
 	answer = signed(map[string]any{
 		"status": "success", "paymentStatus": "INIT_THREEDS", "paymentId": "22416035", "price": 1250.5, "paidPrice": 1250.5,

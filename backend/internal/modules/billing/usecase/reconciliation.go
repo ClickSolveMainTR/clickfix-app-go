@@ -110,6 +110,11 @@ func (s *Service) reconcilePayment(ctx context.Context, p db.BillingPayment, run
 		if stale && errors.As(err, &refusal) && !refusal.Temporary {
 			return s.expireCheckout(ctx, p, "checkout_abandoned")
 		}
+		// A stale page whose answer does not verify is neither settled nor
+		// expired: it is reported once for review instead of failing every sweep.
+		if stale && errors.Is(err, payments.ErrInvalidSignature) {
+			return s.mismatch(ctx, p, runID, "provider_signature_invalid")
+		}
 		return err
 	}
 	if n.Status == payments.StatusPending && stale {
