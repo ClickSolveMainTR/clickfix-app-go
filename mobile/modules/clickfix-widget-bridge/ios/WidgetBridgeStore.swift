@@ -11,7 +11,7 @@ enum WidgetBridgeStore {
     static let presenceOverrideKey = "clickfix.widget.presenceOverride"
     static let pendingRouteKey = "clickfix.widget.pendingRoute"
 
-    static let keychainService = "com.clickfix.widget"
+    static let keychainService = "com.getclickfix.widget"
     static let keychainAccount = "credential"
 
     // MARK: Identifiers
