@@ -282,9 +282,9 @@ func TestCopilotOperationAndOrganizationScope(t *testing.T) {
 	engine, fake, org, actor := agentCoreFixture(t)
 	c, _ := conversationFixture(t, engine, org)
 	svc := New(&repository.Store{Repository: engine.Repo.Billing}, engine, nil)
-	fake.response = "Short customer summary"
+	fake.response = `{"text":"Short customer summary"}`
 	result, err := svc.Copilot(context.Background(), org, actor, c.Uuid, model.CopilotInput{Operation: "summarize", Locale: "en"})
-	if err != nil || result.Credits != 1 {
+	if err != nil || result.Credits != 1 || result.Text != "Short customer summary" {
 		t.Fatalf("result=%+v %v", result, err)
 	}
 	if _, err = svc.Copilot(context.Background(), org+100000, actor, c.Uuid, model.CopilotInput{Operation: "summarize"}); err == nil {

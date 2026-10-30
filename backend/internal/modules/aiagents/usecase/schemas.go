@@ -36,3 +36,9 @@ var replySchema = objectSchema(map[string]any{
 	"handoff":      map[string]any{"type": "boolean"},
 	"citation_ids": map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "string", "format": "uuid"}},
 })
+
+// copilotSchema keeps the composer's text free of headings, quotes and notes
+// addressed to the agent: drafts are inserted into the reply box verbatim.
+var copilotSchema = objectSchema(map[string]any{"text": textSchema(8000)})
+
+const copilotOutputRule = `Put the result in "text". For draft operations (suggest_reply, rewrite, translate, tone, shorten, expand) "text" is ONLY the message to the customer, ready to send: no title, no label such as "Draft", no quote marks or ">" prefix, no notes to the agent, never mention knowledge sources, chunks or IDs. For summarize, next_action and ask, "text" is the answer to the agent in short plain paragraphs or "-" lists.`

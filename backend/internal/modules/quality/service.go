@@ -36,6 +36,14 @@ type Score struct {
 	Value     int    `json:"value"`
 	Rationale string `json:"rationale"`
 }
+
+// scoresSchema makes the provider return the score list itself (no prose).
+var scoresSchema = map[string]any{"type": "object", "additionalProperties": false, "required": []string{"scores"}, "properties": map[string]any{
+	"scores": map[string]any{"type": "array", "items": map[string]any{"type": "object", "additionalProperties": false, "required": []string{"key", "value", "rationale"}, "properties": map[string]any{
+		"key": map[string]any{"type": "string"}, "value": map[string]any{"type": "integer", "minimum": 0, "maximum": 100}, "rationale": map[string]any{"type": "string", "maxLength": 2000},
+	}}},
+}}
+
 type CardInput struct {
 	Name      string      `json:"name"`
 	Criteria  []Criterion `json:"criteria"`
@@ -148,7 +156,7 @@ func (s *Service) review(ctx context.Context, org, actor int64, in ReviewInput, 
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
-		result, e := s.AI.RunAgent(ctx, org, actor, aimodel.RunInput{Task: "complex", Input: text, MaxTokens: 4096}, aiusecase.AgentOptions{Instructions: "Score this resolved conversation, whether handled by a human or AI agent, against this rubric: " + string(card.Criteria) + ". Return JSON {scores:[{key:string,value:integer 0..100,rationale:string}]}. Include each criterion exactly once with evidence. A critical failure receives zero."})
+		result, e := s.AI.RunAgent(ctx, org, actor, aimodel.RunInput{Task: "complex", Input: text, MaxTokens: 4096}, aiusecase.AgentOptions{Instructions: "Score this resolved conversation, whether handled by a human or AI agent, against this rubric: " + string(card.Criteria) + ". Return JSON {scores:[{key:string,value:integer 0..100,rationale:string}]}. Include each criterion exactly once with evidence. A critical failure receives zero.", Schema: scoresSchema})
 		if e != nil {
 			return out, e
 		}
