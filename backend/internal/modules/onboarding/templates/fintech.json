@@ -1,0 +1,112 @@
+{
+  "key": "fintech",
+  "version": 1,
+  "icon": "landmark",
+  "accent": "#047857",
+  "order": 50,
+  "name": { "tr": "Finans / fintech", "en": "Finance / fintech" },
+  "description": {
+    "tr": "Ödeme, cüzdan ve finans uygulamaları için: işlem itirazları, kimlik doğrulama, dolandırıcılık şüphesi ve sıkı güvenlik kuralları.",
+    "en": "For payment, wallet and finance apps: transaction disputes, KYC, fraud suspicions and strict security rules."
+  },
+  "highlights": [
+    { "tr": "Dolandırıcılık için acil yönlendirme", "en": "Urgent routing for fraud" },
+    { "tr": "İşlem numarası alanı", "en": "Transaction ID field" },
+    { "tr": "Sıkı AI güvenlik kuralları", "en": "Strict AI guardrails" }
+  ],
+  "industries": ["fintech", "finans", "finance", "ödeme", "payment", "banka", "cüzdan", "sigorta"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "fintech", "locale": "tr", "languages": ["tr", "en"], "tone": "formal" },
+    "branding": { "primary_color": "#047857" },
+    "teams": [
+      { "key": "musteri-destek", "name": "Müşteri Destek", "description": "Hesap ve işlem soruları", "color": "#047857", "skills": ["hesap"] },
+      { "key": "risk-ve-guvenlik", "name": "Risk ve Güvenlik", "description": "Dolandırıcılık ve şüpheli işlemler", "color": "#dc2626", "skills": ["dolandırıcılık"] },
+      { "key": "kyc", "name": "Kimlik Doğrulama", "description": "KYC ve belge kontrolleri", "color": "#2563eb", "skills": ["kyc"] }
+    ],
+    "tags": [
+      { "name": "işlem-itirazı", "color": "#ea580c" },
+      { "name": "dolandırıcılık-şüphesi", "color": "#dc2626" },
+      { "name": "kyc", "color": "#2563eb" },
+      { "name": "kart", "color": "#7c3aed" },
+      { "name": "para-transferi", "color": "#0f766e" },
+      { "name": "hesap-kilidi", "color": "#ca8a04" }
+    ],
+    "statuses": [
+      { "name": "Belge bekleniyor", "slug": "belge-bekleniyor", "category": "pending", "color": "#2563eb" },
+      { "name": "İnceleme altında", "slug": "inceleme-altinda", "category": "pending", "color": "#ea580c" }
+    ],
+    "business_hours": {
+      "name": "Destek saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "08:00", "close": "22:00" }, { "day": "tue", "open": "08:00", "close": "22:00" },
+        { "day": "wed", "open": "08:00", "close": "22:00" }, { "day": "thu", "open": "08:00", "close": "22:00" },
+        { "day": "fri", "open": "08:00", "close": "22:00" }, { "day": "sat", "open": "09:00", "close": "18:00" }, { "day": "sun", "open": "09:00", "close": "18:00" }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Güvenlik olayları", "description": "Dolandırıcılık ve hesap ele geçirme", "priorities": ["urgent"],
+        "targets": [ { "priority": "urgent", "first_response_minutes": 10, "next_response_minutes": 30, "resolution_minutes": 120 } ] },
+      { "name": "Standart finans desteği", "description": "Diğer talepler",
+        "targets": [
+          { "priority": "high", "first_response_minutes": 60, "resolution_minutes": 480 },
+          { "priority": "normal", "first_response_minutes": 180, "resolution_minutes": 1440 },
+          { "priority": "low", "first_response_minutes": 480, "resolution_minutes": 2880 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Güvenlik uyarısı", "shortcut": "guvenlik", "category": "Güvenlik", "content": "Güvenliğiniz için şifrenizi, kart bilgilerinizi veya SMS doğrulama kodunuzu hiç kimseyle paylaşmayın; ekibimiz bunları asla istemez." },
+      { "title": "İtiraz alındı", "shortcut": "itiraz", "category": "İşlem", "content": "İşlem itirazınızı aldık. İnceleme süreci en fazla 10 iş günü sürer; sonucu size bildireceğiz." },
+      { "title": "Belge iste", "shortcut": "belge", "category": "KYC", "content": "Kimlik doğrulamanızı tamamlamak için uygulama içindeki Belgeler ekranından kimliğinizin ön ve arka yüzünü yükleyebilirsiniz." },
+      { "title": "Kart bloke", "shortcut": "kart_bloke", "category": "Kart", "content": "Kartınızı güvenlik için geçici olarak bloke ettik. Yeni kart talebiniz uygulama içinden oluşturulabilir." }
+    ],
+    "macros": [
+      { "name": "Dolandırıcılık şüphesi", "description": "Acil öncelik, etiket ve güvenlik uyarısı",
+        "actions": [ { "type": "priority", "value": "urgent" }, { "type": "tag", "value": "dolandırıcılık-şüphesi" }, { "type": "reply", "value": "Bildiriminiz için teşekkürler. Hesabınızı korumak için risk ekibimiz hemen inceleme başlattı." } ] },
+      { "name": "Belge iste ve beklet", "description": "KYC belgesi ister",
+        "actions": [ { "type": "tag", "value": "kyc" }, { "type": "reply", "value": "Doğrulamayı tamamlamak için kimlik belgenizi uygulama üzerinden yükleyebilir misiniz?" }, { "type": "status", "value": "pending" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "islem_no", "label": "İşlem numarası", "type": "text" },
+      { "entity": "conversation", "key": "tutar", "label": "Tutar", "type": "number" },
+      { "entity": "contact", "key": "kyc_durumu", "label": "KYC durumu", "type": "select", "options": ["Bekliyor", "Onaylı", "Reddedildi"] }
+    ],
+    "forms": [
+      { "name": "İşlem itirazı", "description": "Hatalı veya tanınmayan işlemler",
+        "fields": [ { "field": "email", "label": "E-posta", "required": true }, { "field": "custom:islem_no", "label": "İşlem numarası", "required": true },
+          { "field": "custom:tutar", "label": "Tutar", "required": false }, { "field": "message", "label": "Açıklama", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "guvenlik", "name": "Güvenlik", "articles": [
+        { "slug": "supheli-islem", "title": "Tanımadığım bir işlem görüyorum", "public": true,
+          "body": "1. Uygulamadan kartınızı hemen geçici olarak kapatın.\n2. İşlemi **İşlemler** ekranından seçip *İtiraz et*'e dokunun.\n3. Ekibimiz itirazınızı en geç 10 iş günü içinde sonuçlandırır." },
+        { "slug": "dolandiricilik", "title": "Dolandırıcılıktan nasıl korunurum?", "public": true,
+          "body": "Ekibimiz sizden **asla** şifre, kart numarası veya SMS kodu istemez. Böyle bir talep alırsanız bize hemen bildirin." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Size nasıl yardımcı olabiliriz?", "greeting_text": "Güvenliğiniz için şifre veya kart bilgisi paylaşmayın.", "color": "#047857" },
+    "ai_agent": {
+      "persona": "Finansal hizmetler şirketinin dikkatli ve güven veren destek asistanısın. Kuralları net anlatır, şüpheli durumlarda hemen uzmana devredersin.",
+      "tone": "Resmi, sakin ve güven verici. 'Siz' hitabı.",
+      "guardrails": [
+        "Asla şifre, kart numarası, CVV veya SMS kodu isteme.",
+        "İşlem iptali, iade veya itiraz sonucu hakkında söz verme.",
+        "Yatırım tavsiyesi verme.",
+        "Dolandırıcılık şüphesinde konuşmayı hemen risk ekibine devret."
+      ],
+      "handoff_keywords": ["dolandırıcılık", "çalındı", "hacklendi", "tanımadığım işlem", "avukat"],
+      "procedures": [
+        { "intent": "transaction_dispute", "title": "İşlem itirazı", "steps": ["İşlem numarası ve tarihini iste.", "Kartı geçici kapatmasını öner.", "İtiraz adımlarını paylaş ve konuşmayı işlem-itirazı etiketiyle beklet."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Acil güvenlik olayları", "team": "risk-ve-guvenlik", "priorities": ["urgent"] }
+    ],
+    "views": [
+      { "name": "Güvenlik olayları", "icon": "shield-alert", "statuses": ["open", "pending"], "priorities": ["urgent"] },
+      { "name": "Belge bekleyenler", "icon": "file-clock", "statuses": ["pending"] }
+    ],
+    "survey": { "name": "Destek memnuniyeti", "question": "Talebinizin ele alınış biçiminden ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "hourly", "digest_hour": 9 }
+  }
+}

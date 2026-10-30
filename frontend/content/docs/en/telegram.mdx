@@ -1,0 +1,30 @@
+---
+title: Telegram
+description: Create a Telegram bot with BotFather, enter its token in ClickFix and answer messages sent to the bot from your inbox.
+section: channels
+order: 6
+---
+
+The Telegram channel brings messages sent to your own Telegram bot into the inbox. Each channel is one bot, and a bot can be connected to only one channel.
+
+## Create a bot [#create-a-bot]
+
+1. Open a chat with **@BotFather** in Telegram.
+2. Send `/newbot`, then give your bot a name and a username ending in `bot`.
+3. Copy the **bot token** BotFather gives you.
+
+## Connect to ClickFix [#connect-to-clickfix]
+
+1. Choose **Channels → Add channel → Telegram**.
+2. Paste the token into **Bot token** and click **Connect**.
+
+ClickFix validates the token and sets up the Telegram webhook automatically. Nothing else to configure.
+
+## How it works [#how-it-works]
+
+- **Private chats**: each person who messages the bot gets their own conversation.
+- **Groups**: if you add the bot to a group, only messages addressed to the bot are received: messages mentioning the bot's @username, `/command@botname` commands and replies to the bot's messages. The conversation is the group itself, and the author's name is shown on each message.
+
+## Changing the token [#changing-the-token]
+
+If you regenerated the token in BotFather, enter the new token in the channel settings and reconnect the channel. The webhook tied to the old token stops working.

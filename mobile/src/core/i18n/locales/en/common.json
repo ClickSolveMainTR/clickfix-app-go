@@ -1,0 +1,23 @@
+{
+  "back": "Back",
+  "cancel": "Cancel",
+  "retry": "Try again",
+  "save": "Save",
+  "error_generic": "Something went wrong. Try again.",
+  "offline_title": "No connection",
+  "offline_body": "Check your internet connection and try again.",
+  "load_failed": "Could not load",
+  "forbidden": "You do not have access to this section.",
+  "search": "Search",
+  "close": "Close",
+  "loading": "Loading…",
+  "no_results": "No results.",
+  "done": "Done",
+  "error_network": "Could not reach the server. Check your internet connection and try again.",
+  "error_timeout": "The server did not answer in time. Try again in a moment.",
+  "error_invalid_response": "The server sent an unexpected answer. Try again in a moment.",
+  "unreachable_banner": "Can't reach the server. What you write is queued and sent once it is back.",
+  "undo": "Undo",
+  "confirm": "Apply",
+  "filter": "Filter"
+}

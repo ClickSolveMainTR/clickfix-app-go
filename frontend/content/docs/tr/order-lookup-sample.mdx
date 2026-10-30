@@ -1,0 +1,584 @@
+---
+title: Sipariş sorgulama örneği
+description: Konuşma kenar çubuğunda müşterinin siparişlerini gösteren, bağımlılıksız Node.js örnek uygulamasının tam kaynak kodu.
+section: developers
+order: 5
+---
+
+Bu örnek, konuşma kenar çubuğunda müşterinin siparişlerini gösteren küçük bir ClickFix uygulamasıdır. Node.js 22+ ile çalışır, hiçbir bağımlılığı yoktur ve MIT lisanslıdır. Aşağıdaki dosyaları aynı klasör yapısıyla kopyalayıp kendi uygulamanızın başlangıç noktası olarak kullanın. Protokolün ayrıntıları: [Kendi uygulamanızı yapın](/docs/apps).
+
+## Ne gösterir [#what-it-shows]
+
+- `clickfix.ready` → `clickfix.context` el sıkışması ve bağlam belirtecinin yenilenmesi (`public/app.js`)
+- Belirtecin sunucuda JWKS ile doğrulanması: EdDSA imzası, `iss`, `aud`, `exp`/`nbf` (`lib/context-token.mjs`)
+- Konuşmanın müşteri e-postasının herkese açık API ile okunması (`server.mjs`)
+- `clickfix.action` ile konuşmaya iç not ekleme ve müşteriye yanıt gönderme
+- Açık/koyu tema, dar kenar çubuğuna uygun düzen ve yalnızca ClickFix panelinin çerçeveleyebilmesi (`frame-ancestors`)
+
+## Çalıştırma [#run]
+
+Dosyaları bir klasöre koyun, `data/orders.json` dosyasını oluşturun ve sunucuyu başlatın:
+
+```bash
+CLICKFIX_APP_ID=<app-id> \
+CLICKFIX_API_KEY=cf_sk_... \
+PANEL_ORIGINS=https://getclickfix.com \
+npm start
+```
+
+| Değişken           | Açıklama                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `CLICKFIX_APP_ID`  | ClickFix'te uygulamayı kaydettikten sonra kartında görünen **Uygulama kimliği**. Belirtecin `aud` değeridir.                    |
+| `CLICKFIX_API_KEY` | `conversations:read` kapsamlı [API anahtarı](/docs/api). Boşsa uygulama demo modunda `demo@example.com` siparişlerini gösterir. |
+| `CLICKFIX_API_URL` | Varsayılan `https://api.getclickfix.com`                                                                                        |
+| `PANEL_ORIGINS`    | Uygulamayı çerçeveleyebilecek panel adres(ler)i, virgülle ayrılır.                                                              |
+| `PORT`             | Varsayılan `8787`                                                                                                               |
+
+Uygulama HTTPS üzerinden ve ClickFix panelinden **farklı bir adreste** yayında olmalıdır (ör. `https://siparis.ornek.com`). Yerelde denemek için bir HTTPS tüneli (Cloudflare Tunnel, ngrok vb.) kullanabilirsiniz.
+
+## ClickFix'e ekleme [#add-to-clickfix]
+
+1. **Organizasyon → Uygulama yönetimi** sayfasında galeriden **Sipariş sorgulama** kartının **Kur** düğmesine basın.
+2. Adres alanına uygulamanızın HTTPS adresini yazın ve kaydedin.
+3. Kartta görünen **Uygulama kimliği**'ni kopyalayıp `CLICKFIX_APP_ID` olarak verin.
+4. Bir konuşma açın; sağ paneldeki **Uygulamalar** bölümünde siparişler görünür.
+
+## Kaynak kod [#source-code]
+
+Her sekme bir dosyadır; sağ üstteki düğmeyle kopyalayın.
+
+```json tab="package.json"
+{
+  "name": "clickfix-example-order-lookup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ClickFix example app: order lookup in the conversation sidebar",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}
+```
+
+```js tab="server.mjs"
+// ClickFix example app: order lookup for the conversation sidebar.
+//
+//   node server.mjs            (Node 22+, no dependencies)
+//
+// Environment:
+//   CLICKFIX_APP_ID     App id from ClickFix (Uygulamalar → app → "Uygulama kimliği"). Required.
+//   CLICKFIX_API_URL    ClickFix API origin. Default https://api.getclickfix.com
+//   CLICKFIX_API_KEY    API key with conversations:read. Without it the app runs in demo mode.
+//   PANEL_ORIGINS       Comma-separated origins allowed to frame the app. Default https://getclickfix.com
+//   PORT                Default 8787
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { keysFromJWKS, verifyContextToken } from "./lib/context-token.mjs";
+
+const root = fileURLToPath(new URL(".", import.meta.url));
+const API = (
+  process.env.CLICKFIX_API_URL || "https://api.getclickfix.com"
+).replace(/\/$/, "");
+const APP_ID = process.env.CLICKFIX_APP_ID || "";
+const API_KEY = process.env.CLICKFIX_API_KEY || "";
+const PANEL_ORIGINS = (process.env.PANEL_ORIGINS || "https://getclickfix.com")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const PORT = Number(process.env.PORT || 8787);
+const orders = JSON.parse(
+  await readFile(join(root, "data/orders.json"), "utf8"),
+);
+
+const TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+};
+
+let jwks = { keys: new Map(), at: 0 };
+async function signingKeys() {
+  if (Date.now() - jwks.at < 10 * 60_000 && jwks.keys.size) return jwks.keys;
+  const res = await fetch(`${API}/v1/app-context/jwks`, {
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`jwks ${res.status}`);
+  jwks = { keys: keysFromJWKS(await res.json()), at: Date.now() };
+  return jwks.keys;
+}
+
+/** The customer's email for the conversation, read with the public API. */
+async function contactEmail(conversationUUID) {
+  const res = await fetch(
+    `${API}/v1/public-api/conversations/${encodeURIComponent(conversationUUID)}`,
+    {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!res.ok) throw new Error(`conversation ${res.status}`);
+  const body = await res.json();
+  return body?.data?.contact?.email ?? null;
+}
+
+function send(res, status, body, headers = {}) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+  res.end(JSON.stringify(body));
+}
+
+async function lookup(req, res) {
+  const token = (req.headers.authorization || "").replace(/^Bearer /, "");
+  let keys;
+  try {
+    keys = await signingKeys();
+  } catch {
+    return send(res, 503, { error: "jwks_unavailable" });
+  }
+  let claims;
+  try {
+    claims = verifyContextToken(token, { keys, appId: APP_ID });
+  } catch (err) {
+    return send(res, 401, {
+      error: "invalid_context",
+      detail: String(err.message),
+    });
+  }
+  if (!claims.conversation_uuid)
+    return send(res, 200, {
+      email: null,
+      orders: [],
+      reason: "no_conversation",
+    });
+  try {
+    const email = API_KEY
+      ? await contactEmail(claims.conversation_uuid)
+      : "demo@example.com";
+    const found = email
+      ? orders.filter((o) => o.email.toLowerCase() === email.toLowerCase())
+      : [];
+    return send(res, 200, { email, demo: !API_KEY, orders: found });
+  } catch {
+    return send(res, 502, { error: "lookup_failed" });
+  }
+}
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost");
+  if (req.method === "GET" && url.pathname === "/api/orders")
+    return lookup(req, res);
+  // The page posts `clickfix.ready` only to these origins and accepts messages only from them.
+  if (req.method === "GET" && url.pathname === "/api/config")
+    return send(res, 200, { panel_origins: PANEL_ORIGINS });
+  if (req.method !== "GET")
+    return send(res, 405, { error: "method_not_allowed" });
+
+  const rel = normalize(
+    url.pathname === "/" ? "/index.html" : url.pathname,
+  ).replace(/^(\.\.[/\\])+/, "");
+  const file = join(root, "public", rel);
+  if (!file.startsWith(join(root, "public")))
+    return send(res, 404, { error: "not_found" });
+  try {
+    const body = await readFile(file);
+    res.writeHead(200, {
+      "Content-Type": TYPES[extname(file)] || "application/octet-stream",
+      // Only the ClickFix panel may frame this app.
+      "Content-Security-Policy": `default-src 'self'; frame-ancestors ${PANEL_ORIGINS.join(" ")}`,
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(body);
+  } catch {
+    send(res, 404, { error: "not_found" });
+  }
+});
+
+if (!APP_ID)
+  console.warn(
+    "CLICKFIX_APP_ID is not set: every context token will be rejected.",
+  );
+if (!API_KEY)
+  console.warn(
+    "CLICKFIX_API_KEY is not set: demo mode, showing orders of demo@example.com.",
+  );
+server.listen(PORT, () => console.log(`order-lookup listening on :${PORT}`));
+```
+
+```js tab="lib/context-token.mjs"
+// Verifies the ClickFix app context token (EdDSA JWT) without dependencies.
+//
+// The panel posts the token to the iframe in a `clickfix.context` message.
+// Your server must check: signature against the JWKS published at
+// GET {api}/v1/app-context/jwks, alg=EdDSA, iss=clickfix:sidebar-apps,
+// aud=your app's id, and the nbf/exp window. Only then trust the claims.
+import { createPublicKey, verify } from "node:crypto";
+
+export const ISSUER = "clickfix:sidebar-apps";
+const SKEW_SECONDS = 30;
+
+function b64url(part) {
+  return Buffer.from(part, "base64url");
+}
+
+/** Turns the JWKS envelope (`{success, data: {keys}}` or `{keys}`) into kid → KeyObject. */
+export function keysFromJWKS(body) {
+  const keys = body?.data?.keys ?? body?.keys ?? [];
+  const out = new Map();
+  for (const jwk of keys) {
+    if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519") continue;
+    out.set(
+      jwk.kid,
+      createPublicKey({
+        key: { kty: "OKP", crv: "Ed25519", x: jwk.x },
+        format: "jwk",
+      }),
+    );
+  }
+  return out;
+}
+
+/**
+ * Returns the verified claims or throws. `keys` comes from keysFromJWKS,
+ * `appId` is the app's id shown in ClickFix (the token audience).
+ */
+export function verifyContextToken(token, { keys, appId, now = Date.now() }) {
+  if (typeof token !== "string") throw new Error("token missing");
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("malformed token");
+  const [h, p, s] = parts;
+  const header = JSON.parse(b64url(h).toString("utf8"));
+  if (header.alg !== "EdDSA") throw new Error("unexpected alg");
+  const key =
+    keys.get(header.kid) ??
+    (keys.size === 1 ? [...keys.values()][0] : undefined);
+  if (!key) throw new Error("unknown key");
+  if (!verify(null, Buffer.from(`${h}.${p}`), key, b64url(s)))
+    throw new Error("bad signature");
+
+  const claims = JSON.parse(b64url(p).toString("utf8"));
+  const t = Math.floor(now / 1000);
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (claims.iss !== ISSUER) throw new Error("unexpected issuer");
+  if (!appId || !aud.includes(appId)) throw new Error("unexpected audience");
+  if (typeof claims.exp !== "number" || claims.exp + SKEW_SECONDS < t)
+    throw new Error("token expired");
+  if (typeof claims.nbf === "number" && claims.nbf - SKEW_SECONDS > t)
+    throw new Error("token not yet valid");
+  return claims;
+}
+```
+
+```html tab="public/index.html"
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Sipariş sorgulama</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Siparişler</h1>
+        <p id="who" class="muted">ClickFix bağlamı bekleniyor…</p>
+      </header>
+      <p id="status" class="muted" role="status"></p>
+      <ul id="orders" class="orders"></ul>
+    </main>
+    <template id="order">
+      <li class="order">
+        <div class="row">
+          <strong class="id"></strong>
+          <span class="badge"></span>
+        </div>
+        <div class="muted meta"></div>
+        <div class="items"></div>
+        <div class="actions">
+          <button type="button" class="note">Nota ekle</button>
+          <button type="button" class="reply secondary">
+            Müşteriye gönder
+          </button>
+        </div>
+      </li>
+    </template>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
+```
+
+```js tab="public/app.js"
+// Browser side of the ClickFix app protocol:
+//   1. app → panel   {type: "clickfix.ready"}
+//   2. panel → app   {type: "clickfix.context", context_token, scopes}   (again on refresh, ~every 100 s)
+//   3. app → panel   {type: "clickfix.action", request_id, action, content | value | target_uuid}
+//   4. panel → app   {type: "clickfix.action.result", request_id, success, error?}
+// The token is only sent to this app's own server; never put it in a URL or storage.
+
+const $ = (id) => document.getElementById(id);
+const fmtMoney = (n, c) =>
+  new Intl.NumberFormat("tr-TR", { style: "currency", currency: c }).format(n);
+const fmtDate = (iso) =>
+  new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(
+    new Date(iso),
+  );
+const STATUS = {
+  processing: "Hazırlanıyor",
+  shipped: "Kargoda",
+  delivered: "Teslim edildi",
+  refunded: "İade edildi",
+};
+
+const { panel_origins: origins } = await (await fetch("/api/config")).json();
+let ctx = null;
+let lastToken = null;
+const pending = new Map();
+
+function post(message) {
+  // A wrong targetOrigin is dropped by the browser, so posting to each allowed origin is safe.
+  for (const origin of origins) window.parent.postMessage(message, origin);
+}
+
+function act(action, content) {
+  if (!ctx?.scopes.includes(action))
+    return Promise.resolve({ success: false, error: "scope_denied" });
+  const request_id = crypto.randomUUID();
+  return new Promise((resolve) => {
+    pending.set(request_id, resolve);
+    post({ type: "clickfix.action", request_id, action, content });
+  });
+}
+
+function summary(o) {
+  const lines = [
+    `Sipariş ${o.id}: ${STATUS[o.status] ?? o.status}`,
+    `Tutar: ${fmtMoney(o.total, o.currency)}`,
+    `Tarih: ${fmtDate(o.placed_at)}`,
+  ];
+  if (o.tracking) lines.push(`Kargo: ${o.carrier} · ${o.tracking}`);
+  return lines.join("\n");
+}
+
+function render(data) {
+  const list = $("orders");
+  list.replaceChildren();
+  $("who").textContent = data.email
+    ? `${data.email}${data.demo ? " (demo verisi)" : ""}`
+    : "Konuşmanın e-posta adresi yok.";
+  if (data.reason === "no_conversation") {
+    $("status").textContent =
+      "Siparişleri görmek için uygulamayı bir konuşmanın kenar çubuğunda açın.";
+    return;
+  }
+  $("status").textContent = data.orders.length
+    ? ""
+    : "Bu müşteriye ait sipariş bulunamadı.";
+  for (const o of data.orders) {
+    const li = $("order").content.firstElementChild.cloneNode(true);
+    li.querySelector(".id").textContent = o.id;
+    li.querySelector(".badge").textContent = STATUS[o.status] ?? o.status;
+    li.querySelector(".meta").textContent =
+      `${fmtDate(o.placed_at)} · ${fmtMoney(o.total, o.currency)}`;
+    li.querySelector(".items").textContent = o.items.join(", ");
+    for (const [cls, action] of [
+      ["note", "conversation.note"],
+      ["reply", "conversation.reply"],
+    ]) {
+      const btn = li.querySelector(`.${cls}`);
+      btn.hidden = !ctx.scopes.includes(action);
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const result = await act(action, summary(o));
+        btn.disabled = false;
+        $("status").textContent = result.success
+          ? "Tamam."
+          : `Yapılamadı (${result.error ?? "bilinmeyen hata"}).`;
+      });
+    }
+    list.append(li);
+  }
+}
+
+async function load() {
+  $("status").textContent = "Siparişler yükleniyor…";
+  const res = await fetch("/api/orders", {
+    headers: { Authorization: `Bearer ${ctx.token}` },
+  });
+  if (!res.ok) {
+    $("status").textContent =
+      res.status === 401
+        ? "Bağlam doğrulanamadı. Paneli yenileyin."
+        : "Siparişler yüklenemedi. Tekrar deneyin.";
+    return;
+  }
+  render(await res.json());
+}
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent || !origins.includes(event.origin)) return;
+  const msg = event.data;
+  if (msg?.type === "clickfix.context") {
+    const first = lastToken === null;
+    ctx = { token: msg.context_token, scopes: msg.scopes ?? [] };
+    lastToken = msg.context_token;
+    // A refresh keeps the same conversation (the panel remounts the frame on a change).
+    if (first) void load();
+  } else if (msg?.type === "clickfix.action.result") {
+    pending.get(msg.request_id)?.({ success: msg.success, error: msg.error });
+    pending.delete(msg.request_id);
+  }
+});
+
+post({ type: "clickfix.ready" });
+```
+
+```css tab="public/styles.css"
+:root {
+  --bg: #ffffff;
+  --fg: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --badge: #f3f4f6;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f17;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #1f2937;
+    --accent: #3b82f6;
+    --badge: #1f2937;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+main {
+  padding: 12px;
+}
+h1 {
+  font-size: 15px;
+  margin: 0 0 2px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+.orders {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.order {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.badge {
+  background: var(--badge);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.items {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+button.secondary {
+  background: var(--badge);
+  color: var(--fg);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+```
+
+## Örnek veri [#sample-data]
+
+`data/orders.json` örnek veridir; gerçek kullanımda `server.mjs` içindeki aramayı kendi sipariş sisteminize yapılan bir çağrıyla değiştirin. Dosya şu biçimde bir dizidir:
+
+```json title="data/orders.json"
+[
+  {
+    "id": "SP-1042",
+    "email": "demo@example.com",
+    "status": "shipped",
+    "total": 1249.9,
+    "currency": "TRY",
+    "placed_at": "2026-10-24T09:12:00Z",
+    "carrier": "Kargo A",
+    "tracking": "KA123456789TR",
+    "items": ["Kablosuz kulaklık", "Şarj kablosu"]
+  },
+  {
+    "id": "SP-1017",
+    "email": "demo@example.com",
+    "status": "delivered",
+    "total": 349,
+    "currency": "TRY",
+    "placed_at": "2026-10-02T14:40:00Z",
+    "carrier": "Kargo B",
+    "tracking": "KB987654321TR",
+    "items": ["Telefon kılıfı"]
+  }
+]
+```
+
+Lisans: MIT. Bu sayfadaki kodu kendi uygulamanızda serbestçe kullanabilir ve değiştirebilirsiniz.
+
+## Sonraki adımlar [#next-steps]
+
+- [Kendi uygulamanızı yapın](/docs/apps)
+- [Uygulama galerisi](/docs/apps-gallery)
+- [API](/docs/api)

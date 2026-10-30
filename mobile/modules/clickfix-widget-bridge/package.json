@@ -1,0 +1,11 @@
+{
+  "name": "clickfix-widget-bridge",
+  "version": "0.1.0",
+  "description": "App Group, shared Keychain and Spotlight bridge for the ClickFix widgets (CF-152)",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "ClickFix",
+  "homepage": "https://github.com/furkanmeclis/clickfix-app-go"
+}

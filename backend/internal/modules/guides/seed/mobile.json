@@ -1,0 +1,503 @@
+{
+ "version": 1,
+ "guides": [
+  {
+   "key": "mobile.inbox",
+   "surface": "mobile",
+   "route": "/inbox",
+   "kind": "page",
+   "order": 10,
+   "setup_order": 0,
+   "tr": {
+    "title": "Gelen kutusu",
+    "summary": "Tüm kanallardan gelen konuşmalarınız burada. Dokunarak açın, yanıtlayın veya kaydırarak hızlıca atayın ve çözün.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Tüm kanallardan gelen konuşmalarınız burada. Dokunarak açın, yanıtlayın veya kaydırarak hızlıca atayın ve çözün.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "inbox-filter",
+      "title": "Görünümler",
+      "body": "Size atananlar, atanmamışlar ve tümü arasında geçin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "assistant-button",
+      "title": "ClickFix Asistan",
+      "body": "Asistan düğmesi bu ekranı bilen ClickFix Asistan'ı açar; sorularınızı yanıtlar ve ayarları sizinle yapar.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Inbox",
+    "summary": "Your conversations from every channel are here. Tap to open and reply, or swipe to assign and resolve quickly.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Your conversations from every channel are here. Tap to open and reply, or swipe to assign and resolve quickly.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "inbox-filter",
+      "title": "Views",
+      "body": "Switch between yours, unassigned and all.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "assistant-button",
+      "title": "ClickFix Assistant",
+      "body": "The assistant button opens ClickFix Assistant, which knows this screen; it answers questions and sets things up with you.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.conversation",
+   "surface": "mobile",
+   "route": "/conversation/[uuid]",
+   "kind": "page",
+   "order": 11,
+   "setup_order": 0,
+   "tr": {
+    "title": "Konuşma",
+    "summary": "Müşteriyle yazışmanız burada. Yanıt yazın, fotoğraf ekleyin, iç not bırakın veya AI yanıt önerisini kullanın.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Müşteriyle yazışmanız burada. Yanıt yazın, fotoğraf ekleyin, iç not bırakın veya AI yanıt önerisini kullanın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "composer",
+      "title": "Yanıt alanı",
+      "body": "Mesajınızı yazıp gönderin; sesli not ve dosya da ekleyebilirsiniz.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Conversation",
+    "summary": "Your thread with the customer. Write a reply, attach a photo, leave an internal note or use the AI reply suggestion.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Your thread with the customer. Write a reply, attach a photo, leave an internal note or use the AI reply suggestion.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "composer",
+      "title": "Composer",
+      "body": "Type and send; you can also add voice notes and files.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.contacts",
+   "surface": "mobile",
+   "route": "/contacts",
+   "kind": "page",
+   "order": 12,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kişiler",
+    "summary": "Müşterilerinizi arayın, geçmiş konuşmalarını ve bilgilerini görün.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Müşterilerinizi arayın, geçmiş konuşmalarını ve bilgilerini görün.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Contacts",
+    "summary": "Search customers and see their history and details.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Search customers and see their history and details.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.agenda",
+   "surface": "mobile",
+   "route": "/agenda",
+   "kind": "page",
+   "order": 13,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ajanda",
+    "summary": "Bugünkü randevularınız, takipleriniz ve hatırlatıcılarınız burada listelenir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bugünkü randevularınız, takipleriniz ve hatırlatıcılarınız burada listelenir.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Agenda",
+    "summary": "Today's appointments, follow-ups and reminders are listed here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Today's appointments, follow-ups and reminders are listed here.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.notifications",
+   "surface": "mobile",
+   "route": "/notifications",
+   "kind": "tour",
+   "order": 1,
+   "setup_order": 1,
+   "tr": {
+    "title": "Bildirimler",
+    "summary": "Atamalar, bahsedilmeler ve SLA uyarıları burada toplanır; bildirim izinlerini açık tutun.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Atamalar, bahsedilmeler ve SLA uyarıları burada toplanır; bildirim izinlerini açık tutun.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Notifications",
+    "summary": "Assignments, mentions and SLA warnings collect here; keep notification permission on.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Assignments, mentions and SLA warnings collect here; keep notification permission on.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more",
+   "surface": "mobile",
+   "route": "/more",
+   "kind": "page",
+   "order": 15,
+   "setup_order": 0,
+   "tr": {
+    "title": "Daha fazla",
+    "summary": "Ekip, kanallar, raporlar, AI, nöbet ve ayarlar gibi diğer bölümlere buradan ulaşırsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ekip, kanallar, raporlar, AI, nöbet ve ayarlar gibi diğer bölümlere buradan ulaşırsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "assistant-button",
+      "title": "ClickFix Asistan",
+      "body": "Asistan düğmesi bu ekranı bilen ClickFix Asistan'ı açar; sorularınızı yanıtlar ve ayarları sizinle yapar.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "More",
+    "summary": "Reach other sections such as team, channels, reports, AI, on-call and settings from here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Reach other sections such as team, channels, reports, AI, on-call and settings from here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "assistant-button",
+      "title": "ClickFix Assistant",
+      "body": "The assistant button opens ClickFix Assistant, which knows this screen; it answers questions and sets things up with you.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_ai",
+   "surface": "mobile",
+   "route": "/more/ai",
+   "kind": "page",
+   "order": 16,
+   "setup_order": 0,
+   "tr": {
+    "title": "Yapay zekâ",
+    "summary": "AI politikanızı ve ajanınızın durumunu görür, temel ayarları değiştirirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "AI politikanızı ve ajanınızın durumunu görür, temel ayarları değiştirirsiniz.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "AI",
+    "summary": "See your AI policy and agent status and change the basics.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "See your AI policy and agent status and change the basics.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_channels",
+   "surface": "mobile",
+   "route": "/more/channels",
+   "kind": "tour",
+   "order": 2,
+   "setup_order": 2,
+   "tr": {
+    "title": "Kanallar",
+    "summary": "Bağlı kanallarınızın durumunu görürsünüz; yeni kanal bağlamak için web paneli kullanılır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bağlı kanallarınızın durumunu görürsünüz; yeni kanal bağlamak için web paneli kullanılır.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Channels",
+    "summary": "See the state of your connected channels; connect new channels from the web panel.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "See the state of your connected channels; connect new channels from the web panel.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_team",
+   "surface": "mobile",
+   "route": "/more/team",
+   "kind": "page",
+   "order": 18,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ekip",
+    "summary": "Ekip arkadaşlarınızın çevrimiçi durumunu ve yükünü görürsünüz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ekip arkadaşlarınızın çevrimiçi durumunu ve yükünü görürsünüz.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Team",
+    "summary": "See your teammates' online status and workload.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "See your teammates' online status and workload.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_members",
+   "surface": "mobile",
+   "route": "/more/members",
+   "kind": "tour",
+   "order": 3,
+   "setup_order": 3,
+   "tr": {
+    "title": "Üyeler",
+    "summary": "Üyeleri görür ve yeni ekip arkadaşı davet edersiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Üyeleri görür ve yeni ekip arkadaşı davet edersiniz.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Members",
+    "summary": "See members and invite new teammates.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "See members and invite new teammates.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_reports",
+   "surface": "mobile",
+   "route": "/more/reports",
+   "kind": "page",
+   "order": 20,
+   "setup_order": 0,
+   "tr": {
+    "title": "Raporlar",
+    "summary": "Temel performans göstergelerini (yanıt süresi, SLA, CSAT) cebinizden takip edin.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Temel performans göstergelerini (yanıt süresi, SLA, CSAT) cebinizden takip edin.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Reports",
+    "summary": "Track key metrics (response time, SLA, CSAT) from your pocket.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Track key metrics (response time, SLA, CSAT) from your pocket.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.more_settings",
+   "surface": "mobile",
+   "route": "/more/settings",
+   "kind": "page",
+   "order": 21,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ayarlar",
+    "summary": "Dil, tema, bildirimler ve hesap ayarlarınız. Rehberleri buradan sıfırlayabilirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Dil, tema, bildirimler ve hesap ayarlarınız. Rehberleri buradan sıfırlayabilirsiniz.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Settings",
+    "summary": "Language, theme, notifications and account settings. You can reset the guides here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Language, theme, notifications and account settings. You can reset the guides here.",
+      "placement": "auto"
+     }
+    ]
+   }
+  },
+  {
+   "key": "mobile.search",
+   "surface": "mobile",
+   "route": "/search",
+   "kind": "page",
+   "order": 22,
+   "setup_order": 0,
+   "tr": {
+    "title": "Arama",
+    "summary": "Konuşma, kişi ve makalelerde arama yapın.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Konuşma, kişi ve makalelerde arama yapın.",
+      "placement": "auto"
+     }
+    ]
+   },
+   "en": {
+    "title": "Search",
+    "summary": "Search conversations, contacts and articles.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Search conversations, contacts and articles.",
+      "placement": "auto"
+     }
+    ]
+   }
+  }
+ ]
+}

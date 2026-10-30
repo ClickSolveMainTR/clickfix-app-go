@@ -1,0 +1,15 @@
+{
+  "request_id": "req_netgsm_balance_fixture_1",
+  "provider": "netgsm",
+  "operation": "account.balance",
+  "direction": "outbound",
+  "channel": "sms",
+  "occurred_at": "2026-10-19T00:00:00.000Z",
+  "payload": {
+    "reason": "settings_balance_check"
+  },
+  "legacy_contract": {
+    "source": "legacy NetgsmAyarlar bakiye",
+    "fixture_name": "netgsm_account_balance_minimal"
+  }
+}

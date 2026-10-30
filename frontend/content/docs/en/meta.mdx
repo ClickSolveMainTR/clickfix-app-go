@@ -1,0 +1,66 @@
+---
+title: WhatsApp, Instagram and Messenger
+description: Connect your WhatsApp Business number, Instagram professional account and Facebook page to ClickFix by signing in with Meta.
+section: channels
+order: 3
+---
+
+The WhatsApp, Instagram and Messenger channels run on Meta's official APIs. You don't create an app or copy tokens: you sign in with your Meta account, grant access, and ClickFix sets up the rest.
+
+> If these channels can't be selected yet, they open once ClickFix's Meta app review is complete. The screen tells you when this is the case.
+
+## Before you start [#before-you-start]
+
+- You'll sign in with a Facebook account that manages the assets you want to connect.
+- **WhatsApp** needs a Meta business account and a phone number that can be registered with WhatsApp Business. If the number is currently used in the WhatsApp Business app, check Meta's number migration rules.
+- **Instagram** needs a **professional account** (business or creator).
+- **Messenger** needs a **Facebook page** you manage.
+
+## WhatsApp [#whatsapp]
+
+1. Choose **Channels → Add channel → WhatsApp**.
+2. Click **Connect WhatsApp with Meta**.
+3. In the Meta window, pick your business, WhatsApp Business account and number, and approve the permissions.
+4. When the window closes the channel is connected and incoming messages start arriving.
+
+You can connect several numbers; each number is its own channel.
+
+### The 24-hour rule and templates [#the-24-hour-rule-and-templates]
+
+On WhatsApp you can reply freely within 24 hours of the customer's last message. After that, you need a Meta-approved **template** to restart the conversation.
+
+Manage templates from the channel's **Templates** menu:
+
+1. Click **New template** and enter a name, category (**Utility**, **Marketing** or **Authentication**), language and body.
+2. Write variables as `{{1}}`, `{{2}}` and give an example for each.
+3. Click **Submit for approval**. The template can be used once Meta approves it.
+
+## Instagram [#instagram]
+
+1. Choose **Channels → Add channel → Instagram** and click **Connect with Meta**.
+2. You're redirected to Instagram; sign in and grant access.
+3. You come back to ClickFix and the channel is connected.
+
+The inbox receives:
+
+- **Direct messages (DMs)**, story replies and story mentions.
+- **Post comments**: each top-level comment opens its own conversation; your reply is posted publicly under the comment.
+- **Mentions** of your account in comments on other posts.
+
+## Messenger [#messenger]
+
+1. Choose **Channels → Add channel → Messenger** and click **Connect with Meta**.
+2. You're redirected to Facebook; sign in and approve the permissions.
+3. Pick your page from **Pick the page to connect**.
+
+If more than 24 hours have passed since the customer's last Messenger message, ClickFix sends your reply with Meta's **human agent** tag, which extends the reply window to 7 days.
+
+## Health and reconnecting [#health-and-reconnecting]
+
+The Channels page shows the token expiry and send failures. If you changed your Facebook password, removed the app's access or the token expired, the channel is marked **Needs reconnect**. Use **Reconnect** from the channel menu to repeat the sign-in steps.
+
+## Disconnecting and data deletion [#disconnecting-and-data-deletion]
+
+When you disconnect the channel, ClickFix deletes the access credentials it stored for that account and stops receiving messages. Existing conversations are kept.
+
+Removing the app's access from your Facebook or Instagram settings also closes the related connections. For data deletion requests and the process, see the [account and data deletion](https://getclickfix.com/account-deletion?lang=en) page.

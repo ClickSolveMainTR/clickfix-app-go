@@ -1,0 +1,6 @@
+[
+  { "id": "SP-1042", "email": "demo@example.com", "status": "shipped", "total": 1249.9, "currency": "TRY", "placed_at": "2026-10-24T09:12:00Z", "carrier": "Kargo A", "tracking": "KA123456789TR", "items": ["Kablosuz kulaklık", "Şarj kablosu"] },
+  { "id": "SP-1017", "email": "demo@example.com", "status": "delivered", "total": 349, "currency": "TRY", "placed_at": "2026-10-02T14:40:00Z", "carrier": "Kargo B", "tracking": "KB987654321TR", "items": ["Telefon kılıfı"] },
+  { "id": "SP-0988", "email": "demo@example.com", "status": "refunded", "total": 899, "currency": "TRY", "placed_at": "2026-09-11T08:05:00Z", "carrier": null, "tracking": null, "items": ["Akıllı saat kayışı"] },
+  { "id": "SP-1050", "email": "ornek.musteri@example.org", "status": "processing", "total": 2150, "currency": "TRY", "placed_at": "2026-10-28T17:30:00Z", "carrier": null, "tracking": null, "items": ["Masaüstü hoparlör"] }
+]

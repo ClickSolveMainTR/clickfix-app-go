@@ -1,0 +1,21 @@
+{
+  "scan_title": "Sign in on the web",
+  "scan_subtitle": "Scan the QR code on the web panel",
+  "scan_hint": "Frame the QR code on the web panel’s sign-in page.",
+  "scan_unknown": "This is not a ClickFix sign-in code. Scan the QR code on the web panel.",
+  "permission_title": "Camera access needed",
+  "permission_body": "Allow the camera to scan the QR code.",
+  "permission_button": "Allow camera",
+  "title": "Approve web sign-in",
+  "body": "A browser wants to sign in as {{email}}. Reject it if this is not you.",
+  "browser": "Browser",
+  "ip": "IP and location",
+  "expires": "Expires",
+  "warning": "Only approve a code you are looking at right now.",
+  "approve": "Approve",
+  "reject": "Reject",
+  "approved": "Signed in on the web",
+  "rejected": "Sign-in request rejected",
+  "expired": "This QR code has expired or was used. Open a new one on the web panel.",
+  "scan_again": "Scan again"
+}

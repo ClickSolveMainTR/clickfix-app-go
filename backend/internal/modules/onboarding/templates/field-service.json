@@ -1,0 +1,116 @@
+{
+  "key": "field-service",
+  "version": 1,
+  "icon": "wrench",
+  "accent": "#ca8a04",
+  "order": 80,
+  "name": { "tr": "Saha servis / kurulum oturumları", "en": "Field service / installation sessions" },
+  "description": {
+    "tr": "Teknik servis, kurulum ve bakım ekipleri için: arıza kaydı, servis randevusu, garanti kontrolü ve teknisyen yönlendirme.",
+    "en": "For service, installation and maintenance crews: fault reports, service visits, warranty checks and technician dispatch."
+  },
+  "highlights": [
+    { "tr": "Kurulum ve servis randevu tipleri", "en": "Installation and service appointment types" },
+    { "tr": "Adres, cihaz ve garanti alanları", "en": "Address, device and warranty fields" },
+    { "tr": "Teknisyen bekleniyor durumu", "en": "Awaiting technician status" }
+  ],
+  "industries": ["field_service", "teknik servis", "servis", "kurulum", "installation", "bakım", "maintenance", "montaj", "beyaz eşya", "klima"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "field_service", "locale": "tr", "languages": ["tr"], "tone": "friendly" },
+    "branding": { "primary_color": "#ca8a04" },
+    "teams": [
+      { "key": "cagri-merkezi", "name": "Çağrı Merkezi", "description": "Arıza kaydı ve randevu", "color": "#ca8a04", "skills": ["randevu"] },
+      { "key": "saha-ekibi", "name": "Saha Ekibi", "description": "Kurulum, bakım ve onarım", "color": "#0f766e", "skills": ["kurulum", "onarım"] }
+    ],
+    "tags": [
+      { "name": "arıza", "color": "#dc2626" },
+      { "name": "kurulum", "color": "#2563eb" },
+      { "name": "bakım", "color": "#0f766e" },
+      { "name": "garanti", "color": "#16a34a" },
+      { "name": "parça", "color": "#7c3aed" },
+      { "name": "tekrar-ziyaret", "color": "#ea580c" }
+    ],
+    "statuses": [
+      { "name": "Teknisyen bekleniyor", "slug": "teknisyen-bekleniyor", "category": "pending", "color": "#ca8a04" },
+      { "name": "Parça bekleniyor", "slug": "parca-bekleniyor", "category": "pending", "color": "#7c3aed" }
+    ],
+    "business_hours": {
+      "name": "Servis saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "08:00", "close": "19:00" }, { "day": "tue", "open": "08:00", "close": "19:00" },
+        { "day": "wed", "open": "08:00", "close": "19:00" }, { "day": "thu", "open": "08:00", "close": "19:00" },
+        { "day": "fri", "open": "08:00", "close": "19:00" }, { "day": "sat", "open": "09:00", "close": "17:00" }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Servis SLA", "description": "Arıza ve kurulum talepleri",
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 30, "resolution_minutes": 480 },
+          { "priority": "high", "first_response_minutes": 60, "resolution_minutes": 1440 },
+          { "priority": "normal", "first_response_minutes": 240, "resolution_minutes": 2880 },
+          { "priority": "low", "first_response_minutes": 480, "resolution_minutes": 7200 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Adres ve cihaz bilgisi", "shortcut": "bilgi", "category": "Kayıt", "content": "Servis kaydı açabilmemiz için açık adresinizi, cihazın marka/modelini ve seri numarasını paylaşabilir misiniz?" },
+      { "title": "Randevu onayı", "shortcut": "randevu", "category": "Randevu", "content": "Servis randevunuz oluşturuldu. Teknisyenimiz ziyaretten önce sizi arayarak saat teyidi yapacak." },
+      { "title": "Garanti kontrolü", "shortcut": "garanti", "category": "Garanti", "content": "Garanti kontrolü için faturanızın veya garanti belgenizin fotoğrafını paylaşabilir misiniz?" },
+      { "title": "Parça siparişi", "shortcut": "parca", "category": "Parça", "content": "Cihazınız için gereken parçayı sipariş ettik. Parça geldiğinde yeni ziyaret için sizinle iletişime geçeceğiz." }
+    ],
+    "macros": [
+      { "name": "Arıza kaydı", "description": "Arıza etiketi ve bilgi isteği",
+        "actions": [ { "type": "tag", "value": "arıza" }, { "type": "reply", "value": "Arıza kaydınızı açıyoruz. Adresinizi ve cihazın seri numarasını paylaşabilir misiniz?" }, { "type": "status", "value": "pending" } ] },
+      { "name": "Parça bekleniyor", "description": "Parça etiketi ve bilgilendirme",
+        "actions": [ { "type": "tag", "value": "parça" }, { "type": "reply", "value": "Gerekli parça sipariş edildi; geldiğinde size haber vereceğiz." }, { "type": "status", "value": "pending" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "cihaz_modeli", "label": "Cihaz modeli", "type": "text" },
+      { "entity": "conversation", "key": "seri_no", "label": "Seri numarası", "type": "text" },
+      { "entity": "conversation", "key": "garanti", "label": "Garanti kapsamında", "type": "boolean" },
+      { "entity": "contact", "key": "servis_adresi", "label": "Servis adresi", "type": "textarea" }
+    ],
+    "forms": [
+      { "name": "Servis talebi", "description": "Arıza, kurulum ve bakım talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "phone", "label": "Telefon", "required": true },
+          { "field": "custom:cihaz_modeli", "label": "Cihaz modeli", "required": true }, { "field": "custom:seri_no", "label": "Seri numarası", "required": false }, { "field": "message", "label": "Sorunu kısaca anlatın", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "servis", "name": "Servis ve garanti", "articles": [
+        { "slug": "servis-kaydi", "title": "Servis kaydı nasıl açılır?", "public": true,
+          "body": "Servis formunu doldurun veya WhatsApp hattımıza yazın. Cihazın marka/model ve seri numarasını hazır bulundurmanız süreci hızlandırır." },
+        { "slug": "garanti-kapsami", "title": "Garanti neleri kapsar?", "public": true,
+          "body": "Garanti süresi içinde üretim kaynaklı arızalarda işçilik ve parça ücretsizdir. Kullanıcı hatası, darbe ve sıvı temasıyla oluşan hasarlar garanti dışıdır." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Servis talebiniz mi var?", "greeting_text": "Arıza, kurulum veya bakım için yazın; size en uygun servis zamanını ayarlayalım.", "color": "#ca8a04" },
+    "ai_agent": {
+      "persona": "Teknik servisin çağrı merkezi asistanısın. Arızayı anlar, gerekli bilgileri toplar ve servis randevusu için ekibe aktarırsın.",
+      "tone": "Pratik, güler yüzlü ve net.",
+      "guardrails": [
+        "Kesin ziyaret saati verme; ekip teyit eder.",
+        "Elektrik veya gaz kaçağı şüphesinde ilgili acil hattı aramasını söyle ve devret.",
+        "Ücret ve garanti kararı verme."
+      ],
+      "handoff_keywords": ["gaz kokusu", "yangın", "elektrik çarptı", "şikayet"],
+      "procedures": [
+        { "intent": "service_request", "title": "Servis talebi", "steps": ["Adres, cihaz modeli ve seri numarasını iste.", "Garanti belgesinin olup olmadığını sor.", "Talebi arıza etiketiyle çağrı merkezine devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Acil arızalar saha ekibine", "team": "saha-ekibi", "priorities": ["urgent"] },
+      { "name": "Yeni talepler çağrı merkezine", "team": "cagri-merkezi", "priorities": ["low", "normal", "high"] }
+    ],
+    "views": [
+      { "name": "Teknisyen bekleyenler", "icon": "truck", "statuses": ["pending"] },
+      { "name": "Acil arızalar", "icon": "flame", "statuses": ["open"], "priorities": ["urgent", "high"] }
+    ],
+    "survey": { "name": "Servis memnuniyeti", "question": "Servis deneyiminizden ne kadar memnun kaldınız?" },
+    "appointment_types": [
+      { "name": "Kurulum oturumu", "duration_minutes": 90, "description": "Yeni cihaz kurulumu ve kullanım eğitimi" },
+      { "name": "Arıza ziyareti", "duration_minutes": 60, "description": "Yerinde arıza tespiti ve onarım" },
+      { "name": "Periyodik bakım", "duration_minutes": 45, "description": "Yıllık bakım ve kontrol" }
+    ],
+    "notifications": { "email_digest": "daily", "digest_hour": 8 }
+  }
+}

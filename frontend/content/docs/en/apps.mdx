@@ -1,0 +1,117 @@
+---
+title: Build your own app
+description: Add your own app to the ClickFix panel; context token, signature verification, theming, sizing, events and publishing.
+section: developers
+order: 4
+---
+
+ClickFix apps open your own web app (order panel, CRM record, billing history, shipment tracking…) in the conversation sidebar, the contact panel or the menu. Agents see what they need without leaving the conversation; with the permissions you grant, your app can add notes or send replies.
+
+Start from the open-source [Order lookup sample](/docs/order-lookup-sample?lang=en) (Node.js, no dependencies, MIT).
+
+## How it works [#how-it-works]
+
+1. An admin registers the app's URL on **Organization → Manage apps**, and chooses where it appears and which permissions it requests.
+2. When an agent opens a conversation, the panel loads your app in a sandboxed iframe.
+3. Your app says it is ready; the panel sends it a short-lived, signed **context token**.
+4. Your server verifies the token and uses the conversation and contact IDs in it to query your own data (and, if needed, the [ClickFix API](/docs/api?lang=en)).
+5. When your app requests an action (e.g. add an internal note), the panel performs it with the agent's session and permissions.
+
+Your app never sees the agent's session credentials.
+
+## Requirements [#requirements]
+
+- The app must be served over `https://` from a **different origin** than the ClickFix panel (same-origin apps are refused for security).
+- The URL must not contain a username, password or `#`.
+- Only allow the ClickFix panel to frame your app: `Content-Security-Policy: frame-ancestors https://getclickfix.com`.
+- The iframe runs with `sandbox="allow-scripts allow-forms allow-same-origin"`, no referrer, no popups or top navigation, and no browser permissions such as camera or microphone. Show copyable text instead of opening links in new tabs.
+
+## Messages and events [#messages-and-events]
+
+Your app talks to the panel with `window.postMessage`. The panel only accepts messages from this iframe and the registered URL's origin; likewise, only accept messages from the panel's origin.
+
+| Direction   | Message                                                                                              | When                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| App → panel | `{"type": "clickfix.ready"}`                                                                         | Once, when the page is loaded and listening                                      |
+| Panel → app | `{"type": "clickfix.context", "context_token": "…", "scopes": ["conversation.read", …]}`             | Right after `ready`, and whenever the token is renewed (about every 100 seconds) |
+| App → panel | `{"type": "clickfix.action", "request_id": "<uuid>", "action": "conversation.note", "content": "…"}` | When you request an action                                                       |
+| Panel → app | `{"type": "clickfix.action.result", "request_id": "<uuid>", "success": true}`                        | When the action completes or is rejected (with `error`)                          |
+
+When the agent switches to another conversation, the panel **reloads** the iframe and the old context is gone, so you don't need to listen for conversation changes.
+
+```js
+const PANEL = "https://getclickfix.com";
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent || event.origin !== PANEL) return;
+  if (event.data?.type === "clickfix.context") {
+    // Send the token only to your own server; never put it in a URL, log or storage.
+    loadData(event.data.context_token, event.data.scopes);
+  }
+});
+
+window.parent.postMessage({ type: "clickfix.ready" }, PANEL);
+```
+
+### Actions and permissions [#actions-and-permissions]
+
+| Permission              | Label in the panel    | Message field                               |
+| ----------------------- | --------------------- | ------------------------------------------- |
+| `conversation.read`     | See the conversation  | — (adds the conversation ID to the context) |
+| `contact.read`          | See the contact       | — (adds the contact ID to the context)      |
+| `conversation.reply`    | Reply to the customer | `content` (up to 10,000 characters)         |
+| `conversation.note`     | Add internal notes    | `content`                                   |
+| `conversation.status`   | Change status         | `value`: `open`, `pending`, `resolved`…     |
+| `conversation.priority` | Change priority       | `value`: `low`, `normal`, `high`, `urgent`  |
+| `conversation.assign`   | Assign agents         | `target_uuid`: the member's ID              |
+| `conversation.tag`      | Add tags              | `target_uuid`: the tag's ID                 |
+
+- An app can only use permissions granted in its registration **and** held by the member using the panel. The token's `scopes` is that intersection.
+- Actions only work in the conversation sidebar. Each `request_id` is accepted once; at most 10 actions per 10 seconds.
+- `error` values: `scope_denied`, `forbidden`, `invalid_request`, `no_conversation`, `rate_limited`, `duplicate_request`, `failed`.
+
+## Verifying the context token [#verifying-the-context-token]
+
+`context_token` is a JWT. Verify it on your server before trusting any ID in it:
+
+- Algorithm `EdDSA` (Ed25519). Keys: `https://api.getclickfix.com/v1/app-context/jwks` (`data.keys` in the response envelope; match on `kid`, cache for a few minutes).
+- `iss` = `clickfix:sidebar-apps`
+- `aud` = the app ID (shown as **App ID** on the app's card on the **Manage apps** page)
+- `nbf` ≤ now < `exp` (tokens live 120 seconds; allow a few seconds of clock skew)
+
+Claims of a verified token:
+
+| Claim               | Meaning                                                                       |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `sub`               | ID of the member who opened the app                                           |
+| `organization_uuid` | Organization ID                                                               |
+| `conversation_uuid` | Open conversation (conversation sidebar only)                                 |
+| `contact_uuid`      | Open contact (contact panel only)                                             |
+| `scopes`            | Usable permissions                                                            |
+| `app_revision`      | Registration version; older tokens stop working when the registration changes |
+
+See the Turkish guide or the sample's `lib/context-token.mjs` for a dependency-free Node.js verifier.
+
+If you need conversation details (e.g. the customer's email), call `GET /v1/public-api/conversations/{conversation_uuid}` from your server with an [API key](/docs/api?lang=en) that has `conversations:read`. Never send the API key to the iframe.
+
+## Theming and sizing [#theming-and-sizing]
+
+- **Theme:** the panel doesn't send theme information. Add `<meta name="color-scheme" content="light dark">` and use `prefers-color-scheme`.
+- **Width:** the conversation sidebar is narrow (about 320–400 px). Use a single, scrollable column; avoid horizontal scrolling.
+- **Height:** about 420 px in the sidebar; the full page in the menu. Scroll vertically inside the iframe for long content.
+- **Formats:** format dates, times and amounts with `Intl`.
+- **Loading and errors:** show a short loading text until the context arrives, and errors that say what to do.
+
+## Publishing [#publishing]
+
+1. Deploy your app over HTTPS with the `frame-ancestors` header.
+2. Go to **Organization → Manage apps → Add app**; set the name, URL, icon and **Placement**.
+3. Tick only the **permissions** you actually use. Use **Preview** to check that the URL loads.
+4. Save, then add the **App ID** from the card to your app's settings as the expected `aud`.
+5. Open a conversation and try it from the **Apps** section in the right panel.
+
+Changing the registration (URL, permissions, placement) renews open sessions and invalidates older tokens. Switch the toggle on the card off to hide an app temporarily.
+
+## Gallery apps [#gallery-apps]
+
+The gallery on the **Manage apps** page installs free tools verified to be embeddable in one click: Order lookup (this sample), Calendly scheduling, an Uptime Kuma status page, a Google Docs handbook, a Metabase dashboard and an OpenStreetMap map. Gallery apps don't use the ClickFix protocol; they only show your URL and receive no conversation data.

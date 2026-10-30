@@ -1,0 +1,56 @@
+---
+title: Appointments
+description: Define appointment types such as onboarding, demo or training, share your public booking page and set up reminders.
+section: product
+order: 3
+---
+
+With appointments, your customers book meetings with you and your agents book them from a conversation or contact card. Appointments show on the team **Calendar** next to shifts and time off.
+
+Appointments depend on your plan; the settings page tells you if your plan doesn't include them.
+
+## Turn the module on [#turn-the-module-on]
+
+1. Open **Organization → Appointments**.
+2. Tick **Appointments are on**.
+3. Turn on **Public booking pages** so customers can book by themselves.
+4. Fill in **Time zone (IANA)** (e.g. `Europe/Istanbul`) and **Reminders (minutes before)**.
+
+Reminders set how many minutes before the appointment they are sent; separate values with commas (e.g. `1440, 60`). The customer gets an email and the host an in-app notification; if you have an active SMS channel, an SMS is sent too.
+
+## Create an appointment type [#create-an-appointment-type]
+
+Fill in these sections under **New appointment type**:
+
+| Section                   | Settings                                                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Basics                    | Name, link name, description, color                                                                                                        |
+| Duration and availability | Durations (the first is the default), start interval, buffer before and after, how many days ahead, minimum notice, daily maximum per host |
+| Location and hosts        | Location type (video call, phone call, in person, online link) and who hosts                                                               |
+| Intake form               | Phone, subject and message fields: off, optional or required                                                                               |
+| Booking policy            | Agent confirmation, bookable on the public page, customer cancel and reschedule rights, change deadline                                    |
+| Messages                  | Confirmation and reminder email texts (defaults are used when empty)                                                                       |
+
+Host options: **Round-robin between hosts**, **Selected agents** or **A team (round-robin)**.
+
+> When you choose the **Video call** location type, a [video room](/docs/video-rooms?lang=en) is opened for the appointment automatically and the join link is added to the customer's confirmation and reminder emails. If video calls are unavailable (plan, organization setting or minute balance), the appointment is still booked and the customer is told the agent will share the connection details.
+
+## Public booking page [#public-booking-page]
+
+With public pages on, the settings screen shows your booking page address. Use **Copy booking link** on any type for a direct link. Your web widget links to this page too.
+
+On the page the customer:
+
+1. Picks the meeting type, duration, day and an available time. Times are shown in the customer's own time zone.
+2. Enters their name, email and the intake form.
+3. Clicks **Confirm booking**.
+
+The customer gets an email with the details. They can add the appointment to their calendar via `.ics`, Google Calendar or Outlook and, if you allow it, reschedule or cancel from the link in the email. When the type is set to **Agent confirms each booking**, the customer first sees "Request received".
+
+## Booking from the dashboard [#booking-from-the-dashboard]
+
+From a contact card or a conversation, click **Book appointment** and pick the type, host and a free slot. **Email the confirmation to the customer** sends a confirmation with calendar links.
+
+In the appointment details you can **Confirm**, **Reschedule**, **Mark completed**, mark as **No-show** or cancel. **Copy customer link** shares the customer's appointment page.
+
+Appointments are available in the mobile app too.

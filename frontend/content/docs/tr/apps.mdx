@@ -1,0 +1,143 @@
+---
+title: Kendi uygulamanızı yapın
+description: ClickFix paneline kendi uygulamanızı ekleyin; bağlam belirteci, imza doğrulama, tema, boyut, olaylar ve yayınlama.
+section: developers
+order: 4
+---
+
+ClickFix uygulamaları, kendi web uygulamanızı (sipariş paneli, CRM kaydı, fatura geçmişi, kargo takibi…) konuşma kenar çubuğunda, kişi panelinde veya menüde açar. Temsilci konuşmadan çıkmadan ihtiyacı olan bilgiyi görür; uygulamanız izin verdiğiniz ölçüde konuşmaya not ekleyebilir veya yanıt gönderebilir.
+
+Hazır bir başlangıç noktası olarak açık kaynak [Sipariş sorgulama örneğini](/docs/order-lookup-sample) kullanabilirsiniz (Node.js, bağımlılıksız, MIT lisanslı).
+
+## Nasıl çalışır? [#how-it-works]
+
+1. Bir yönetici uygulamanın adresini **Organizasyon → Uygulama yönetimi** sayfasında kaydeder; nerede görüneceğini ve hangi izinleri isteyeceğini seçer.
+2. Bir temsilci konuşmayı açtığında panel uygulamanızı korumalı bir iframe içinde yükler.
+3. Uygulamanız hazır olduğunu bildirir; panel ona kısa ömürlü, imzalı bir **bağlam belirteci** gönderir.
+4. Uygulamanızın sunucusu belirteci doğrular, içindeki konuşma ve kişi kimlikleriyle kendi verinizi (ve gerekirse [ClickFix API'sini](/docs/api)) sorgular.
+5. Uygulama bir eylem isterse (ör. iç not ekleme) panel bunu temsilcinin oturumuyla ve yetkileriyle uygular.
+
+Uygulamanız temsilcinin oturum bilgilerini hiçbir zaman görmez.
+
+## Gereksinimler [#requirements]
+
+- Uygulama `https://` ile yayında olmalı ve ClickFix panelinden **farklı bir adreste** çalışmalıdır (aynı adresteki uygulamalar güvenlik nedeniyle açılmaz).
+- Adres kullanıcı adı, şifre veya `#` içeremez.
+- Sunucunuz yalnızca ClickFix panelinin çerçevelemesine izin vermelidir: `Content-Security-Policy: frame-ancestors https://getclickfix.com`.
+- Iframe şu kısıtlarla açılır: `sandbox="allow-scripts allow-forms allow-same-origin"`, yönlendiren bilgisi gönderilmez, açılır pencere ve üst sayfaya yönlendirme yoktur, kamera/mikrofon gibi tarayıcı izinleri verilmez. Bağlantıları yeni sekmede açmak yerine metni kopyalanabilir gösterin.
+
+## Mesajlaşma ve olaylar [#messages-and-events]
+
+Uygulamanız panelle `window.postMessage` üzerinden konuşur. Panel yalnızca bu iframe'den ve kayıtlı adresin kökeninden gelen mesajları kabul eder; siz de yalnızca panelin kökeninden gelen mesajları kabul edin.
+
+| Yön              | Mesaj                                                                                                | Ne zaman                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Uygulama → panel | `{"type": "clickfix.ready"}`                                                                         | Sayfa yüklenip dinlemeye hazır olduğunda, bir kez                              |
+| Panel → uygulama | `{"type": "clickfix.context", "context_token": "…", "scopes": ["conversation.read", …]}`             | `ready`'den hemen sonra ve belirteç yenilendiğinde (yaklaşık 100 saniyede bir) |
+| Uygulama → panel | `{"type": "clickfix.action", "request_id": "<uuid>", "action": "conversation.note", "content": "…"}` | Bir eylem istediğinizde                                                        |
+| Panel → uygulama | `{"type": "clickfix.action.result", "request_id": "<uuid>", "success": true}`                        | Eylem tamamlandığında veya reddedildiğinde (`error` alanıyla)                  |
+
+Temsilci başka bir konuşmaya geçtiğinde panel iframe'i **yeniden yükler**; eski bağlam tamamen silinir. Bu yüzden konuşma değişikliğini ayrıca dinlemeniz gerekmez.
+
+```js
+const PANEL = "https://getclickfix.com";
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent || event.origin !== PANEL) return;
+  if (event.data?.type === "clickfix.context") {
+    // Belirteci yalnızca kendi sunucunuza gönderin; URL'ye, loga veya depolamaya yazmayın.
+    loadData(event.data.context_token, event.data.scopes);
+  }
+});
+
+window.parent.postMessage({ type: "clickfix.ready" }, PANEL);
+```
+
+### Eylemler ve izinler [#actions-and-permissions]
+
+| İzin                    | Panelde görünen adı      | Mesaj alanı                                |
+| ----------------------- | ------------------------ | ------------------------------------------ |
+| `conversation.read`     | Konuşmayı görme          | — (bağlama konuşma kimliğini ekler)        |
+| `contact.read`          | Kişiyi görme             | — (bağlama kişi kimliğini ekler)           |
+| `conversation.reply`    | Müşteriye yanıt gönderme | `content` (en fazla 10.000 karakter)       |
+| `conversation.note`     | İç not ekleme            | `content`                                  |
+| `conversation.status`   | Durumu değiştirme        | `value`: `open`, `pending`, `resolved`…    |
+| `conversation.priority` | Önceliği değiştirme      | `value`: `low`, `normal`, `high`, `urgent` |
+| `conversation.assign`   | Temsilci atama           | `target_uuid`: üyenin kimliği              |
+| `conversation.tag`      | Etiket ekleme            | `target_uuid`: etiketin kimliği            |
+
+- Uygulama yalnızca kayıtta verilen **ve** paneli kullanan üyenin de yetkisi olan izinleri kullanabilir. Belirteçteki `scopes` bu kesişimdir.
+- Eylemler yalnızca konuşma kenar çubuğunda çalışır. Her `request_id` bir kez kabul edilir; 10 saniyede en fazla 10 eylem gönderilebilir.
+- `error` değerleri: `scope_denied`, `forbidden`, `invalid_request`, `no_conversation`, `rate_limited`, `duplicate_request`, `failed`.
+
+## Bağlam belirtecini doğrulama [#verifying-the-context-token]
+
+`context_token` bir JWT'dir. Bağlamdaki kimliklere güvenmeden önce sunucunuzda doğrulayın:
+
+- İmza algoritması `EdDSA` (Ed25519). Anahtarlar: `https://api.getclickfix.com/v1/app-context/jwks` (yanıt zarfında `data.keys`; `kid` ile eşleştirin, birkaç dakika önbelleğe alabilirsiniz).
+- `iss` = `clickfix:sidebar-apps`
+- `aud` = uygulamanın kimliği (**Uygulama yönetimi** sayfasında uygulamanın kartındaki **Uygulama kimliği**)
+- `nbf` ≤ şimdi < `exp` (belirteç 120 saniye geçerlidir; birkaç saniyelik saat farkına tolerans tanıyın)
+
+Doğrulanan belirteçteki alanlar:
+
+| Alan                | Açıklama                                                                 |
+| ------------------- | ------------------------------------------------------------------------ |
+| `sub`               | Uygulamayı açan üyenin kimliği                                           |
+| `organization_uuid` | Organizasyonun kimliği                                                   |
+| `conversation_uuid` | Açık konuşma (yalnızca konuşma kenar çubuğunda)                          |
+| `contact_uuid`      | Açık kişi (yalnızca kişi panelinde)                                      |
+| `scopes`            | Kullanılabilir izinler                                                   |
+| `app_revision`      | Uygulama kaydının sürümü; kayıt değişince eski belirteçler geçersiz olur |
+
+Node.js ile doğrulama örneği (bağımlılıksız):
+
+```js
+import { createPublicKey, verify } from "node:crypto";
+
+export function verifyContextToken(token, jwk, appId) {
+  const [h, p, s] = token.split(".");
+  const header = JSON.parse(Buffer.from(h, "base64url"));
+  if (header.alg !== "EdDSA") throw new Error("alg");
+  const key = createPublicKey({
+    key: { kty: "OKP", crv: "Ed25519", x: jwk.x },
+    format: "jwk",
+  });
+  if (!verify(null, Buffer.from(`${h}.${p}`), key, Buffer.from(s, "base64url")))
+    throw new Error("signature");
+  const claims = JSON.parse(Buffer.from(p, "base64url"));
+  const now = Date.now() / 1000;
+  if (
+    claims.iss !== "clickfix:sidebar-apps" ||
+    ![].concat(claims.aud).includes(appId)
+  )
+    throw new Error("claims");
+  if (claims.exp + 30 < now || claims.nbf - 30 > now)
+    throw new Error("expired");
+  return claims;
+}
+```
+
+Konuşmanın ayrıntısına (ör. müşterinin e-posta adresi) ihtiyacınız varsa sunucunuzdan, `conversations:read` kapsamlı bir [API anahtarıyla](/docs/api) `GET /v1/public-api/conversations/{conversation_uuid}` çağırın. API anahtarını asla iframe'e göndermeyin.
+
+## Tema ve boyut [#theming-and-sizing]
+
+- **Tema:** Panel tema bilgisini göndermez. `<meta name="color-scheme" content="light dark">` ekleyin ve renkleri `prefers-color-scheme` ile ayarlayın; panel ile uyumlu görünür.
+- **Genişlik:** Konuşma kenar çubuğu dardır (yaklaşık 320–400 px). Tek sütunlu, kaydırılabilir bir düzen kullanın; yatay kaydırmadan kaçının.
+- **Yükseklik:** Kenar çubuğunda yükseklik yaklaşık 420 px'tir, menüde sayfanın tamamını kullanır. İçerik uzunsa iframe içinde dikey kaydırma kullanın.
+- **Dil ve biçimler:** Tarih, saat ve para tutarlarını `Intl` ile biçimlendirin (`tr-TR`: `29 Eki 2026`, `₺1.249,90`).
+- **Yükleniyor ve hata durumları:** Bağlam gelene kadar kısa bir "yükleniyor" metni, hata olduğunda ne yapılacağını söyleyen bir mesaj gösterin.
+
+## Yayınlama [#publishing]
+
+1. Uygulamanızı HTTPS ile yayınlayın ve `frame-ancestors` başlığını ekleyin.
+2. **Organizasyon → Uygulama yönetimi → Uygulama ekle**'ye basın; ad, adres, simge ve **Görüneceği yer**'i seçin.
+3. Yalnızca gerçekten kullandığınız **izinleri** işaretleyin. **Önizle** ile adresin açıldığını kontrol edin.
+4. Kaydedin ve karttaki **Uygulama kimliği**'ni uygulamanızın ayarlarına `aud` değeri olarak ekleyin.
+5. Bir konuşma açıp sağ paneldeki **Uygulamalar** bölümünden deneyin.
+
+Kaydı değiştirdiğinizde (adres, izinler, yer) açık oturumlar yenilenir ve eski belirteçler geçersiz olur. Uygulamayı geçici olarak gizlemek için kartındaki anahtarı kapatın.
+
+## Galeri uygulamaları [#gallery-apps]
+
+**Uygulama yönetimi** sayfasındaki galeri, panele gömülebildiği doğrulanmış ücretsiz araçları tek tıkla kurmanızı sağlar: Sipariş sorgulama (bu örnek), Calendly randevu, Uptime Kuma durum sayfası, Google Dokümanlar el kitabı, Metabase panosu ve OpenStreetMap haritası. Galeri uygulamaları ClickFix protokolünü kullanmaz; yalnızca adresinizi gösterir ve konuşma verisi almaz.

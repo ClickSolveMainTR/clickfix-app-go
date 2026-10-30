@@ -1,0 +1,190 @@
+---
+title: Webhooks and signature verification
+description: Receive ClickFix events on your server, verify the ClickFix-Webhook-Signature header with HMAC-SHA256 and handle retries safely.
+section: developers
+order: 2
+---
+
+Webhooks send a signed `POST` request to the HTTPS URL you choose whenever something happens in ClickFix (a new conversation, an inbound message, an SLA breach and so on). Your systems stay up to date without polling.
+
+## Create a subscription [#create-a-subscription]
+
+Webhook subscriptions are created through the API, with an [API key](/docs/api?lang=en) that has the `webhooks:write` scope:
+
+```bash
+curl -X POST https://api.getclickfix.com/v1/public-api/webhooks \
+  -H "Authorization: Bearer cf_sk_..." \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: crm-sync-webhook-1" \
+  -d '{
+    "name": "CRM sync",
+    "url": "https://example.com/clickfix/webhook",
+    "events": ["conversation.created", "conversation.resolved"],
+    "enabled": true
+  }'
+```
+
+`data.uuid` in the response is the subscription ID. `data.secret` is the signing secret and is returned **only in the create response**; store it securely.
+
+List subscriptions with `GET /webhooks`, update one with `PUT /webhooks/{uuid}` and delete it with `DELETE /webhooks/{uuid}`. You can also see and delete subscriptions in the dashboard under **Organization → API & automations → REST hook subscriptions**.
+
+### URL rules [#url-rules]
+
+- The URL must use `https://` and point to a public server. `localhost`, `.local`, `.internal` and private IP addresses are rejected.
+- Redirects (3xx) are not followed.
+- Your server must respond within 10 seconds.
+
+## Events [#events]
+
+| Group               | Events                                                                                                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conversation        | `conversation.created`, `conversation.updated`, `conversation.assigned`, `conversation.unassigned`, `conversation.status_changed`, `conversation.priority_changed`, `conversation.resolved`, `conversation.reopened`, `conversation.snoozed`, `conversation.tag_added` |
+| Message             | `message.received`, `message.sent`, `message.failed`                                                                                                                                                                                                                   |
+| Contact and company | `contact.created`, `contact.updated`, `contact.merged`, `company.created`, `company.updated`                                                                                                                                                                           |
+| SLA                 | `sla.warning`, `sla.breached`                                                                                                                                                                                                                                          |
+| Satisfaction        | `csat.submitted`                                                                                                                                                                                                                                                       |
+
+## Request format [#request-format]
+
+Headers:
+
+| Header                       | Description                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `Content-Type`               | `application/json`                                                           |
+| `User-Agent`                 | `ClickFix-Webhooks/1`                                                        |
+| `ClickFix-Webhook-Id`        | Unique delivery ID. It stays the same across retries; use it to deduplicate. |
+| `ClickFix-Webhook-Event`     | Event name, e.g. `conversation.created`                                      |
+| `ClickFix-Webhook-Timestamp` | When the request was signed (Unix seconds)                                   |
+| `ClickFix-Webhook-Signature` | `v1=` followed by the hex HMAC-SHA256 signature                              |
+
+Body:
+
+```json
+{
+  "id": "event-uuid",
+  "event": "conversation.created",
+  "version": 1,
+  "occurred_at": "2026-10-29T10:15:00Z",
+  "data": {}
+}
+```
+
+The content of `data` depends on the event. Read the related resource through the API for full details.
+
+## Verifying the signature [#verifying-the-signature]
+
+The signature is computed as:
+
+```text
+ClickFix-Webhook-Signature = "v1=" + hex(HMAC-SHA256(secret, timestamp + "." + raw_body))
+```
+
+When verifying:
+
+1. Compute the signature over the raw bytes you received, **before parsing JSON**.
+2. Compare it with `ClickFix-Webhook-Signature` in **constant time**.
+3. Reject the request if the timestamp is too old or in the future (e.g. more than 5 minutes).
+4. Store `ClickFix-Webhook-Id`; if the same ID arrives again, don't process it twice.
+5. Respond `2xx` once you have durably stored the event. Do long work in the background.
+
+### Node.js (Express) [#node-js-express]
+
+```js
+import crypto from "node:crypto";
+import express from "express";
+
+const app = express();
+const SECRET = process.env.CLICKFIX_WEBHOOK_SECRET;
+const TOLERANCE_SECONDS = 300;
+
+function verify(rawBody, timestamp, signature) {
+  if (!timestamp || !signature) return false;
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) return false;
+  const expected =
+    "v1=" +
+    crypto
+      .createHmac("sha256", SECRET)
+      .update(`${timestamp}.`)
+      .update(rawBody)
+      .digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+app.post(
+  "/clickfix/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const ok = verify(
+      req.body,
+      req.get("ClickFix-Webhook-Timestamp"),
+      req.get("ClickFix-Webhook-Signature"),
+    );
+    if (!ok) return res.status(401).end();
+
+    const deliveryId = req.get("ClickFix-Webhook-Id");
+    const event = JSON.parse(req.body.toString("utf8"));
+    // Skip if deliveryId was already processed, otherwise queue the event.
+    res.status(204).end();
+  },
+);
+```
+
+### Python [#python]
+
+```python
+import hashlib
+import hmac
+import time
+
+TOLERANCE_SECONDS = 300
+
+def verify(secret: str, raw_body: bytes, timestamp: str, signature: str) -> bool:
+    if not timestamp or not signature:
+        return False
+    try:
+        if abs(time.time() - int(timestamp)) > TOLERANCE_SECONDS:
+            return False
+    except ValueError:
+        return False
+    mac = hmac.new(secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256)
+    expected = "v1=" + mac.hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### Go [#go]
+
+```go
+package webhook
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
+	"time"
+)
+
+func Verify(secret string, body []byte, timestamp, signature string) bool {
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return false
+	}
+	if d := time.Since(time.Unix(ts, 0)); d > 5*time.Minute || d < -5*time.Minute {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp + "."))
+	mac.Write(body)
+	expected := "v1=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+```
+
+## Retries [#retries]
+
+Any non-`2xx` response or a timeout counts as a failed delivery. ClickFix retries with growing intervals (1 minute, 5 minutes, 30 minutes, 2 hours, 6 hours, 12 hours, 24 hours), up to 8 attempts in total. Nothing is delivered while a subscription is disabled.
+
+Retries, REST hooks and trigger polling can deliver the same event more than once, so your receiver must ignore duplicates safely.

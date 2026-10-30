@@ -1,0 +1,133 @@
+# sqlc queries on mixed-scope tables (mixed_scope_tables.txt) that do not
+# name the scope themselves. Format: QueryName reason.
+
+# Platform roles: user_roles and auth_settings only ever reference platform
+# roles (tenant roles are assigned through organization_member_roles).
+GetAuthSettings            default_role_id is a platform role
+CreateRole                 scope defaults to 'platform'
+ListUsersFiltered          user_roles hold platform roles only
+CountUsers                 user_roles hold platform roles only
+CountUsersWithRole         user_roles hold platform roles only
+ListUsersForExport         user_roles hold platform roles only
+ListUserUUIDsForBulk       user_roles hold platform roles only
+
+# Tenant tables (tenant_tables.txt) read without an organization filter
+# (CF-44). Each one resolves the organization from the row itself before any
+# organization-scoped work, or is a platform-wide worker / platform admin view.
+
+# Webhooks: the request names an instance by public uuid or provider id only.
+GetChannelInstanceByPublicUUID     webhook address; unguessable uuid, signature verified with the instance secret, org taken from the row
+GetChannelInstanceByExternal       webhook routing by (channel_type, external_id), unique across organizations; org taken from the row
+ListLiveChannelInstances           platform health / reconcile / IMAP dispatch worker over every organization; each job runs scoped to the row's org
+
+# Inbox workers.
+WakeSnoozedConversations           platform worker; RETURNING rows carry organization_id for the published events
+
+# Billing: platform admin aggregates and cross-organization workers.
+BillingAdminSubscriptionStats      platform admin MRR aggregate (no organization rows returned)
+BillingAdminTransferCount          platform admin count of bank transfers across organizations
+BillingExpiringCredits             wallet expiry worker over every organization; rows carry organization_id
+BillingRefundsWithoutNotes         refund note worker over every organization; rows carry organization_id
+BillingAmbiguousRefunds            refund reconciliation worker over every organization
+BillingStatementPayment            provider statement lookup by (provider, merchant, order reference); org from the row
+BillingExpiredWalletOrganizations  wallet expiry worker; returns the organizations to process
+BillingPaymentOrder                provider callback lookup by (provider, order reference); org from the row
+BillingRenewalCandidates           renewal worker over every organization
+BillingReconcileCandidates         payment reconciliation worker over every organization
+BillingRenewalReminderCandidates   renewal reminder worker over every organization
+
+# SLA (CF-46): the minutely sweep claims due clocks of every organization;
+# each row carries its organization_id, used for all follow-up writes.
+ClaimDueSLAMetrics                 platform-wide SLA sweep worker; org taken from the row
+PurgeIntegrationRequests   worker: deletes expired idempotency rows for all organizations by age
+ClaimScheduledAutomationRules   worker: claims due scheduled rules across organizations; each run then executes with the claimed row organization_id
+ClaimOutboundDeliveries   worker: claims due webhook deliveries across organizations; delivery uses the claimed row organization_id
+
+# CF-51: platform-wide follow-up tick; each claimed reminder carries its organization_id.
+ClaimDueReminders          worker tick across organizations; rows carry organization_id
+# AIKnowledgeSourceDue: scheduled source sync worker; rows contain organization_id, all claims and follow-up reads/writes use that organization
+# KnowledgeReviewDueOrganizations: periodic staleness worker; returns only organization IDs whose articles lack a warning for their current revision, all follow-up mutations scope that organization
+
+# The two AI worker queries above explicitly project organization_id, so the current
+# isolation checker recognizes their scope marker and requires no active exemption.
+# Their cross-organization purpose remains documented here for review.
+
+# Public status pages deliberately expose published pages only; org from row scopes all reads.
+# StatusPublicPage already names p.organization_id in its organization join; no exemption is needed.
+
+# Engineering webhook addresses are unguessable integration UUIDs. Signature is
+# checked against encrypted instance credentials before using its organization.
+EngineeringIntegrationByUUID webhook routing by integration UUID; owning organization is taken from the row after signature validation
+EngineeringClaimDeliveries platform delivery sweep; each returned row carries organization_id, used for all follow-up reads and writes
+EngineeringPurgeOAuthStates platform cleanup removes only expired single-use states across organizations; no data is exposed
+# FeedbackPublicOrg public opt-in board lookup by organization UUID; returns scope for later queries
+# QuotePublic public customer quote lookup by high-entropy share token; redacted response
+# QuotePublicLock public customer decision by high-entropy share token; scope taken from row
+# RevenueReport super-admin-only cross-organization revenue aggregates
+ObservabilityAICost                internal Prometheus aggregate, no organization identifiers or personal data emitted
+# CompliancePolicies                daily maintenance worker enumerates configured policies; subsequent work uses each organization_id
+# CompliancePendingRequests         durable job recovery worker; each request is processed in its organization scope
+ComplianceExpiredExports          artifact expiry worker; subsequent mutation uses organization_id from the row
+SSOExpireStates                    maintenance removes expired cryptographic state only
+# SSOOrganization                    public SSO discovery by organization UUID; returns ID for scoped follow-up queries
+# ReportsDue  scheduled report dispatcher; returns organization_id, subsequent reads/writes use that organization
+ReportsPurge  retention worker deletes expired generated report artifacts only, across organizations
+# OncallMonitorDue  sync dispatcher returns owning organization; all checks and mutations use that scope
+# OncallAlertsDue  escalation dispatcher returns owning organization; steps run inside scoped transactions
+OncallPurgeResults  age-only retention worker removes check history older than 30 days
+# IntegrationPurgeTriggers  retention worker deletes polling history older than 30 days; no data returned
+# CF-127: self-service account deletion intentionally removes this user's data in every organization.
+# AccountDeletionOrganizations authenticated account deletion/worker discovers only subject memberships; later mutations scope the organization
+# PurgeUserPersonalData account purge deletes only the subject user's personal notifications/devices/preferences across organizations
+# PurgeUserSignInData account purge removes only subject user's credentials and grants across organizations
+# AccountDeletionScrubAudit account purge scrubs only subject actor PII across organizations
+# CF-2: subject is authenticated with app-specific HMAC before global discovery; follow-up writes use each returned organization_id.
+# MetaSubjectContacts authenticated Meta subject lookup; returns organization scope
+# MetaSubjectInstances authenticated Meta subject lookup; returns organization scope
+AccountDeletionRevokeDelegatedSessions immediate self-service sign-out revokes only subject user's delegated sessions across organizations
+# AccountDeletionSearchMessages account purge discovers only the deleted subject's authored message documents; each row projects organization_id and no message content is exposed
+# MetaDeletionRequests capability receipt worker discovers only its linked CF-127 requests; each returned organization_id scopes Process
+
+# BillingPlanCreditPage one-off platform backfill pages current subscriptions; every grant locks and re-reads the owning organization
+
+# CF-124/125 cross-org query justifications. These queries already project or
+# correlate organization_id, so the isolation checker needs no active exemption.
+# ResolvePublicBrand / ResolvePublicBrandIdentity: public help resolves an active
+# organization from its slug or a unique configured host, then scopes all content reads.
+# ListExpiredDiagnosticAttachments / ListExpiredWidgetDiagnostics: maintenance
+# enumerates only expired rows and uses each returned organization_id for cleanup.
+# PurgeExpiredWidgetDiagnosticContext: maintenance deletes expired context only;
+# any linked attachment must already be deleted in the same organization.
+# CF-96: Asynq scheduler enumerates due workflow versions/runs across organizations.
+# Both queries project organization_id; every follow-up mutation uses that returned scope.
+
+# WorkflowDueSchedules internal scheduler projects organization_id; subsequent runs stay scoped
+WorkflowRunDue internal executor leases due runs only; returned organization_id scopes version, step and checkpoint access
+# CF-139 video rooms: LiveKit addresses rooms by their unique livekit_name and
+# egress id, guests by an unguessable ticket hash; the org comes from the row.
+VideoLiveRooms              platform sweep over every live room; each room is then handled with its own organization_id
+VideoRoomByUUID             signed join link names the room uuid (HMAC-verified first); org taken from the row
+VideoRoomByLivekitName      LiveKit webhook names the room by its unique livekit_name; org taken from the row
+VideoParticipantByTicket    guest ticket is a 256-bit secret (hash stored); org taken from the row
+VideoRecordingByEgress      egress webhook names the recording by its unique egress id; org taken from the row
+VideoExpiredRecordings      platform retention worker over every organization; rows carry organization_id
+
+# ExpiredWidgetReplayChunks retention worker enumerates expired objects only; each cleanup uses the returned organization_id
+# PurgeWidgetSessions retention worker deletes expired sessions only after all same-organization objects are removed
+# AppointmentVideoDue: minutely appointment outcome worker; each returned row carries organization_id and all reads/writes are scoped to it
+# CF-122: minutely worker only; pending projection carries organization_id, all processing is scoped.
+# TranscriptPending: bounded internal dispatcher; each job includes returned organization_id
+# TranscriptExpire: retention-only deletion across orgs; each source join matches organization_id, triggers scrub same-org traces
+# TranscriptStale: maintenance marks interrupted jobs failed; never loads text or replays provider calls
+
+# Product feedback (CF-141): the platform staff list spans every organization
+# (platform.product_feedback.read); rows are addressed by their uuid.
+ProductFeedbackCount       platform-wide list (platform.product_feedback.read)
+ProductFeedbackSetStatus   platform staff update by uuid (platform.product_feedback.read)
+
+# Mobile widget tokens (CF-152): a token belongs to one user and one
+# organization; the organization comes from the row (and is checked against
+# X-Organization by RequireWidgetOrganization).
+TouchWidgetToken           update of a row already resolved by GetValidWidgetToken
+RevokeWidgetTokensForDevice the caller's own tokens on one device (logout, re-issue)
+RebindWidgetTokensSession  the caller's own tokens follow a rotated refresh session

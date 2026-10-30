@@ -1,0 +1,17 @@
+{
+  "inbox": "Gelen kutusu",
+  "unread": "Okunmamış",
+  "mine": "Bana atanan",
+  "no_conversations": "Bekleyen konuşma yok",
+  "presence": "Durumum",
+  "status.online": "Çevrimiçi",
+  "status.away": "Uzakta",
+  "status.busy": "Meşgul",
+  "status.offline": "Çevrimdışı",
+  "status.unknown": "Bilinmiyor",
+  "signed_out": "Görmek için ClickFix'te oturum açın",
+  "no_org": "ClickFix'te bir organizasyon seçin",
+  "no_permission": "Bu organizasyonda gelen kutusunu görme izniniz yok",
+  "open_app": "ClickFix'i aç",
+  "updated": "Güncellendi {{time}}"
+}

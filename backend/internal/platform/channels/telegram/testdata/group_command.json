@@ -1,0 +1,1 @@
+{"update_id":915372012,"message":{"message_id":57,"from":{"id":6023456789,"is_bot":false,"first_name":"Mehmet","username":"mkaya"},"chat":{"id":-4012345678,"title":"Acme Muhasebe","type":"group","all_members_are_administrators":true},"date":1792829220,"text":"/help@clickfix_test_bot","entities":[{"offset":0,"length":23,"type":"bot_command"}]}}

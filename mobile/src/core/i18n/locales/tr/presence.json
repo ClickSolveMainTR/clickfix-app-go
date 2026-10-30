@@ -1,0 +1,8 @@
+{
+  "shift": "Vardiyam",
+  "shift_org": "Organizasyonun mesai saatlerine göre çalışıyor",
+  "shift_closed": "Bugün mesai yok",
+  "shift_on": "Şu an mesaide · {{start}}–{{end}}",
+  "shift_before": "Bugün {{start}}–{{end}}",
+  "shift_after": "Bugünkü mesai bitti ({{start}}–{{end}})"
+}

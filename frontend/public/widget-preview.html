@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Widget preview</title>
+    <style>
+      /* A neutral fake page behind the widget (CF-150 editor preview). */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font:
+          14px ui-sans-serif,
+          system-ui,
+          sans-serif;
+        background: #f4f5f8;
+        color: #9aa0ad;
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 24px;
+      }
+      .bar {
+        height: 14px;
+        border-radius: 7px;
+        background: #e3e6ec;
+        margin: 12px 0;
+      }
+      .hero {
+        height: 140px;
+        border-radius: 14px;
+        background: #e9ecf2;
+        margin: 20px 0 28px;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #15171c;
+        }
+        .bar,
+        .hero {
+          background: #22252c;
+        }
+      }
+      html.dark,
+      html.dark body {
+        background: #15171c;
+      }
+      html.dark .bar,
+      html.dark .hero {
+        background: #22252c;
+      }
+      html.light,
+      html.light body {
+        background: #f4f5f8;
+      }
+      html.light .bar,
+      html.light .hero {
+        background: #e3e6ec;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page" aria-hidden="true">
+      <div class="bar" style="width: 30%"></div>
+      <div class="hero"></div>
+      <div class="bar"></div>
+      <div class="bar" style="width: 86%"></div>
+      <div class="bar" style="width: 64%"></div>
+      <div class="bar" style="width: 92%"></div>
+      <div class="bar" style="width: 40%"></div>
+    </div>
+    <script src="/widget-preview-bridge.js"></script>
+    <script src="/widget.js" data-preview="true"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+/* App Shortcut phrases (AppShortcuts.xcstrings needs iOS 17; the app targets 16.4). */
+"Change my status in ${applicationName}" = "${applicationName}'te durumumu değiştir";
+"New ${applicationName} conversation" = "Yeni ${applicationName} konuşması";
+"Open my unread conversations in ${applicationName}" = "${applicationName}'te okunmamış konuşmalarımı aç";
+"Search ${applicationName}" = "${applicationName}'te arama yap";
+"Search in ${applicationName}" = "${applicationName}'te ara";
+"Set my ${applicationName} status to ${status}" = "${applicationName} durumumu ${status} yap";
+"Show my ${applicationName} inbox" = "${applicationName} gelen kutumu aç";
+"Show today's appointments in ${applicationName}" = "${applicationName} bugünkü randevularım";
+"Start a new conversation in ${applicationName}" = "${applicationName}'te yeni konuşma başlat";
+"What's on my ${applicationName} agenda today" = "${applicationName} ajandamda bugün ne var";

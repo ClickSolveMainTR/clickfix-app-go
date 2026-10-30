@@ -1,0 +1,84 @@
+---
+title: Otomasyon ve iş akışları
+description: Yönlendirme kuralları, makrolar ve görsel iş akışı editörüyle tekrar eden destek işlerini otomatikleştirin.
+section: product
+order: 5
+---
+
+ClickFix'te otomasyon üç katmandan oluşur:
+
+| Araç                  | Ne için                                                                    | Nerede                                       |
+| --------------------- | -------------------------------------------------------------------------- | -------------------------------------------- |
+| Yönlendirme kuralları | Yeni konuşmayı doğru ekibe veya beceriye göndermek                         | **Ekip durumu → Yönlendirme**                |
+| Makrolar              | Bir konuşmada birden çok eylemi tek tıkla uygulamak                        | **Gelen kutusu → Hazır yanıtlar → Makrolar** |
+| İş akışları           | Tetikleyici, koşul, eylem, bekleme ve dallardan oluşan görsel otomasyonlar | **İş akışları**                              |
+
+## Yönlendirme kuralları [#routing-rules]
+
+**Ekip durumu → Yönlendirme** sekmesinde otomatik yönlendirmeyi açıp stratejiyi seçersiniz:
+
+- **Sırayla (round-robin)** veya **Yük dengeli**.
+- **Kapasite sınırlarına uy**: Temsilcinin aynı anda alabileceği konuşma sayısı aşılmaz.
+
+**Yönlendirme kuralları** yukarıdan aşağı değerlendirilir; ilk uyan kural konuşmayı bir ekibin kuyruğuna gönderir veya belirli beceriler (ör. `tr`, `fatura`) ister. Kural yoksa tüm temsilciler tek bir havuzdur. **Canlı durum** sekmesi çevrimiçi temsilcileri ve kuyruğu, **Geçmiş** sekmesi yönlendirme kararlarını gösterir.
+
+## Makrolar [#macros]
+
+Makrolar, sık yaptığınız işlem dizilerini (etiket ekle, öncelik değiştir, ata, yanıt gönder gibi) tek seferde uygular. Konuşmada `M` tuşuyla açılır. Kişisel veya ekip kapsamlı olabilir.
+
+## İş akışları [#workflows]
+
+İş akışı editörü, otomasyonu kanvas üzerinde düğümlerle kurmanızı sağlar.
+
+### Yeni iş akışı [#new-workflow]
+
+1. Sol menüde **İş akışları → Yeni iş akışı** seçin. Akış bir tetikleyici ve bir bitiş düğümüyle başlar.
+2. Soldaki **Düğümler** paletinden düğümleri kanvasa sürükleyin ve çıkış noktasından giriş noktasına sürükleyerek bağlayın.
+3. Bir düğümü seçip sağdaki panelden ayarlarını yapın.
+4. **Sorunlar** sekmesi eksik veya hatalı ayarları gösterir. Sorun kalmadığında taslak kaydedilir.
+5. **Test et** ile akışı deneyin, ardından **Yayınla**.
+
+Yayınlanan her sürüm değişmez; çalışmalar başladıkları sürüme bağlı kalır. **Sürümler** sekmesinden eski bir sürümü taslağa geri yükleyebilirsiniz.
+
+### Düğüm türleri [#node-types]
+
+| Düğüm       | Ne yapar                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| Tetikleyici | Akışı başlatan olay. Her akışta tam bir tane olur.                                                               |
+| Koşul       | Koşul doğruysa "evet", değilse "hayır" çıkışından devam eder. Koşullar VE / VEYA gruplarıyla iç içe kurulabilir. |
+| Dal         | Konuşmayı iki yola ayırır.                                                                                       |
+| Eylem       | Konuşmada bir değişiklik yapar veya dış bir işlem başlatır.                                                      |
+| Bekle       | 1 dakika ile 30 gün arası bekler. Döngüler yalnızca bekleme düğümünden geri bağlanabilir.                        |
+| Bitiş       | Akışı sonlandırır. Her yol bir bitişe ulaşmalıdır.                                                               |
+
+### Tetikleyiciler [#triggers]
+
+- **Konuşma oluşturuldu**
+- **Konuşma güncellendi** (durum, öncelik, atama gibi alanlar değiştiğinde)
+- **Mesaj alındı** (müşteriden yeni mesaj)
+- **Etiket eklendi**
+- **SLA ihlali**
+- **Zamanlanmış** (her N dakikada açık konuşmaları tarar)
+- **Webhook** (kimliği doğrulanmış bir API çağrısı akışı başlatır)
+
+### Eylemler [#actions]
+
+- **Temsilciye ata**, **Yönlendir** (ekip, beceri ve stratejiye göre; kapasite ve çevrimiçi durum canlı okunur)
+- **Etiket ekle**, **Etiketi kaldır**, **Öncelik ayarla**, **Durum ayarla**
+- **Yanıt gönder** (yazdığınız metin) veya **Hazır yanıt gönder**
+- **İç not ekle**, **Bildirim gönder**
+- **Webhook çağır** (kayıtlı bir webhook uç noktasına olay gönderir)
+- **AI prosedürü çalıştır** (sonuç öneri olarak kalır, müşteriye gönderilmez)
+- **Ürün talebi aç** (bağlı ürün talebi aracında — Jira, Linear, GitHub — kayıt açar)
+
+### Yönlendirme kuralını aktarma [#importing-a-routing-rule]
+
+**Yönlendirmeden aktar** ile mevcut bir yönlendirme kuralını iş akışına dönüştürebilirsiniz. Kural yayınlanmış ama kapalı bir iş akışı olarak gelir; asıl kural değişmez. Hangisinin etkin kalacağına siz karar verirsiniz.
+
+### Çalışmaları izleme [#monitoring-runs]
+
+**Çalışmalar** sekmesi her çalışmanın adım günlüğünü gösterir. **Kanvasta göster** ile çalışmanın izlediği yolu kanvasta görürsünüz. Bekleyen çalışmalarda devam zamanı yazar. Sonucu belirsiz bir dış işlem tekrar denenmez ve elle doğrulamanız için işaretlenir.
+
+## Dış araçlarla otomasyon [#automating-with-external-tools]
+
+Zapier, Make ve n8n gibi araçları ClickFix'e bağlamak için [Entegrasyonlar](/docs/mcp-integrations) sayfasına, kendi sisteminize olay göndermek için [Webhook'lar](/docs/webhooks) sayfasına bakın.

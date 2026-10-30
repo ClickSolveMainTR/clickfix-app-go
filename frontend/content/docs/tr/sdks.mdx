@@ -1,0 +1,241 @@
+---
+title: SDK'lar ve örnek kod
+description: Go, Node.js ve React için ClickFix SDK kullanım örnekleri; kimlik doğrulama, tekrar deneme, sayfalama, webhook imzası ve SDK'sız istekler.
+section: developers
+order: 2
+---
+
+ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için arayüzsüz bir widget istemcisi vardır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar.
+
+<Callout title="Paketler henüz yayımlanmadı">
+  SDK paketleri (`@clickfix/node`, `@clickfix/react-widget` ve Go modülü)
+  yayımlandığında bu sayfada duyurulacak. O zamana kadar aşağıdaki [SDK'sız
+  örnekler](#without-an-sdk) aynı işlemleri doğrudan HTTP ile yapar; [API
+  başvurusundaki](/docs/api-reference/conversations) her uç noktanın yanında
+  curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
+</Callout>
+
+Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). API anahtarları yalnızca sunucuda kalmalıdır; tarayıcı koduna koymayın. Anahtar oluşturma ve kapsamlar: [API](/docs/api).
+
+## İstemci oluşturma ve istek gönderme [#create-a-client]
+
+Yazma işlemlerinde işlemi tanımlayan sabit bir `Idempotency-Key` verin (ör. sipariş numarası) ve tekrar denemelerde aynı değeri gönderin.
+
+```ts tab="Node.js"
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: "https://api.getclickfix.com",
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+const created = await client.request(
+  "/v1/public-api/conversations",
+  "post",
+  {
+    contact_uuid: contactUUID,
+    inbox_uuid: inboxUUID,
+    subject: "Teslimat sorusu",
+  },
+  {
+    idempotencyKey: "siparis-1042-destek",
+    signal: AbortSignal.timeout(30_000),
+  },
+);
+```
+
+```go tab="Go"
+client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+if err != nil {
+	log.Fatal(err)
+}
+res, err := client.GetV1PublicApiContactsWithResponse(ctx, &clickfix.GetV1PublicApiContactsParams{})
+```
+
+Node.js istemcisi hata yanıtlarında durum, kod, istek kimliği ve ayrıntıları taşıyan bir `APIError` fırlatır. GET istekleri ve anahtarlı yazmalar varsayılan olarak en fazla üç kez denenir (üstel bekleme, sınırlı `Retry-After`); anahtarsız yazmalar tekrar denenmez. Go istemcisi 30 saniyelik HTTP zaman aşımı ve aynı tekrar deneme kuralını ekler.
+
+API tamamlanmış yazma yanıtlarını (hatalar dahil) saklar: aynı anahtarla tekrar denemek kayıtlı bir hatayı başarıya çeviremez. Düzeltilmiş girdi için yeni bir anahtar kullanın.
+
+## Sayfalama [#pagination]
+
+```ts tab="Node.js"
+import { paginate } from "@clickfix/node";
+
+for await (const contact of paginate(async (limit, offset) => {
+  const envelope = await client.request(
+    "/v1/public-api/contacts",
+    "get",
+    undefined,
+    {
+      query: { limit, offset },
+    },
+  );
+  // envelope.data'yı kendi şemanızla doğrulayıp {items, total, limit, offset} döndürün.
+  return validateContactPage(envelope.data);
+})) {
+  await consume(contact);
+}
+```
+
+```go tab="Go"
+type Contact struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+err = clickfix.Iterate(ctx,
+	func(ctx context.Context, limit, offset int) (clickfix.Page[Contact], error) {
+		return clickfix.ListPage[Contact](ctx, client, "contacts", limit, offset)
+	},
+	func(contact Contact) bool { /* işle */ return true },
+)
+```
+
+Ofset sayfalama anlık görüntüler içindir; eşzamanlı eklemeler sayfaları kaydırabilir. Eşitleme yaparken UUID'leri tekilleştirin; artımlı eşitleme için [tetikleyici imlecini](/docs/mcp-integrations) kullanın.
+
+## Webhook imzası ve kimlik özeti [#webhook-signature]
+
+```ts tab="Node.js"
+import { identityHash, verifyWebhook } from "@clickfix/node";
+
+const valid = verifyWebhook(
+  secret,
+  headers.timestamp,
+  headers.signature,
+  rawBody,
+);
+
+// Web widget'ında oturum açmış kullanıcı için user_hash
+const userHash = identityHash(identitySecret, authenticatedUser.id);
+```
+
+```go tab="Go"
+err = clickfix.VerifyWebhook(secret,
+	r.Header.Get("ClickFix-Webhook-Timestamp"),
+	r.Header.Get("ClickFix-Webhook-Signature"), rawBody, time.Now(), 5*time.Minute)
+
+userHash := clickfix.IdentityHash(identitySecret, userID)
+```
+
+İmzayı JSON'u ayrıştırmadan önce, ham gövde üzerinde doğrulayın ve yan etkilerden önce `ClickFix-Webhook-Id` değerini kaydedip tekilleştirin. SDK'sız doğrulama örnekleri (Node.js, Python, Go): [Webhook'lar](/docs/webhooks#verifying-the-signature).
+
+## React widget istemcisi [#react-widget]
+
+Hazır mesajlaşma arayüzünü (balon, ana sayfa, yardım merkezi) kendi düğmenizle yönetmek için tipli hook'lar:
+
+```tsx tab="Hazır widget"
+"use client";
+import { useMemo } from "react";
+import { useClickFix, useClickFixEvent } from "@clickfix/react-widget";
+
+export function Support({ consent }: { consent: boolean }) {
+  const options = useMemo(
+    () =>
+      consent
+        ? {
+            appOrigin: "https://getclickfix.com",
+            widgetId: "WIDGET_ID",
+            hideLauncher: true,
+          }
+        : null, // null, onay verilene kadar yüklemeyi erteler
+    [consent],
+  );
+  const { ready, unread, open, sdk } = useClickFix(options);
+  useClickFixEvent("conversation:ended", (e) => console.log(e.status));
+
+  return (
+    <button aria-expanded={open} disabled={!ready} onClick={() => sdk.toggle()}>
+      Destek {unread || ""}
+    </button>
+  );
+}
+```
+
+```tsx tab="Kendi arayüzünüz"
+"use client";
+import { useEffect, useState } from "react";
+import { createWidgetClient, useWidget } from "@clickfix/react-widget";
+
+export function Support() {
+  const [client] = useState(() =>
+    createWidgetClient({
+      publicId: "WIDGET_ID",
+      baseURL: "/api", // kendi sitenizdeki aynı kökenli vekil
+      onToken: (token) => sessionStorage.setItem("support-token", token),
+    }),
+  );
+  const { visitor } = useWidget(client);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void client.init(abort.signal).catch(console.error);
+    return () => abort.abort();
+  }, [client]);
+
+  return <span>{visitor ? "Hazır" : "Bağlanıyor"}</span>;
+}
+```
+
+Arayüzsüz istemcide konuşmaları ve mesajları kendiniz çizersiniz:
+
+```ts
+await client.identify({ user_id: user.id, user_hash: serverProvidedHmac });
+const { items } = await client.conversations();
+await client.createConversation({
+  text: "Merhaba",
+  client_id: crypto.randomUUID(),
+});
+await client.sendMessage(
+  conversationUUID,
+  { text: "Fotoğraf", client_id: stableMessageUUID },
+  file,
+);
+await client.markRead(conversationUUID);
+```
+
+`user_hash` sunucunuzda üretilir; kimlik anahtarını tarayıcıya göndermeyin. Widget komutları ve olayları: [Web widget](/docs/web-widget#javascript-api).
+
+## SDK'sız istekler [#without-an-sdk]
+
+```bash tab="curl"
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: siparis-1042-not" \
+  -d '{ "content": "Sipariş kargoya verildi.", "private": true }'
+```
+
+```ts tab="fetch"
+const res = await fetch(
+  "https://api.getclickfix.com/v1/public-api/contacts?limit=20",
+  {
+    headers: { Authorization: `Bearer ${process.env.CLICKFIX_API_KEY}` },
+  },
+);
+const body = await res.json();
+if (!body.success) throw new Error(`${body.error.code}: ${body.error.message}`);
+```
+
+```python tab="Python"
+import os, requests
+
+API = "https://api.getclickfix.com/v1/public-api"
+headers = {"Authorization": f"Bearer {os.environ['CLICKFIX_API_KEY']}"}
+
+contacts = requests.get(f"{API}/contacts", params={"limit": 20}, headers=headers, timeout=30).json()
+
+created = requests.post(
+    f"{API}/conversations",
+    json={"contact_uuid": contact_uuid, "inbox_uuid": inbox_uuid, "subject": "Teslimat sorusu"},
+    headers={**headers, "Idempotency-Key": "siparis-1042-destek"},
+    timeout=30,
+).json()
+```
+
+`429 RATE_LIMITED` yanıtında `Retry-After` süresi kadar bekleyip aynı `Idempotency-Key` ile tekrar deneyin; `400`, `401` ve `403` hatalarını tekrar denemeyin.
+
+## Sonraki adımlar [#next-steps]
+
+- [API](/docs/api)
+- [Webhook'lar ve imza doğrulama](/docs/webhooks)
+- [Sipariş sorgulama örneği](/docs/order-lookup-sample)

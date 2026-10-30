@@ -1,0 +1,15 @@
+{
+  "incidents.title": "Olaylar",
+  "incidents.active": "Devam eden",
+  "incidents.resolved": "Çözülen",
+  "incidents.state_resolved": "Çözüldü",
+  "incidents.public": "Durum sayfasında",
+  "incidents.started": "Başladı {{at}}",
+  "incidents.resolved_at": "Çözüldü {{at}}",
+  "incidents.empty": "Olay yok",
+  "incidents.empty_hint": "Kesinti veya bakım olduğunda burada görünür.",
+  "incidents.banner_one": "Devam eden bir olay var",
+  "incidents.banner_many_one": "{{count}} devam eden olay var",
+  "incidents.banner_many_other": "{{count}} devam eden olay var",
+  "incidents.open_hint": "Olay ayrıntılarını açar"
+}

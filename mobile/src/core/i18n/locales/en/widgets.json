@@ -1,0 +1,17 @@
+{
+  "inbox": "Inbox",
+  "unread": "Unread",
+  "mine": "Assigned to me",
+  "no_conversations": "No conversations waiting",
+  "presence": "My status",
+  "status.online": "Online",
+  "status.away": "Away",
+  "status.busy": "Busy",
+  "status.offline": "Offline",
+  "status.unknown": "Unknown",
+  "signed_out": "Sign in to ClickFix to see this",
+  "no_org": "Choose an organization in ClickFix",
+  "no_permission": "You can't see the inbox in this organization",
+  "open_app": "Open ClickFix",
+  "updated": "Updated {{time}}"
+}

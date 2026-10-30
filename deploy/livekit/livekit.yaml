@@ -1,0 +1,29 @@
+# ClickFix LiveKit server (CF-139). Non-secret settings only; the entrypoint
+# (deploy/livekit/entrypoint.sh) appends rtc, webhook and TURN sections from
+# environment variables and passes keys / Redis through LiveKit's own env
+# flags (LIVEKIT_KEYS, REDIS_HOST, REDIS_PASSWORD). See docs/video-rooms.md.
+
+# Signalling + server API (HTTP/WebSocket). Never published directly: the
+# reverse proxy terminates TLS (wss://) and the API reaches it on the private
+# app network.
+port: 7880
+logging:
+  level: info
+  json: true
+
+room:
+  # Rooms exist only when the ClickFix API creates them (CreateRoom before
+  # the first token); a token for an unknown room cannot conjure one.
+  auto_create: false
+  empty_timeout: 600
+  departure_timeout: 120
+  # Hard ceiling; each room gets its own max from the platform policy.
+  max_participants: 500
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: video/vp8
+    - mime: video/h264
+    - mime: video/vp9
+
+# Egress (recordings) is registered through the same Redis.

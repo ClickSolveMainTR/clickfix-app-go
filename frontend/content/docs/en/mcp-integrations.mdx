@@ -1,0 +1,90 @@
+---
+title: Zapier, Make, n8n and apps
+description: Connect ClickFix to automations in Zapier, Make and n8n, and add your own tools to the panel as apps.
+section: developers
+order: 3
+---
+
+This page explains how to connect ClickFix with external tools:
+
+- **Zapier, Make and n8n**: REST hook subscriptions, trigger polling and API actions.
+- **Apps**: open your own web app or gallery tools in the conversation sidebar, the contact panel or the menu.
+
+## Zapier, Make and n8n [#zapier-make-and-n8n]
+
+Automation tools use the ClickFix public API. To prepare:
+
+1. Create an API key under **Organization → API & automations**. Automation tools usually need these scopes: `triggers:read`, `webhooks:write`, `conversations:write`, `contacts:write`.
+2. Base URL: `https://api.getclickfix.com/v1/public-api`
+3. Send `Authorization: Bearer cf_sk_...` on every request.
+4. Send a unique `Idempotency-Key` header on every write and reuse it on retry.
+
+### Trigger events [#trigger-events]
+
+| Event                    | When                                     |
+| ------------------------ | ---------------------------------------- |
+| `conversation.created`   | A new conversation is opened             |
+| `conversation.resolved`  | A conversation is resolved               |
+| `contact.created`        | A new contact is created                 |
+| `csat.submitted`         | A customer submits a satisfaction rating |
+| `conversation.tag_added` | A tag is added to a conversation         |
+
+### REST hooks (instant) [#rest-hooks-instant]
+
+Subscribe when a flow is turned on and delete the subscription when it's turned off:
+
+| Operation   | Endpoint                       | Scope            |
+| ----------- | ------------------------------ | ---------------- |
+| Subscribe   | `POST /subscriptions`          | `webhooks:write` |
+| Unsubscribe | `DELETE /subscriptions/{uuid}` | `webhooks:write` |
+
+Subscribe body:
+
+```json
+{
+  "name": "Zap: new conversation",
+  "url": "https://hooks.example.com/receiver",
+  "events": ["conversation.created"],
+  "enabled": true
+}
+```
+
+Store `data.uuid` from the response to unsubscribe, and `data.secret` to [verify signatures](/docs/webhooks?lang=en). Active subscriptions appear on the **REST hook subscriptions** tab in the dashboard; deleting one there stops deliveries to it.
+
+### Trigger polling [#trigger-polling]
+
+For tools that can't use REST hooks:
+
+```bash
+curl "https://api.getclickfix.com/v1/public-api/triggers?event=conversation.created&cursor=0" \
+  -H "Authorization: Bearer cf_sk_..."
+```
+
+- Each page holds up to 100 items in ascending order within your organization.
+- After processing, store `data.next_cursor` and use it on the next call. Keep going while `has_more` is true.
+- Items contain the event ID, event name, the related record's ID and the event time. Read details through the regular API.
+- History is kept for 30 days. If you get `410 CURSOR_EXPIRED`, resynchronize your data and start again with `cursor=0`.
+
+### Actions [#actions]
+
+| Operation           | Endpoint                              | Scope                 |
+| ------------------- | ------------------------------------- | --------------------- |
+| Create conversation | `POST /conversations`                 | `conversations:write` |
+| Add internal note   | `POST /conversations/{uuid}/messages` | `conversations:write` |
+| Update contact      | `PATCH /contacts/{uuid}`              | `contacts:write`      |
+
+See the [API quickstart](/docs/api?lang=en) for example bodies.
+
+### Per tool [#per-tool]
+
+- **Zapier**: wire the subscribe / unsubscribe and list endpoints above into a REST hook trigger; use HTTP requests for actions.
+- **Make**: use the **Custom webhook** module with the same subscribe / unsubscribe requests, plus HTTP actions.
+- **n8n**: call the same endpoints with the HTTP Request node. To package a community node, use the node and credential descriptions on [n8n node definition](/docs/n8n-node?lang=en).
+
+ClickFix doesn't have an official app published in the Zapier, Make or n8n marketplaces yet; connect through the generic HTTP / webhook modules above.
+
+## Apps [#apps]
+
+Open your own web app (order panel, CRM record, billing history) in the conversation sidebar, the contact panel or the menu, or install tools such as Calendly, Uptime Kuma or Metabase from the gallery in one click. Manage apps on **Organization → Manage apps**.
+
+For the context token, signature verification, messages, theming and publishing, see [Build your own app](/docs/apps?lang=en).

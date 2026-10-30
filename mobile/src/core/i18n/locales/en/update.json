@@ -1,0 +1,5 @@
+{
+  "ota_ready": "A new version is ready",
+  "ota_later": "Later",
+  "ota_restart": "Restart"
+}

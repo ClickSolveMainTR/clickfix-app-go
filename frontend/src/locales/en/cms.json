@@ -1,0 +1,11 @@
+{
+  "home.title": "Overview",
+  "home.subtitle": "Your team's conversations, channels and setup steps come together here.",
+  "home.greeting": "Hello {{name}}",
+  "home.eyebrow": "Organization",
+  "home.empty_title": "No conversations yet",
+  "home.empty_description": "Once you connect your first channel, incoming customer messages show up here. The web widget or email gets you started in a few minutes.",
+  "home.no_org_title": "Create your organization first",
+  "home.no_org_description": "Channels, team and conversations belong to an organization. Name your organization and the setup wizard walks you through the rest.",
+  "home.no_org_action": "Create organization"
+}

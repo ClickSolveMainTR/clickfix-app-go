@@ -1,0 +1,84 @@
+---
+title: Google Chat
+description: Google Workspace'te kendi Google Chat uygulamanızı oluşturup ClickFix'e bağlayın; doğrudan mesajlar ve seçtiğiniz odalar gelen kutusuna düşer.
+section: channels
+order: 5
+---
+
+Google Chat kanalı organizasyonunuza özeldir: kendi Google Cloud projenizde bir Google Chat uygulaması ve bir hizmet hesabı oluşturursunuz, ClickFix'e hizmet hesabı anahtarını ve proje numarasını girersiniz.
+
+> Google Chat uygulamaları yalnızca **Google Workspace** hesaplarında çalışır; kişisel Gmail hesabıyla Chat uygulaması yayınlanamaz. Aşağıdaki adımları Workspace yöneticiniz veya projede yetkili bir kullanıcı yapmalıdır.
+
+## Özet [#summary]
+
+| Ne                     | Nerede                                                         | ClickFix alanı                    |
+| ---------------------- | -------------------------------------------------------------- | --------------------------------- |
+| Proje numarası         | Google Cloud Console → proje seçici → **Project number**       | Google Cloud proje numarası       |
+| Hizmet hesabı anahtarı | IAM & Admin → Service Accounts → hesap → Keys → Add key → JSON | Hizmet hesabı anahtarı (JSON)     |
+| HTTP endpoint URL      | ClickFix'te kanal oluşturulunca gösterilir                     | Google Chat API → Configuration   |
+| Odalar                 | Kanal ayarları                                                 | Yönlendirilen Google Chat odaları |
+
+## 1. Google Cloud projesi [#1-google-cloud-project]
+
+1. [console.cloud.google.com](https://console.cloud.google.com) üzerinde yeni bir proje oluşturun veya mevcut bir projeyi seçin. Proje, Workspace organizasyonunuzun altında olmalıdır.
+2. Proje panosundaki **Project number** değerini not edin (yalnızca rakamlardan oluşur, ör. `123456789012`). Bu değer proje kimliği (`my-project-id`) **değildir**.
+
+## 2. Google Chat API'yi etkinleştirin [#2-enable-the-google-chat-api]
+
+**APIs & Services → Library → Google Chat API → Enable**.
+
+## 3. Hizmet hesabı ve anahtar [#3-service-account-and-key]
+
+1. **IAM & Admin → Service Accounts → Create service account** ile bir hizmet hesabı oluşturun (ör. `clickfix-chat`). Rol vermeniz gerekmez.
+2. Hesabı açın → **Keys → Add key → Create new key → JSON**. Anahtar dosyası bilgisayarınıza iner.
+
+Organizasyonunuzda hizmet hesabı anahtarı oluşturma politikayla kapatılmışsa, Cloud yöneticinizin bu proje için istisna tanıması gerekir. Anahtar dosyasını e-postayla veya sohbetle paylaşmayın; yalnızca ClickFix'e yükleyin ve ardından silin.
+
+## 4. ClickFix'te kanalı oluşturun [#4-create-the-channel-in-clickfix]
+
+1. **Kanallar → Kanal ekle → Google Chat** seçin.
+2. **Kanal adı**, **Google Cloud proje numarası** ve **Hizmet hesabı anahtarı (JSON)** alanlarını doldurun. Anahtarı yapıştırabilir veya **Dosyadan yükle** ile seçebilirsiniz.
+3. **Bağla**'ya basın. ClickFix bilgileri Google ile doğrular ve ekranda kopyalanabilir **HTTP endpoint URL** adresini gösterir. Bu adres daha sonra kanal ayarlarında da görünür.
+
+Anahtar şifreli saklanır ve bir daha gösterilmez.
+
+## 5. Chat uygulamasını yapılandırın [#5-configure-the-chat-app]
+
+**APIs & Services → Google Chat API → Configuration**:
+
+- **Build this Chat app as a Google Workspace add-on**: işaretlemeyin.
+- **App name**, **Avatar URL** ve **Description** alanlarını doldurun.
+- **Interactive features**: açık. **Functionality** altında _Receive 1:1 messages_ ve _Join spaces and group conversations_ işaretli olsun.
+- **Connection settings**: **HTTP endpoint URL** seçin ve 4. adımdaki adresi yapıştırın.
+- **Authentication Audience**: **Project Number**.
+- **Visibility**: Uygulamayı kullanabilecek kişi ve grupları seçin.
+
+**Save**'e basın. Uygulama birkaç dakika içinde Google Chat'te aranabilir hâle gelir.
+
+## 6. Kullanım ve oda seçimi [#6-usage-and-picking-rooms]
+
+- **Doğrudan mesajlar**: Google Chat'te uygulamayı arayıp yazan herkesin mesajı gelen kutusuna düşer. Ad ve e-posta Google'dan gelir.
+- **Odalar**: Uygulamayı odaya ekleyin (oda adı → **Apps & integrations → Add apps**). Ardından ClickFix'te kanalın **Ayarlar** menüsünde **Yönlendirilen Google Chat odaları** listesinden odayı işaretleyin. Gerekirse `spaces/AAAA…` biçimindeki oda kimliğini elle ekleyebilirsiniz.
+
+Seçilmeyen odaların mesajları alınmaz. Odalarda Google, uygulamaya yalnızca uygulamanın **@etiketlendiği** mesajları iletir. Odalarda her thread ayrı bir konuşmadır ve yanıtınız aynı thread'e gider.
+
+## Sınırlar [#limits]
+
+Yalnızca metin desteklenir (en fazla 4096 karakter). Dosya, kart ve tepkiler desteklenmez.
+
+## Anahtarı yenileme [#rotating-the-key]
+
+1. Aynı hizmet hesabında yeni bir JSON anahtarı oluşturun.
+2. ClickFix'te kanal ayarlarındaki **Hizmet hesabı anahtarı** alanına yeni dosyayı yükleyip kaydedin. Boş bırakılan alan mevcut anahtarı korur.
+3. Google Cloud'da eski anahtarı silin.
+
+Farklı bir Cloud projesine geçiyorsanız yeni bir Google Chat kanalı oluşturun.
+
+## Sorun giderme [#troubleshooting]
+
+| Belirti                         | Neden ve çözüm                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat'te uygulama yanıt vermiyor | HTTP endpoint URL yanlış veya Authentication Audience "Project Number" değil. ClickFix'teki proje numarası Cloud'dakiyle aynı olmalı. |
+| Bağlarken hata                  | Yapıştırılan JSON bir hizmet hesabı anahtarı değil, anahtar silinmiş veya proje numarası rakam değil.                                 |
+| Oda mesajları gelmiyor          | Oda kanal ayarlarında seçili değil veya mesajda uygulama @etiketlenmedi.                                                              |
+| Oda listesi yüklenmiyor         | Chat API etkin değil veya anahtar geçersiz. Oda kimliğini elle ekleyebilirsiniz.                                                      |

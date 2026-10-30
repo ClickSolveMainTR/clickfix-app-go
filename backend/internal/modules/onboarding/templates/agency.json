@@ -1,0 +1,106 @@
+{
+  "key": "agency",
+  "version": 1,
+  "icon": "palette",
+  "accent": "#7c3aed",
+  "order": 30,
+  "name": { "tr": "Ajans", "en": "Agency" },
+  "description": {
+    "tr": "Dijital, kreatif ve yazılım ajansları için: müşteri bazlı talepler, revizyon turları, proje ekipleri ve sözleşmeli yanıt süreleri.",
+    "en": "For digital, creative and dev agencies: client requests, revision rounds, project teams and contracted response times."
+  },
+  "highlights": [
+    { "tr": "Proje ve revizyon etiketleri", "en": "Project and revision tags" },
+    { "tr": "Müşteri projesi alanı", "en": "Client project field" },
+    { "tr": "Revizyon makrosu", "en": "Revision macro" }
+  ],
+  "industries": ["agency", "ajans", "kreatif", "creative", "dijital", "marketing", "pazarlama", "tasarım"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "agency", "locale": "tr", "languages": ["tr", "en"], "tone": "friendly" },
+    "branding": { "primary_color": "#7c3aed" },
+    "teams": [
+      { "key": "musteri-iliskileri", "name": "Müşteri İlişkileri", "description": "Talepleri karşılar, önceliklendirir", "color": "#7c3aed", "skills": ["iletişim"] },
+      { "key": "tasarim", "name": "Tasarım", "description": "Kreatif ve revizyon işleri", "color": "#db2777", "skills": ["tasarım"] },
+      { "key": "gelistirme", "name": "Geliştirme", "description": "Web, uygulama ve teknik bakım", "color": "#0f766e", "skills": ["web", "teknik"] }
+    ],
+    "tags": [
+      { "name": "revizyon", "color": "#db2777" },
+      { "name": "yeni-iş", "color": "#16a34a" },
+      { "name": "acil-yayın", "color": "#dc2626" },
+      { "name": "bakım", "color": "#0f766e" },
+      { "name": "fatura", "color": "#b45309" },
+      { "name": "onay-bekliyor", "color": "#f59e0b" }
+    ],
+    "statuses": [
+      { "name": "Müşteri onayında", "slug": "musteri-onayinda", "category": "pending", "color": "#f59e0b" }
+    ],
+    "business_hours": {
+      "name": "Ajans mesaisi", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "09:30", "close": "18:30" }, { "day": "tue", "open": "09:30", "close": "18:30" },
+        { "day": "wed", "open": "09:30", "close": "18:30" }, { "day": "thu", "open": "09:30", "close": "18:30" },
+        { "day": "fri", "open": "09:30", "close": "18:30" }, { "day": "sat", "closed": true }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Retainer müşterileri", "description": "Sözleşmeli müşteriler için yanıt süreleri",
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 30, "resolution_minutes": 480 },
+          { "priority": "high", "first_response_minutes": 120, "resolution_minutes": 1440 },
+          { "priority": "normal", "first_response_minutes": 480, "resolution_minutes": 4320 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Talep alındı", "shortcut": "alindi", "category": "Genel", "content": "Talebinizi aldık, proje ekibimiz inceliyor. Tahmini teslim tarihini gün içinde paylaşacağız." },
+      { "title": "Revizyon turu", "shortcut": "revizyon", "category": "Proje", "content": "Revizyon notlarınızı aldık. Sözleşmenizdeki revizyon hakkı kapsamında çalışmaya başlıyoruz." },
+      { "title": "Onay iste", "shortcut": "onay", "category": "Proje", "content": "Çalışmanın son halini ekte paylaştık. Onayınızı aldıktan sonra yayına alacağız." },
+      { "title": "Yayına alındı", "shortcut": "yayinda", "category": "Proje", "content": "Çalışma yayına alındı. Bir sorun görürseniz bu konuşmadan bize yazmanız yeterli." }
+    ],
+    "macros": [
+      { "name": "Revizyon talebi", "description": "Revizyon etiketler ve tasarım ekibine not düşer",
+        "actions": [ { "type": "tag", "value": "revizyon" }, { "type": "note", "value": "Revizyon talebi: kalan revizyon hakkını kontrol edin." }, { "type": "reply", "value": "Revizyon notlarınızı aldık, çalışmaya başlıyoruz." } ] },
+      { "name": "Müşteri onayına gönder", "description": "Onay bekliyor etiketi ve bekleme",
+        "actions": [ { "type": "tag", "value": "onay-bekliyor" }, { "type": "status", "value": "pending" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "proje", "label": "Proje", "type": "text" },
+      { "entity": "contact", "key": "sozlesme_tipi", "label": "Sözleşme tipi", "type": "select", "options": ["Retainer", "Proje bazlı", "Saatlik"] }
+    ],
+    "forms": [
+      { "name": "Yeni talep", "description": "Müşteri talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "email", "label": "E-posta", "required": true },
+          { "field": "custom:proje", "label": "Proje adı", "required": true }, { "field": "message", "label": "Talep detayı", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "calisma-sekli", "name": "Nasıl çalışıyoruz", "articles": [
+        { "slug": "revizyon-hakki", "title": "Revizyon hakkı nasıl işler?", "public": true,
+          "body": "Her teslimat için sözleşmenizde belirtilen sayıda revizyon hakkınız vardır. Revizyon notlarını tek mesajda ve maddeler halinde iletmeniz süreci hızlandırır." },
+        { "slug": "acil-talep", "title": "Acil yayın talebi", "public": false,
+          "body": "Canlı sitede kırık bir sayfa, ödeme hatası veya yanlış fiyat gibi durumlar acildir. Bu talepleri *acil-yayın* etiketiyle geliştirme ekibine aktarın." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Merhaba!", "greeting_text": "Projenizle ilgili her şey için bize buradan yazabilirsiniz.", "color": "#7c3aed" },
+    "ai_agent": {
+      "persona": "Ajansın proje koordinatörüsün. Müşterinin talebini netleştirir, doğru ekibe yönlendirir ve süreç hakkında bilgi verirsin.",
+      "tone": "Profesyonel, yardımsever ve net. Teslim tarihlerinde temkinli ol.",
+      "guardrails": [
+        "Teslim tarihi veya ek ücret hakkında söz verme; proje ekibine devret.",
+        "Sözleşme kapsamı dışındaki işleri onaylama."
+      ],
+      "handoff_keywords": ["sözleşme", "fesih", "ödeme", "acil"],
+      "procedures": [
+        { "intent": "revision_request", "title": "Revizyon talebi", "steps": ["Proje adını ve teslimatı sor.", "Revizyon notlarını maddeler halinde iste.", "Talebi revizyon etiketiyle tasarım ekibine devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Acil yayınlar geliştirmeye", "team": "gelistirme", "priorities": ["urgent"] }
+    ],
+    "views": [
+      { "name": "Onay bekleyenler", "icon": "clock", "statuses": ["pending"] },
+      { "name": "Acil", "icon": "flame", "statuses": ["open"], "priorities": ["urgent", "high"] }
+    ],
+    "survey": { "name": "Proje memnuniyeti", "question": "Bu talepte ekibimizle çalışmaktan ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "daily", "digest_hour": 9 }
+  }
+}

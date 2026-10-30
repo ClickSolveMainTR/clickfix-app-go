@@ -1,0 +1,85 @@
+---
+title: SSO ve SCIM
+description: Ekibinizin kendi kimlik sağlayıcınızla OIDC veya SAML üzerinden giriş yapmasını ve SCIM ile otomatik kullanıcı yönetimini ayarlayın.
+section: security
+order: 2
+---
+
+Kurumsal tek oturum açma (SSO) ile ekibiniz ClickFix'e kendi kimlik sağlayıcınız (IdP) üzerinden giriş yapar. SCIM 2.0 ile kullanıcılar ve gruplar kimlik sağlayıcınızdan otomatik olarak eklenir, güncellenir ve devre dışı bırakılır.
+
+SSO, SCIM ve IP kısıtlaması **Kurumsal plan** özelliğidir. Ayarlar **Organizasyon → Güvenlik** sayfasındadır.
+
+## Nasıl çalışır [#how-it-works]
+
+- SSO ile giriş yapabilmek için kullanıcının **önceden SCIM ile sağlanmış** ve etkin olması gerekir. ClickFix, kullanıcıları yalnızca e-posta adresine bakarak otomatik eşleştirmez.
+- SCIM'deki `externalId`, OIDC'deki `sub` değerine veya SAML'deki `NameID` değerine **eşit olmalıdır**. Bu değer değişmeyen, kalıcı bir kimlik olmalıdır.
+- SSO ile açılan oturum yalnızca o organizasyon için geçerlidir. Süresi dolduğunda kimlik sağlayıcı üzerinden yeniden giriş yapılır.
+
+## 1. SSO'yu yapılandırma [#1-configure-sso]
+
+**Organizasyon → Güvenlik → Tek oturum açma (SSO)** bölümünde **Protokol** seçin.
+
+### OIDC [#oidc]
+
+1. Kimlik sağlayıcınızda bir OIDC uygulaması (authorization code akışı) oluşturun.
+2. ClickFix'te gösterilen **Redirect URI** adresini IdP uygulamanıza ekleyin.
+3. ClickFix'e şunları girin: **Issuer**, **Client ID**, **Client secret**, **Yetkilendirme URL'si**, **Token URL'si** ve **JWKS URL'si**. Tüm adresler `https://` olmalıdır.
+4. **SSO etkin**'i işaretleyip kaydedin.
+
+ClickFix PKCE (S256) kullanır ve ID token'ı RS256 imzası, issuer, audience ve süre açısından doğrular. Client secret şifreli saklanır ve bir daha gösterilmez; alanı boş bırakırsanız kayıtlı değer korunur.
+
+### SAML [#saml]
+
+1. ClickFix'te gösterilen **ACS adresi (Assertion Consumer Service)** ve **SP Entity ID / metadata adresi** değerleriyle kimlik sağlayıcınızda bir SAML uygulaması oluşturun.
+2. IdP'nizin **metadata XML**'ini ClickFix'e yapıştırın veya **XML dosyası yükle** ile seçin (en fazla 1 MB).
+3. **SSO etkin**'i işaretleyip kaydedin.
+
+SAML için şu koşullar geçerlidir:
+
+- IdP, **imzalı** ve **şifrelenmemiş** assertion göndermelidir. Şifreli assertion desteklenmez.
+- Giriş her zaman ClickFix'ten başlatılır. IdP tarafından başlatılan (IdP-initiated) girişler reddedilir.
+
+## 2. SCIM ile kullanıcı sağlama [#2-provision-users-with-scim]
+
+1. SSO yapılandırmasını kaydettikten sonra **SCIM ile kullanıcı yönetimi** bölümünde **Token oluştur / yenile**'ye basın.
+2. Gösterilen **SCIM temel adresi** ve **SCIM token** değerlerini kimlik sağlayıcınızın SCIM / provisioning ayarlarına girin. Token **yalnızca bir kez** gösterilir.
+3. Kullanıcıları ve grupları IdP'nizde ClickFix uygulamasına atayın.
+
+Yeni token oluşturmak eskisini hemen geçersiz kılar; bu durumda IdP'nizi de güncelleyin.
+
+### Desteklenen SCIM işlemleri [#supported-scim-operations]
+
+| Kaynak | İşlemler                                                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Users  | Sayfalı liste, GET, POST, PUT, PATCH, DELETE. `userName` ve `externalId` eşitlik filtreleri                                     |
+| Groups | Sayfalı liste, GET, POST, PUT, PATCH, DELETE. `displayName` ve `externalId` eşitlik filtreleri, PATCH ile üye ekleme ve çıkarma |
+
+Desteklenmeyenler: toplu (Bulk) işlemler, parola değişikliği, sıralama, ETag ve diğer filtre ifadeleri (`400` döner). SCIM istekleri organizasyon başına dakikada 120 ile sınırlıdır.
+
+Notlar:
+
+- Kullanıcıyı devre dışı bırakmak veya silmek, kişinin bu organizasyondaki üyeliğini ve ekip üyeliklerini kaldırır; ClickFix hesabının kendisi silinmez.
+- Kilitlenmeyi önlemek için **sahip** ve **yönetici** rolündeki üyeler SCIM ile kaldırılamaz.
+- Gruplar ClickFix'te ekiplere karşılık gelir. Grup PUT isteği üye listesini tamamen değiştirir.
+
+## 3. Girişi test etme [#3-test-sign-in]
+
+1. **Girişi test et**'e basın. Kimlik sağlayıcınıza yönlendirilir, giriş yaparsınız.
+2. Yanıt doğrulanır ve SCIM ile sağlanmış eşleşen kullanıcı bulunursa "SSO testi başarılı" mesajını görürsünüz.
+
+Test başarısız olursa issuer, client bilgileri, metadata ve kullanıcının SCIM kaydını kontrol edin.
+
+Ekibinizle **Üyeler için giriş bağlantısı**'nı paylaşın; bu bağlantı doğrudan organizasyonunuzun SSO girişini başlatır.
+
+## 4. SSO'yu zorunlu kılma [#4-enforce-sso]
+
+**SSO zorunlu** açıkken organizasyona yalnızca SSO ile açılmış oturumlar erişebilir; parolayla giriş yapan üyeler engellenir.
+
+- Zorunluluk yalnızca **SSO ile doğrulanmış bir oturumdan** açılabilir. Önce **Girişi test et** ile oturumunuzu doğrulayın.
+- Açmadan önce yöneticilerin SSO ile giriş yapabildiğinden emin olun. SSO yapılandırması bozulursa ekip kilitlenebilir.
+
+## IP kısıtlaması [#ip-restrictions]
+
+**IP kısıtlaması** bölümünde organizasyona yalnızca belirli IP adreslerinden veya CIDR bloklarından (ör. `203.0.113.0/24`) erişilmesini sağlarsınız. Liste boşken kısıtlama yoktur; en fazla 100 kural eklenebilir.
+
+Kısıtlama panel, API ve mobil uygulama dahil tüm istekler için geçerlidir. Mevcut IP'niz listede yoksa ClickFix kaydetmenize izin vermez; **IP'mi ekle** ile kendi adresinizi ekleyin.

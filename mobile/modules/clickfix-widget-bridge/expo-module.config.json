@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ClickFixWidgetBridgeModule"],
+    "appDelegateSubscribers": ["ClickFixWidgetBridgeAppDelegate"]
+  },
+  "android": {
+    "modules": ["expo.modules.clickfixwidgetbridge.ClickFixWidgetBridgeModule"]
+  }
+}

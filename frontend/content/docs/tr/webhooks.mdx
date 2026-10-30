@@ -1,0 +1,190 @@
+---
+title: Webhook'lar ve imza doğrulama
+description: ClickFix olaylarını kendi sunucunuza alın, ClickFix-Webhook-Signature başlığını HMAC-SHA256 ile doğrulayın ve tekrarları güvenle işleyin.
+section: developers
+order: 2
+---
+
+Webhook'lar, ClickFix'te bir olay olduğunda (yeni konuşma, gelen mesaj, SLA ihlali vb.) sizin belirttiğiniz HTTPS adresine imzalı bir `POST` isteği gönderir. Böylece sisteminizi yoklama yapmadan güncel tutabilirsiniz.
+
+## Abonelik oluşturma [#create-a-subscription]
+
+Webhook abonelikleri API üzerinden oluşturulur. `webhooks:write` kapsamlı bir [API anahtarı](/docs/api) ile:
+
+```bash
+curl -X POST https://api.getclickfix.com/v1/public-api/webhooks \
+  -H "Authorization: Bearer cf_sk_..." \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: crm-sync-webhook-1" \
+  -d '{
+    "name": "CRM senkronizasyonu",
+    "url": "https://ornek.com/clickfix/webhook",
+    "events": ["conversation.created", "conversation.resolved"],
+    "enabled": true
+  }'
+```
+
+Yanıttaki `data.uuid` aboneliğin kimliğidir. `data.secret` imza anahtarıdır ve **yalnızca oluşturma yanıtında** döner; güvenli bir yerde saklayın.
+
+Abonelikleri `GET /webhooks` ile listeleyebilir, `PUT /webhooks/{uuid}` ile güncelleyebilir, `DELETE /webhooks/{uuid}` ile silebilirsiniz. Mevcut abonelikleri panelde **Organizasyon → API ve otomasyonlar → REST hook abonelikleri** sekmesinde de görür ve silebilirsiniz.
+
+### Adres kuralları [#url-rules]
+
+- Adres `https://` olmalı ve herkese açık bir sunucuya işaret etmelidir. `localhost`, `.local`, `.internal` ve özel IP adresleri kabul edilmez.
+- Yönlendirmeler (3xx) izlenmez.
+- Sunucunuz 10 saniye içinde yanıt vermelidir.
+
+## Olaylar [#events]
+
+| Grup           | Olaylar                                                                                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Konuşma        | `conversation.created`, `conversation.updated`, `conversation.assigned`, `conversation.unassigned`, `conversation.status_changed`, `conversation.priority_changed`, `conversation.resolved`, `conversation.reopened`, `conversation.snoozed`, `conversation.tag_added` |
+| Mesaj          | `message.received`, `message.sent`, `message.failed`                                                                                                                                                                                                                   |
+| Kişi ve şirket | `contact.created`, `contact.updated`, `contact.merged`, `company.created`, `company.updated`                                                                                                                                                                           |
+| SLA            | `sla.warning`, `sla.breached`                                                                                                                                                                                                                                          |
+| Memnuniyet     | `csat.submitted`                                                                                                                                                                                                                                                       |
+
+## İstek biçimi [#request-format]
+
+Başlıklar:
+
+| Başlık                       | Açıklama                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| `Content-Type`               | `application/json`                                                                         |
+| `User-Agent`                 | `ClickFix-Webhooks/1`                                                                      |
+| `ClickFix-Webhook-Id`        | Teslimatın benzersiz kimliği. Tekrar denemelerde aynı kalır; tekilleştirmek için kullanın. |
+| `ClickFix-Webhook-Event`     | Olay adı, ör. `conversation.created`                                                       |
+| `ClickFix-Webhook-Timestamp` | İsteğin imzalandığı an (Unix saniye)                                                       |
+| `ClickFix-Webhook-Signature` | `v1=` ve ardından onaltılık (hex) HMAC-SHA256 imzası                                       |
+
+Gövde:
+
+```json
+{
+  "id": "olay-uuid",
+  "event": "conversation.created",
+  "version": 1,
+  "occurred_at": "2026-10-29T10:15:00Z",
+  "data": {}
+}
+```
+
+`data` içeriği olaya göre değişir. Ayrıntılı bilgi için ilgili kaynağı API ile okuyun.
+
+## İmza doğrulama [#verifying-the-signature]
+
+İmza şöyle hesaplanır:
+
+```text
+ClickFix-Webhook-Signature = "v1=" + hex(HMAC-SHA256(secret, timestamp + "." + ham_gövde))
+```
+
+Doğrularken:
+
+1. Gövdeyi **JSON olarak ayrıştırmadan önce**, gelen ham baytlarla imzayı hesaplayın.
+2. Sonucu `ClickFix-Webhook-Signature` ile **sabit zamanlı** karşılaştırın.
+3. Zaman damgası çok eskiyse veya ilerideyse (ör. 5 dakikadan fazla) isteği reddedin.
+4. `ClickFix-Webhook-Id` değerini kaydedin; aynı kimlik tekrar gelirse işlemi yinelemeyin.
+5. Olayı kalıcı olarak kaydettikten sonra `2xx` yanıt verin. Uzun işleri arka planda yapın.
+
+### Node.js (Express) [#node-js-express]
+
+```js
+import crypto from "node:crypto";
+import express from "express";
+
+const app = express();
+const SECRET = process.env.CLICKFIX_WEBHOOK_SECRET;
+const TOLERANCE_SECONDS = 300;
+
+function verify(rawBody, timestamp, signature) {
+  if (!timestamp || !signature) return false;
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) return false;
+  const expected =
+    "v1=" +
+    crypto
+      .createHmac("sha256", SECRET)
+      .update(`${timestamp}.`)
+      .update(rawBody)
+      .digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+app.post(
+  "/clickfix/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const ok = verify(
+      req.body,
+      req.get("ClickFix-Webhook-Timestamp"),
+      req.get("ClickFix-Webhook-Signature"),
+    );
+    if (!ok) return res.status(401).end();
+
+    const deliveryId = req.get("ClickFix-Webhook-Id");
+    const event = JSON.parse(req.body.toString("utf8"));
+    // deliveryId daha önce işlendiyse atlayın, değilse event'i kuyruğa alın.
+    res.status(204).end();
+  },
+);
+```
+
+### Python [#python]
+
+```python
+import hashlib
+import hmac
+import time
+
+TOLERANCE_SECONDS = 300
+
+def verify(secret: str, raw_body: bytes, timestamp: str, signature: str) -> bool:
+    if not timestamp or not signature:
+        return False
+    try:
+        if abs(time.time() - int(timestamp)) > TOLERANCE_SECONDS:
+            return False
+    except ValueError:
+        return False
+    mac = hmac.new(secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256)
+    expected = "v1=" + mac.hexdigest()
+    return hmac.compare_digest(expected, signature)
+```
+
+### Go [#go]
+
+```go
+package webhook
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
+	"time"
+)
+
+func Verify(secret string, body []byte, timestamp, signature string) bool {
+	ts, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return false
+	}
+	if d := time.Since(time.Unix(ts, 0)); d > 5*time.Minute || d < -5*time.Minute {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp + "."))
+	mac.Write(body)
+	expected := "v1=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+```
+
+## Tekrar denemeler [#retries]
+
+`2xx` dışındaki her yanıt veya zaman aşımı başarısız teslimat sayılır. ClickFix teslimatı artan aralıklarla (1 dakika, 5 dakika, 30 dakika, 2 saat, 6 saat, 12 saat, 24 saat) toplam 8 denemeye kadar tekrarlar. Abonelik devre dışıysa teslimat yapılmaz.
+
+Tekrar denemeler ve REST hook / yoklama tetikleyicileri aynı olay için birden fazla teslimat üretebileceğinden alıcınızın tekrarları güvenle yok sayması gerekir.

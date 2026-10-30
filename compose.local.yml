@@ -1,0 +1,220 @@
+name: ${COMPOSE_PROJECT_NAME:-${NAME_PREFIX:-app}}
+
+# Local infrastructure only. Backend (air) and frontend (pnpm) run on the host
+# via `make local-dev`. No dokploy-network.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: ${NAME_PREFIX:-app}-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
+      POSTGRES_DB: ${DB_NAME:-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+
+  redis:
+    image: redis:8-alpine
+    container_name: ${NAME_PREFIX:-app}-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    container_name: ${NAME_PREFIX:-app}-seaweedfs
+    restart: unless-stopped
+    # Single-node SeaweedFS (master + volume + filer + S3 gateway). The bucket
+    # is created on start. The admin identity from AWS_ACCESS_KEY_ID denies
+    # anonymous S3 access; the JWT keys lock the filer / volume HTTP ports so
+    # only the S3 gateway (same process) can read or write objects.
+    command:
+      - mini
+      - -dir=/data
+      - -ip=127.0.0.1
+      - -ip.bind=0.0.0.0
+      - -bucket=${S3_BUCKET:-app}
+      - -s3.port=8333
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+      - -webdav=false
+      - -admin.ui=false
+      - -master.telemetry=false
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-s3admin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-s3admin-secret}
+      WEED_JWT_SIGNING_KEY: ${SEAWEEDFS_JWT_WRITE_KEY:-local-seaweedfs-write-key}
+      WEED_JWT_FILER_SIGNING_KEY: ${SEAWEEDFS_JWT_WRITE_KEY:-local-seaweedfs-write-key}
+      WEED_JWT_SIGNING_READ_KEY: ${SEAWEEDFS_JWT_READ_KEY:-local-seaweedfs-read-key}
+      WEED_JWT_FILER_SIGNING_READ_KEY: ${SEAWEEDFS_JWT_READ_KEY:-local-seaweedfs-read-key}
+    ports:
+      - "${S3_PORT:-9000}:8333"
+    volumes:
+      - seaweedfs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8333/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    platform: linux/amd64
+    container_name: ${NAME_PREFIX:-app}-mailhog
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    networks:
+      - app
+
+  adminer:
+    image: adminer:4
+    container_name: ${NAME_PREFIX:-app}-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    networks:
+      - app
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: ${NAME_PREFIX:-app}-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-app-dev-meili-master-key-change-me}
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      # Use 127.0.0.1 — BusyBox wget resolves localhost to ::1; Meili listens on IPv4 only.
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - app
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: ${NAME_PREFIX:-app}-centrifugo
+    restart: unless-stopped
+    command: centrifugo -c config.json
+    environment:
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:-app-centrifugo-api-key-change-me}
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:-app-centrifugo-token-hmac-change-me}
+      CENTRIFUGO_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGINS:-http://localhost:3000 http://127.0.0.1:3000}
+    ports:
+      - "${CENTRIFUGO_PORT:-8000}:8000"
+    volumes:
+      - ./deploy/centrifugo/config.json:/centrifugo/config.json:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "centrifugo", "healthcheck", "--address=http://localhost:8000"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+
+  # LiveKit SFU for video rooms (CF-139). Dev keys below match the backend
+  # defaults in .env.example; the API on the host receives webhooks through
+  # host.docker.internal. Recording needs the `video-recording` profile:
+  #   docker compose -f compose.local.yml --profile video-recording up -d
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    container_name: ${NAME_PREFIX:-app}-livekit
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/livekit/entrypoint.sh"]
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-APIclickfixdev}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-clickfix-local-livekit-secret-change-me}
+      REDIS_HOST: redis:6379
+      LIVEKIT_WEBHOOK_URL: http://host.docker.internal:8080/v1/public/video/webhook
+      NODE_IP: 127.0.0.1
+      LIVEKIT_USE_EXTERNAL_IP: "false"
+      LIVEKIT_RTC_PORT_START: "50000"
+      LIVEKIT_RTC_PORT_END: "50100"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./deploy/livekit/livekit.yaml:/etc/livekit/livekit.yaml:ro
+      - ./deploy/livekit/entrypoint.sh:/etc/livekit/entrypoint.sh:ro
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"
+      - "7881:7881/tcp"
+      - "50000-50100:50000-50100/udp"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app
+
+  livekit-egress:
+    image: livekit/egress:v1.15.0
+    container_name: ${NAME_PREFIX:-app}-livekit-egress
+    profiles: ["video-recording"]
+    restart: unless-stopped
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-APIclickfixdev}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-clickfix-local-livekit-secret-change-me}
+      LIVEKIT_WS_URL: ws://livekit:7880
+      EGRESS_CONFIG_BODY: |
+        redis:
+          address: redis:6379
+        health_port: 9090
+        enable_chrome_sandbox: false
+    shm_size: 1gb
+    depends_on:
+      - livekit
+    networks:
+      - app
+
+volumes:
+  postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-${NAME_PREFIX:-app}-postgres}
+  redis_data:
+    name: ${REDIS_VOLUME_NAME:-${NAME_PREFIX:-app}-redis}
+  seaweedfs_data:
+    name: ${SEAWEEDFS_VOLUME_NAME:-${NAME_PREFIX:-app}-seaweedfs}
+  meili_data:
+    name: ${MEILI_VOLUME_NAME:-${NAME_PREFIX:-app}-meilisearch}
+
+networks:
+  app:
+    name: ${LOCAL_NETWORK_NAME:-${NAME_PREFIX:-app}}
+    driver: bridge

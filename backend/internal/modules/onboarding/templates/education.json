@@ -1,0 +1,105 @@
+{
+  "key": "education",
+  "version": 1,
+  "icon": "graduation-cap",
+  "accent": "#ea580c",
+  "order": 60,
+  "name": { "tr": "Eğitim", "en": "Education" },
+  "description": {
+    "tr": "Okullar, kurs platformları ve eğitim kurumları için: kayıt, ödeme, ders erişimi ve sertifika talepleri; veli ve öğrenci iletişimi.",
+    "en": "For schools, course platforms and training providers: enrolment, payments, course access and certificates; parent and student communication."
+  },
+  "highlights": [
+    { "tr": "Kayıt ve ders erişimi etiketleri", "en": "Enrolment and course access tags" },
+    { "tr": "Öğrenci numarası alanı", "en": "Student ID field" },
+    { "tr": "Kayıt dönemine uygun SLA", "en": "Enrolment-season SLA" }
+  ],
+  "industries": ["education", "eğitim", "okul", "school", "kurs", "course", "akademi", "üniversite", "edtech"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "education", "locale": "tr", "languages": ["tr"], "tone": "friendly" },
+    "branding": { "primary_color": "#ea580c" },
+    "teams": [
+      { "key": "ogrenci-isleri", "name": "Öğrenci İşleri", "description": "Kayıt, ödeme ve belge talepleri", "color": "#ea580c", "skills": ["kayıt"] },
+      { "key": "teknik-destek", "name": "Teknik Destek", "description": "Platform ve ders erişimi", "color": "#2563eb", "skills": ["platform"] }
+    ],
+    "tags": [
+      { "name": "kayıt", "color": "#16a34a" },
+      { "name": "ödeme", "color": "#b45309" },
+      { "name": "ders-erişimi", "color": "#2563eb" },
+      { "name": "sertifika", "color": "#7c3aed" },
+      { "name": "sınav", "color": "#dc2626" },
+      { "name": "veli", "color": "#0891b2" }
+    ],
+    "statuses": [
+      { "name": "Belge bekleniyor", "slug": "belge-bekleniyor", "category": "pending", "color": "#f59e0b" }
+    ],
+    "business_hours": {
+      "name": "Öğrenci işleri saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "09:00", "close": "17:30" }, { "day": "tue", "open": "09:00", "close": "17:30" },
+        { "day": "wed", "open": "09:00", "close": "17:30" }, { "day": "thu", "open": "09:00", "close": "17:30" },
+        { "day": "fri", "open": "09:00", "close": "17:30" }, { "day": "sat", "open": "10:00", "close": "14:00" }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Öğrenci talepleri", "description": "Kayıt ve erişim talepleri",
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 30, "resolution_minutes": 240 },
+          { "priority": "high", "first_response_minutes": 120, "resolution_minutes": 1440 },
+          { "priority": "normal", "first_response_minutes": 480, "resolution_minutes": 2880 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Kayıt adımları", "shortcut": "kayit", "category": "Kayıt", "content": "Kayıt için web sitemizdeki başvuru formunu doldurup ödemeyi tamamlamanız yeterli. Onay e-postası birkaç dakika içinde gelir." },
+      { "title": "Ders erişimi", "shortcut": "erisim", "category": "Platform", "content": "Ders erişiminiz ödeme onayından sonra açılır. Öğrenci panelinize giriş yapıp Derslerim ekranını yenileyebilir misiniz?" },
+      { "title": "Sertifika", "shortcut": "sertifika", "category": "Sertifika", "content": "Sertifikanız kursu tamamladıktan sonra 3 iş günü içinde öğrenci panelinize yüklenir." },
+      { "title": "Teşekkür", "shortcut": "tesekkur", "category": "Genel", "content": "Bize yazdığınız için teşekkürler, iyi dersler dileriz!" }
+    ],
+    "macros": [
+      { "name": "Ders erişimi sorunu", "description": "Etiketler ve teknik ekibe not",
+        "actions": [ { "type": "tag", "value": "ders-erişimi" }, { "type": "note", "value": "Ödeme onayını ve kayıt durumunu kontrol edin." } ] },
+      { "name": "Belge iste", "description": "Eksik belgeyi ister ve bekletir",
+        "actions": [ { "type": "reply", "value": "Kaydınızı tamamlamak için eksik belgenizi öğrenci panelinden yükleyebilir misiniz?" }, { "type": "status", "value": "pending" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "contact", "key": "ogrenci_no", "label": "Öğrenci numarası", "type": "text" },
+      { "entity": "conversation", "key": "program", "label": "Program / kurs", "type": "text" }
+    ],
+    "forms": [
+      { "name": "Öğrenci talebi", "description": "Kayıt ve ders talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "email", "label": "E-posta", "required": true },
+          { "field": "custom:program", "label": "Program / kurs", "required": false }, { "field": "message", "label": "Talebiniz", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "kayit-ve-odeme", "name": "Kayıt ve ödeme", "articles": [
+        { "slug": "kayit-nasil-yapilir", "title": "Kayıt nasıl yapılır?", "public": true,
+          "body": "1. Programın sayfasından **Başvur**'a tıklayın.\n2. Formu doldurup ödemeyi tamamlayın.\n3. Onay e-postasındaki bağlantıyla öğrenci panelinize giriş yapın." },
+        { "slug": "taksit-secenekleri", "title": "Taksitle ödeyebilir miyim?", "public": true,
+          "body": "Kredi kartına 6 aya kadar taksit seçeneklerimiz vardır. Taksit seçenekleri ödeme ekranında bankanıza göre listelenir." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Merhaba! 🎓", "greeting_text": "Kayıt, ödeme veya derslerle ilgili sorularınızı yazın.", "color": "#ea580c" },
+    "ai_agent": {
+      "persona": "Eğitim kurumunun yardımsever öğrenci danışmanısın. Öğrencilere ve velilere kayıt, ödeme ve ders erişimi konusunda sabırla yol gösterirsin.",
+      "tone": "Sıcak, cesaretlendirici ve anlaşılır.",
+      "guardrails": [
+        "Not, sınav sonucu veya burs hakkında karar bildirme; öğrenci işlerine devret.",
+        "Öğrencinin kişisel bilgilerini veliye teyit etmeden paylaşma."
+      ],
+      "handoff_keywords": ["şikayet", "iade", "burs", "disiplin"],
+      "procedures": [
+        { "intent": "course_access", "title": "Ders erişimi", "steps": ["Öğrenci numarasını ve programı sor.", "Ödemenin onaylandığını teyit etmesini iste.", "Erişim hâlâ yoksa teknik ekibe devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Erişim sorunları teknik ekibe", "team": "teknik-destek", "priorities": ["high", "urgent"] }
+    ],
+    "views": [
+      { "name": "Kayıt talepleri", "icon": "user-plus", "statuses": ["open"] },
+      { "name": "Belge bekleyenler", "icon": "file-clock", "statuses": ["pending"] }
+    ],
+    "survey": { "name": "Öğrenci memnuniyeti", "question": "Aldığınız yardımdan ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "daily", "digest_hour": 8 }
+  }
+}

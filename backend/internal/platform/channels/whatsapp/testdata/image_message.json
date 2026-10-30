@@ -1,0 +1,26 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [{
+    "id": "102290129340398",
+    "changes": [{
+      "value": {
+        "messaging_product": "whatsapp",
+        "metadata": {"display_phone_number": "15550783881", "phone_number_id": "106540352242922"},
+        "contacts": [{"profile": {"name": "Ayşe Yılmaz"}, "wa_id": "905321112233"}],
+        "messages": [{
+          "from": "905321112233",
+          "id": "wamid.HBgMOTA1MzIxMTEyMjMzFQIAEhgWM0VCMEIMAGE",
+          "timestamp": "1761645660",
+          "type": "image",
+          "image": {
+            "caption": "Kırık parça",
+            "mime_type": "image/jpeg",
+            "sha256": "Q7c6vYb1jWTr3S9dQb0Ip0gYV4R1g4nZpQ2ZQm6sK2A=",
+            "id": "1003383421387256"
+          }
+        }]
+      },
+      "field": "messages"
+    }]
+  }]
+}

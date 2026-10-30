@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="{{.Lang}}" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{.Title}}</title>
+<style>
+body{margin:0;padding:0;width:100%!important;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+table{border-collapse:collapse}
+img{border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic}
+a{color:#087313}
+@media (max-width:620px){.cf-pad{padding:28px 22px 30px!important}.cf-h1{font-size:23px!important}}
+@media (prefers-color-scheme:dark){
+.cf-bg{background:#0A0D0B!important}
+.cf-card{background:#111412!important;border-color:#262B27!important}
+.cf-text{color:#E8ECE9!important}
+.cf-muted,.cf-muted a{color:#9AA39C!important}
+.cf-link,.cf-link a,a.cf-link{color:#3DFF4B!important}
+.cf-soft{background:#12301A!important}
+.cf-softmuted{color:#A9C9AE!important}
+.cf-btn{background:#03FF13!important}
+.cf-btn a{color:#000000!important}
+}
+[data-ogsb] .cf-bg{background:#0A0D0B!important}
+[data-ogsb] .cf-card{background:#111412!important;border-color:#262B27!important}
+[data-ogsc] .cf-text{color:#E8ECE9!important}
+[data-ogsc] .cf-muted{color:#9AA39C!important}
+[data-ogsc] .cf-link,[data-ogsc] a.cf-link{color:#3DFF4B!important}
+[data-ogsb] .cf-soft{background:#12301A!important}
+[data-ogsc] .cf-softmuted{color:#A9C9AE!important}
+[data-ogsb] .cf-btn{background:#03FF13!important}
+[data-ogsc] .cf-btn a{color:#000000!important}
+</style>
+</head>
+<body class="cf-bg" style="margin:0;padding:0;background:#F7F6F2">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F7F6F2;opacity:0">{{.Preheader}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="cf-bg" bgcolor="#F7F6F2" style="width:100%;background:#F7F6F2">
+<tr>
+<td align="center" style="padding:32px 12px 40px">
+{{.MsoOpen}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
+<tr>
+<td align="center" style="padding:0 0 24px">
+<img src="{{.LogoSrc}}" width="40" height="40" alt="ClickFix" style="display:block;width:40px;height:40px;border-radius:10px">
+<div class="cf-text" style="padding-top:8px;font-family:'Space Grotesk','Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:600;font-size:18px;line-height:1;letter-spacing:-0.04em;color:#0C110D">clickfix</div>
+</td>
+</tr>
+<tr>
+<td class="cf-card cf-pad" bgcolor="#FFFFFF" style="background:#FFFFFF;border:1px solid #E2E1DA;border-radius:16px;padding:36px 40px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+{{- if .Eyebrow}}
+<div class="cf-link" style="margin:0 0 14px;font-family:Oxanium,'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:12px;line-height:1;letter-spacing:0.12em;text-transform:uppercase;color:#087313"><span style="color:#03FF13;font-size:12px">&#9679;</span>&nbsp;&nbsp;{{.Eyebrow}}</div>
+{{- end}}
+<h1 class="cf-text cf-h1" style="margin:0 0 16px;font-family:'Space Grotesk','Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:600;font-size:26px;line-height:1.2;letter-spacing:-0.02em;color:#0C110D">{{.Title}}</h1>
+{{- range .Blocks}}
+{{- if eq .Kind "text"}}
+<p class="cf-text" style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#0C110D">{{range $i, $line := .Lines}}{{if $i}}<br>{{end}}{{range $line}}{{if .URL}}<a class="cf-link" href="{{.URL}}" style="color:#087313;word-break:break-all">{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{end}}</p>
+{{- else if eq .Kind "details"}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="cf-soft" bgcolor="#E6F7E7" style="width:100%;background:#E6F7E7;border-radius:12px;margin:4px 0 20px">
+<tr><td style="padding:8px 20px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+{{- range .Rows}}
+<tr>
+<td class="cf-softmuted" valign="top" width="130" style="width:130px;padding:10px 16px 10px 0;font-size:13px;line-height:1.6;color:#3F5A43">{{.Key}}</td>
+<td class="cf-text" valign="top" style="padding:10px 0;font-size:15px;line-height:1.5;font-weight:500;color:#0C110D">{{.Value}}</td>
+</tr>
+{{- end}}
+</table>
+</td></tr>
+</table>
+{{- else if eq .Kind "code"}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="cf-soft" bgcolor="#E6F7E7" style="width:100%;background:#E6F7E7;border-radius:12px;margin:4px 0 20px">
+<tr><td align="center" style="padding:20px">
+<div class="cf-softmuted" style="font-size:13px;line-height:1.5;color:#3F5A43">{{.Label}}</div>
+<div class="cf-text" style="padding-top:6px;font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;font-weight:600;font-size:30px;line-height:1.2;letter-spacing:0.18em;color:#0C110D">{{.Code}}</div>
+</td></tr>
+</table>
+{{- else if eq .Kind "links"}}
+<p class="cf-muted" style="margin:0 0 16px;font-size:14px;line-height:1.8;color:#5E655F">{{range $i, $l := .Links}}{{if $i}}<br>{{end}}<a class="cf-link" href="{{$l.URL}}" style="color:#087313">{{$l.Text}}</a>{{end}}</p>
+{{- end}}
+{{- end}}
+{{- if .ActionURL}}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:12px 0 0">
+<tr><td class="cf-btn" align="center" bgcolor="#0C110D" style="background:#0C110D;border-radius:10px">
+<a href="{{.ActionURL}}" style="display:block;padding:14px 22px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;line-height:1.2;color:#F7F6F2;text-decoration:none;border-radius:10px">{{.ActionLabel}}</a>
+</td></tr>
+</table>
+<p class="cf-muted" style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#5E655F">{{.FallbackHint}}<br><a class="cf-link" href="{{.ActionURL}}" style="color:#087313;word-break:break-all">{{.ActionURL}}</a></p>
+{{- end}}
+</td>
+</tr>
+<tr>
+<td class="cf-muted" align="center" style="padding:24px 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#5E655F">
+{{.SentBy}}<br>
+<a href="{{.SiteURL}}" style="color:#5E655F">getclickfix.com</a>{{if .PreferencesURL}} &middot; <a href="{{.PreferencesURL}}" style="color:#5E655F">{{.PreferencesLabel}}</a>{{end}}
+</td>
+</tr>
+</table>
+{{.MsoClose}}
+</td>
+</tr>
+</table>
+</body>
+</html>

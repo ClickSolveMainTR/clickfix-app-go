@@ -1,0 +1,90 @@
+---
+title: Zapier, Make, n8n ve uygulamalar
+description: ClickFix'i Zapier, Make ve n8n ile otomasyonlara bağlayın; kendi araçlarınızı panele uygulama olarak ekleyin.
+section: developers
+order: 3
+---
+
+Bu sayfa ClickFix'i dış araçlarla nasıl bağlayacağınızı anlatır:
+
+- **Zapier, Make ve n8n**: REST hook abonelikleri, tetikleyici yoklama ve API eylemleri.
+- **Uygulamalar**: Kendi web uygulamanızı veya galerideki araçları konuşma kenar çubuğunda, kişi panelinde veya menüde açmak.
+
+## Zapier, Make ve n8n [#zapier-make-and-n8n]
+
+Otomasyon araçları ClickFix'in herkese açık API'sini kullanır. Hazırlık:
+
+1. **Organizasyon → API ve otomasyonlar** sayfasında bir API anahtarı oluşturun. Otomasyon araçları için genellikle şu kapsamlar yeterlidir: `triggers:read`, `webhooks:write`, `conversations:write`, `contacts:write`.
+2. Temel adres: `https://api.getclickfix.com/v1/public-api`
+3. Her istekte `Authorization: Bearer cf_sk_...` başlığını gönderin.
+4. Tüm yazma isteklerinde benzersiz bir `Idempotency-Key` başlığı kullanın; tekrar denemede aynısını gönderin.
+
+### Tetikleyici olaylar [#trigger-events]
+
+| Olay                     | Ne zaman                            |
+| ------------------------ | ----------------------------------- |
+| `conversation.created`   | Yeni konuşma açıldığında            |
+| `conversation.resolved`  | Konuşma çözüldüğünde                |
+| `contact.created`        | Yeni kişi oluştuğunda               |
+| `csat.submitted`         | Müşteri memnuniyet puanı verdiğinde |
+| `conversation.tag_added` | Konuşmaya etiket eklendiğinde       |
+
+### REST hook (anlık) [#rest-hooks-instant]
+
+Akış açıldığında abone olun, kapandığında aboneliği silin:
+
+| İşlem             | Uç nokta                       | Kapsam           |
+| ----------------- | ------------------------------ | ---------------- |
+| Abone ol          | `POST /subscriptions`          | `webhooks:write` |
+| Abonelikten ayrıl | `DELETE /subscriptions/{uuid}` | `webhooks:write` |
+
+Abone olma gövdesi:
+
+```json
+{
+  "name": "Zap: yeni konuşma",
+  "url": "https://hooks.ornek.com/receiver",
+  "events": ["conversation.created"],
+  "enabled": true
+}
+```
+
+Yanıttaki `data.uuid` değerini ayrılmak için, `data.secret` değerini [imza doğrulama](/docs/webhooks) için saklayın. Etkin abonelikler panelde **REST hook abonelikleri** sekmesinde görünür; buradan silinen aboneliğe gönderim durur.
+
+### Tetikleyici yoklama [#trigger-polling]
+
+REST hook kullanamayan araçlar için yoklama:
+
+```bash
+curl "https://api.getclickfix.com/v1/public-api/triggers?event=conversation.created&cursor=0" \
+  -H "Authorization: Bearer cf_sk_..."
+```
+
+- Her sayfa en fazla 100 öğe içerir ve organizasyon içindeki sıraya göre artan düzendedir.
+- İşledikten sonra `data.next_cursor` değerini saklayın ve bir sonraki çağrıda kullanın. `has_more` doğru olduğu sürece devam edin.
+- Öğeler olay kimliği, olay adı, ilgili kaydın kimliği ve olay zamanını içerir. Ayrıntıları normal API ile okuyun.
+- Geçmiş 30 gün tutulur. `410 CURSOR_EXPIRED` yanıtı alırsanız verilerinizi yeniden eşitleyip `cursor=0` ile başlayın.
+
+### Eylemler [#actions]
+
+| İşlem           | Uç nokta                              | Kapsam                |
+| --------------- | ------------------------------------- | --------------------- |
+| Konuşma oluştur | `POST /conversations`                 | `conversations:write` |
+| İç not ekle     | `POST /conversations/{uuid}/messages` | `conversations:write` |
+| Kişiyi güncelle | `PATCH /contacts/{uuid}`              | `contacts:write`      |
+
+Örnek gövdeler için [API hızlı başlangıç](/docs/api) sayfasına bakın.
+
+### Araç bazında [#per-tool]
+
+- **Zapier**: Abone ol / ayrıl ve liste için yukarıdaki uç noktaları bir REST hook tetikleyicisine bağlayın; eylemler için HTTP isteklerini kullanın.
+- **Make**: **Custom webhook** modülüyle aynı abone ol / ayrıl isteklerini ve HTTP eylemlerini kullanın.
+- **n8n**: HTTP Request düğümüyle aynı uç noktaları çağırabilirsiniz. Bir topluluk düğümü paketlemek isterseniz [n8n düğüm tanımı](/docs/n8n-node) sayfasındaki düğüm ve kimlik bilgisi tanımlarını kullanın.
+
+ClickFix'in Zapier, Make veya n8n mağazalarında yayımlanmış resmi bir uygulaması henüz yoktur; bağlantılar yukarıdaki genel HTTP / webhook modülleriyle kurulur.
+
+## Uygulamalar [#apps]
+
+Kendi web uygulamanızı (sipariş paneli, CRM kaydı, fatura geçmişi gibi) konuşma kenar çubuğunda, kişi panelinde veya menüde açabilir; galeriden Calendly, Uptime Kuma, Metabase gibi araçları tek tıkla kurabilirsiniz. Uygulamalar **Organizasyon → Uygulama yönetimi** sayfasından yönetilir.
+
+Bağlam belirteci, imza doğrulama, mesajlar, tema ve yayınlama adımları için [Kendi uygulamanızı yapın](/docs/apps) rehberine bakın.

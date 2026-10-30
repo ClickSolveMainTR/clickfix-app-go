@@ -1,0 +1,8 @@
+{
+  "shift": "My shift",
+  "shift_org": "Follows the organization's business hours",
+  "shift_closed": "No shift today",
+  "shift_on": "On shift now · {{start}}–{{end}}",
+  "shift_before": "Today {{start}}–{{end}}",
+  "shift_after": "Today's shift is over ({{start}}–{{end}})"
+}

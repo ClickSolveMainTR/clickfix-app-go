@@ -1,0 +1,111 @@
+{
+  "key": "it-helpdesk",
+  "version": 1,
+  "icon": "server",
+  "accent": "#0369a1",
+  "order": 40,
+  "name": { "tr": "Kurumsal BT helpdesk", "en": "Internal IT helpdesk" },
+  "description": {
+    "tr": "Şirket içi BT ekipleri için: erişim talepleri, donanım arızaları, yazılım kurulumu ve kritik kesintiler için önceliklendirme.",
+    "en": "For internal IT teams: access requests, hardware faults, software installs and prioritisation of critical outages."
+  },
+  "highlights": [
+    { "tr": "Erişim, donanım ve ağ etiketleri", "en": "Access, hardware and network tags" },
+    { "tr": "Departman ve demirbaş alanları", "en": "Department and asset fields" },
+    { "tr": "Kesinti SLA'sı", "en": "Outage SLA" }
+  ],
+  "industries": ["it_helpdesk", "bt", "it", "helpdesk", "kurumsal", "enterprise", "iç destek"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "it_helpdesk", "locale": "tr", "languages": ["tr"], "tone": "neutral" },
+    "branding": { "primary_color": "#0369a1" },
+    "teams": [
+      { "key": "servis-masasi", "name": "Servis Masası", "description": "İlk temas, şifre ve erişim talepleri", "color": "#0369a1", "skills": ["erişim"] },
+      { "key": "saha-destek", "name": "Saha Destek", "description": "Donanım ve masaüstü destek", "color": "#ca8a04", "skills": ["donanım"] },
+      { "key": "altyapi", "name": "Altyapı", "description": "Ağ, sunucu ve kritik kesintiler", "color": "#dc2626", "skills": ["ağ", "sunucu"] }
+    ],
+    "tags": [
+      { "name": "erişim-talebi", "color": "#2563eb" },
+      { "name": "şifre", "color": "#0891b2" },
+      { "name": "donanım", "color": "#ca8a04" },
+      { "name": "yazılım-kurulumu", "color": "#7c3aed" },
+      { "name": "ağ", "color": "#0f766e" },
+      { "name": "kesinti", "color": "#dc2626" }
+    ],
+    "statuses": [
+      { "name": "Onay bekliyor", "slug": "onay-bekliyor", "category": "pending", "color": "#f59e0b" },
+      { "name": "Parça bekleniyor", "slug": "parca-bekleniyor", "category": "pending", "color": "#ca8a04" }
+    ],
+    "business_hours": {
+      "name": "BT mesaisi", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "08:30", "close": "18:00" }, { "day": "tue", "open": "08:30", "close": "18:00" },
+        { "day": "wed", "open": "08:30", "close": "18:00" }, { "day": "thu", "open": "08:30", "close": "18:00" },
+        { "day": "fri", "open": "08:30", "close": "18:00" }, { "day": "sat", "closed": true }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Kritik kesinti", "description": "Birden çok kişiyi etkileyen kesintiler", "priorities": ["urgent"],
+        "targets": [ { "priority": "urgent", "first_response_minutes": 15, "next_response_minutes": 30, "resolution_minutes": 240 } ] },
+      { "name": "Standart BT talepleri", "description": "Erişim, donanım ve yazılım",
+        "targets": [
+          { "priority": "high", "first_response_minutes": 60, "resolution_minutes": 480 },
+          { "priority": "normal", "first_response_minutes": 240, "resolution_minutes": 1440 },
+          { "priority": "low", "first_response_minutes": 480, "resolution_minutes": 4320 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Talep alındı", "shortcut": "alindi", "category": "Genel", "content": "Talebiniz servis masasına ulaştı ve sıraya alındı. Gelişmeleri bu konuşmadan paylaşacağız." },
+      { "title": "Yönetici onayı", "shortcut": "onay", "category": "Erişim", "content": "Bu erişim için yöneticinizin onayı gerekiyor. Onay geldiğinde yetkiniz tanımlanacak." },
+      { "title": "Bilgisayarı yeniden başlat", "shortcut": "restart", "category": "Masaüstü", "content": "Lütfen bilgisayarınızı tamamen kapatıp yeniden başlatın ve sorunun devam edip etmediğini bize bildirin." },
+      { "title": "Kesinti bilgilendirmesi", "shortcut": "kesinti", "category": "Altyapı", "content": "Yaşanan kesintiden haberdarız ve altyapı ekibimiz çalışıyor. Gelişmeleri 30 dakikada bir paylaşacağız." }
+    ],
+    "macros": [
+      { "name": "Kritik kesinti", "description": "Acil öncelik, kesinti etiketi ve bilgilendirme",
+        "actions": [ { "type": "priority", "value": "urgent" }, { "type": "tag", "value": "kesinti" }, { "type": "reply", "value": "Kesintiyi kaydettik, altyapı ekibimiz hemen çalışmaya başladı." } ] },
+      { "name": "Onaya gönder", "description": "Erişim talebini onaya bekletir",
+        "actions": [ { "type": "tag", "value": "erişim-talebi" }, { "type": "status", "value": "pending" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "contact", "key": "departman", "label": "Departman", "type": "select", "options": ["Finans", "İnsan Kaynakları", "Satış", "Operasyon", "Yönetim", "Diğer"] },
+      { "entity": "conversation", "key": "demirbas_no", "label": "Demirbaş numarası", "type": "text" },
+      { "entity": "conversation", "key": "etkilenen_kisi", "label": "Etkilenen kişi sayısı", "type": "number" }
+    ],
+    "forms": [
+      { "name": "BT talebi", "description": "Çalışanların BT talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "email", "label": "Kurumsal e-posta", "required": true },
+          { "field": "custom:demirbas_no", "label": "Demirbaş numarası", "required": false }, { "field": "priority", "label": "Öncelik", "required": false }, { "field": "message", "label": "Sorun", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "sik-talepler", "name": "Sık talepler", "articles": [
+        { "slug": "vpn-baglantisi", "title": "VPN'e nasıl bağlanırım?", "public": false,
+          "body": "1. VPN istemcisini açın.\n2. Kurumsal e-posta ve şifrenizle giriş yapın.\n3. İki adımlı doğrulama kodunu onaylayın.\n\nBağlanamazsanız internet bağlantınızı kontrol edip servis masasına yazın." },
+        { "slug": "sifre-yenileme", "title": "Kurumsal şifremi nasıl yenilerim?", "public": false,
+          "body": "Şifreler 90 günde bir yenilenir. Şifre portalından eski şifrenizle giriş yapıp yenisini belirleyin; en az 12 karakter, büyük-küçük harf ve rakam içermeli." }
+      ] }
+    ],
+    "widget": { "greeting_title": "BT Servis Masası", "greeting_text": "Erişim, donanım veya yazılım sorununuzu yazın; ekibimiz hemen dönüş yapacak.", "color": "#0369a1" },
+    "ai_agent": {
+      "persona": "Şirket içi BT servis masası asistanısın. Çalışanların sorunlarını hızlıca sınıflandırır, basit adımlarla çözer, gerekeni doğru ekibe aktarırsın.",
+      "tone": "Net, sakin ve teknik olmayan bir dil.",
+      "guardrails": [
+        "Yönetici onayı gereken erişimleri kendiliğinden verme.",
+        "Şifreyi asla sohbet üzerinden isteme veya paylaşma."
+      ],
+      "handoff_keywords": ["kesinti", "virüs", "fidye", "veri sızıntısı"],
+      "procedures": [
+        { "intent": "access_request", "title": "Erişim talebi", "steps": ["Hangi sisteme erişim istendiğini sor.", "Yönetici onayı gerektiğini belirt.", "Talebi erişim etiketiyle onaya beklet."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Kesintiler altyapıya", "team": "altyapi", "priorities": ["urgent"] },
+      { "name": "Diğer talepler servis masasına", "team": "servis-masasi", "priorities": ["low", "normal", "high"] }
+    ],
+    "views": [
+      { "name": "Kritik", "icon": "siren", "statuses": ["open"], "priorities": ["urgent"] },
+      { "name": "Onay bekleyenler", "icon": "clock", "statuses": ["pending"] }
+    ],
+    "survey": { "name": "BT memnuniyeti", "question": "Servis masasından aldığınız destekten ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "hourly", "digest_hour": 9 }
+  }
+}

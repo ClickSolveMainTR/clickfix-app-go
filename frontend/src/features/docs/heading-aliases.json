@@ -1,0 +1,192 @@
+{
+  "sms-voice": {
+    "connect": "connect-1",
+    "baglama": "connect-1",
+    "ticari-ileti-ve-iys": "commercial-messages-and-iys",
+    "telefon-sesli": "phone-voice"
+  },
+  "channels": {
+    "desteklenen-kanallar": "supported-channels",
+    "kanal-ayarlari": "channel-settings",
+    "kanal-sagligi": "channel-health",
+    "api-kanali": "api-channel"
+  },
+  "meta": {
+    "baslamadan-once": "before-you-start",
+    "24-saat-kurali-ve-sablonlar": "the-24-hour-rule-and-templates",
+    "baglanti-sagligi-ve-yeniden-baglanma": "health-and-reconnecting",
+    "baglantiyi-kaldirma-ve-veri-silme": "disconnecting-and-data-deletion"
+  },
+  "video-rooms": {
+    "kullanilabilirlik": "availability",
+    "oda-olusturma": "create-a-room",
+    "misafiri-davet-etme": "invite-the-guest",
+    "misafir-deneyimi": "the-guest-experience",
+    "bekleme-odasi-ve-katilimcilar": "waiting-room-and-participants",
+    "sifreleme-ve-kayit": "encryption-and-recording",
+    "kayitlarin-saklanmasi": "storing-recordings",
+    "organizasyon-kurallari": "organization-rules",
+    "dakikalar-ve-ucretlendirme": "minutes-and-billing"
+  },
+  "inbox": {
+    "gorunumler": "views",
+    "konusma-durumlari": "conversation-statuses",
+    "atama": "assignment",
+    "yanit-ve-ic-not": "replies-and-internal-notes",
+    "hazir-yanitlar-ve-makrolar": "canned-replies-and-macros",
+    "konusmalari-birlestirme": "merging-conversations",
+    "klavye-kisayollari": "keyboard-shortcuts"
+  },
+  "google-chat": {
+    "ozet": "summary",
+    "1-google-cloud-projesi": "1-google-cloud-project",
+    "2-google-chat-api-yi-etkinlestirin": "2-enable-the-google-chat-api",
+    "3-hizmet-hesabi-ve-anahtar": "3-service-account-and-key",
+    "4-clickfix-te-kanali-olusturun": "4-create-the-channel-in-clickfix",
+    "5-chat-uygulamasini-yapilandirin": "5-configure-the-chat-app",
+    "6-kullanim-ve-oda-secimi": "6-usage-and-picking-rooms",
+    "sinirlar": "limits",
+    "anahtari-yenileme": "rotating-the-key",
+    "sorun-giderme": "troubleshooting"
+  },
+  "index": {
+    "baslayin": "get-started",
+    "gelistiriciler": "developers"
+  },
+  "webhooks": {
+    "abonelik-olusturma": "create-a-subscription",
+    "adres-kurallari": "url-rules",
+    "olaylar": "events",
+    "istek-bicimi": "request-format",
+    "imza-dogrulama": "verifying-the-signature",
+    "tekrar-denemeler": "retries"
+  },
+  "knowledge-base": {
+    "makale-yazma": "writing-articles",
+    "koleksiyonlar-ve-kategoriler": "collections-and-categories",
+    "yardim-merkezi": "help-center",
+    "topluluk-forumu": "community-forum",
+    "konusmadan-forum-sorusu": "forum-question-from-a-conversation"
+  },
+  "apps": {
+    "nasil-calisir": "how-it-works",
+    "gereksinimler": "requirements",
+    "mesajlasma-ve-olaylar": "messages-and-events",
+    "eylemler-ve-izinler": "actions-and-permissions",
+    "baglam-belirtecini-dogrulama": "verifying-the-context-token",
+    "tema-ve-boyut": "theming-and-sizing",
+    "yayinlama": "publishing",
+    "galeri-uygulamalari": "gallery-apps"
+  },
+  "telegram": {
+    "bot-olusturma": "create-a-bot",
+    "clickfix-e-baglama": "connect-to-clickfix",
+    "nasil-calisir": "how-it-works",
+    "token-i-degistirme": "changing-the-token"
+  },
+  "slack-teams": {
+    "baglama": "connect",
+    "kanallari-secme": "pick-channels",
+    "nasil-calisir": "how-it-works",
+    "1-uygulama-kaydi-entra-id": "1-app-registration-entra-id",
+    "3-clickfix-te-kanali-olusturma": "3-create-the-channel-in-clickfix",
+    "4-teams-e-kurma": "4-install-in-teams",
+    "sinirlar": "limits"
+  },
+  "data-protection": {
+    "ilgili-kisi-basvurulari": "data-subject-requests",
+    "veri-disa-aktarma": "data-export",
+    "silme-anonimlestirme": "erasure-anonymization",
+    "saklama-sureleri": "retention",
+    "acik-riza-kayitlari": "consent-records",
+    "verbis-envanteri": "verbis-inventory",
+    "ilgili-guvenlik-araclari": "related-security-tools"
+  },
+  "email": {
+    "yonlendirme-ile-baglama": "connect-with-forwarding",
+    "gonderen-alan-adini-dogrulama": "verify-your-sender-domain",
+    "kendi-smtp-sunucunuz": "your-own-smtp-server",
+    "imap-ve-smtp-ile-baglama": "connect-over-imap-and-smtp",
+    "nasil-calisir": "how-it-works"
+  },
+  "ai": {
+    "calisma-modu": "mode",
+    "davranis": "behavior",
+    "kapsam-ve-calisma-saatleri": "scope-and-working-hours",
+    "bilgi-kaynagi": "knowledge-source",
+    "prosedurler": "procedures",
+    "araclar": "tools",
+    "test-sohbeti-ve-calisma-kaydi": "test-chat-and-run-log",
+    "guvenlik": "safety",
+    "kurulumda-yapay-zeka": "ai-during-set-up"
+  },
+  "getting-started": {
+    "1-hesap-olusturun": "1-create-an-account",
+    "2-organizasyonunuzu-acin": "2-set-up-your-organization",
+    "yapay-zeka-ile-ya-da-hazir-sablonla-kurulum": "set-up-with-ai-or-a-ready-made-template",
+    "3-ekibinizi-davet-edin": "3-invite-your-team",
+    "4-ilk-kanali-baglayin": "4-connect-your-first-channel",
+    "5-web-widget-i-sitenize-ekleyin": "5-add-the-web-widget-to-your-site",
+    "6-ilk-konusmayi-alin": "6-receive-your-first-conversation",
+    "7-mobil-uygulama": "7-mobile-app",
+    "sonraki-adimlar": "next-steps"
+  },
+  "web-widget": {
+    "widget-olusturma": "create-a-widget",
+    "kurulum": "install",
+    "izin-verilen-alan-adlari": "allowed-domains",
+    "giris-yapmis-kullanicilari-tanitma": "identifying-signed-in-users",
+    "yardim-merkezi-ve-randevu": "help-center-and-booking"
+  },
+  "appointments": {
+    "modulu-acma": "turn-the-module-on",
+    "randevu-turu-olusturma": "create-an-appointment-type",
+    "herkese-acik-randevu-sayfasi": "public-booking-page",
+    "panelden-randevu-olusturma": "booking-from-the-dashboard"
+  },
+  "automation": {
+    "yonlendirme-kurallari": "routing-rules",
+    "makrolar": "macros",
+    "is-akislari": "workflows",
+    "yeni-is-akisi": "new-workflow",
+    "dugum-turleri": "node-types",
+    "tetikleyiciler": "triggers",
+    "eylemler": "actions",
+    "yonlendirme-kuralini-aktarma": "importing-a-routing-rule",
+    "calismalari-izleme": "monitoring-runs",
+    "dis-araclarla-otomasyon": "automating-with-external-tools"
+  },
+  "mcp-integrations": {
+    "zapier-make-ve-n8n": "zapier-make-and-n8n",
+    "tetikleyici-olaylar": "trigger-events",
+    "rest-hook-anlik": "rest-hooks-instant",
+    "tetikleyici-yoklama": "trigger-polling",
+    "eylemler": "actions",
+    "arac-bazinda": "per-tool",
+    "uygulamalar": "apps"
+  },
+  "sso-scim": {
+    "nasil-calisir": "how-it-works",
+    "1-sso-yu-yapilandirma": "1-configure-sso",
+    "2-scim-ile-kullanici-saglama": "2-provision-users-with-scim",
+    "desteklenen-scim-islemleri": "supported-scim-operations",
+    "3-girisi-test-etme": "3-test-sign-in",
+    "4-sso-yu-zorunlu-kilma": "4-enforce-sso",
+    "ip-kisitlamasi": "ip-restrictions"
+  },
+  "api": {
+    "1-api-anahtari-olusturun": "create-api-key",
+    "kapsamlar": "scopes",
+    "2-ilk-isteginiz": "first-request",
+    "yanit-yapisi": "response-format",
+    "sayfalama": "pagination",
+    "yazma-istekleri-ve-idempotency-key": "idempotency",
+    "ornek-konusma-olusturma": "create-conversation",
+    "ornek-ic-not-ekleme": "add-note",
+    "uc-noktalar": "endpoints",
+    "hiz-sinirlari-ve-boyutlar": "rate-limits",
+    "sdk-lar": "sdks",
+    "sonraki-adimlar": "next-steps",
+    "uc-nokta-basvurusu": "endpoint-reference"
+  }
+}

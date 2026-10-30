@@ -1,0 +1,84 @@
+---
+title: Automation and workflows
+description: Automate repetitive support work with routing rules, macros and the visual workflow editor.
+section: product
+order: 5
+---
+
+Automation in ClickFix has three layers:
+
+| Tool          | For                                                                             | Where                               |
+| ------------- | ------------------------------------------------------------------------------- | ----------------------------------- |
+| Routing rules | Sending new conversations to the right team or skill                            | **Team status → Routing**           |
+| Macros        | Applying several actions to a conversation in one click                         | **Inbox → Canned replies → Macros** |
+| Workflows     | Visual automations built from triggers, conditions, actions, waits and branches | **Workflows**                       |
+
+## Routing rules [#routing-rules]
+
+On **Team status → Routing**, turn on automatic routing and pick a strategy:
+
+- **Round-robin** or **Load balanced**.
+- **Respect capacity limits**: an agent never gets more concurrent conversations than their limit.
+
+**Routing rules** are evaluated top to bottom; the first matching rule sends the conversation to a team's queue or asks for certain skills (e.g. `en`, `billing`). With no rules, all agents form a single pool. The **Live status** tab shows online agents and the queue; the **History** tab shows routing decisions.
+
+## Macros [#macros]
+
+Macros apply a sequence you do often (add a tag, change priority, assign, send a reply and so on) in one go. Open them with `M` in a conversation. They can be personal or team-wide.
+
+## Workflows [#workflows]
+
+The workflow editor lets you build automations with nodes on a canvas.
+
+### New workflow [#new-workflow]
+
+1. Choose **Workflows → New workflow** in the left menu. The flow starts with a trigger and an end node.
+2. Drag nodes from the **Nodes** palette onto the canvas and connect them by dragging from an output to an input.
+3. Select a node to configure it in the side panel.
+4. The **Issues** tab lists missing or invalid settings. The draft saves once there are none.
+5. Try the flow with **Test**, then **Publish**.
+
+Every published version is immutable; runs stay tied to the version they started on. Restore an older version into the draft from the **Versions** tab.
+
+### Node types [#node-types]
+
+| Node      | What it does                                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------------- |
+| Trigger   | The event that starts the flow. Exactly one per workflow.                                                            |
+| Condition | Continues from "yes" when the condition is true, otherwise from "no". Conditions can be nested with AND / OR groups. |
+| Branch    | Splits the conversation into two paths.                                                                              |
+| Action    | Changes the conversation or starts an external operation.                                                            |
+| Wait      | Waits between 1 minute and 30 days. Loops may only point back from a wait node.                                      |
+| End       | Ends the flow. Every path must reach an end.                                                                         |
+
+### Triggers [#triggers]
+
+- **Conversation created**
+- **Conversation updated** (status, priority, assignment and similar changes)
+- **Message received** (a new customer message)
+- **Tag added**
+- **SLA breached**
+- **Scheduled** (scans open conversations every N minutes)
+- **Webhook** (an authenticated API call starts the flow)
+
+### Actions [#actions]
+
+- **Assign to agent**, **Route** (by team, skill and strategy; capacity and availability are read live)
+- **Add tag**, **Remove tag**, **Set priority**, **Set status**
+- **Send reply** (text you write) or **Send canned response**
+- **Add internal note**, **Notify**
+- **Call webhook** (sends the event to a registered webhook endpoint)
+- **Run AI procedure** (the result stays as a suggestion; nothing is sent to the customer)
+- **Create product request** (opens a record in the connected issue tracker: Jira, Linear or GitHub)
+
+### Importing a routing rule [#importing-a-routing-rule]
+
+**Import routing rule** turns an existing routing rule into a workflow. It arrives as a published but disabled workflow; the original rule is unchanged. You decide which one stays active.
+
+### Monitoring runs [#monitoring-runs]
+
+The **Runs** tab shows each run's step log. **Show on canvas** highlights the path the run took. Waiting runs show when they resume. An external step with an uncertain result is not retried and is flagged for you to check by hand.
+
+## Automating with external tools [#automating-with-external-tools]
+
+To connect tools like Zapier, Make and n8n, see [Integrations](/docs/mcp-integrations?lang=en). To send events to your own system, see [Webhooks](/docs/webhooks?lang=en).

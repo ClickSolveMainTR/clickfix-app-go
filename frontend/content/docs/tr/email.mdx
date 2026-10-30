@@ -1,0 +1,61 @@
+---
+title: E-posta kanalı
+description: Destek e-posta adresinizi ClickFix'e yönlendirme veya IMAP ve SMTP ile bağlayın, gönderen alan adınızı doğrulayın.
+section: channels
+order: 2
+---
+
+E-posta kanalı, destek adresinize (ör. `destek@firmaniz.com`) gelen e-postaları gelen kutusuna konuşma olarak taşır. Yanıtlarınız müşteriye e-posta olarak gider ve aynı e-posta dizisinde kalır.
+
+İki bağlantı yöntemi vardır:
+
+| Yöntem                              | Ne zaman                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Yönlendirme**                     | Destek adresinizi ClickFix'in size özel yönlendirme adresine iletirsiniz. Önerilen yöntemdir.            |
+| **Kendi posta kutum (IMAP + SMTP)** | ClickFix posta kutunuzu IMAP ile okur, yanıtları SMTP ile gönderir. Yönlendirme kuramıyorsanız kullanın. |
+
+## Yönlendirme ile bağlama [#connect-with-forwarding]
+
+1. **Kanallar → Kanal ekle → E-posta** seçin ve **Bağlantı yöntemi** olarak **Yönlendirme**'yi işaretleyin.
+2. **Yönlendirme adresi** alanına adresin ilk kısmını yazın (3-64 karakter; küçük harf, rakam, nokta veya tire). Boş bırakırsanız otomatik oluşturulur.
+3. **Gönderen adresi** ve **Gönderen adı** alanlarını doldurun. Gönderen adresi boş kalırsa yanıtlar yönlendirme adresinden gider.
+4. **Bağla** dedikten sonra ekranda size özel yönlendirme adresi görünür.
+5. E-posta sağlayıcınızda (Google Workspace, Microsoft 365, Yandex vb.) destek adresinize gelen postaları bu adrese iletecek bir yönlendirme kuralı oluşturun.
+
+Yanıt adresi (Reply-To) her zaman yönlendirme adresidir; bu nedenle yönlendirmeyi henüz kurmamış olsanız bile müşterinin yanıtları ClickFix'e döner.
+
+### Gönderen alan adını doğrulama [#verify-your-sender-domain]
+
+Yanıtların kendi alan adınızdan (`@firmaniz.com`) gitmesi için alan adını doğrulayın:
+
+1. Kanal ayarlarında **Gönderen alan adı** alanına alan adınızı yazıp **Kaydet**'e basın.
+2. Ekranda listelenen DNS kayıtlarını alan adı sağlayıcınızın DNS paneline ekleyin.
+3. **Doğrula**'ya basın. Durum **Doğrulandı** olduğunda yanıtlar alan adınızdan gönderilir.
+
+DNS değişikliklerinin yayılması birkaç dakikadan birkaç saate kadar sürebilir. Durum **Doğrulama bekleniyor** ise bir süre sonra tekrar deneyin.
+
+### Kendi SMTP sunucunuz [#your-own-smtp-server]
+
+Gönderim sağlayıcısı olarak **Kendi SMTP sunucum** seçeneğini işaretlerseniz yanıtlar sizin SMTP sunucunuzdan gider. SMTP sunucusu, port, kullanıcı adı, parola ve TLS modunu girmeniz gerekir.
+
+## IMAP ve SMTP ile bağlama [#connect-over-imap-and-smtp]
+
+1. **Bağlantı yöntemi** olarak **Kendi posta kutum (IMAP + SMTP)** seçin.
+2. **Gelen posta (IMAP)** bölümüne IMAP sunucusu, port, kullanıcı adı, parola, TLS modu ve okunacak klasörü girin.
+3. **Giden posta (SMTP)** bölümüne SMTP bilgilerini girin. **Gönderen adresi** genellikle posta kutusunun kendi adresidir.
+4. İsteğe bağlı ayarlar:
+   - **İlk eşitleme (gün)**: İlk bağlantıda kaç günlük e-postanın içe aktarılacağı (1-365, varsayılan 3).
+   - **İçe aktarınca taşı**: İçe aktarılan e-postaların taşınacağı klasör.
+   - **İçe aktarılan e-postaları okundu olarak işaretle**.
+5. **Bağlantıyı test et** ile bilgileri kontrol edin, ardından kaydedin.
+
+> Gmail, Outlook ve Yandex için hesap parolası yerine **uygulama parolası** kullanın.
+
+TLS modu olarak **Porta göre otomatik**, **SSL/TLS** veya **STARTTLS** seçebilirsiniz. Parolalar şifreli saklanır; ayarları düzenlerken parola alanını boş bırakırsanız kayıtlı parola korunur.
+
+## Nasıl çalışır [#how-it-works]
+
+- E-postalar `References`, `In-Reply-To` ve `Message-ID` başlıklarına göre doğru konuşmaya bağlanır.
+- Alıntılanan eski mesajlar ve imzalar ayıklanır; görünür yanıt gösterilir. CC'ler ve ekler korunur.
+- Otomatik yanıtlar (ofis dışı mesajları, posta listeleri) döngü oluşturmaması için yok sayılır.
+- Geri dönen (bounce) e-postalar ilgili mesajı başarısız olarak işaretler.

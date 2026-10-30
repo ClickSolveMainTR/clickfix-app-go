@@ -1,0 +1,106 @@
+---
+title: Slack ve Microsoft Teams
+description: Slack Connect kanallarını ve Microsoft Teams mesajlarını ClickFix gelen kutusuna bağlayın; yanıtlar aynı sohbete döner.
+section: channels
+order: 4
+---
+
+Slack ve Microsoft Teams kanalları, iş ortaklarınız ve kurumsal müşterilerinizle yürüttüğünüz yazışmaları gelen kutusuna taşır. Temsilci yanıtları aynı sohbete, Slack'te ilgili thread'e döner.
+
+## Slack [#slack]
+
+Slack bağlantısı OAuth ile yapılır: ClickFix'i kendi Slack çalışma alanınıza kurarsınız, ardından mesajları alınacak kanalları seçersiniz.
+
+### Bağlama [#connect]
+
+1. **Kanallar → Kanal ekle → Slack** seçin ve **Slack'e ekle** düğmesine basın.
+2. Slack'e yönlendirilirsiniz; çalışma alanınızı seçip kurulumu onaylayın.
+3. ClickFix'e döndüğünüzde **Yönlendirilen Slack kanalları** ekranı açılır.
+
+> Slack'in kendi "Install App" düğmesiyle yapılan kurulum ClickFix'e bağlanmaz. Kurulumu her zaman ClickFix'teki **Slack'e ekle** düğmesiyle başlatın.
+
+### Kanalları seçme [#pick-channels]
+
+1. Slack'te mesajlarını almak istediğiniz her kanala botu ekleyin:
+
+   ```text
+   /invite @ClickFix
+   ```
+
+2. ClickFix'te **Listeyi yenile**'ye basın ve kanalları işaretleyin. Gerekirse **Slack kanal kimliği** girerek elle de ekleyebilirsiniz.
+
+Yalnızca seçili kanallardaki mesajlar gelen kutusuna düşer. Hiç kanal seçilmezse Slack mesajı alınmaz.
+
+### Nasıl çalışır [#how-it-works]
+
+- Her Slack thread'i bir konuşmadır. Mesajı yazan kişinin adı mesajda görünür.
+- Bir mesaja `:ticket:` tepkisi bırakmak, o mesajı "Destek talebi" olarak aynı konuşmaya düşürür.
+- Yanıtlarınız her zaman ilgili thread'e gider.
+
+ClickFix uygulaması şu izinleri ister: `chat:write`, `channels:history`, `groups:history`, `reactions:read`, `channels:read`, `groups:read`, `users:read`.
+
+## Microsoft Teams [#microsoft-teams]
+
+Teams kanalı organizasyonunuza özeldir: Microsoft Entra (Azure AD) kiracınızda bir uygulama kaydı ve bir Azure Bot oluşturur, bilgilerini ClickFix'e girersiniz. Bu adımları Microsoft 365 yöneticiniz yapmalıdır.
+
+### 1. Uygulama kaydı (Entra ID) [#1-app-registration-entra-id]
+
+1. Azure Portal → **Microsoft Entra ID → App registrations → New registration**.
+2. **Supported account types** olarak _Accounts in this organizational directory only_ (tek kiracı) seçin. Redirect URI gerekmez.
+3. Oluşan kayıttan **Application (client) ID** ve **Directory (tenant) ID** değerlerini not edin.
+4. **Certificates & secrets → New client secret** ile bir gizli anahtar oluşturun ve **Value** değerini kopyalayın. Bu değer yalnızca bir kez görünür.
+
+### 2. Azure Bot [#2-azure-bot]
+
+1. Azure Portal'da bir **Azure Bot** kaynağı oluşturun.
+2. **Type of App** olarak _Single Tenant_ seçin ve 1. adımdaki uygulama kaydını kullanın.
+3. Fiyat katmanı olarak **F0** yeterlidir.
+4. **Channels** bölümünden **Microsoft Teams** kanalını ekleyin.
+
+### 3. ClickFix'te kanalı oluşturma [#3-create-the-channel-in-clickfix]
+
+1. **Kanallar → Kanal ekle → Microsoft Teams** seçin.
+2. **Microsoft App ID**, **Uygulama parolası (client secret)** ve **Microsoft kiracı (tenant) kimliği** alanlarını doldurup **Bağla**'ya basın.
+3. Ekranda gösterilen **Messaging endpoint** adresini kopyalayın.
+4. Azure Portal → Azure Bot kaynağınız → **Configuration → Messaging endpoint** alanına yapıştırıp kaydedin.
+
+### 4. Teams'e kurma [#4-install-in-teams]
+
+Botu Teams'te kullanmak için bir uygulama paketi gerekir. En kolay yol Teams Developer Portal'dır (**Apps → New app → App features → Bot**, mevcut bot kimliğiyle). Alternatif olarak aşağıdaki manifesti iki ikonla (192×192 renkli, 32×32 kontur) zip'leyip **Teams → Apps → Manage your apps → Upload a custom app** ile yükleyebilirsiniz. Kiracınızda özel uygulama yüklemeye izin verilmiş olmalıdır.
+
+```json
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "<app_id>",
+  "developer": {
+    "name": "Şirketiniz",
+    "websiteUrl": "https://firmaniz.com",
+    "privacyUrl": "https://firmaniz.com/gizlilik",
+    "termsOfUseUrl": "https://firmaniz.com/kosullar"
+  },
+  "name": { "short": "Destek", "full": "Destek Ekibi" },
+  "description": {
+    "short": "Destek ekibimize Teams'ten yazın.",
+    "full": "Bota yazılan mesajlar destek ekibimize ulaşır; yanıtlar aynı sohbete döner."
+  },
+  "icons": { "color": "color.png", "outline": "outline.png" },
+  "accentColor": "#03FF13",
+  "bots": [
+    {
+      "botId": "<app_id>",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "validDomains": ["api.getclickfix.com"]
+}
+```
+
+`<app_id>` yerine 1. adımdaki Application (client) ID değerini yazın.
+
+### Sınırlar [#limits]
+
+Teams kanalı şu an yalnızca metin mesajlarını destekler; kart, dosya, düzenleme ve tepki desteklenmez.

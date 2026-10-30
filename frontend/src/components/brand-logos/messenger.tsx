@@ -1,0 +1,36 @@
+"use client";
+
+import { useId } from "react";
+
+import { BrandSvg, type BrandLogoProps } from "./brand-svg";
+
+/**
+ * Messenger mark: gradient bubble with a white bolt (Meta brand resources).
+ * The white disc under the glyph fills the bolt cut-out.
+ */
+export function MessengerLogo(props: BrandLogoProps) {
+  const id = useId();
+  return (
+    <BrandSvg name="Messenger" viewBox="0 0 24 24" {...props}>
+      <defs>
+        <radialGradient
+          id={id}
+          cx="4.6"
+          cy="23.9"
+          r="26"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#0099FF" />
+          <stop offset="0.6" stopColor="#A033FF" />
+          <stop offset="0.9" stopColor="#FF5280" />
+          <stop offset="1" stopColor="#FF7061" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="11.6" r="9.5" fill="#FFFFFF" />
+      <path
+        fill={`url(#${id})`}
+        d="M12 0C5.24 0 0 4.952 0 11.64c0 3.499 1.434 6.521 3.769 8.61a.96.96 0 0 1 .323.683l.065 2.135a.96.96 0 0 0 1.347.85l2.381-1.053a.96.96 0 0 1 .641-.046A13 13 0 0 0 12 23.28c6.76 0 12-4.952 12-11.64S18.76 0 12 0m6.806 7.44c.522-.03.971.567.63 1.094l-4.178 6.457a.707.707 0 0 1-.977.208l-3.87-2.504a.44.44 0 0 0-.49.007l-4.363 3.01c-.637.438-1.415-.317-.995-.966l4.179-6.457a.706.706 0 0 1 .977-.21l3.87 2.505c.15.097.344.094.491-.007l4.362-3.008a.7.7 0 0 1 .364-.13"
+      />
+    </BrandSvg>
+  );
+}

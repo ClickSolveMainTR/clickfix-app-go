@@ -1,0 +1,84 @@
+---
+title: Google Chat
+description: Create your own Google Chat app in Google Workspace and connect it to ClickFix; direct messages and the rooms you pick land in the inbox.
+section: channels
+order: 5
+---
+
+The Google Chat channel is specific to your organization: you create a Google Chat app and a service account in your own Google Cloud project, then give ClickFix the service account key and the project number.
+
+> Google Chat apps only work with **Google Workspace** accounts; a personal Gmail account can't publish a Chat app. Your Workspace admin or a user with access to the project should do the steps below.
+
+## Summary [#summary]
+
+| What                | Where                                                            | ClickFix field                  |
+| ------------------- | ---------------------------------------------------------------- | ------------------------------- |
+| Project number      | Google Cloud Console → project picker → **Project number**       | Google Cloud project number     |
+| Service account key | IAM & Admin → Service Accounts → account → Keys → Add key → JSON | Service account key (JSON)      |
+| HTTP endpoint URL   | Shown in ClickFix once the channel is created                    | Google Chat API → Configuration |
+| Rooms               | Channel settings                                                 | Routed Google Chat rooms        |
+
+## 1. Google Cloud project [#1-google-cloud-project]
+
+1. In [console.cloud.google.com](https://console.cloud.google.com) create a project or pick an existing one. It must belong to your Workspace organization.
+2. Note the **Project number** on the project dashboard (digits only, e.g. `123456789012`). This is **not** the project ID (`my-project-id`).
+
+## 2. Enable the Google Chat API [#2-enable-the-google-chat-api]
+
+**APIs & Services → Library → Google Chat API → Enable**.
+
+## 3. Service account and key [#3-service-account-and-key]
+
+1. Create a service account under **IAM & Admin → Service Accounts → Create service account** (e.g. `clickfix-chat`). It needs no role.
+2. Open it → **Keys → Add key → Create new key → JSON**. The key file downloads to your computer.
+
+If your organization's policy blocks service account key creation, your Cloud admin needs to allow it for this project. Don't share the key file by email or chat; upload it only to ClickFix, then delete it.
+
+## 4. Create the channel in ClickFix [#4-create-the-channel-in-clickfix]
+
+1. Choose **Channels → Add channel → Google Chat**.
+2. Fill in the channel name, **Google Cloud project number** and **Service account key (JSON)**. Paste the key or pick the file with **Load from file**.
+3. Click **Connect**. ClickFix checks the details with Google and shows the **HTTP endpoint URL** with a copy button. The URL also appears later in the channel settings.
+
+The key is stored encrypted and never shown again.
+
+## 5. Configure the Chat app [#5-configure-the-chat-app]
+
+**APIs & Services → Google Chat API → Configuration**:
+
+- **Build this Chat app as a Google Workspace add-on**: leave unchecked.
+- Fill in **App name**, **Avatar URL** and **Description**.
+- **Interactive features**: on. Under **Functionality**, tick _Receive 1:1 messages_ and _Join spaces and group conversations_.
+- **Connection settings**: choose **HTTP endpoint URL** and paste the URL from step 4.
+- **Authentication Audience**: **Project Number**.
+- **Visibility**: choose the people and groups who can use the app.
+
+Click **Save**. The app becomes searchable in Google Chat within a few minutes.
+
+## 6. Usage and picking rooms [#6-usage-and-picking-rooms]
+
+- **Direct messages**: anyone who finds the app in Google Chat and messages it lands in the inbox. Name and email come from Google.
+- **Rooms**: add the app to the room (room name → **Apps & integrations → Add apps**). Then in ClickFix open the channel's **Settings** and tick the room under **Routed Google Chat rooms**. You can also add a `spaces/AAAA…` space ID by hand.
+
+Messages from rooms that aren't selected are not received. In rooms, Google only sends the app messages that **@mention** it. Each thread in a room is its own conversation, and your reply goes to the same thread.
+
+## Limits [#limits]
+
+Text only (up to 4096 characters). Files, cards and reactions are not supported.
+
+## Rotating the key [#rotating-the-key]
+
+1. Create a new JSON key on the same service account.
+2. Upload it to the **Service account key** field in the ClickFix channel settings and save. An empty field keeps the current key.
+3. Delete the old key in Google Cloud.
+
+If you move to a different Cloud project, create a new Google Chat channel.
+
+## Troubleshooting [#troubleshooting]
+
+| Symptom                         | Cause and fix                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| The app doesn't respond in Chat | Wrong HTTP endpoint URL, or Authentication Audience isn't "Project Number". The project number in ClickFix must match Cloud. |
+| Error when connecting           | The pasted JSON isn't a service account key, the key was deleted, or the project number isn't numeric.                       |
+| Room messages don't arrive      | The room isn't selected in the channel settings, or the app wasn't @mentioned.                                               |
+| Room list doesn't load          | The Chat API isn't enabled or the key is invalid. Add the space ID by hand.                                                  |

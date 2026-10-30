@@ -1,0 +1,52 @@
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+
+export type SearchSpecDef = {
+  id: string;
+  labelKey: string;
+  icon?: LucideIcon;
+  permission?: string | string[];
+  anyPermission?: string[];
+  /** Local-only specs (nav pages) skip remote API. */
+  local?: boolean;
+};
+
+export type RemoteSearchSpec = {
+  id: string;
+  label_key: string;
+  permission?: string;
+  icon?: string;
+};
+
+export type SearchHit = {
+  spec: string;
+  id: string;
+  title: string;
+  subtitle?: string;
+  href: string;
+  icon?: string;
+  score?: number;
+  /** Organization search: message text cropped around the match. */
+  snippet?: string;
+  /** Organization search: conversation of a conversation / message hit. */
+  conversation_id?: string;
+  /** Organization search: the hit is an internal note. */
+  private?: boolean;
+};
+
+export type PaletteItem = {
+  id: string;
+  spec: string;
+  label: string;
+  description?: string;
+  href: string;
+  icon?: ReactNode;
+  /** Serializable icon id for localStorage restore (see resolveSearchIcon). */
+  iconKey?: string;
+  group: string;
+};
+
+export type SearchCatalog = {
+  id: string;
+  specs: SearchSpecDef[];
+};

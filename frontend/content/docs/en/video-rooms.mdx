@@ -1,0 +1,81 @@
+---
+title: Video rooms
+description: Run video calls with customers that need no account, protected by PIN and waiting room, with optional end-to-end encryption.
+section: product
+order: 4
+---
+
+Video rooms let you meet customers from the browser or the mobile app. Customers don't need an account or an app: they click the link, type their name and join.
+
+Features: optional PIN, waiting room, screen sharing, chat, camera and microphone controls, end-to-end encryption (E2EE) and recording.
+
+## Availability [#availability]
+
+Video depends on your plan and must be turned on under **Organization → Video**. When the module isn't available, the screen says why (plan, organization setting or minute balance).
+
+## Create a room [#create-a-room]
+
+1. Open **Video calls** in the left menu and click **Create room**. You can also open a room from inside a conversation with **Start a video call**.
+2. Choose the settings:
+   - **Room name**, optional **Start** time and **Duration**.
+   - **PIN** (4-12 digits, optional or required by your organization's rules).
+   - **Waiting room**: guests wait until you admit them.
+   - **Allow recording** (see below).
+3. Create the room.
+
+## Invite the guest [#invite-the-guest]
+
+From **Links and invitations** in the room details:
+
+- **Guest link**: copies the link for the customer. It looks like `https://getclickfix.com/r/<code>`.
+- **Agent link**: for your teammates; only signed-in organization members can use it.
+- **Send invitation**: emails an invitation to the customer.
+
+> The PIN is **not** included in the invitation email. For security, send it to the customer over a separate channel (SMS, phone, chat).
+
+Links expire 24 hours after the planned end for scheduled rooms, and 7 days after creation for unscheduled rooms.
+
+## The guest experience [#the-guest-experience]
+
+1. The customer opens the link, enters their name (and the PIN if asked) and clicks **Join the call**.
+2. The browser asks for camera and microphone access.
+3. With a waiting room, the customer sees a waiting message and joins once you admit them.
+
+If the customer has the mobile app installed, the same link can open in the app.
+
+## Waiting room and participants [#waiting-room-and-participants]
+
+Manage guests from the **Waiting room** list with **Admit** or **Deny**. Use **Remove** to take someone out of the call. A guest in the waiting room has no access to the call's audio, video or encryption key until admitted.
+
+Camera, screen sharing and chat permissions are enforced on the server according to the room's and organization's rules.
+
+## Encryption and recording [#encryption-and-recording]
+
+Every call is encrypted in transit, both signaling and media. In addition:
+
+| Room type               | End-to-end encryption                                                                  | Recording                                              |
+| ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Recording off (default) | On: media is decrypted only on participants' devices; the server can't see the content | Not possible                                           |
+| **Allow recording** on  | Off                                                                                    | Possible; participants see "This call may be recorded" |
+
+Recording happens on the server, so an end-to-end encrypted call can't be recorded; that's why you choose when creating the room. If your organization requires E2EE, no room can be recorded.
+
+### Storing recordings [#storing-recordings]
+
+Download or delete recordings under **Organization → Video → Recordings**.
+
+- By default recordings are kept in platform storage for a limited time (shown on the settings screen) and then deleted automatically.
+- With **Upload recordings to our own S3 bucket**, recordings go straight to your storage. You enter the endpoint (`https://`), region, bucket, optional prefix and access keys. ClickFix doesn't delete recordings in your own bucket.
+
+## Organization rules [#organization-rules]
+
+On **Organization → Video → Rules** you can tighten the rules within the platform and plan limits: turn off camera, screen sharing, chat, recording or guest access; require PIN, waiting room or E2EE; lower duration and participant limits.
+
+## Minutes and billing [#minutes-and-billing]
+
+Video is billed per **participant-minute**: each participant's connection is rounded up to the minute. Recording is not billed separately.
+
+- Your plan's minutes are used first. If your plan includes unlimited minutes, nothing is metered.
+- Buy extra minutes as packages on the **Minutes** tab; they are added once the invoice is paid.
+- With a zero balance no new room can be opened and nobody new can join. If the balance runs out during a call, the room is closed.
+- When the balance drops below the threshold, owners and admins are notified at most once a day.

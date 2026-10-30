@@ -1,0 +1,45 @@
+Return-Path: <ayse@musteri.com.tr>
+From: =?UTF-8?Q?Ay=C5=9Fe_Y=C4=B1lmaz?= <Ayse@Musteri.com.tr>
+To: Acme Destek <acme-destek@in.clickfix.test>
+Cc: Mehmet <mehmet@musteri.com.tr>
+Subject: =?UTF-8?B?UmU6IEZhdHVyYSBoYXRhc8Sx?=
+Date: Wed, 28 Oct 2026 10:15:00 +0300
+Message-ID: <CAF123reply@mail.gmail.com>
+In-Reply-To: <cf.0f8d4f3e-1c5a-4a59-9b8f-2d7e1c0a9b11.PENBRjAwMXJvb3RAbWFpbC5nbWFpbC5jb20-@acme.com>
+References: <CAF001root@mail.gmail.com> <cf.0f8d4f3e-1c5a-4a59-9b8f-2d7e1c0a9b11.PENBRjAwMXJvb3RAbWFpbC5nbWFpbC5jb20-@acme.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixed1"
+
+--mixed1
+Content-Type: multipart/alternative; boundary="alt1"
+
+--alt1
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Merhaba, fatura hâlâ g=C3=B6r=C3=BCnm=C3=BCyor.
+Ekte ekran g=C3=B6r=C3=BCnt=C3=BCs=C3=BC var.
+
+--
+Ay=C5=9Fe Y=C4=B1lmaz
+Muhasebe
+
+28 Eki 2026 =C3=87ar, 09:00 tarihinde Acme Destek <destek@acme.com> =C5=9Funu y=
+azd=C4=B1:
+> Merhaba Ay=C5=9Fe Han=C4=B1m, faturan=C4=B1z yeniden olu=C5=9Fturuldu.
+
+--alt1
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div>Merhaba, fatura h=C3=A2l=C3=A2 g=C3=B6r=C3=BCnm=C3=BCyor.<script>alert(1)</script><img src=3D"x" onerror=3D"alert(2)"><a href=3D"javascript:alert(3)">x</a></div>
+--alt1--
+
+--mixed1
+Content-Type: image/png; name="ekran.png"
+Content-Disposition: attachment; filename="ekran.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlE
+QVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+--mixed1--

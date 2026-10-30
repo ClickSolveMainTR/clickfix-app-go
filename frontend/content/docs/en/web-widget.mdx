@@ -1,0 +1,209 @@
+---
+title: Web widget
+description: Add a live chat bubble to your website with one line of code, customize it, and securely identify your signed-in users.
+section: channels
+order: 7
+---
+
+The web widget is a live chat bubble on your site. Visitors message you, search your help center and book appointments from it. Each widget is its own inbox; create one per site if you have several.
+
+## Create a widget [#create-a-widget]
+
+1. Open **Web widget** in the left menu.
+2. Type a name and click **Create widget**.
+3. Configure the tabs and click **Save**.
+
+| Tab            | Settings                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| Appearance     | Accent color, position (bottom right / bottom left), language, show the team                                   |
+| Chat           | Greeting title and text, pre-chat form (name and email), file upload (up to 10 MB), satisfaction rating (CSAT) |
+| Business hours | Days and hours, time zone, offline message                                                                     |
+| Security       | Allowed domains, identity verification secret, identified users only                                           |
+| Install        | Install code and an identify example                                                                           |
+
+Outside business hours the widget shows as offline and requires an email address.
+
+## Install [#install]
+
+Add the line from the **Install** tab to every page of your site, before the `</body>` tag:
+
+```html
+<script
+  src="https://getclickfix.com/widget.js"
+  data-widget="WIDGET_ID"
+  async
+></script>
+```
+
+`WIDGET_ID` is the widget ID shown in the dashboard; just copy the line from there. Use **Try on this page** to try the widget in the dashboard before you publish it.
+
+### Allowed domains [#allowed-domains]
+
+On the **Security** tab, enter one domain per line. `*.example.com` covers every subdomain. When the list is empty, the widget works on any site.
+
+## JavaScript API [#javascript-api]
+
+Once loaded, the widget is controlled through `window.ClickFix`. Calls made before the script loads are queued:
+
+```html
+<script>
+  window.ClickFix =
+    window.ClickFix ||
+    function () {
+      (window.ClickFix.q = window.ClickFix.q || []).push(arguments);
+    };
+  ClickFix("init", { widgetId: "WIDGET_ID", hideLauncher: true });
+</script>
+<script src="https://getclickfix.com/widget.js" async></script>
+```
+
+| Command                                      | What it does                                                                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ClickFix("open")` / `"close"` / `"toggle"`  | Opens, closes or toggles the chat window                                                                                          |
+| `ClickFix("identify", {...})`                | Identifies a signed-in user (below)                                                                                               |
+| `ClickFix("update", { name, email, phone })` | Updates the visitor's details                                                                                                     |
+| `ClickFix("track", "event_name", {...})`     | Records a page event; the last 20 are attached to the visitor's next message                                                      |
+| `ClickFix("on", "message", fn)`              | Listens to an event: `ready`, `open`, `close`, `message`, `message:sent`, `conversation`, `unread`, `identify`, `rating`, `track` |
+| `ClickFix("reset")`                          | Forgets the visitor (call it on logout)                                                                                           |
+| `ClickFix("shutdown")`                       | Removes the widget from the page                                                                                                  |
+
+`init` options: `widgetId`, `locale` (`tr` / `en`), `position` (`left` / `right`), `color` (`#rrggbb`), `hideLauncher` (hide the bubble and open the chat from your own button), `user` (identify the user at start) and `debug`.
+
+TypeScript types are published at `https://getclickfix.com/widget.d.ts`.
+
+## Identifying signed-in users [#identifying-signed-in-users]
+
+You can securely tell the widget who your signed-in users are, so their conversations are linked to the right contact and company.
+
+1. On the **Security** tab, click **Generate secret**. The secret is shown only once; copy it to your server.
+2. On your server, compute a `user_hash` for each user:
+
+   ```text
+   user_hash = hex(HMAC-SHA256(identity_secret, user_id))
+   ```
+
+3. Call `identify` on the page:
+
+   ```html
+   <script>
+     ClickFix("identify", {
+       user_id: "USER_ID",
+       user_hash: "USER_HASH",
+       name: "Ada Yılmaz",
+       email: "ada@example.com",
+       company: { id: "acme", name: "Acme Inc.", domain: "acme.com" },
+     });
+   </script>
+   ```
+
+Never send the secret to the browser. For example, in Node.js:
+
+```js
+import crypto from "node:crypto";
+
+const userHash = crypto
+  .createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
+  .update(String(user.id))
+  .digest("hex");
+```
+
+Turn on **Identified users only** to stop anonymous visitors from sending messages; this suits sites that require sign-in, like a customer portal. Use **Rotate secret** to replace the secret, and update it on your server too.
+
+## Examples [#examples]
+
+### Your own button [#own-button]
+
+You can hide the bubble and open the widget from your own button. Any element with the `data-clickfix-launcher` attribute opens the widget; `data-clickfix-unread` is kept up to date with the unread count:
+
+```html
+<button class="support" data-clickfix-launcher data-clickfix-unread="0">
+  Support
+</button>
+
+<style>
+  .support {
+    position: relative;
+  }
+  .support[data-clickfix-unread]:not([data-clickfix-unread="0"])::after {
+    content: attr(data-clickfix-unread);
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #dc2626;
+    color: #fff;
+    border-radius: 9px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+</style>
+
+<script>
+  window.ClickFix =
+    window.ClickFix ||
+    function () {
+      (window.ClickFix.q = window.ClickFix.q || []).push(arguments);
+    };
+  ClickFix("init", { widgetId: "WIDGET_ID", hideLauncher: true });
+</script>
+<script src="https://getclickfix.com/widget.js" async></script>
+```
+
+### Listening to events [#listening-to-events]
+
+```js
+ClickFix("on", "ready", () => console.log("Widget ready"));
+ClickFix(
+  "on",
+  "unread",
+  ({ count }) => (document.title = count ? `(${count}) My shop` : "My shop"),
+);
+ClickFix("on", "message", (message) =>
+  analytics.track("support_message", message),
+);
+ClickFix("track", "checkout_started", { total: 349.9 });
+```
+
+### Computing `user_hash` on the server [#user-hash-on-the-server]
+
+Compute the `user_hash` of a signed-in user on your server and give the page only the result:
+
+```js tab="Node.js"
+import { createHmac } from "node:crypto";
+
+export function userHash(userId) {
+  return createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
+    .update(String(userId))
+    .digest("hex");
+}
+```
+
+```php tab="PHP"
+<?php
+function clickfix_user_hash(string $userId): string {
+    return hash_hmac('sha256', $userId, getenv('CLICKFIX_IDENTITY_SECRET'));
+}
+```
+
+```python tab="Python"
+import hashlib, hmac, os
+
+def user_hash(user_id: str) -> str:
+    secret = os.environ["CLICKFIX_IDENTITY_SECRET"].encode()
+    return hmac.new(secret, str(user_id).encode(), hashlib.sha256).hexdigest()
+```
+
+```go tab="Go"
+func UserHash(userID string) string {
+	mac := hmac.New(sha256.New, []byte(os.Getenv("CLICKFIX_IDENTITY_SECRET")))
+	mac.Write([]byte(userID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+```
+
+### React [#react]
+
+To drive the widget with typed hooks in a React app, see [SDKs and sample code → React widget client](/docs/sdks?lang=en#react-widget).
+
+## Help center and booking [#help-center-and-booking]
+
+If your knowledge base has published public articles, visitors can search them from the widget. With the appointments module on, the widget links to your public booking page. Details: [Knowledge base](/docs/knowledge-base?lang=en), [Appointments](/docs/appointments?lang=en).

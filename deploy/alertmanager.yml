@@ -1,0 +1,9 @@
+# Configure a receiver in the deployment secret store before enabling delivery.
+route:
+  receiver: operations
+  group_by: [alertname, channel, queue]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+receivers:
+  - name: operations

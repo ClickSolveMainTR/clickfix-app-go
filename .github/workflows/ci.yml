@@ -1,0 +1,559 @@
+name: ci
+
+# Adapted from olexfilms-ecosystem's ci.yml: one path-filtered run per PR and
+# per main push, a single required "ci" check, v0.N release tags on green
+# main, and EAS shipping for mobile/ (OTA when the native fingerprint is
+# unchanged, a TestFlight build otherwise).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Weekly full run (every job, whatever changed) so the image build stays
+  # proven even when no merge touched its inputs.
+  schedule:
+    - cron: "0 3 * * 1"
+
+# One run per PR, and one per main push stream: a newer push to main cancels
+# the older main run. The surviving run diffs from the last v0.N tag, so
+# areas changed in cancelled runs are still tested and mobile/ changes still
+# shipped. mobile-release and release-tag use !failure() so a cancel never
+# kills an EAS build or a tag push half-way.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  SQLC_VERSION: "1.31.1"
+  MIGRATE_VERSION: v4.19.1
+
+jobs:
+  # Decides which jobs a run needs (plain git diff, no third-party action).
+  # PRs diff against their base; a push to main diffs against the newest
+  # v0.N tag before HEAD (no tag -> full). workflow_dispatch, the weekly
+  # schedule, a PR labelled "ci-full" and a change to this file run all.
+  #   frontend/**                 -> frontend, contracts
+  #   backend/**                  -> backend, contracts
+  #   backend/migrations/**       -> backend, contracts, infra
+  #   mobile/**                   -> mobile
+  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile
+  #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
+  #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
+  #   Makefile, scripts/, other   -> backend, frontend, contracts
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+      infra: ${{ steps.filter.outputs.infra }}
+      full: ${{ steps.filter.outputs.full }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+          filter: blob:none
+      - name: Changed areas
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
+        run: |
+          backend=false; frontend=false; contracts=false
+          mobile=false; infra=false; full=false
+          files=""
+          case "$EVENT" in
+            pull_request)
+              [ "$CI_FULL" = "true" ] && full=true || files=$(git diff --name-only HEAD^1 HEAD) ;;
+            push)
+              if base=$(git describe --tags --abbrev=0 --match 'v0.[0-9]*' HEAD^ 2>/dev/null); then
+                echo "diff base: $base ($(git rev-parse --short "$base^{commit}"))"
+                files=$(git diff --name-only "$base" HEAD)
+              else
+                full=true
+              fi ;;
+            *) full=true ;;
+          esac
+          printf '%s\n' "$files"
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              .github/workflows/ci.yml) full=true ;;
+              .github/*) ;;
+              backend/docs/openapi.yaml)
+                backend=true; frontend=true; contracts=true; mobile=true ;;
+              *.md|docs/*) ;;
+              backend/Dockerfile|frontend/Dockerfile|compose.prod.yml|deploy/*|.dockerignore|*/.dockerignore)
+                infra=true ;;
+              backend/migrations/*) backend=true; contracts=true; infra=true ;;
+              frontend/*) frontend=true; contracts=true ;;
+              mobile/*) mobile=true ;;
+              backend/*|sdks/*) backend=true; contracts=true ;;
+              *) backend=true; frontend=true; contracts=true ;;
+            esac
+          done <<< "$files"
+          if [ "$full" = "true" ]; then
+            backend=true; frontend=true; contracts=true; mobile=true; infra=true
+          fi
+          {
+            echo "backend=$backend"; echo "frontend=$frontend"
+            echo "contracts=$contracts"; echo "mobile=$mobile"
+            echo "infra=$infra"; echo "full=$full"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  backend:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Integration tests skip when these are unset; here they always run
+      # against the migrated service database.
+      TEST_DATABASE_URL: postgres://app:app@localhost:5432/app_test?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: ${{ env.SQLC_VERSION }}
+      - name: sqlc generate is up to date
+        run: |
+          sqlc generate
+          git diff --exit-code -- internal/database/db
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: backend
+      - name: go vet
+        run: go vet ./...
+      - name: Migrate test database
+        run: go run -tags postgres "github.com/golang-migrate/migrate/v4/cmd/migrate@${MIGRATE_VERSION}" -path migrations -database "$TEST_DATABASE_URL" up
+      # Down files of the newest migrations must undo them cleanly: roll the
+      # last two back and apply them again (up -> down -> up).
+      - name: Migration roundtrip (last two)
+        run: |
+          go run -tags postgres "github.com/golang-migrate/migrate/v4/cmd/migrate@${MIGRATE_VERSION}" -path migrations -database "$TEST_DATABASE_URL" down 2
+          go run -tags postgres "github.com/golang-migrate/migrate/v4/cmd/migrate@${MIGRATE_VERSION}" -path migrations -database "$TEST_DATABASE_URL" up
+      - name: go test
+        run: go test ./... -count=1
+      # The API registers every module's routes at startup; overlapping
+      # patterns make net/http panic there, which no unit test catches.
+      # Boot the real server against the migrated test database and require
+      # it to answer HTTP before stopping it.
+      - name: Server boot smoke test
+        run: |
+          # Startup pings object storage; run the same SeaweedFS image as compose.
+          docker run -d --name seaweedfs -p 9000:8333 \
+            -e AWS_ACCESS_KEY_ID=s3admin -e AWS_SECRET_ACCESS_KEY=s3admin-secret \
+            chrislusf/seaweedfs:4.47 mini -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 -bucket=app \
+            -s3.port=8333 -s3.port.iceberg=0 -s3.port.lance=0 -webdav=false -admin.ui=false -master.telemetry=false
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:9000/healthz >/dev/null 2>&1 && break; sleep 1; done
+          set -a; . ../.env.example 2>/dev/null || true; set +a
+          export BILLING_SELLER_JSON="$(grep '^BILLING_SELLER_JSON=' ../.env.example | cut -d= -f2-)"
+          export DB_HOST=localhost DB_PORT=5432 DB_USER=app DB_PASSWORD=app DB_NAME=app_test
+          export REDIS_ADDR=localhost:6379 APP_HTTP_ADDR=:18080
+          go build -o /tmp/api ./cmd/server
+          /tmp/api > /tmp/api.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 60); do
+            if ! kill -0 "$pid" 2>/dev/null; then echo "server exited during startup"; cat /tmp/api.log; exit 1; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/ || true)
+            if [ "$code" != "000" ]; then echo "server answered HTTP $code"; kill "$pid"; exit 0; fi
+            sleep 1
+          done
+          echo "server did not answer within 60s"; cat /tmp/api.log; kill "$pid"; exit 1
+      - name: OpenAPI lint
+        run: npx --yes @redocly/cli@1 lint docs/openapi.yaml docs/public-api.yaml
+      - name: compose.prod.yml passes every backend env var
+        working-directory: .
+        run: ./scripts/check-compose-env.sh
+
+  # Part of the required `ci` gate: no high-severity gosec findings, no reachable Go
+  # vulnerabilities, no high/critical production npm advisories.
+  security:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Reachable Go vulnerabilities (all severities)
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - name: Go security analysis (high severity)
+        working-directory: backend
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.11 -severity high -exclude-generated ./...
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: SDK Go vulnerabilities
+        working-directory: sdks/go
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - name: SDK Go security analysis (high severity)
+        working-directory: sdks/go
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.11 -severity high -exclude-generated ./...
+      - name: SDK dependency audit
+        working-directory: sdks
+        run: pnpm audit --audit-level high
+      - name: Production dependency audit (high and critical)
+        working-directory: frontend
+        run: pnpm audit --prod --audit-level high
+
+  # Keep generator downloads/builds out of the fast contracts job.
+  sdks:
+    needs: [changes]
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: sdks/go/go.sum
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: sdks/pnpm-lock.yaml
+      - name: Install SDK tools
+        working-directory: sdks
+        run: pnpm install --frozen-lockfile
+      - name: Generated SDKs and backend/docs/public-api.yaml are current
+        working-directory: sdks
+        run: pnpm check
+      - name: TypeScript and widget SDK tests
+        working-directory: sdks
+        run: pnpm test
+      - name: Go SDK tests
+        working-directory: sdks/go
+        run: go test -p 2 ./...
+
+  # Lint, format, types, unit tests and the production build.
+  frontend:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Format
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm run --if-present test
+      - uses: actions/cache@v6
+        with:
+          path: frontend/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}-${{ hashFiles('frontend/src/**', 'frontend/next.config.ts') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}-
+      - name: Build
+        run: pnpm build
+
+  # Expo app: lint, typecheck, tests and the committed API types. No native
+  # build here. Skips cleanly until mobile/ exists (CF-79).
+  mobile:
+    needs: [changes]
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v7
+      - name: mobile/ present?
+        id: present
+        run: |
+          if [ -f mobile/package.json ]; then echo "run=true" >> "$GITHUB_OUTPUT"
+          else echo "run=false" >> "$GITHUB_OUTPUT"; echo "mobile/ does not exist yet" >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/setup-node@v7
+        if: steps.present.outputs.run == 'true'
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        if: steps.present.outputs.run == 'true'
+        working-directory: mobile
+        run: npm ci
+      - name: Lint, typecheck, tests, i18n
+        if: steps.present.outputs.run == 'true'
+        working-directory: mobile
+        run: |
+          npm run --if-present lint
+          npm run --if-present typecheck
+          npm run --if-present test
+          npm run --if-present i18n:check
+      - name: api-generate is up to date
+        if: steps.present.outputs.run == 'true'
+        working-directory: mobile
+        run: |
+          if npm run | grep -q 'api:generate'; then
+            npm run api:generate
+            git diff --exit-code -- src
+          fi
+
+  # Generated contracts must be committed: frontend API types and i18n
+  # catalogs in parity.
+  contracts:
+    needs: [changes]
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check frontend public API docs copy
+        run: node frontend/scripts/sync-docs-spec.mjs --check
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: api-generate is up to date
+        working-directory: frontend
+        run: |
+          pnpm api:generate
+          git diff --exit-code -- src/generated/
+      - name: i18n
+        run: node scripts/check-i18n.mjs
+
+  # Builds the production images as Dokploy does (compose.prod.yml contexts),
+  # without pushing. Only when Dockerfiles, compose or deploy/ change, on a
+  # full run and weekly.
+  image-build:
+    needs: [changes]
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      # Exposes the runtime token the type=gha cache needs to the docker CLI.
+      - name: compose.prod.yml passes every backend env var
+        run: ./scripts/check-compose-env.sh
+      - uses: crazy-max/ghaction-github-runtime@v4
+      - name: Build backend and frontend images
+        run: |
+          for svc in backend frontend; do
+            docker buildx build "./$svc" \
+              --cache-from "type=gha,scope=$svc" \
+              --cache-to "type=gha,scope=$svc,mode=max"
+          done
+
+  # Single required status check. Branch protection waits on "ci"; it fails
+  # when any job above failed or was cancelled. Skipped jobs count as passed;
+  # the filter itself must succeed.
+  ci:
+    name: ci
+    if: always()
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All jobs green
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+          CHANGES: ${{ needs.changes.result }}
+        run: |
+          echo "$RESULTS"
+          if [ "$CHANGES" != "success" ]; then
+            echo "::error::path filter job did not succeed"; exit 1
+          fi
+          if ! echo "$RESULTS" | jq -e 'all(. == "success" or . == "skipped")' >/dev/null; then
+            echo "::error::a required CI job failed or was cancelled"; exit 1
+          fi
+
+  # Every green push to main that touched mobile/ (or the OpenAPI spec) ships
+  # the app: same native fingerprint as the latest store build -> eas update
+  # (OTA, channel production); fingerprint changed or no build yet -> eas
+  # build --auto-submit (TestFlight). Skips (green, with a summary note)
+  # until mobile/ exists, the EXPO_TOKEN secret is set and app.json has an
+  # EAS project id (`eas init`), so a missing credential never fails main.
+  mobile-release:
+    needs: [ci]
+    if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        if: ${{ !failure() }}
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: mobile/ changed since the last release?
+        if: ${{ !failure() }}
+        id: changed
+        run: |
+          if [ ! -f mobile/package.json ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "mobile/ does not exist yet" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "EXPO_TOKEN secret is not set: mobile release skipped (mobile/README.md, Release)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if ! jq -e '.expo.extra.eas.projectId // empty' mobile/app.json >/dev/null; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "mobile/app.json has no extra.eas.projectId (run eas init): mobile release skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if base=$(git describe --tags --abbrev=0 --match 'v0.[0-9]*' HEAD^ 2>/dev/null); then
+            echo "diff base: $base"
+            files=$(git diff --name-only "$base" HEAD -- mobile backend/docs/openapi.yaml | grep -vE '\.md$' || true)
+          else
+            files="(unknown range, shipping)"
+          fi
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"; echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "mobile/ unchanged, nothing shipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/setup-node@v7
+        if: ${{ !failure() && steps.changed.outputs.run == 'true' }}
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        if: ${{ !failure() && steps.changed.outputs.run == 'true' }}
+        working-directory: mobile
+        run: npm ci
+      - name: Fingerprint vs latest store build
+        if: ${{ !failure() && steps.changed.outputs.run == 'true' }}
+        id: fp
+        working-directory: mobile
+        run: |
+          last=$(npx eas-cli@latest build:list -p ios --status finished \
+            --distribution store --limit 1 --json --non-interactive \
+            | sed -n '/^\[/,$p' | jq -r '.[0].id // empty')
+          if [ -z "$last" ]; then
+            echo "no finished store build on EAS yet -> build"
+            echo "mode=build" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          cmp=$(npx eas-cli@latest fingerprint:compare --build-id "$last" \
+            --environment production --json --non-interactive | sed -n '/^{/,$p')
+          remote=$(jq -r '.fingerprint1.hash // empty' <<<"$cmp")
+          local=$(jq -r '.fingerprint2.hash // empty' <<<"$cmp")
+          echo "latest build $last fingerprint=$remote local=$local"
+          if [ -n "$remote" ] && [ "$remote" = "$local" ]; then
+            echo "mode=update" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=build" >> "$GITHUB_OUTPUT"
+          fi
+          echo "last=$last" >> "$GITHUB_OUTPUT"
+      - name: OTA update (fingerprint unchanged)
+        if: ${{ !failure() && steps.fp.outputs.mode == 'update' }}
+        working-directory: mobile
+        run: |
+          npx eas-cli@latest update --channel production --platform all \
+            --environment production --non-interactive \
+            --message "${GITHUB_SHA::8}: $(git log -1 --format=%s | cut -c1-100)"
+          echo "EAS OTA update published to channel production" >> "$GITHUB_STEP_SUMMARY"
+      - name: EAS build + store submit (fingerprint changed)
+        if: ${{ !failure() && steps.fp.outputs.mode == 'build' }}
+        working-directory: mobile
+        run: |
+          npx eas-cli@latest build -p all --profile production \
+            --auto-submit --non-interactive --no-wait
+          echo "EAS production build queued (auto-submit to TestFlight and Play internal)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Every green main run not cancelled by a newer push tags its HEAD with the
+  # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes.
+  release-tag:
+    needs: [ci]
+    if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        if: ${{ !failure() }}
+        with:
+          fetch-depth: 0
+      - name: Tag next version
+        if: ${{ !failure() }}
+        run: |
+          git fetch --tags --force
+          if git tag --points-at HEAD | grep -qE '^v0\.[0-9]+$'; then
+            echo "HEAD already tagged: $(git tag --points-at HEAD)"; exit 0
+          fi
+          last=$(git tag -l 'v0.*' | grep -E '^v0\.[0-9]+$' | sed 's/^v0\.//' | sort -n | tail -1 || true)
+          next="v0.$(( ${last:-0} + 1 ))"
+          git tag "$next" "$GITHUB_SHA"
+          git push origin "$next"
+          echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"

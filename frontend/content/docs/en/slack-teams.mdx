@@ -1,0 +1,106 @@
+---
+title: Slack and Microsoft Teams
+description: Bring Slack Connect channels and Microsoft Teams messages into the ClickFix inbox; replies go back to the same chat.
+section: channels
+order: 4
+---
+
+The Slack and Microsoft Teams channels bring conversations with partners and enterprise customers into your inbox. Agent replies go back to the same chat, and in Slack to the right thread.
+
+## Slack [#slack]
+
+Slack connects over OAuth: you install ClickFix in your Slack workspace, then pick the channels to route.
+
+### Connect [#connect]
+
+1. Choose **Channels → Add channel → Slack** and click **Add to Slack**.
+2. You're redirected to Slack; pick your workspace and approve the install.
+3. Back in ClickFix, the **Routed Slack channels** screen opens.
+
+> An install made with Slack's own "Install App" button is not linked to ClickFix. Always start the install with **Add to Slack** in ClickFix.
+
+### Pick channels [#pick-channels]
+
+1. In Slack, invite the bot to every channel you want to route:
+
+   ```text
+   /invite @ClickFix
+   ```
+
+2. In ClickFix, click **Refresh list** and tick the channels. You can also add a channel by its **Slack channel ID**.
+
+Only messages from selected channels reach the inbox. With no channel selected, no Slack messages are received.
+
+### How it works [#how-it-works]
+
+- Each Slack thread is one conversation. The author's name is shown on the message.
+- Reacting to a message with `:ticket:` brings that message into the same conversation as a "Support request".
+- Your replies always go to the matching thread.
+
+The ClickFix app asks for these scopes: `chat:write`, `channels:history`, `groups:history`, `reactions:read`, `channels:read`, `groups:read`, `users:read`.
+
+## Microsoft Teams [#microsoft-teams]
+
+The Teams channel is specific to your organization: you create an app registration and an Azure Bot in your Microsoft Entra (Azure AD) tenant and enter their details in ClickFix. Your Microsoft 365 administrator should do these steps.
+
+### 1. App registration (Entra ID) [#1-app-registration-entra-id]
+
+1. Azure Portal → **Microsoft Entra ID → App registrations → New registration**.
+2. Set **Supported account types** to _Accounts in this organizational directory only_ (single tenant). No redirect URI is needed.
+3. Note the **Application (client) ID** and **Directory (tenant) ID**.
+4. Under **Certificates & secrets → New client secret**, create a secret and copy its **Value**. It is shown only once.
+
+### 2. Azure Bot [#2-azure-bot]
+
+1. Create an **Azure Bot** resource in the Azure Portal.
+2. Set **Type of App** to _Single Tenant_ and use the app registration from step 1.
+3. The **F0** pricing tier is enough.
+4. Under **Channels**, add **Microsoft Teams**.
+
+### 3. Create the channel in ClickFix [#3-create-the-channel-in-clickfix]
+
+1. Choose **Channels → Add channel → Microsoft Teams**.
+2. Fill in **Microsoft App ID**, **App password (client secret)** and **Microsoft tenant ID**, then click **Connect**.
+3. Copy the **Messaging endpoint** shown on screen.
+4. In Azure Portal → your Azure Bot → **Configuration → Messaging endpoint**, paste it and save.
+
+### 4. Install in Teams [#4-install-in-teams]
+
+To use the bot in Teams you need an app package. The easiest way is the Teams Developer Portal (**Apps → New app → App features → Bot**, with the existing bot ID). Alternatively, zip the manifest below with two icons (192×192 color, 32×32 outline) and upload it under **Teams → Apps → Manage your apps → Upload a custom app**. Custom app upload must be allowed in your tenant.
+
+```json
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "<app_id>",
+  "developer": {
+    "name": "Your company",
+    "websiteUrl": "https://yourcompany.com",
+    "privacyUrl": "https://yourcompany.com/privacy",
+    "termsOfUseUrl": "https://yourcompany.com/terms"
+  },
+  "name": { "short": "Support", "full": "Support Team" },
+  "description": {
+    "short": "Message our support team from Teams.",
+    "full": "Messages sent to the bot reach our support team; replies come back to the same chat."
+  },
+  "icons": { "color": "color.png", "outline": "outline.png" },
+  "accentColor": "#03FF13",
+  "bots": [
+    {
+      "botId": "<app_id>",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "validDomains": ["api.getclickfix.com"]
+}
+```
+
+Replace `<app_id>` with the Application (client) ID from step 1.
+
+### Limits [#limits]
+
+The Teams channel currently supports text messages only; cards, files, edits and reactions are not supported.

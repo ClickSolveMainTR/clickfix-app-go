@@ -1,0 +1,293 @@
+---
+title: n8n düğüm tanımı
+description: ClickFix için bir n8n topluluk düğümü paketlerken kullanabileceğiniz bildirime dayalı düğüm ve kimlik bilgisi tanımları.
+section: developers
+order: 4
+---
+
+n8n'de ClickFix'i en kolay **HTTP Request** düğümüyle bağlarsınız; uç noktalar [Zapier, Make ve n8n](/docs/mcp-integrations#per-tool) sayfasındadır. Kendi topluluk düğümünüzü paketlemek isterseniz bu sayfadaki iki tanımı başlangıç noktası olarak kullanabilirsiniz.
+
+## Ne içerir [#what-it-contains]
+
+- `ClickFix.description.json`: n8n'in `INodeTypeDescription` biçimine uyan bildirime dayalı (declarative) düğüm tanımı. Konuşma oluşturma, iç not ekleme, kişi güncelleme, tetikleyici sorgulama ve REST hook aboneliği işlemlerini içerir.
+- `ClickFix.credentials.json`: `Authorization: Bearer cf_sk_…` başlığını ekleyen genel kimlik bilgisi tanımı.
+
+Paketinizde bunları düğümün `description` alanına ve kimlik bilgisinin `properties` / `authenticate` alanlarına yükleyin; TypeScript sarmalayıcısını, paket bilgilerini ve simgeyi siz eklersiniz. Biçim, [n8n'in resmi bildirime dayalı düğüm rehberini](https://docs.n8n.io/integrations/creating-nodes/build/declarative-style-node/) izler.
+
+## Kurulum notları [#setup-notes]
+
+- **API Base URL** alanına `https://api.getclickfix.com` yazın (sonuna `/v1` eklemeyin). Tanımdaki `https://support.example.com` yalnızca bir yer tutucudur.
+- **API Key** alanına **API ve otomasyonlar → API anahtarları** sayfasında oluşturduğunuz anahtarı girin. İhtiyaç duyulan kapsamlar: `triggers:read`, `webhooks:write`, `conversations:write`, `contacts:write`.
+- Tüm yazma işlemleri bir `Idempotency-Key` başlığı ister; tekrar denemelerde aynı değeri gönderin.
+- REST hook tetikleyici düğümü, aboneliğin `uuid` ve `secret` değerlerini saklamalı, devre dışı bırakılınca aboneliği silmeli ve [webhook imzasını](/docs/webhooks) doğrulamalıdır.
+- ClickFix'in n8n pazarında yayımlanmış resmi bir düğümü henüz yoktur.
+
+## Tanımlar [#definitions]
+
+Her sekme bir dosyadır; sağ üstteki düğmeyle kopyalayın.
+
+```json tab="ClickFix.credentials.json"
+{
+  "name": "clickFixApi",
+  "displayName": "ClickFix API",
+  "properties": [
+    {
+      "displayName": "API Base URL",
+      "name": "baseUrl",
+      "type": "string",
+      "default": "https://support.example.com",
+      "required": true
+    },
+    {
+      "displayName": "API Key",
+      "name": "apiKey",
+      "type": "string",
+      "typeOptions": {
+        "password": true
+      },
+      "default": "",
+      "required": true
+    }
+  ],
+  "authenticate": {
+    "type": "generic",
+    "properties": {
+      "headers": {
+        "Authorization": "={{\"Bearer \" + $credentials.apiKey}}"
+      }
+    }
+  }
+}
+```
+
+```json tab="ClickFix.description.json"
+{
+  "displayName": "ClickFix",
+  "name": "clickFix",
+  "group": ["transform"],
+  "version": 1,
+  "description": "Organization-scoped ClickFix support actions and REST hook subscriptions",
+  "defaults": {
+    "name": "ClickFix"
+  },
+  "inputs": ["main"],
+  "outputs": ["main"],
+  "credentials": [
+    {
+      "name": "clickFixApi",
+      "required": true
+    }
+  ],
+  "requestDefaults": {
+    "baseURL": "={{$credentials.baseUrl + \"/v1/public-api\"}}",
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    }
+  },
+  "properties": [
+    {
+      "displayName": "Operation",
+      "name": "operation",
+      "type": "options",
+      "noDataExpression": true,
+      "default": "createConversation",
+      "options": [
+        {
+          "name": "Create Conversation",
+          "value": "createConversation",
+          "action": "create conversation",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "/conversations",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Add Note",
+          "value": "addNote",
+          "action": "add note",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "=/conversations/{{$parameter[\"recordUuid\"]}}/messages",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Update Contact",
+          "value": "updateContact",
+          "action": "update contact",
+          "routing": {
+            "request": {
+              "method": "PATCH",
+              "url": "=/contacts/{{$parameter[\"recordUuid\"]}}",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Subscribe Trigger",
+          "value": "subscribe",
+          "action": "subscribe trigger",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "/subscriptions",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Unsubscribe Trigger",
+          "value": "unsubscribe",
+          "action": "unsubscribe trigger",
+          "routing": {
+            "request": {
+              "method": "DELETE",
+              "url": "=/subscriptions/{{$parameter[\"recordUuid\"]}}",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              }
+            }
+          }
+        },
+        {
+          "name": "Poll Triggers",
+          "value": "poll",
+          "action": "poll triggers",
+          "routing": {
+            "request": {
+              "method": "GET",
+              "url": "/triggers"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "displayName": "Idempotency Key",
+      "name": "idempotencyKey",
+      "type": "string",
+      "default": "",
+      "required": true,
+      "description": "Stable per logical action; preserve on retries",
+      "displayOptions": {
+        "hide": {
+          "operation": ["poll"]
+        }
+      }
+    },
+    {
+      "displayName": "Record UUID",
+      "name": "recordUuid",
+      "type": "string",
+      "default": "",
+      "required": true,
+      "displayOptions": {
+        "show": {
+          "operation": ["addNote", "updateContact", "unsubscribe"]
+        }
+      }
+    },
+    {
+      "displayName": "JSON Body",
+      "name": "body",
+      "type": "json",
+      "default": "{}",
+      "required": true,
+      "description": "For Add Note: {\"content\":\"Internal context\",\"private\":true,\"client_id\":\"UUID\"}",
+      "displayOptions": {
+        "show": {
+          "operation": [
+            "createConversation",
+            "addNote",
+            "updateContact",
+            "subscribe"
+          ]
+        }
+      }
+    },
+    {
+      "displayName": "Event",
+      "name": "event",
+      "type": "options",
+      "default": "conversation.created",
+      "options": [
+        {
+          "name": "conversation.created",
+          "value": "conversation.created"
+        },
+        {
+          "name": "conversation.resolved",
+          "value": "conversation.resolved"
+        },
+        {
+          "name": "contact.created",
+          "value": "contact.created"
+        },
+        {
+          "name": "csat.submitted",
+          "value": "csat.submitted"
+        },
+        {
+          "name": "conversation.tag_added",
+          "value": "conversation.tag_added"
+        }
+      ],
+      "displayOptions": {
+        "show": {
+          "operation": ["poll"]
+        }
+      },
+      "routing": {
+        "request": {
+          "qs": {
+            "event": "={{$value}}"
+          }
+        }
+      }
+    },
+    {
+      "displayName": "Cursor",
+      "name": "cursor",
+      "type": "string",
+      "default": "0",
+      "description": "Persist data.next_cursor after successful handling; deduplicate data.items by id",
+      "displayOptions": {
+        "show": {
+          "operation": ["poll"]
+        }
+      },
+      "routing": {
+        "request": {
+          "qs": {
+            "cursor": "={{$value}}"
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+## Sonraki adımlar [#next-steps]
+
+- [Zapier, Make ve n8n](/docs/mcp-integrations)
+- [API](/docs/api)
+- [Webhook'lar](/docs/webhooks)

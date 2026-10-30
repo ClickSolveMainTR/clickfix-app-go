@@ -1,0 +1,102 @@
+---
+title: AI ajanı ve Copilot
+description: AI ajanının çalışma modunu, sınıflandırmayı, prosedürleri ve araçları ayarlayın; temsilciler için Copilot'u kullanın.
+section: product
+order: 1
+---
+
+ClickFix'te yapay zekâ iki şekilde çalışır:
+
+- **AI ajanı**: Müşteri konuşmalarını sınıflandırır, bilgi bankanıza dayanarak yanıt taslağı hazırlar veya seçtiğiniz koşullarda yanıtı kendisi gönderir.
+- **Copilot**: Gelen kutusunda temsilcinin yanında çalışır; yanıt önerir, özetler, metni düzenler.
+
+Yapay zekâ kullanımı planınızdaki yapay zekâ kredilerinden düşer. Kredi biterse ajan konuşmaları temsilcilere devreder.
+
+Ajan ayarlarını **Organizasyon → Yapay zekâ** sayfasında yaparsınız. Sayfada dört sekme vardır: **Ajan**, **Prosedürler**, **Araçlar** ve **Çalışma kaydı**.
+
+## Çalışma modu [#mode]
+
+| Mod           | Ne yapar                                                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kapalı        | Ajan yanıt üretmez. Sınıflandırma açıksa yalnızca konu, öncelik ve özet çıkarılır.                                                                                     |
+| Sadece özet   | Her yeni mesajda konuşma sınıflandırılır ve temsilciler için özet çıkarılır; müşteriye hiçbir şey gönderilmez.                                                         |
+| Taslak + onay | Ajan bilgi bankasına dayanarak yanıt taslağı hazırlar; temsilci onaylayıp gönderir.                                                                                    |
+| Tam otonom    | Güven eşiği aşıldığında ve kaynak gösterebildiğinde yanıtı kendisi gönderir; aksi hâlde özetle temsilciye devreder. Konuşmaya bir temsilci yazdıysa ajan yanıt vermez. |
+
+Mod değişikliği hemen uygulanır. Yeni başlıyorsanız **Taslak + onay** ile başlayıp yanıt kalitesini gördükten sonra otonom moda geçmenizi öneririz.
+
+## Davranış [#behavior]
+
+- **Otomatik sınıflandırma (triage)**: Gelen mesajların dilini, niyetini, kategorisini, duygusunu ve aciliyetini çıkarır.
+- **Persona ve yanıt tonu**: Markanızın sesi ve üslup tercihleri. Bu metin güvenlik kurallarını aşamaz.
+- **Güven eşiği**: Otonom modda yanıt yalnızca modelin güveni bu değerin üzerindeyse gönderilir; altında kalırsa taslak olarak bekler ve konuşma temsilciye devredilir.
+- **Devir anahtar kelimeleri**: Müşteri mesajında bu kelimelerden biri geçerse (ör. "temsilci") ajan konuşmayı hemen temsilciye devreder.
+
+## Kapsam ve çalışma saatleri [#scope-and-working-hours]
+
+- **Kanallar**: Ajan yalnızca seçili kanal türlerinde çalışır. Hiç kanal seçilmezse devreye girmez.
+- **Kategoriler**: Doluysa ajan yalnızca sınıflandırmanın bu kategorilerden birini bulduğu konuşmalarda otonom yanıt verir.
+- **Yanıt dili**, **Saat dilimi**, **Günler** ve **Çalışma saatleri**.
+
+Ayrıca her kanalın **Ayarlar** menüsündeki **AI ajanı** seçeneğiyle ajanı kanal bazında açıp kapatabilirsiniz.
+
+## Bilgi kaynağı [#knowledge-source]
+
+Ajan, müşteriye giden yanıtlarını bilgi bankanızdaki **herkese açık** ve **yayında** olan makalelere dayandırır. İyi yanıtlar için sık sorulan soruları makale olarak yazın. Bkz. [Bilgi bankası](/docs/knowledge-base).
+
+## Prosedürler [#procedures]
+
+Prosedür, belirli bir müşteri niyeti için ajanın izleyeceği adımlardır. Örneğin bir iade talebinde: önce sipariş numarasını sor, sipariş aracını çağır, 14 gün geçtiyse temsilciye devret.
+
+1. **Prosedürler → Yeni prosedür** ile başlayın.
+2. **Niyet** alanına sınıflandırmanın ürettiği niyeti birebir yazın (ör. `refund_request`) ve dili seçin. Niyet ve dil sonradan değiştirilemez.
+3. Başlığı ve adımları yazıp kaydedin, ardından yayınlayın.
+
+Yalnızca yayındaki sürüm kullanılır. Prosedür ajana yeni araç yetkisi veremez ve güvenlik kurallarını aşamaz.
+
+## Araçlar [#tools]
+
+**Yerleşik araçlar** her organizasyonda hazır gelir ve yalnızca ilgili konuşma içinde çalışır:
+
+| Araç                   | Ne yapar                                        |
+| ---------------------- | ----------------------------------------------- |
+| `lookup_contact`       | Konuşmadaki kişinin bilgilerini okur            |
+| `conversation_history` | Konuşmanın herkese açık mesaj geçmişini okur    |
+| `knowledge_search`     | Yayındaki bilgi bankası makalelerinde arar      |
+| `create_note`          | Konuşmaya iç not ekler (temsilci onayıyla)      |
+| `set_status`           | Konuşma durumunu değiştirir (temsilci onayıyla) |
+
+**Organizasyon araçları (HTTP)** ile kendi sisteminizdeki bir uç noktayı ajanın çağırabileceği bir araca dönüştürürsünüz (sipariş, lisans veya fatura sorgulama gibi):
+
+- Araç, ajan tarafından JSON gövdeli bir `POST` isteğiyle çağrılır.
+- **Araç adı** küçük harfle başlar ve 3-50 karakterdir (a-z, 0-9, \_). Ad sonradan değiştirilemez.
+- **Günlük çağrı sınırı** 1 ile 1000 arasındadır.
+- **Onay gerekir** açıkken ajan aracı yalnızca önerir, çağrıyı bir temsilci onaylar. Veri değiştiren araçlar için açık tutun.
+- Kimlik bilgileri şifreli saklanır ve bir daha gösterilmez. Araçlar silinmez, devre dışı bırakılır.
+
+## Test sohbeti ve çalışma kaydı [#test-chat-and-run-log]
+
+**Test sohbeti** ile müşteri gibi bir mesaj yazıp ajanın yanıtını ve kullandığı kaynakları görürsünüz. Her test gerçek bir çalışmadır ve kredinizden düşer.
+
+**Çalışma kaydı** her yapay zekâ çalışmasını kişisel verileri maskelenmiş olarak saklar: girdi, bilgi bankası parçaları, araç çağrıları, çıktı, token, maliyet ve gecikme. Bir yanıtın neden öyle verildiğini buradan izlersiniz.
+
+## Güvenlik [#safety]
+
+- Ajan, talimat enjeksiyonu şüphesi taşıyan veya güvensiz çıktı üreten istekleri durdurur.
+- Günlük çağrı, eşzamanlılık ve bütçe sınırları aşılırsa yeni çalışma başlatılmaz.
+- Yapay zekâ işlem kayıtlarının ne kadar saklanacağını **Gizlilik ve KVKK → Saklama süreleri** sekmesinden belirlersiniz. Bkz. [KVKK araçları](/docs/data-protection).
+
+## Copilot [#copilot]
+
+Gelen kutusunda bir konuşma açıkken Copilot şu işlemleri yapar:
+
+- **Yanıt öner** ve **Konuşmayı özetle**
+- Yazdığınız metni **Yeniden yaz**, **Çevir**, **Tonu değiştir**, **Kısalt**, **Genişlet**
+- **Sonraki adımı öner**
+- **Copilot'a sor**: Konuşma hakkında serbest soru
+
+Copilot menüsünü yanıt editöründen veya klavye kısayollarıyla açarsınız (`?` tüm kısayolları gösterir). Copilot'un önerileri siz göndermedikçe müşteriye gitmez.
+
+## Kurulumda yapay zekâ [#ai-during-set-up]
+
+Yeni bir organizasyon açarken kurulum sihirbazı, web sitenizden ve birkaç sorudan yola çıkarak ekipler, SLA'lar, hazır yanıtlar, başlangıç makaleleri ve ajan kişiliği için öneri hazırlayabilir. Bkz. [Başlarken](/docs/getting-started).

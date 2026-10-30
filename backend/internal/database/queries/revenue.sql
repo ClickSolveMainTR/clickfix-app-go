@@ -1,0 +1,48 @@
+-- Platform-only, never reachable from tenant routes. Currency is never converted implicitly.
+-- name: RevenueCoverage :one
+SELECT starts_at FROM billing_revenue_coverage WHERE singleton;
+-- name: RevenueReport :one
+WITH start_rows AS (
+ SELECT DISTINCT ON(organization_id) organization_id,currency,mrr_minor,status,plan_code FROM billing_revenue_snapshots
+ WHERE occurred_at<=sqlc.arg(since)::timestamptz ORDER BY organization_id,occurred_at DESC,id DESC
+), end_rows AS (
+ SELECT DISTINCT ON(organization_id) organization_id,currency,mrr_minor,status,plan_code FROM billing_revenue_snapshots
+ WHERE occurred_at<=sqlc.arg(until)::timestamptz ORDER BY organization_id,occurred_at DESC,id DESC
+), currencies AS (SELECT currency FROM start_rows UNION SELECT currency FROM end_rows),
+ pairs AS (
+ SELECT COALESCE(a.organization_id,b.organization_id) AS organization_id,c.currency,
+ COALESCE(a.mrr_minor,0) AS opening,COALESCE(b.mrr_minor,0) AS closing
+ FROM currencies c CROSS JOIN (SELECT organization_id FROM start_rows UNION SELECT organization_id FROM end_rows) o
+ LEFT JOIN start_rows a ON a.organization_id=o.organization_id AND a.currency=c.currency
+ LEFT JOIN end_rows b ON b.organization_id=o.organization_id AND b.currency=c.currency
+ WHERE a.organization_id IS NOT NULL OR b.organization_id IS NOT NULL
+), metrics AS (
+ SELECT currency,sum(opening) AS opening_mrr_minor,sum(closing) AS mrr_minor,sum(closing)*12 AS arr_minor,
+ sum(closing) FILTER(WHERE opening=0) AS new_mrr_minor,
+ sum(closing-opening) FILTER(WHERE opening>0 AND closing>opening) AS expansion_mrr_minor,
+ sum(opening-closing) FILTER(WHERE closing>0 AND closing<opening) AS contraction_mrr_minor,
+ sum(opening) FILTER(WHERE opening>0 AND closing=0) AS churned_mrr_minor,
+ count(*) FILTER(WHERE closing>0) AS customers,
+ count(*) FILTER(WHERE opening>0 AND closing=0)::numeric/nullif(count(*) FILTER(WHERE opening>0),0) AS customer_churn,
+ sum(CASE WHEN opening>0 THEN closing ELSE 0 END)/nullif(sum(opening),0) AS nrr,
+ sum(closing)/nullif(count(*) FILTER(WHERE closing>0),0) AS arpa_minor
+ FROM pairs GROUP BY currency
+), mix AS (
+ SELECT currency,plan_code,count(*) AS customers,sum(mrr_minor) AS mrr_minor FROM end_rows WHERE mrr_minor>0 GROUP BY currency,plan_code
+), first_paid AS (
+ SELECT s.organization_id,min(s.created_at) AS first_at FROM billing_subscriptions s WHERE EXISTS(SELECT 1 FROM billing_revenue_snapshots r WHERE r.organization_id=s.organization_id AND r.mrr_minor>0) GROUP BY s.organization_id
+), cohorts AS (
+ SELECT date_trunc('month',f.first_at) AS cohort,e.currency,count(*) AS organizations,count(*) FILTER(WHERE e.mrr_minor>0) AS retained,sum(e.mrr_minor) AS mrr_minor
+ FROM first_paid f JOIN end_rows e ON e.organization_id=f.organization_id WHERE f.first_at<=sqlc.arg(until)::timestamptz GROUP BY 1,e.currency
+), pending AS (
+ SELECT i.currency,count(*) AS transfers,COALESCE(sum(t.amount_minor),0) AS amount_minor FROM billing_bank_transfers t
+ JOIN billing_invoices i ON i.organization_id=t.organization_id AND i.id=t.invoice_id WHERE t.status='reported' GROUP BY i.currency
+)
+SELECT jsonb_build_object(
+ 'currencies',COALESCE((SELECT jsonb_agg(to_jsonb(m)) FROM metrics m),'[]'::jsonb),
+ 'plan_mix',COALESCE((SELECT jsonb_agg(to_jsonb(m)) FROM mix m),'[]'::jsonb),
+ 'cohorts',COALESCE((SELECT jsonb_agg(to_jsonb(c)) FROM cohorts c),'[]'::jsonb),
+ 'pending_transfers_current',COALESCE((SELECT jsonb_agg(to_jsonb(p)) FROM pending p),'[]'::jsonb),
+ 'trial_starts',(SELECT count(*) FROM billing_trial_enrollments WHERE started_at>=sqlc.arg(since)::timestamptz AND started_at<sqlc.arg(until)::timestamptz),
+ 'trial_conversions',(SELECT count(DISTINCT subscription_id) FROM billing_subscription_transitions WHERE from_status='trialing' AND to_status='active' AND created_at>=sqlc.arg(since)::timestamptz AND created_at<sqlc.arg(until)::timestamptz)
+)::jsonb AS report;

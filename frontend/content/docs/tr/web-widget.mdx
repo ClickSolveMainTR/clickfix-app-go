@@ -1,0 +1,209 @@
+---
+title: Web widget
+description: Web sitenize tek satır kodla canlı destek balonu ekleyin, görünümünü ayarlayın ve giriş yapmış kullanıcılarınızı güvenle tanıtın.
+section: channels
+order: 7
+---
+
+Web widget, sitenize eklenen bir canlı destek balonudur. Ziyaretçiler balondan size yazar, yardım merkezinizde arama yapar ve randevu alır. Her widget ayrı bir gelen kutusudur; birden çok site için birden çok widget oluşturabilirsiniz.
+
+## Widget oluşturma [#create-a-widget]
+
+1. Sol menüde **Web widget** sayfasını açın.
+2. Bir ad yazıp **Widget oluştur**'a basın.
+3. Sekmelerden ayarları yapıp **Kaydet**'e basın.
+
+| Sekme            | Ayarlar                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Görünüm          | Ana renk, konum (sağ alt / sol alt), dil, ekibi göster                                                                    |
+| Sohbet           | Karşılama başlığı ve metni, sohbet öncesi form (ad ve e-posta), dosya gönderimi (en fazla 10 MB), memnuniyet puanı (CSAT) |
+| Çalışma saatleri | Gün ve saatler, saat dilimi, çevrimdışı mesajı                                                                            |
+| Güvenlik         | İzin verilen alan adları, kimlik doğrulama anahtarı, yalnızca doğrulanmış kullanıcılar                                    |
+| Kurulum          | Kurulum kodu ve kullanıcı tanıtma örneği                                                                                  |
+
+Çalışma saatleri dışında widget çevrimdışı görünür ve e-posta adresi zorunlu olur.
+
+## Kurulum [#install]
+
+**Kurulum** sekmesindeki satırı sitenizin tüm sayfalarına, `</body>` etiketinden önce ekleyin:
+
+```html
+<script
+  src="https://getclickfix.com/widget.js"
+  data-widget="WIDGET_ID"
+  async
+></script>
+```
+
+`WIDGET_ID` yerine panelde gösterilen widget kimliği gelir; kodu doğrudan panelden kopyalamanız yeterlidir. **Bu sayfada dene** düğmesiyle widget'ı yayınlamadan önce panelde deneyebilirsiniz.
+
+### İzin verilen alan adları [#allowed-domains]
+
+**Güvenlik** sekmesinde her satıra bir alan adı yazın. `*.ornek.com` tüm alt alan adlarını kapsar. Liste boşsa widget her sitede çalışır.
+
+## JavaScript API [#javascript-api]
+
+Widget yüklendikten sonra `window.ClickFix` üzerinden kontrol edilebilir. Script yüklenmeden önce yapılan çağrılar sıraya alınır:
+
+```html
+<script>
+  window.ClickFix =
+    window.ClickFix ||
+    function () {
+      (window.ClickFix.q = window.ClickFix.q || []).push(arguments);
+    };
+  ClickFix("init", { widgetId: "WIDGET_ID", hideLauncher: true });
+</script>
+<script src="https://getclickfix.com/widget.js" async></script>
+```
+
+| Komut                                        | Ne yapar                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `ClickFix("open")` / `"close"` / `"toggle"`  | Sohbet penceresini açar, kapatır veya değiştirir                                                                          |
+| `ClickFix("identify", {...})`                | Giriş yapmış kullanıcıyı tanıtır (aşağıda)                                                                                |
+| `ClickFix("update", { name, email, phone })` | Ziyaretçi bilgilerini günceller                                                                                           |
+| `ClickFix("track", "olay_adi", {...})`       | Sayfa olayı kaydeder; son 20 olay ziyaretçinin bir sonraki mesajına eklenir                                               |
+| `ClickFix("on", "message", fn)`              | Olay dinler: `ready`, `open`, `close`, `message`, `message:sent`, `conversation`, `unread`, `identify`, `rating`, `track` |
+| `ClickFix("reset")`                          | Ziyaretçiyi unutur (çıkış yaparken çağırın)                                                                               |
+| `ClickFix("shutdown")`                       | Widget'ı sayfadan kaldırır                                                                                                |
+
+`init` seçenekleri: `widgetId`, `locale` (`tr` / `en`), `position` (`left` / `right`), `color` (`#rrggbb`), `hideLauncher` (balonu gizleyip kendi düğmenizle açmak için), `user` (başlangıçta kullanıcıyı tanıtmak için) ve `debug`.
+
+TypeScript tipleri `https://getclickfix.com/widget.d.ts` adresinde yayınlanır.
+
+## Giriş yapmış kullanıcıları tanıtma [#identifying-signed-in-users]
+
+Sitenizde giriş yapmış kullanıcıları widget'a güvenli biçimde tanıtabilirsiniz. Böylece konuşmalar doğru kişiye ve şirkete bağlanır.
+
+1. **Güvenlik** sekmesinde **Anahtar oluştur** ile bir kimlik doğrulama anahtarı üretin. Anahtar yalnızca bir kez gösterilir; kopyalayıp sunucunuzda saklayın.
+2. Sunucunuzda her kullanıcı için `user_hash` üretin:
+
+   ```text
+   user_hash = hex(HMAC-SHA256(kimlik_dogrulama_anahtari, user_id))
+   ```
+
+3. Sayfada `identify` çağırın:
+
+   ```html
+   <script>
+     ClickFix("identify", {
+       user_id: "USER_ID",
+       user_hash: "USER_HASH",
+       name: "Ada Yılmaz",
+       email: "ada@example.com",
+       company: { id: "acme", name: "Acme A.Ş.", domain: "acme.com" },
+     });
+   </script>
+   ```
+
+Anahtarı asla tarayıcıya göndermeyin. Örneğin Node.js'te:
+
+```js
+import crypto from "node:crypto";
+
+const userHash = crypto
+  .createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
+  .update(String(user.id))
+  .digest("hex");
+```
+
+**Yalnızca doğrulanmış kullanıcılar** seçeneğini açarsanız anonim ziyaretçiler mesaj gönderemez. Bu, müşteri paneli gibi giriş gerektiren siteler için uygundur. Anahtarı **Anahtarı yenile** ile değiştirebilirsiniz; bu durumda sunucunuzdaki anahtarı da güncelleyin.
+
+## Örnekler [#examples]
+
+### Kendi düğmeniz [#own-button]
+
+Balonu gizleyip widget'ı kendi düğmenizden açabilirsiniz. `data-clickfix-launcher` özniteliği olan her öğe widget'ı açar; `data-clickfix-unread` okunmamış mesaj sayısıyla güncellenir:
+
+```html
+<button class="support" data-clickfix-launcher data-clickfix-unread="0">
+  Destek
+</button>
+
+<style>
+  .support {
+    position: relative;
+  }
+  .support[data-clickfix-unread]:not([data-clickfix-unread="0"])::after {
+    content: attr(data-clickfix-unread);
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #dc2626;
+    color: #fff;
+    border-radius: 9px;
+    padding: 0 6px;
+    font-size: 11px;
+  }
+</style>
+
+<script>
+  window.ClickFix =
+    window.ClickFix ||
+    function () {
+      (window.ClickFix.q = window.ClickFix.q || []).push(arguments);
+    };
+  ClickFix("init", { widgetId: "WIDGET_ID", hideLauncher: true });
+</script>
+<script src="https://getclickfix.com/widget.js" async></script>
+```
+
+### Olayları dinleme [#listening-to-events]
+
+```js
+ClickFix("on", "ready", () => console.log("Widget hazır"));
+ClickFix(
+  "on",
+  "unread",
+  ({ count }) => (document.title = count ? `(${count}) Mağazam` : "Mağazam"),
+);
+ClickFix("on", "message", (message) =>
+  analytics.track("support_message", message),
+);
+ClickFix("track", "checkout_started", { total: 349.9 });
+```
+
+### Sunucuda `user_hash` üretme [#user-hash-on-the-server]
+
+Oturum açmış kullanıcı için `user_hash` değerini sunucunuzda üretip sayfaya yalnızca sonucu verin:
+
+```js tab="Node.js"
+import { createHmac } from "node:crypto";
+
+export function userHash(userId) {
+  return createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
+    .update(String(userId))
+    .digest("hex");
+}
+```
+
+```php tab="PHP"
+<?php
+function clickfix_user_hash(string $userId): string {
+    return hash_hmac('sha256', $userId, getenv('CLICKFIX_IDENTITY_SECRET'));
+}
+```
+
+```python tab="Python"
+import hashlib, hmac, os
+
+def user_hash(user_id: str) -> str:
+    secret = os.environ["CLICKFIX_IDENTITY_SECRET"].encode()
+    return hmac.new(secret, str(user_id).encode(), hashlib.sha256).hexdigest()
+```
+
+```go tab="Go"
+func UserHash(userID string) string {
+	mac := hmac.New(sha256.New, []byte(os.Getenv("CLICKFIX_IDENTITY_SECRET")))
+	mac.Write([]byte(userID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+```
+
+### React [#react]
+
+React uygulamalarında tipli hook'larla widget'ı yönetmek için: [SDK'lar ve örnek kod → React widget istemcisi](/docs/sdks#react-widget).
+
+## Yardım merkezi ve randevu [#help-center-and-booking]
+
+Bilgi bankanızda herkese açık yayınlanmış makaleler varsa ziyaretçiler widget içinden arama yapabilir. Randevular modülü açıksa widget herkese açık randevu sayfanıza bağlantı verir. Ayrıntılar: [Bilgi bankası](/docs/knowledge-base), [Randevular](/docs/appointments).

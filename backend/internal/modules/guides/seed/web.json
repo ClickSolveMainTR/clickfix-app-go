@@ -1,0 +1,4237 @@
+{
+ "version": 2,
+ "guides": [
+  {
+   "key": "web.dashboard",
+   "surface": "web",
+   "route": "/",
+   "kind": "page",
+   "order": 10,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ana sayfa",
+    "summary": "Ana sayfa, ekibinizin destek işinin özetidir: açık ve bekleyen konuşmalar, SLA riskleri, bugünkü yükünüz ve kurulumda kalan adımlar tek bakışta görünür.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ana sayfa, ekibinizin destek işinin özetidir: açık ve bekleyen konuşmalar, SLA riskleri, bugünkü yükünüz ve kurulumda kalan adımlar tek bakışta görünür.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "sidebar",
+      "title": "Menü",
+      "body": "Sol menüden gelen kutusuna, müşterilere, ekibe, kanallara ve ayarlara geçersiniz. Gruplar daraltılabilir; rozetler bekleyen işi gösterir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-search",
+      "title": "Her şeyi arayın",
+      "body": "**Cmd/Ctrl + K** ile konuşma, kişi, şirket ve makale arayın ya da bir sayfaya atlayın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-notifications",
+      "title": "Bildirimler",
+      "body": "Size atanan konuşmalar, bahsedilmeler ve SLA uyarıları burada toplanır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s5",
+      "target": "header-help",
+      "title": "Sayfa rehberi",
+      "body": "Her sayfadaki **?** düğmesi o sayfanın ne işe yaradığını anlatır ve turu yeniden başlatır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s6",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Home",
+    "summary": "Home is the summary of your team's support work: open and pending conversations, SLA risks, today's workload and the remaining set-up steps at a glance.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Home is the summary of your team's support work: open and pending conversations, SLA risks, today's workload and the remaining set-up steps at a glance.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "sidebar",
+      "title": "Menu",
+      "body": "The left menu takes you to the inbox, customers, team, channels and settings. Groups collapse; badges show pending work.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-search",
+      "title": "Search everything",
+      "body": "Press **Cmd/Ctrl + K** to search conversations, contacts, companies and articles, or jump to a page.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-notifications",
+      "title": "Notifications",
+      "body": "Assignments, mentions and SLA warnings for you land here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s5",
+      "target": "header-help",
+      "title": "Page guide",
+      "body": "The **?** button on every page explains what the page is for and replays its tour.",
+      "placement": "auto"
+     },
+     {
+      "id": "s6",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.setup",
+   "surface": "web",
+   "route": "/setup",
+   "kind": "page",
+   "order": 20,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kurulum",
+    "summary": "Kurulum sayfası, organizasyonunuzu ilk müşteri mesajına hazırlayan adım listesidir: kanal bağlama, ekibi davet etme, widget kurulumu ve ilk konuşma. Yapay zekâ destekli kurulumla web sitenizden hazır bir yapılandırma da çıkarabilirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Kurulum sayfası, organizasyonunuzu ilk müşteri mesajına hazırlayan adım listesidir: kanal bağlama, ekibi davet etme, widget kurulumu ve ilk konuşma. Yapay zekâ destekli kurulumla web sitenizden hazır bir yapılandırma da çıkarabilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Adımlar",
+      "body": "Ürünün herhangi bir yerinde tamamladığınız adımlar burada kendiliğinden işaretlenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Hazır şablonlar ve AI kurulum",
+      "body": "Sektörünüze uygun bir şablon seçin veya web sitenizi verin; önizlemede istemediklerinizi kaldırıp tek tıkla uygulayın, 24 saat içinde geri alabilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Set-up",
+    "summary": "The set-up page is the checklist that gets your organization to its first customer message: connect a channel, invite the team, install the widget and receive the first conversation. AI-assisted set-up can also draft a full configuration from your website.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The set-up page is the checklist that gets your organization to its first customer message: connect a channel, invite the team, install the widget and receive the first conversation. AI-assisted set-up can also draft a full configuration from your website.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Steps",
+      "body": "Steps you complete anywhere in the product tick themselves here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Templates and AI set-up",
+      "body": "Pick a template for your industry or enter your website; untick what you don't want in the preview, apply in one click and undo within 24 hours.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.baslangic",
+   "surface": "web",
+   "route": "/getting-started",
+   "kind": "page",
+   "order": 21,
+   "setup_order": 0,
+   "tr": {
+    "title": "Başlangıç sihirbazı",
+    "summary": "Başlangıç sihirbazı, yeni bir organizasyon açtığınızda işletmenizi birkaç soruyla tanır ve organizasyonunuzu sizin için hazırlar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Başlangıç sihirbazı, yeni bir organizasyon açtığınızda işletmenizi birkaç soruyla tanır ve organizasyonunuzu sizin için hazırlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "",
+      "title": "Soruları yanıtlayın",
+      "body": "Sektör, ekip büyüklüğü, kanallar ve çalışma saatleri gibi yanıtlar kurulum planını kişiselleştirir; hepsini sonradan değiştirebilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Start wizard",
+    "summary": "The start wizard gets to know your business with a few questions when you open a new organization and prepares your organization for you.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The start wizard gets to know your business with a few questions when you open a new organization and prepares your organization for you.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "",
+      "title": "Answer the questions",
+      "body": "Answers like industry, team size, channels and hours personalize the set-up plan; you can change everything later.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.inbox",
+   "surface": "web",
+   "route": "/inbox",
+   "kind": "page",
+   "order": 30,
+   "setup_order": 0,
+   "tr": {
+    "title": "Gelen kutusu",
+    "summary": "Gelen kutusu, tüm kanallardan (e-posta, WhatsApp, Instagram, web widget, telefon…) gelen müşteri konuşmalarının tek listesidir. Konuşmaları atar, yanıtlar, etiketler ve çözersiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Gelen kutusu, tüm kanallardan (e-posta, WhatsApp, Instagram, web widget, telefon…) gelen müşteri konuşmalarının tek listesidir. Konuşmaları atar, yanıtlar, etiketler ve çözersiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "inbox-views",
+      "title": "Görünümler",
+      "body": "Size atananlar, atanmamışlar ve kayıtlı görünümler arasında geçin; sayılar canlı güncellenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "inbox-list",
+      "title": "Konuşma listesi",
+      "body": "Bir konuşmayı açmak için tıklayın. Öncelik, SLA süresi ve kanal simgesi her satırda görünür; toplu işlem için kutuları işaretleyin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "inbox-composer",
+      "title": "Yanıt alanı",
+      "body": "Yanıt yazın, **/** ile hazır yanıt ekleyin, iç not bırakın veya AI yanıt önerisini kullanın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s5",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Inbox",
+    "summary": "The inbox is the single list of customer conversations from every channel (e-mail, WhatsApp, Instagram, web widget, phone…). You assign, reply to, tag and resolve conversations here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The inbox is the single list of customer conversations from every channel (e-mail, WhatsApp, Instagram, web widget, phone…). You assign, reply to, tag and resolve conversations here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "inbox-views",
+      "title": "Views",
+      "body": "Switch between yours, unassigned and saved views; counts update live.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "inbox-list",
+      "title": "Conversation list",
+      "body": "Click a conversation to open it. Priority, SLA timer and channel icon show on each row; tick boxes for bulk actions.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "inbox-composer",
+      "title": "Composer",
+      "body": "Write a reply, insert a canned reply with **/**, leave an internal note or use the AI reply suggestion.",
+      "placement": "auto"
+     },
+     {
+      "id": "s5",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.replies",
+   "surface": "web",
+   "route": "/replies",
+   "kind": "page",
+   "order": 31,
+   "setup_order": 0,
+   "tr": {
+    "title": "Hazır yanıtlar ve makrolar",
+    "summary": "Hazır yanıtlar sık sorulan sorulara tek tuşla verilen cevaplardır; makrolar ise yanıt, etiket, durum ve öncelik değişikliğini tek tıkta birlikte uygular.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Hazır yanıtlar sık sorulan sorulara tek tuşla verilen cevaplardır; makrolar ise yanıt, etiket, durum ve öncelik değişikliğini tek tıkta birlikte uygular.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Yeni hazır yanıt",
+      "body": "Başlık, kısayol ve içerik girin; gelen kutusunda **/kısayol** yazarak kullanırsınız. Kişisel, ekip veya organizasyon kapsamında paylaşabilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Canned replies and macros",
+    "summary": "Canned replies answer frequent questions with one key; macros apply a reply, tags, status and priority together in one click.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Canned replies answer frequent questions with one key; macros apply a reply, tags, status and priority together in one click.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "New canned reply",
+      "body": "Enter a title, shortcut and content; type **/shortcut** in the inbox to use it. Share it personally, with a team or the whole organization.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.contacts",
+   "surface": "web",
+   "route": "/contacts",
+   "kind": "page",
+   "order": 40,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kişiler",
+    "summary": "Kişiler, size yazan müşterilerin rehberidir. Her kişinin kanal kimlikleri, konuşma geçmişi, özel alanları ve bağlı olduğu şirket burada tutulur.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Kişiler, size yazan müşterilerin rehberidir. Her kişinin kanal kimlikleri, konuşma geçmişi, özel alanları ve bağlı olduğu şirket burada tutulur.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Kişi ekleme ve içe aktarma",
+      "body": "Tek tek kişi ekleyin veya CSV/XLSX ile toplu içe aktarın; dışa aktarma da buradadır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-header",
+      "title": "Arama ve filtreler",
+      "body": "Ad, e-posta, telefon veya etiketle arayın; sütunları ve görünümü kendinize göre ayarlayın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Contacts",
+    "summary": "Contacts is the directory of customers who wrote to you. Each contact keeps channel identities, conversation history, custom fields and their company.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Contacts is the directory of customers who wrote to you. Each contact keeps channel identities, conversation history, custom fields and their company.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Add and import",
+      "body": "Add contacts one by one or bulk-import CSV/XLSX; export lives here too.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-header",
+      "title": "Search and filters",
+      "body": "Search by name, e-mail, phone or tag; adjust columns and the view to your liking.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.companies",
+   "surface": "web",
+   "route": "/companies",
+   "kind": "page",
+   "order": 41,
+   "setup_order": 0,
+   "tr": {
+    "title": "Şirketler",
+    "summary": "Şirketler, B2B müşterilerinizi kurum düzeyinde toplar: kişileri, açık talepleri, sağlık skorunu ve gelir bilgisini aynı kartta görürsünüz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Şirketler, B2B müşterilerinizi kurum düzeyinde toplar: kişileri, açık talepleri, sağlık skorunu ve gelir bilgisini aynı kartta görürsünüz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Şirket ekleyin",
+      "body": "Şirket ekleyin, alan adıyla kişileri otomatik eşleştirin ve kademe (tier) atayın; SLA kuralları kademeye göre çalışabilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Companies",
+    "summary": "Companies groups your B2B customers at the account level: contacts, open requests, health score and revenue on one card.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Companies groups your B2B customers at the account level: contacts, open requests, health score and revenue on one card.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Add a company",
+      "body": "Add a company, match contacts automatically by domain and assign a tier; SLA rules can target tiers.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.company",
+   "surface": "web",
+   "route": "/companies/[uuid]",
+   "kind": "page",
+   "order": 42,
+   "setup_order": 0,
+   "tr": {
+    "title": "Şirket ayrıntısı",
+    "summary": "Şirket ayrıntısı, bir müşteri kurumunun tüm ilişkisini gösterir: kişiler, konuşmalar, notlar, sağlık skoru ve önemli olaylar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Şirket ayrıntısı, bir müşteri kurumunun tüm ilişkisini gösterir: kişiler, konuşmalar, notlar, sağlık skoru ve önemli olaylar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Özet",
+      "body": "Sağlık skoru ve risk sinyalleri kayıp riskini erken fark etmenizi sağlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Company detail",
+    "summary": "The company detail shows a customer account's full relationship: contacts, conversations, notes, health score and key events.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The company detail shows a customer account's full relationship: contacts, conversations, notes, health score and key events.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Summary",
+      "body": "The health score and risk signals help you spot churn risk early.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.objects",
+   "surface": "web",
+   "route": "/objects/[typeUuid]",
+   "kind": "page",
+   "order": 43,
+   "setup_order": 0,
+   "tr": {
+    "title": "Özel nesneler",
+    "summary": "Özel nesneler; siparişler, cihazlar veya sözleşmeler gibi işinize özgü kayıtları tutar ve bunları kişi, şirket ve konuşmalara bağlar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Özel nesneler; siparişler, cihazlar veya sözleşmeler gibi işinize özgü kayıtları tutar ve bunları kişi, şirket ve konuşmalara bağlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Kayıt ekleyin",
+      "body": "Nesne türünün alanlarına göre kayıt ekleyin; tür ve alanları Ayarlar → Özel nesneler'den yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Custom objects",
+    "summary": "Custom objects hold records specific to your business, such as orders, devices or contracts, and link them to contacts, companies and conversations.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Custom objects hold records specific to your business, such as orders, devices or contracts, and link them to contacts, companies and conversations.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Add records",
+      "body": "Add records following the object type's fields; manage types and fields under Settings → Custom objects.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.teams",
+   "surface": "web",
+   "route": "/teams",
+   "kind": "page",
+   "order": 50,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ekipler",
+    "summary": "Ekipler, temsilcilerinizi konu veya dil bazında gruplar. Konuşmalar ekiplere yönlendirilir; her ekibin kendi çalışma saatleri ve becerileri olabilir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ekipler, temsilcilerinizi konu veya dil bazında gruplar. Konuşmalar ekiplere yönlendirilir; her ekibin kendi çalışma saatleri ve becerileri olabilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Yeni ekip",
+      "body": "Ekip oluşturun, üyeleri ekleyin ve yönlendirme için beceri etiketleri tanımlayın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Teams",
+    "summary": "Teams group your agents by topic or language. Conversations are routed to teams; each team can have its own hours and skills.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Teams group your agents by topic or language. Conversations are routed to teams; each team can have its own hours and skills.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "New team",
+      "body": "Create a team, add members and define skill tags for routing.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.team",
+   "surface": "web",
+   "route": "/teams/[uuid]",
+   "kind": "page",
+   "order": 51,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ekip ayrıntısı",
+    "summary": "Ekip ayrıntısında üyeleri, ekip saatlerini, becerileri ve ekibin iş yükünü yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ekip ayrıntısında üyeleri, ekip saatlerini, becerileri ve ekibin iş yükünü yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Üyeler ve beceriler",
+      "body": "Üye ekleyip çıkarın; beceriler otomatik yönlendirmede en uygun temsilciyi seçmeye yardım eder.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Team detail",
+    "summary": "In the team detail you manage members, team hours, skills and the team's workload.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "In the team detail you manage members, team hours, skills and the team's workload.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Members and skills",
+      "body": "Add and remove members; skills help routing pick the best agent.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.team_create",
+   "surface": "web",
+   "route": "/teams/create",
+   "kind": "page",
+   "order": 52,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ekip oluştur",
+    "summary": "Bu formla yeni bir ekip açarsınız. Ad, renk, saat dilimi ve üyeler yeterlidir; gerisini sonra düzenleyebilirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bu formla yeni bir ekip açarsınız. Ad, renk, saat dilimi ve üyeler yeterlidir; gerisini sonra düzenleyebilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Create team",
+    "summary": "This form opens a new team. A name, color, time zone and members are enough; you can edit the rest later.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "This form opens a new team. A name, color, time zone and members are enough; you can edit the rest later.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.team_status",
+   "surface": "web",
+   "route": "/team-status",
+   "kind": "page",
+   "order": 53,
+   "setup_order": 0,
+   "tr": {
+    "title": "Ekip durumu",
+    "summary": "Ekip durumu, kimin çevrimiçi, meşgul veya molada olduğunu ve her temsilcinin anlık konuşma yükünü canlı gösterir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Ekip durumu, kimin çevrimiçi, meşgul veya molada olduğunu ve her temsilcinin anlık konuşma yükünü canlı gösterir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Canlı tablo",
+      "body": "Kapasite dolduğunda otomatik yönlendirme yeni konuşmaları müsait temsilcilere verir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Team status",
+    "summary": "Team status shows live who is online, busy or on a break and each agent's current conversation load.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Team status shows live who is online, busy or on a break and each agent's current conversation load.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Live board",
+      "body": "When capacity is full, routing hands new conversations to available agents.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.calendar",
+   "surface": "web",
+   "route": "/calendar",
+   "kind": "page",
+   "order": 54,
+   "setup_order": 0,
+   "tr": {
+    "title": "Takvim ve randevular",
+    "summary": "Takvim, ekibinizin randevularını ve müşteri görüşmelerini gösterir. Müşteriler herkese açık rezervasyon sayfanızdan randevu alabilir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Takvim, ekibinizin randevularını ve müşteri görüşmelerini gösterir. Müşteriler herkese açık rezervasyon sayfanızdan randevu alabilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Randevu oluşturun",
+      "body": "Bir müşteri veya konuşma için randevu açın; görüntülü görüşme bağlantısı otomatik eklenebilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Calendar and appointments",
+    "summary": "The calendar shows your team's appointments and customer meetings. Customers can book from your public booking page.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The calendar shows your team's appointments and customer meetings. Customers can book from your public booking page.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Create an appointment",
+      "body": "Open an appointment for a contact or conversation; a video link can be added automatically.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.video",
+   "surface": "web",
+   "route": "/video",
+   "kind": "page",
+   "order": 55,
+   "setup_order": 0,
+   "tr": {
+    "title": "Görüntülü görüşmeler",
+    "summary": "Görüntülü görüşme odaları, müşterilerinizle tarayıcıdan ekran paylaşımlı görüşme yapmanızı sağlar; kayıtlar ve özetler konuşmaya eklenir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Görüntülü görüşme odaları, müşterilerinizle tarayıcıdan ekran paylaşımlı görüşme yapmanızı sağlar; kayıtlar ve özetler konuşmaya eklenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Oda başlatın",
+      "body": "Yeni bir oda açın ve davet bağlantısını müşteriye gönderin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Video rooms",
+    "summary": "Video rooms let you meet customers in the browser with screen sharing; recordings and summaries are attached to the conversation.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Video rooms let you meet customers in the browser with screen sharing; recordings and summaries are attached to the conversation.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Start a room",
+      "body": "Open a new room and send the invite link to the customer.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.video_room",
+   "surface": "web",
+   "route": "/video/[uuid]",
+   "kind": "page",
+   "order": 56,
+   "setup_order": 0,
+   "tr": {
+    "title": "Görüşme odası",
+    "summary": "Bu, canlı bir görüntülü görüşme odasıdır. Kamera, mikrofon, ekran paylaşımı ve kayıt kontrolleri buradadır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bu, canlı bir görüntülü görüşme odasıdır. Kamera, mikrofon, ekran paylaşımı ve kayıt kontrolleri buradadır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Video room",
+    "summary": "This is a live video room. Camera, microphone, screen sharing and recording controls are here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "This is a live video room. Camera, microphone, screen sharing and recording controls are here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.reports",
+   "surface": "web",
+   "route": "/reports",
+   "kind": "page",
+   "order": 57,
+   "setup_order": 0,
+   "tr": {
+    "title": "Raporlar",
+    "summary": "Raporlar; ilk yanıt süresi, çözüm süresi, SLA uyumu, memnuniyet (CSAT) ve kanal hacimlerini dönem ve ekip bazında ölçer.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Raporlar; ilk yanıt süresi, çözüm süresi, SLA uyumu, memnuniyet (CSAT) ve kanal hacimlerini dönem ve ekip bazında ölçer.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Dönem ve filtreler",
+      "body": "Tarih aralığını, ekibi ve kanalı seçin; grafikler anında yenilenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Dışa aktarın ve zamanlayın",
+      "body": "Raporu PDF/XLSX olarak indirin veya e-postayla düzenli gönderim planlayın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Reports",
+    "summary": "Reports measure first response time, resolution time, SLA compliance, satisfaction (CSAT) and channel volumes by period and team.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Reports measure first response time, resolution time, SLA compliance, satisfaction (CSAT) and channel volumes by period and team.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Period and filters",
+      "body": "Pick the date range, team and channel; charts refresh instantly.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Export and schedule",
+      "body": "Download the report as PDF/XLSX or schedule regular e-mail delivery.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.oncall",
+   "surface": "web",
+   "route": "/oncall",
+   "kind": "page",
+   "order": 58,
+   "setup_order": 0,
+   "tr": {
+    "title": "Nöbet",
+    "summary": "Nöbet, mesai dışı acil konuşmalar ve olaylar için kimin ulaşılabilir olduğunu belirleyen vardiya ve eskalasyon planıdır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Nöbet, mesai dışı acil konuşmalar ve olaylar için kimin ulaşılabilir olduğunu belirleyen vardiya ve eskalasyon planıdır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Plan oluşturun",
+      "body": "Rotasyon ve eskalasyon adımlarını tanımlayın; bildirimler mobil uygulamaya gelir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "On-call",
+    "summary": "On-call is the shift and escalation plan that decides who is reachable for urgent conversations and incidents outside hours.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "On-call is the shift and escalation plan that decides who is reachable for urgent conversations and incidents outside hours.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Create a plan",
+      "body": "Define rotations and escalation steps; alerts reach the mobile app.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.workforce",
+   "surface": "web",
+   "route": "/workforce",
+   "kind": "page",
+   "order": 59,
+   "setup_order": 0,
+   "tr": {
+    "title": "İş gücü yönetimi",
+    "summary": "İş gücü yönetimi, geçmiş hacme göre talep tahmini yapar ve vardiyaları buna göre planlamanıza yardım eder.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "İş gücü yönetimi, geçmiş hacme göre talep tahmini yapar ve vardiyaları buna göre planlamanıza yardım eder.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Workforce management",
+    "summary": "Workforce management forecasts demand from past volume and helps you plan shifts accordingly.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Workforce management forecasts demand from past volume and helps you plan shifts accordingly.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.coaching",
+   "surface": "web",
+   "route": "/coaching",
+   "kind": "page",
+   "order": 60,
+   "setup_order": 0,
+   "tr": {
+    "title": "Koçluk ve kalite",
+    "summary": "Koçluk sayfası, konuşmaları kalite kriterlerine göre değerlendirmenizi ve temsilcilere geri bildirim vermenizi sağlar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Koçluk sayfası, konuşmaları kalite kriterlerine göre değerlendirmenizi ve temsilcilere geri bildirim vermenizi sağlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Coaching and quality",
+    "summary": "The coaching page lets you score conversations against quality criteria and give agents feedback.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The coaching page lets you score conversations against quality criteria and give agents feedback.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.channels",
+   "surface": "web",
+   "route": "/channels",
+   "kind": "page",
+   "order": 70,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kanallar",
+    "summary": "Kanallar, müşterilerin size ulaştığı yerlerdir: e-posta, WhatsApp, Instagram, Messenger, Telegram, SMS, telefon ve web widget. Bağlanan her kanal gelen kutusuna akar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Kanallar, müşterilerin size ulaştığı yerlerdir: e-posta, WhatsApp, Instagram, Messenger, Telegram, SMS, telefon ve web widget. Bağlanan her kanal gelen kutusuna akar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Kanal bağlayın",
+      "body": "Bir kanal türü seçin ve yönergeleri izleyin. E-posta için destek adresinizi yönlendirmeniz yeterlidir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-header",
+      "title": "Sağlık durumu",
+      "body": "Her kanalın son mesaj ve hata durumu listede görünür; sorun olduğunda burada uyarı çıkar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Channels",
+    "summary": "Channels are where customers reach you: e-mail, WhatsApp, Instagram, Messenger, Telegram, SMS, phone and the web widget. Every connected channel flows into the inbox.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Channels are where customers reach you: e-mail, WhatsApp, Instagram, Messenger, Telegram, SMS, phone and the web widget. Every connected channel flows into the inbox.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Connect a channel",
+      "body": "Pick a channel type and follow the steps. For e-mail, forwarding your support address is enough.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-header",
+      "title": "Health",
+      "body": "Each channel's last message and error state show in the list; problems are flagged here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.channel_connect",
+   "surface": "web",
+   "route": "/channels/connect/[type]",
+   "kind": "page",
+   "order": 71,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kanal bağlama",
+    "summary": "Bu sayfa seçtiğiniz kanalı adım adım bağlar. Gerekli bilgiler kanal türüne göre değişir (ör. Meta hesabı, API anahtarı veya e-posta yönlendirme).",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bu sayfa seçtiğiniz kanalı adım adım bağlar. Gerekli bilgiler kanal türüne göre değişir (ör. Meta hesabı, API anahtarı veya e-posta yönlendirme).",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Connect a channel",
+    "summary": "This page connects the chosen channel step by step. The details needed depend on the channel (e.g. a Meta account, an API key or e-mail forwarding).",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "This page connects the chosen channel step by step. The details needed depend on the channel (e.g. a Meta account, an API key or e-mail forwarding).",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.channel_calls",
+   "surface": "web",
+   "route": "/channels/[uuid]/calls",
+   "kind": "page",
+   "order": 72,
+   "setup_order": 0,
+   "tr": {
+    "title": "Çağrı kayıtları",
+    "summary": "Çağrı kayıtları, telefon kanalınızdaki gelen ve giden aramaları, sürelerini, kayıtlarını ve transkriptlerini listeler.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Çağrı kayıtları, telefon kanalınızdaki gelen ve giden aramaları, sürelerini, kayıtlarını ve transkriptlerini listeler.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Call log",
+    "summary": "The call log lists inbound and outbound calls of your phone channel with durations, recordings and transcripts.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The call log lists inbound and outbound calls of your phone channel with durations, recordings and transcripts.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.widget",
+   "surface": "web",
+   "route": "/widget",
+   "kind": "page",
+   "order": 73,
+   "setup_order": 0,
+   "tr": {
+    "title": "Web widget",
+    "summary": "Web widget, sitenize ekleyeceğiniz canlı sohbet balonudur. Renkleri, karşılama mesajını, ön formu ve yardım merkezi aramasını buradan ayarlarsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Web widget, sitenize ekleyeceğiniz canlı sohbet balonudur. Renkleri, karşılama mesajını, ön formu ve yardım merkezi aramasını buradan ayarlarsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Görünüm",
+      "body": "Rengi ve karşılama metnini değiştirin; önizleme anında güncellenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Kurulum kodu",
+      "body": "Kodu kopyalayıp sitenizin `</body>` etiketinden önce yapıştırın. Widget çalıştığında kurulum adımı kendiliğinden tamamlanır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Web widget",
+    "summary": "The web widget is the live chat bubble you add to your site. Set colors, the greeting, the pre-chat form and help-center search here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The web widget is the live chat bubble you add to your site. Set colors, the greeting, the pre-chat form and help-center search here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Appearance",
+      "body": "Change the color and greeting; the preview updates instantly.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "Install snippet",
+      "body": "Copy the snippet and paste it before your site's `</body>` tag. The set-up step completes itself once the widget runs.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.forum",
+   "surface": "web",
+   "route": "/forum",
+   "kind": "page",
+   "order": 74,
+   "setup_order": 0,
+   "tr": {
+    "title": "Topluluk forumu",
+    "summary": "Topluluk forumu, müşterilerinizin birbirine yardım ettiği ve fikir paylaştığı herkese açık alandır; moderasyonu buradan yaparsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Topluluk forumu, müşterilerinizin birbirine yardım ettiği ve fikir paylaştığı herkese açık alandır; moderasyonu buradan yaparsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Community forum",
+    "summary": "The community forum is the public space where customers help each other and share ideas; you moderate it here.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The community forum is the public space where customers help each other and share ideas; you moderate it here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.workflows",
+   "surface": "web",
+   "route": "/workflows",
+   "kind": "page",
+   "order": 75,
+   "setup_order": 0,
+   "tr": {
+    "title": "İş akışları",
+    "summary": "İş akışları, tetikleyici + koşul + adım mantığıyla tekrarlayan işleri otomatikleştirir: ör. yeni VIP konuşmayı öncelikli yap ve ekibe bildir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "İş akışları, tetikleyici + koşul + adım mantığıyla tekrarlayan işleri otomatikleştirir: ör. yeni VIP konuşmayı öncelikli yap ve ekibe bildir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Yeni akış",
+      "body": "Boş tuvalden başlayın veya şablon seçin; yayınlamadan önce test edebilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Workflows",
+    "summary": "Workflows automate repetitive work with trigger + condition + step logic: e.g. make new VIP conversations urgent and notify the team.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Workflows automate repetitive work with trigger + condition + step logic: e.g. make new VIP conversations urgent and notify the team.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "New workflow",
+      "body": "Start from a blank canvas or a template; you can test before publishing.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.workflow",
+   "surface": "web",
+   "route": "/workflows/[uuid]",
+   "kind": "page",
+   "order": 76,
+   "setup_order": 0,
+   "tr": {
+    "title": "İş akışı düzenleyici",
+    "summary": "Görsel düzenleyicide adımları sürükleyip bağlarsınız. Her adımın ayarları sağ panelde açılır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Görsel düzenleyicide adımları sürükleyip bağlarsınız. Her adımın ayarları sağ panelde açılır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Workflow editor",
+    "summary": "In the visual editor you drag and connect steps. Each step's settings open in the right panel.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "In the visual editor you drag and connect steps. Each step's settings open in the right panel.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.rules",
+   "surface": "web",
+   "route": "/rules",
+   "kind": "page",
+   "order": 77,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kurallar",
+    "summary": "Kurallar, konuşmalara olay anında uygulanan basit otomasyonlardır: etiketleme, atama, öncelik ve bildirim.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Kurallar, konuşmalara olay anında uygulanan basit otomasyonlardır: etiketleme, atama, öncelik ve bildirim.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Kural ekleyin",
+      "body": "Ne zaman, hangi koşulda ve ne yapılacağını seçin; kurallar sırayla çalışır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Rules",
+    "summary": "Rules are simple automations applied to conversations as events happen: tagging, assignment, priority and notifications.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Rules are simple automations applied to conversations as events happen: tagging, assignment, priority and notifications.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Add a rule",
+      "body": "Choose when, under which condition and what to do; rules run in order.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.rule",
+   "surface": "web",
+   "route": "/rules/[uuid]",
+   "kind": "page",
+   "order": 78,
+   "setup_order": 0,
+   "tr": {
+    "title": "Kural düzenleyici",
+    "summary": "Bu kuralın tetikleyicisini, koşullarını ve eylemlerini düzenlersiniz; çalışma geçmişi alttadır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bu kuralın tetikleyicisini, koşullarını ve eylemlerini düzenlersiniz; çalışma geçmişi alttadır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Rule editor",
+    "summary": "Edit this rule's trigger, conditions and actions; the run history is below.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Edit this rule's trigger, conditions and actions; the run history is below.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.apps",
+   "surface": "web",
+   "route": "/apps",
+   "kind": "page",
+   "order": 79,
+   "setup_order": 0,
+   "tr": {
+    "title": "Uygulamalar",
+    "summary": "Uygulamalar, konuşma kenar çubuğuna eklenen entegrasyonlardır (ör. sipariş sorgulama, CRM kartı).",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Uygulamalar, konuşma kenar çubuğuna eklenen entegrasyonlardır (ör. sipariş sorgulama, CRM kartı).",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Apps",
+    "summary": "Apps are integrations added to the conversation sidebar (e.g. order lookup, CRM card).",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Apps are integrations added to the conversation sidebar (e.g. order lookup, CRM card).",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_organization",
+   "surface": "web",
+   "route": "/settings/organization",
+   "kind": "page",
+   "order": 90,
+   "setup_order": 0,
+   "tr": {
+    "title": "Organizasyon ayarları",
+    "summary": "Organizasyon adını, logosunu, varsayılan dilini ve saat dilimini buradan yönetirsiniz; müşteriye giden e-postalarda bu bilgiler kullanılır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Organizasyon adını, logosunu, varsayılan dilini ve saat dilimini buradan yönetirsiniz; müşteriye giden e-postalarda bu bilgiler kullanılır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Organization settings",
+    "summary": "Manage the organization name, logo, default language and time zone here; customer-facing e-mails use these details.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Manage the organization name, logo, default language and time zone here; customer-facing e-mails use these details.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_members",
+   "surface": "web",
+   "route": "/settings/members",
+   "kind": "page",
+   "order": 91,
+   "setup_order": 0,
+   "tr": {
+    "title": "Üyeler",
+    "summary": "Üyeler sayfası, organizasyonunuza erişen ekip arkadaşlarını ve rollerini listeler. Davet gönderir, rol değiştirir veya erişimi kaldırırsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Üyeler sayfası, organizasyonunuza erişen ekip arkadaşlarını ve rollerini listeler. Davet gönderir, rol değiştirir veya erişimi kaldırırsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Ekip arkadaşı davet edin",
+      "body": "E-posta adresini ve rolü girin; davet bağlantısı e-postayla gider. Temsilci rolü konuşmaları yanıtlamak için yeterlidir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Members",
+    "summary": "The members page lists teammates with access to your organization and their roles. Send invites, change roles or remove access.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The members page lists teammates with access to your organization and their roles. Send invites, change roles or remove access.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Invite a teammate",
+      "body": "Enter the e-mail and role; the invite link goes out by e-mail. The agent role is enough to answer conversations.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_roles",
+   "surface": "web",
+   "route": "/settings/roles",
+   "kind": "page",
+   "order": 92,
+   "setup_order": 0,
+   "tr": {
+    "title": "Roller",
+    "summary": "Roller, kimin neyi görebileceğini ve yapabileceğini belirler. Hazır roller dışında kendi rolünüzü izin matrisiyle oluşturabilirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Roller, kimin neyi görebileceğini ve yapabileceğini belirler. Hazır roller dışında kendi rolünüzü izin matrisiyle oluşturabilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Rol oluşturun",
+      "body": "İzinleri gruplar halinde seçin; değişiklik o role sahip herkese hemen uygulanır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Roles",
+    "summary": "Roles decide who can see and do what. Besides the built-in roles you can build your own with the permission matrix.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Roles decide who can see and do what. Besides the built-in roles you can build your own with the permission matrix.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Create a role",
+      "body": "Pick permissions by group; changes apply immediately to everyone with that role.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_role",
+   "surface": "web",
+   "route": "/settings/roles/[uuid]",
+   "kind": "page",
+   "order": 93,
+   "setup_order": 0,
+   "tr": {
+    "title": "Rol ayrıntısı",
+    "summary": "Bu rolün izinlerini ve rolü taşıyan üyeleri görürsünüz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bu rolün izinlerini ve rolü taşıyan üyeleri görürsünüz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Role detail",
+    "summary": "See this role's permissions and the members who hold it.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "See this role's permissions and the members who hold it.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_role_create",
+   "surface": "web",
+   "route": "/settings/roles/create",
+   "kind": "page",
+   "order": 94,
+   "setup_order": 0,
+   "tr": {
+    "title": "Rol oluştur",
+    "summary": "Yeni bir rol için ad ve izinleri seçin. En az yetki ilkesine uyun: yalnızca gereken izinleri verin.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Yeni bir rol için ad ve izinleri seçin. En az yetki ilkesine uyun: yalnızca gereken izinleri verin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Create role",
+    "summary": "Choose a name and permissions for a new role. Follow least privilege: grant only what is needed.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Choose a name and permissions for a new role. Follow least privilege: grant only what is needed.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_custom_fields",
+   "surface": "web",
+   "route": "/settings/custom-fields",
+   "kind": "page",
+   "order": 95,
+   "setup_order": 0,
+   "tr": {
+    "title": "Özel alanlar",
+    "summary": "Özel alanlar, konuşma ve kişilere işinize özgü bilgiler ekler (sipariş no, paket, cihaz modeli…). Formlarda, filtrelerde ve raporlarda kullanılır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Özel alanlar, konuşma ve kişilere işinize özgü bilgiler ekler (sipariş no, paket, cihaz modeli…). Formlarda, filtrelerde ve raporlarda kullanılır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Custom fields",
+    "summary": "Custom fields add business-specific data to conversations and contacts (order no, plan, device model…). They are used in forms, filters and reports.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Custom fields add business-specific data to conversations and contacts (order no, plan, device model…). They are used in forms, filters and reports.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_custom_objects",
+   "surface": "web",
+   "route": "/settings/custom-objects",
+   "kind": "page",
+   "order": 96,
+   "setup_order": 0,
+   "tr": {
+    "title": "Özel nesne türleri",
+    "summary": "Özel nesne türlerini ve alanlarını tanımlarsınız; kayıtlar menüdeki nesne sayfasında tutulur.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Özel nesne türlerini ve alanlarını tanımlarsınız; kayıtlar menüdeki nesne sayfasında tutulur.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Custom object types",
+    "summary": "Define custom object types and their fields; records live on the object page in the menu.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Define custom object types and their fields; records live on the object page in the menu.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_request_forms",
+   "surface": "web",
+   "route": "/settings/request-forms",
+   "kind": "page",
+   "order": 97,
+   "setup_order": 0,
+   "tr": {
+    "title": "Talep formları",
+    "summary": "Talep formları, widget'ta ve yardım merkezinde müşteriden yapılandırılmış bilgi toplar; zorunlu alanlar çözümden önce istenebilir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Talep formları, widget'ta ve yardım merkezinde müşteriden yapılandırılmış bilgi toplar; zorunlu alanlar çözümden önce istenebilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Request forms",
+    "summary": "Request forms collect structured details from customers in the widget and help center; required fields can be enforced before resolving.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Request forms collect structured details from customers in the widget and help center; required fields can be enforced before resolving.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_appointments",
+   "surface": "web",
+   "route": "/settings/appointments",
+   "kind": "page",
+   "order": 98,
+   "setup_order": 0,
+   "tr": {
+    "title": "Randevu ayarları",
+    "summary": "Randevu türlerini, sürelerini, uygunluk saatlerini ve herkese açık rezervasyon sayfanızı yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Randevu türlerini, sürelerini, uygunluk saatlerini ve herkese açık rezervasyon sayfanızı yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Appointment settings",
+    "summary": "Manage appointment types, durations, availability and your public booking page.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Manage appointment types, durations, availability and your public booking page.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_brands",
+   "surface": "web",
+   "route": "/settings/brands",
+   "kind": "page",
+   "order": 99,
+   "setup_order": 0,
+   "tr": {
+    "title": "Markalar",
+    "summary": "Birden fazla markanız varsa her marka için ayrı kanal, widget, yardım merkezi ve e-posta görünümü tanımlarsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Birden fazla markanız varsa her marka için ayrı kanal, widget, yardım merkezi ve e-posta görünümü tanımlarsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Brands",
+    "summary": "If you run several brands, define separate channels, widget, help center and e-mail look for each brand.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "If you run several brands, define separate channels, widget, help center and e-mail look for each brand.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_apps",
+   "surface": "web",
+   "route": "/settings/apps",
+   "kind": "page",
+   "order": 100,
+   "setup_order": 0,
+   "tr": {
+    "title": "Uygulama yönetimi",
+    "summary": "Galeriden uygulama kurar, kendi uygulamalarınızı ekler; nerede görüneceklerini ve hangi izinleri kullanacaklarını belirlersiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Galeriden uygulama kurar, kendi uygulamalarınızı ekler; nerede görüneceklerini ve hangi izinleri kullanacaklarını belirlersiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Manage apps",
+    "summary": "Install apps from the gallery, add your own, and choose where they appear and which permissions they use.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Install apps from the gallery, add your own, and choose where they appear and which permissions they use.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_ai",
+   "surface": "web",
+   "route": "/settings/ai",
+   "kind": "page",
+   "order": 101,
+   "setup_order": 0,
+   "tr": {
+    "title": "Yapay zekâ ayarları",
+    "summary": "Yapay zekâ ayarları; yanıt önerileri, otomatik sınıflandırma ve müşteriyle konuşan AI ajanının davranışını, kurallarını ve bütçesini belirler.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Yapay zekâ ayarları; yanıt önerileri, otomatik sınıflandırma ve müşteriyle konuşan AI ajanının davranışını, kurallarını ve bütçesini belirler.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Politika",
+      "body": "AI'ı açın, günlük çağrı ve bütçe sınırlarını belirleyin; kişisel veriler varsayılan olarak maskelenir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "AI ajanı",
+      "body": "Ajanın kişiliğini, sınırlarını ve devretme anahtar kelimelerini tanımlayın; önce test sohbetinde deneyin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "AI settings",
+    "summary": "AI settings control reply suggestions, automatic triage and the customer-facing AI agent's behavior, guardrails and budget.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "AI settings control reply suggestions, automatic triage and the customer-facing AI agent's behavior, guardrails and budget.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-header",
+      "title": "Policy",
+      "body": "Turn AI on and set daily call and budget limits; personal data is masked by default.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "page-actions",
+      "title": "AI agent",
+      "body": "Define the agent's persona, guardrails and hand-off keywords; try it in the test chat first.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_knowledge",
+   "surface": "web",
+   "route": "/settings/knowledge",
+   "kind": "page",
+   "order": 102,
+   "setup_order": 0,
+   "tr": {
+    "title": "Bilgi bankası",
+    "summary": "Bilgi bankası, hem ekibinizin hem AI ajanının kullandığı makalelerdir. Herkese açık makaleler yardım merkezinizde yayınlanır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Bilgi bankası, hem ekibinizin hem AI ajanının kullandığı makalelerdir. Herkese açık makaleler yardım merkezinizde yayınlanır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Makale yazın",
+      "body": "Koleksiyon seçin, makaleyi yazın ve görünürlüğü (herkese açık / iç) belirleyin; yayınladığınızda AI hemen kullanmaya başlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Knowledge base",
+    "summary": "The knowledge base holds articles used by your team and the AI agent. Public articles are published on your help center.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The knowledge base holds articles used by your team and the AI agent. Public articles are published on your help center.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Write an article",
+      "body": "Pick a collection, write the article and set visibility (public / internal); once published the AI uses it right away.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_knowledge_article",
+   "surface": "web",
+   "route": "/settings/knowledge/[uuid]",
+   "kind": "page",
+   "order": 103,
+   "setup_order": 0,
+   "tr": {
+    "title": "Makale düzenleyici",
+    "summary": "Makaleyi düzenleyin, sürüm geçmişini görün ve yayınlayın.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Makaleyi düzenleyin, sürüm geçmişini görün ve yayınlayın.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Article editor",
+    "summary": "Edit the article, see its version history and publish.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Edit the article, see its version history and publish.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_knowledge_new",
+   "surface": "web",
+   "route": "/settings/knowledge/new",
+   "kind": "page",
+   "order": 104,
+   "setup_order": 0,
+   "tr": {
+    "title": "Yeni makale",
+    "summary": "Yeni bir bilgi bankası makalesi yazarsınız. Kısa, tek konuya odaklı makaleler AI'ın doğru yanıt vermesini kolaylaştırır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Yeni bir bilgi bankası makalesi yazarsınız. Kısa, tek konuya odaklı makaleler AI'ın doğru yanıt vermesini kolaylaştırır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "New article",
+    "summary": "Write a new knowledge base article. Short, single-topic articles help the AI answer accurately.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Write a new knowledge base article. Short, single-topic articles help the AI answer accurately.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.billing",
+   "surface": "web",
+   "route": "/billing",
+   "kind": "page",
+   "order": 105,
+   "setup_order": 0,
+   "tr": {
+    "title": "Faturalama",
+    "summary": "Faturalama; planınızı, koltuk sayınızı, AI ve dakika kredilerinizi, faturalarınızı ve ödeme yönteminizi gösterir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Faturalama; planınızı, koltuk sayınızı, AI ve dakika kredilerinizi, faturalarınızı ve ödeme yönteminizi gösterir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Plan ve krediler",
+      "body": "Planınızı yükseltin veya kredi paketi alın; ClickFix Asistan kullanımı kredilerinizden düşmez.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Billing",
+    "summary": "Billing shows your plan, seats, AI and minute credits, invoices and payment method.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Billing shows your plan, seats, AI and minute credits, invoices and payment method.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "page-actions",
+      "title": "Plan and credits",
+      "body": "Upgrade your plan or buy credit packs; ClickFix Assistant usage is never deducted from your credits.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_audit",
+   "surface": "web",
+   "route": "/settings/audit",
+   "kind": "page",
+   "order": 106,
+   "setup_order": 0,
+   "tr": {
+    "title": "Denetim kaydı",
+    "summary": "Denetim kaydı, organizasyonunuzda kimin ne zaman neyi değiştirdiğini gösterir; güvenlik ve uyumluluk için dışa aktarılabilir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Denetim kaydı, organizasyonunuzda kimin ne zaman neyi değiştirdiğini gösterir; güvenlik ve uyumluluk için dışa aktarılabilir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Audit log",
+    "summary": "The audit log shows who changed what and when in your organization; export it for security and compliance.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "The audit log shows who changed what and when in your organization; export it for security and compliance.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_support_access",
+   "surface": "web",
+   "route": "/settings/support-access",
+   "kind": "page",
+   "order": 107,
+   "setup_order": 0,
+   "tr": {
+    "title": "Destek erişimi",
+    "summary": "ClickFix destek ekibinin sorununuzu incelemek için hesabınıza süreli ve kayıtlı erişmesine buradan izin verirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "ClickFix destek ekibinin sorununuzu incelemek için hesabınıza süreli ve kayıtlı erişmesine buradan izin verirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Support access",
+    "summary": "Allow the ClickFix support team time-limited, audited access to your account to investigate an issue.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Allow the ClickFix support team time-limited, audited access to your account to investigate an issue.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_privacy",
+   "surface": "web",
+   "route": "/settings/privacy",
+   "kind": "page",
+   "order": 108,
+   "setup_order": 0,
+   "tr": {
+    "title": "Gizlilik ve veri",
+    "summary": "Veri saklama sürelerini, KVKK/GDPR silme ve dışa aktarma taleplerini yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Veri saklama sürelerini, KVKK/GDPR silme ve dışa aktarma taleplerini yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Privacy and data",
+    "summary": "Manage data retention and KVKK/GDPR deletion and export requests.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Manage data retention and KVKK/GDPR deletion and export requests.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_security",
+   "surface": "web",
+   "route": "/settings/security",
+   "kind": "page",
+   "order": 109,
+   "setup_order": 0,
+   "tr": {
+    "title": "Güvenlik",
+    "summary": "SSO, iki adımlı doğrulama zorunluluğu, IP izin listesi ve oturum politikalarını belirlersiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "SSO, iki adımlı doğrulama zorunluluğu, IP izin listesi ve oturum politikalarını belirlersiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Security",
+    "summary": "Configure SSO, enforced two-factor authentication, the IP allow-list and session policies.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Configure SSO, enforced two-factor authentication, the IP allow-list and session policies.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_sla",
+   "surface": "web",
+   "route": "/settings/sla",
+   "kind": "page",
+   "order": 110,
+   "setup_order": 0,
+   "tr": {
+    "title": "SLA ve çalışma saatleri",
+    "summary": "SLA politikaları, önceliğe göre ilk yanıt ve çözüm hedeflerini belirler; çalışma saatleri ve tatiller bu sürelerin nasıl sayılacağını tanımlar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "SLA politikaları, önceliğe göre ilk yanıt ve çözüm hedeflerini belirler; çalışma saatleri ve tatiller bu sürelerin nasıl sayılacağını tanımlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "sla-business-hours",
+      "title": "Çalışma saatleri",
+      "body": "Haftalık programınızı ve resmî tatilleri ekleyin; SLA saati yalnızca mesai içinde ilerler.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "sla-policies",
+      "title": "SLA politikaları",
+      "body": "Öncelik başına hedef süreler girin; süre dolmadan uyarı yüzdesi gelince temsilci uyarılır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "SLA and business hours",
+    "summary": "SLA policies set first-response and resolution targets per priority; business hours and holidays define how that time is counted.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "SLA policies set first-response and resolution targets per priority; business hours and holidays define how that time is counted.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "sla-business-hours",
+      "title": "Business hours",
+      "body": "Add your weekly schedule and public holidays; SLA clocks only run during working hours.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "sla-policies",
+      "title": "SLA policies",
+      "body": "Enter targets per priority; agents are warned when the warning percentage is reached.",
+      "placement": "auto"
+     },
+     {
+      "id": "s4",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_integrations",
+   "surface": "web",
+   "route": "/settings/integrations",
+   "kind": "page",
+   "order": 111,
+   "setup_order": 0,
+   "tr": {
+    "title": "Entegrasyonlar",
+    "summary": "Slack, Zapier, webhook ve API anahtarları gibi dış sistem bağlantılarını yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Slack, Zapier, webhook ve API anahtarları gibi dış sistem bağlantılarını yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Integrations",
+    "summary": "Manage connections to external systems such as Slack, Zapier, webhooks and API keys.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Manage connections to external systems such as Slack, Zapier, webhooks and API keys.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_video",
+   "surface": "web",
+   "route": "/settings/video",
+   "kind": "page",
+   "order": 112,
+   "setup_order": 0,
+   "tr": {
+    "title": "Görüntülü görüşme ayarları",
+    "summary": "Kayıt, transkripsiyon ve oda varsayılanlarını belirlersiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Kayıt, transkripsiyon ve oda varsayılanlarını belirlersiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Video settings",
+    "summary": "Set recording, transcription and room defaults.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Set recording, transcription and room defaults.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.settings_customer_health",
+   "surface": "web",
+   "route": "/settings/customer-health",
+   "kind": "page",
+   "order": 113,
+   "setup_order": 0,
+   "tr": {
+    "title": "Müşteri sağlığı",
+    "summary": "Sağlık skorunun hangi sinyallerden (talep sıklığı, memnuniyet, kullanım) oluşacağını ve risk uyarılarını ayarlarsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Sağlık skorunun hangi sinyallerden (talep sıklığı, memnuniyet, kullanım) oluşacağını ve risk uyarılarını ayarlarsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Customer health",
+    "summary": "Choose which signals (request frequency, satisfaction, usage) make up the health score and set risk alerts.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Choose which signals (request frequency, satisfaction, usage) make up the health score and set risk alerts.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.profile",
+   "surface": "web",
+   "route": "/profile",
+   "kind": "page",
+   "order": 120,
+   "setup_order": 0,
+   "tr": {
+    "title": "Profil",
+    "summary": "Profil sayfasında hesap bilgilerinizi, güvenliğinizi, bildirim tercihlerinizi ve rehber ayarlarınızı yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Profil sayfasında hesap bilgilerinizi, güvenliğinizi, bildirim tercihlerinizi ve rehber ayarlarınızı yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "guides-reset",
+      "title": "Turları sıfırla",
+      "body": "Tüm sayfa turlarını ve kurulum turunu baştan görmek için tıklayın; turların kendiliğinden başlamasını da buradan kapatabilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Profile",
+    "summary": "On the profile page you manage your account details, security, notification preferences and guide settings.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "On the profile page you manage your account details, security, notification preferences and guide settings.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "guides-reset",
+      "title": "Reset tours",
+      "body": "Click to see every page tour and the set-up tour again; you can also stop tours from starting by themselves here.",
+      "placement": "auto"
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.profile_password",
+   "surface": "web",
+   "route": "/profile/password",
+   "kind": "page",
+   "order": 121,
+   "setup_order": 0,
+   "tr": {
+    "title": "Şifre ve güvenlik",
+    "summary": "Şifrenizi değiştirir, iki adımlı doğrulamayı ve geçiş anahtarlarını (passkey) yönetirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Şifrenizi değiştirir, iki adımlı doğrulamayı ve geçiş anahtarlarını (passkey) yönetirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Password and security",
+    "summary": "Change your password and manage two-factor authentication and passkeys.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Change your password and manage two-factor authentication and passkeys.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "web.profile_preferences",
+   "surface": "web",
+   "route": "/profile/preferences",
+   "kind": "page",
+   "order": 122,
+   "setup_order": 0,
+   "tr": {
+    "title": "Tercihler",
+    "summary": "Dil, tema ve bildirim tercihlerinizi belirlersiniz. Rehber turlarını buradan sıfırlayıp yeniden görebilirsiniz.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Bu sayfa ne işe yarar?",
+      "body": "Dil, tema ve bildirim tercihlerinizi belirlersiniz. Rehber turlarını buradan sıfırlayıp yeniden görebilirsiniz.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Takıldığınızda ClickFix Asistan'a sorun",
+      "body": "Sağ üstteki asistan düğmesi (veya **Cmd/Ctrl + J**) bu sayfayı bilen ClickFix Asistan'ı açar. Sorularınızı yanıtlar, ayarları sizinle birlikte yapar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Preferences",
+    "summary": "Set your language, theme and notification preferences. You can reset the guided tours here to see them again.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "What is this page for?",
+      "body": "Set your language, theme and notification preferences. You can reset the guided tours here to see them again.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "header-assistant",
+      "title": "Ask ClickFix Assistant when stuck",
+      "body": "The assistant button at the top right (or **Cmd/Ctrl + J**) opens ClickFix Assistant, which knows this page. It answers questions and sets things up with you.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.channels",
+   "surface": "web",
+   "route": "/channels",
+   "kind": "tour",
+   "order": 1,
+   "setup_order": 1,
+   "tr": {
+    "title": "Kanallarınızı bağlayın",
+    "summary": "Müşterileriniz size nereden yazıyorsa (e-posta, WhatsApp, Instagram…) o kanalı bağlayın; tüm mesajlar tek gelen kutusunda toplanır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Kanallarınızı bağlayın",
+      "body": "Müşterileriniz size nereden yazıyorsa (e-posta, WhatsApp, Instagram…) o kanalı bağlayın; tüm mesajlar tek gelen kutusunda toplanır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-channels",
+      "title": "Buradan ulaşırsınız",
+      "body": "Menüdeki **Kanallar** sayfasında kanal türünü seçip bağlayın. En kolayı destek e-posta adresinizi yönlendirmektir.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/channels"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Connect your channels",
+    "summary": "Connect wherever your customers write from (e-mail, WhatsApp, Instagram…); every message lands in one inbox.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Connect your channels",
+      "body": "Connect wherever your customers write from (e-mail, WhatsApp, Instagram…); every message lands in one inbox.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-channels",
+      "title": "Find it here",
+      "body": "Pick a channel type on **Channels** in the menu. Forwarding your support e-mail address is the easiest start.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/channels"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.team",
+   "surface": "web",
+   "route": "/settings/members",
+   "kind": "tour",
+   "order": 2,
+   "setup_order": 2,
+   "tr": {
+    "title": "Ekibinizi davet edin",
+    "summary": "Konuşmaları birlikte yanıtlamak için ekip arkadaşlarınızı davet edin ve rollerini seçin.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Ekibinizi davet edin",
+      "body": "Konuşmaları birlikte yanıtlamak için ekip arkadaşlarınızı davet edin ve rollerini seçin.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-members",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Ayarlar → Üyeler** sayfasında e-posta ve rol girerek davet gönderin.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/members"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Invite your team",
+    "summary": "Invite teammates to answer conversations together and choose their roles.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Invite your team",
+      "body": "Invite teammates to answer conversations together and choose their roles.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-members",
+      "title": "Find it here",
+      "body": "Send invites from **Settings → Members** with an e-mail and a role.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/members"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.business_hours",
+   "surface": "web",
+   "route": "/settings/sla",
+   "kind": "tour",
+   "order": 3,
+   "setup_order": 3,
+   "tr": {
+    "title": "Çalışma saatlerinizi girin",
+    "summary": "Çalışma saatleri, müşterilere ne zaman yanıt beklediklerini söyler ve SLA sürelerinin mesai içinde sayılmasını sağlar.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Çalışma saatlerinizi girin",
+      "body": "Çalışma saatleri, müşterilere ne zaman yanıt beklediklerini söyler ve SLA sürelerinin mesai içinde sayılmasını sağlar.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-sla",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Ayarlar → SLA** sayfasındaki çalışma saatleri bölümünden haftalık programı ve tatilleri ekleyin.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/sla"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Set your business hours",
+    "summary": "Business hours tell customers when to expect replies and make SLA clocks count only working time.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Set your business hours",
+      "body": "Business hours tell customers when to expect replies and make SLA clocks count only working time.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-sla",
+      "title": "Find it here",
+      "body": "Add the weekly schedule and holidays in the business hours section of **Settings → SLA**.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/sla"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.sla",
+   "surface": "web",
+   "route": "/settings/sla",
+   "kind": "tour",
+   "order": 4,
+   "setup_order": 4,
+   "tr": {
+    "title": "SLA hedefi belirleyin",
+    "summary": "SLA politikası, her öncelik için ilk yanıt ve çözüm hedefi koyar; süre dolmadan ekibiniz uyarılır.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "SLA hedefi belirleyin",
+      "body": "SLA politikası, her öncelik için ilk yanıt ve çözüm hedefi koyar; süre dolmadan ekibiniz uyarılır.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-sla",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Ayarlar → SLA** sayfasında bir politika oluşturun; örneğin acil talepler için 30 dakika ilk yanıt.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/sla"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Set an SLA target",
+    "summary": "An SLA policy sets first-response and resolution targets per priority; your team is warned before they lapse.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Set an SLA target",
+      "body": "An SLA policy sets first-response and resolution targets per priority; your team is warned before they lapse.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-sla",
+      "title": "Find it here",
+      "body": "Create a policy on **Settings → SLA**; e.g. a 30-minute first response for urgent requests.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/sla"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.ai",
+   "surface": "web",
+   "route": "/settings/ai",
+   "kind": "tour",
+   "order": 5,
+   "setup_order": 5,
+   "tr": {
+    "title": "Yapay zekâyı açın",
+    "summary": "Yapay zekâ, temsilcilere yanıt önerir, konuşmaları sınıflandırır ve isterseniz müşterilere ilk yanıtı AI ajanı verir.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Yapay zekâyı açın",
+      "body": "Yapay zekâ, temsilcilere yanıt önerir, konuşmaları sınıflandırır ve isterseniz müşterilere ilk yanıtı AI ajanı verir.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-ai",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Ayarlar → Yapay zekâ** sayfasında politikayı açın ve AI ajanının kişiliğini tanımlayın.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/ai"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Turn on AI",
+    "summary": "AI suggests replies to agents, triages conversations and, if you want, an AI agent answers customers first.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Turn on AI",
+      "body": "AI suggests replies to agents, triages conversations and, if you want, an AI agent answers customers first.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-ai",
+      "title": "Find it here",
+      "body": "Turn the policy on in **Settings → AI** and define the AI agent's persona.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/ai"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.widget",
+   "surface": "web",
+   "route": "/widget",
+   "kind": "tour",
+   "order": 6,
+   "setup_order": 6,
+   "tr": {
+    "title": "Web widget'ını kurun",
+    "summary": "Web widget'ı sitenize canlı sohbet ve yardım merkezi araması ekler.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Web widget'ını kurun",
+      "body": "Web widget'ı sitenize canlı sohbet ve yardım merkezi araması ekler.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-widget",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Web widget** sayfasında görünümü ayarlayın ve kurulum kodunu sitenize ekleyin.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/widget"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Install the web widget",
+    "summary": "The web widget adds live chat and help-center search to your website.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Install the web widget",
+      "body": "The web widget adds live chat and help-center search to your website.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-widget",
+      "title": "Find it here",
+      "body": "Adjust the look on the **Web widget** page and add the snippet to your site.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/widget"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.help_center",
+   "surface": "web",
+   "route": "/settings/knowledge",
+   "kind": "tour",
+   "order": 7,
+   "setup_order": 7,
+   "tr": {
+    "title": "Yardım merkezinizi doldurun",
+    "summary": "Herkese açık makaleler müşterilerin kendi sorularını çözmesini sağlar ve AI ajanının doğru yanıt vermesini besler.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Yardım merkezinizi doldurun",
+      "body": "Herkese açık makaleler müşterilerin kendi sorularını çözmesini sağlar ve AI ajanının doğru yanıt vermesini besler.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-knowledge",
+      "title": "Buradan ulaşırsınız",
+      "body": "**Ayarlar → Bilgi bankası** sayfasında ilk makalelerinizi yazın ve yayınlayın.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/knowledge"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Fill your help center",
+    "summary": "Public articles let customers solve their own questions and feed the AI agent accurate answers.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Fill your help center",
+      "body": "Public articles let customers solve their own questions and feed the AI agent accurate answers.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "nav-settings-knowledge",
+      "title": "Find it here",
+      "body": "Write and publish your first articles under **Settings → Knowledge base**.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/settings/knowledge"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "key": "setup.mobile",
+   "surface": "web",
+   "route": "/profile",
+   "kind": "tour",
+   "order": 8,
+   "setup_order": 8,
+   "tr": {
+    "title": "Mobil uygulamayı yükleyin",
+    "summary": "ClickFix mobil uygulamasıyla konuşmaları yoldayken yanıtlar, anlık bildirim alırsınız.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Mobil uygulamayı yükleyin",
+      "body": "ClickFix mobil uygulamasıyla konuşmaları yoldayken yanıtlar, anlık bildirim alırsınız.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "user-menu",
+      "title": "Buradan ulaşırsınız",
+      "body": "Uygulamayı App Store veya Google Play'den indirip ClickFix hesabınızla giriş yapın. Sonra uygulamadaki **QR tara** ile web oturumunu da tek dokunuşla açabilirsiniz.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/profile"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Asistanla birlikte yapın",
+      "body": "İsterseniz ClickFix Asistan bu adımı sizinle birlikte, sorular sorarak tamamlar.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   },
+   "en": {
+    "title": "Get the mobile app",
+    "summary": "With the ClickFix mobile app you answer conversations on the go and get push notifications.",
+    "steps": [
+     {
+      "id": "s1",
+      "target": "",
+      "title": "Get the mobile app",
+      "body": "With the ClickFix mobile app you answer conversations on the go and get push notifications.",
+      "placement": "auto"
+     },
+     {
+      "id": "s2",
+      "target": "user-menu",
+      "title": "Find it here",
+      "body": "Download the app from the App Store or Google Play and sign in with your ClickFix account. The app's **Scan QR** then signs you into the web panel in one tap.",
+      "placement": "auto",
+      "action": {
+       "kind": "navigate",
+       "route": "/profile"
+      }
+     },
+     {
+      "id": "s3",
+      "target": "header-assistant",
+      "title": "Do it with the assistant",
+      "body": "If you like, ClickFix Assistant completes this step with you by asking a few questions.",
+      "placement": "auto",
+      "action": {
+       "kind": "open_assistant"
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,296 @@
+# Organization-owned tables (organization_id NOT NULL). Every sqlc query in
+# this directory that reads or writes one of them must reference
+# organization_id (and alias.organization_id when aliased), or be listed in
+# isolation_exempt.txt with the reason the caller resolves the organization
+# itself (webhook lookups by provider id, platform-wide workers, ...).
+# Enforced by internal/database/queries_test.go (CF-3, CF-44).
+# TestEveryOrgOwnedTableIsListed fails when a migration adds a table with a
+# NOT NULL organization_id that is missing here.
+
+# Organizations, members, teams
+organization_members
+organization_member_roles
+organization_invitation_roles
+organization_onboarding
+onboarding_setup_runs
+onboarding_setup_items
+teams
+team_members
+support_access_grants
+agent_presence
+attachments
+
+# Inbox
+conversations
+conversation_counters
+conversation_participants
+conversation_ratings
+conversation_reads
+conversation_statuses
+conversation_tags
+conversation_views
+conversation_reminders
+conversation_bulk_ops
+messages
+conversation_links
+side_conversations
+side_conversation_messages
+message_mentions
+tags
+
+# Channels
+channel_instances
+channel_email_domains
+
+# CRM
+contacts
+contact_identities
+companies
+
+# Custom fields and objects
+custom_field_definitions
+custom_object_types
+custom_object_records
+
+# Billing (customer side; platform admin and workers are exempt per query)
+billing_bank_transfers
+billing_checkout_sessions
+billing_credit_allocations
+billing_credit_ledger
+billing_credit_purchases
+billing_dunning
+billing_entitlement_overrides
+billing_gateway_transactions
+billing_invoice_documents
+billing_invoice_lines
+billing_invoice_usage_periods
+billing_invoices
+billing_item_changes
+billing_payment_attempts
+billing_payment_methods
+billing_payment_notices
+billing_payments
+billing_plan_changes
+billing_profiles
+billing_reconciliation_mismatches
+billing_redemptions
+billing_referral_codes
+billing_referrals
+billing_refund_credit_reservations
+billing_refund_notes
+billing_renewal_reminders
+billing_subscription_coupons
+billing_subscription_items
+billing_subscription_transitions
+billing_subscriptions
+billing_trial_enrollments
+billing_trial_reminders
+billing_usage_denials
+billing_usage_periods
+billing_usage_records
+billing_usage_settlements
+billing_usage_totals
+billing_wallet_settings
+billing_webhook_receipts
+
+# SLA (CF-46)
+business_hours
+business_holidays
+sla_policies
+sla_policy_targets
+conversation_sla_metrics
+# Routing and capacity (CF-53, CF-54)
+agent_capacity
+routing_settings
+routing_rules
+routing_cursors
+routing_events
+knowledge_collections
+knowledge_articles
+knowledge_article_versions
+knowledge_chunks
+knowledge_article_feedback
+knowledge_index_states
+ai_policies
+ai_runs
+ai_credit_reservation_lots
+
+# Automation, webhooks, public API (CF-94, 95, 115)
+automation_rules
+automation_executions
+outbound_webhooks
+outbound_webhook_deliveries
+public_api_keys
+public_api_idempotency
+# AI agents, tools and procedures (CF-64, CF-65, CF-67, CF-68)
+ai_agent_configs
+ai_agent_jobs
+ai_resolutions
+ai_tools
+ai_tool_calls
+ai_procedures
+
+# Bank statement matching (CF-29)
+billing_bank_statement_lines
+# Request forms (CF-52)
+request_forms
+# Canned responses and macros (CF-48)
+canned_responses
+macros
+
+# Customer revenue (CF-86)
+company_revenue
+company_revenue_history
+
+# Customer health (CF-87)
+company_health_settings
+company_health
+company_health_history
+
+# AI knowledge workflows (CF-65/70/72/75/76/77).
+business_context_sections
+business_context_versions
+knowledge_sources
+knowledge_source_documents
+knowledge_suggestions
+knowledge_translations
+knowledge_reviews
+ai_evaluation_cases
+ai_evaluations
+ai_evaluation_results
+ai_conversation_links
+# Analytics (CF-110)
+analytics_conversations
+
+# Surveys (CF-99)
+survey_templates
+survey_invitations
+survey_responses
+
+# Status and incidents (CF-102/103)
+status_pages
+status_components
+status_incidents
+status_incident_components
+status_incident_updates
+status_incident_conversations
+status_subscriptions
+status_incident_deliveries
+# Engineering bridge (CF-88..93)
+engineering_projects
+engineering_releases
+engineering_issues
+engineering_conversations
+engineering_comments
+engineering_integrations
+engineering_external_issues
+engineering_deliveries
+engineering_oauth_states
+engineering_webhook_receipts
+engineering_escalations
+engineering_comment_sync
+engineering_error_events
+# Support operations (CF-100/101/105/106/108/113/114)
+feedback_settings
+feature_requests
+feature_votes
+feature_sources
+feedback_comments
+changelog_entries
+shift_templates
+agent_shifts
+agent_time_off
+schedule_settings
+internal_threads
+internal_thread_members
+internal_messages
+qa_scorecards
+qa_reviews
+billing_revenue_snapshots
+enterprise_quotes
+roadmap_entries
+# Account screen and timeline (CF-85)
+company_notes
+company_events
+
+channel_voice_calls
+retention_policies
+data_subject_requests
+contact_consents
+organization_sso
+sso_identities
+sso_login_states
+scim_groups
+channel_email_imap_states
+
+# CF-112
+custom_reports
+report_schedules
+report_deliveries
+
+# CF-104
+oncall_rotas
+escalation_policies
+oncall_alerts
+uptime_monitors
+uptime_results
+
+# CF-97
+integration_event_cursors
+integration_trigger_events
+meta_deletion_links
+
+# CF-107/109
+workforce_events
+qa_calibrations
+qa_calibration_scores
+coaching_items
+gamification_rules
+gamification_preferences
+# CF-78
+forum_categories
+forum_posts
+forum_votes
+forum_subscriptions
+forum_notifications
+# CF-124/125
+brands
+brand_email_templates
+widget_diagnostics
+
+# CF-96/118
+workflows
+workflow_versions
+workflow_runs
+workflow_steps
+sidebar_apps
+# CF-138 appointments
+appointment_settings
+appointment_types
+appointment_type_hosts
+appointments
+appointment_reminders_sent
+# CF-139 video rooms
+video_org_settings
+video_rooms
+video_participants
+video_sessions
+video_recordings
+
+# CF-126
+widget_sessions
+widget_replay_chunks
+# Widget editor (CF-150)
+widget_drafts
+widget_versions
+widget_installs
+# CF-122
+recording_transcripts
+
+# Module guides and ClickFix Asistan (CF-141)
+guide_progress
+assistant_threads
+assistant_messages
+product_feedback
+# Mobile widget tokens (CF-152)
+widget_tokens

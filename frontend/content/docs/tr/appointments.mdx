@@ -1,0 +1,56 @@
+---
+title: Randevular
+description: Kurulum, demo veya eğitim gibi randevu türleri tanımlayın, herkese açık randevu sayfanızı paylaşın ve hatırlatmaları ayarlayın.
+section: product
+order: 3
+---
+
+Randevular modülüyle müşterileriniz sizinle görüşme planlar, temsilcileriniz de bir konuşmadan veya kişi kartından randevu oluşturur. Randevular ekibin **Takvim** görünümünde vardiya ve izinlerle birlikte gösterilir.
+
+Randevular planınıza bağlıdır; planınız içermiyorsa ayarlar sayfası bunu belirtir.
+
+## Modülü açma [#turn-the-module-on]
+
+1. **Organizasyon → Randevular** sayfasını açın.
+2. **Randevular açık** seçeneğini işaretleyin.
+3. Müşterilerin kendi başına randevu alabilmesi için **Herkese açık randevu sayfaları** seçeneğini açın.
+4. **Saat dilimi** (IANA biçiminde, ör. `Europe/Istanbul`) ve **Hatırlatmalar** alanlarını doldurun.
+
+Hatırlatmalar randevudan kaç dakika önce gönderileceğini belirler; virgülle ayırın (ör. `1440, 60`). Müşteriye e-posta, görüşmeciye uygulama içi bildirim gider; SMS kanalınız etkinse SMS de gönderilir.
+
+## Randevu türü oluşturma [#create-an-appointment-type]
+
+**Yeni randevu türü** ile şu bölümleri doldurun:
+
+| Bölüm               | Ayarlar                                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Temel bilgiler      | Ad, bağlantı adı, açıklama, renk                                                                                                                                 |
+| Süre ve uygunluk    | Süreler (ilk değer varsayılan), başlangıç aralığı, öncesi ve sonrası tampon, en fazla kaç gün sonrası, en az önceden bildirim, görüşmeci başına günlük üst sınır |
+| Yer ve görüşmeciler | Yer türü (görüntülü görüşme, telefon, yüz yüze, çevrim içi bağlantı) ve kim görüşür                                                                              |
+| Ön bilgi formu      | Telefon, konu ve mesaj alanları için: sorma, isteğe bağlı veya zorunlu                                                                                           |
+| Randevu kuralları   | Temsilci onayı, herkese açık sayfada alınabilirlik, müşterinin iptal ve yeniden planlama hakkı, son değişiklik süresi                                            |
+| Mesajlar            | Onay ve hatırlatma e-postası metinleri (boş bırakılırsa varsayılan metin)                                                                                        |
+
+**Kim görüşür** seçenekleri: **Görüşmeciler arasında sırayla**, **Seçili temsilciler** veya **Bir ekip (sırayla)**.
+
+> **Görüntülü görüşme** yer türünü seçtiğinizde randevu için otomatik olarak bir [görüntülü görüşme odası](/docs/video-rooms) açılır ve katılım bağlantısı müşterinin onay ve hatırlatma e-postalarına eklenir. Görüntülü görüşme kullanılamıyorsa (plan, organizasyon ayarı veya dakika bakiyesi) randevu yine oluşturulur ve müşteriye bağlantı bilgilerini temsilcinin ileteceği yazılır.
+
+## Herkese açık randevu sayfası [#public-booking-page]
+
+Herkese açık sayfa açıksa ayarlar ekranında randevu sayfanızın adresi görünür. Her randevu türü için **Randevu bağlantısını kopyala** ile doğrudan bağlantı da alabilirsiniz. Web widget'ınız da bu sayfaya bağlantı verir.
+
+Müşteri sayfada:
+
+1. Görüşme türünü, süreyi, günü ve uygun saati seçer. Saatler müşterinin kendi saat diliminde gösterilir.
+2. Adını, e-posta adresini ve ön bilgi formunu doldurur.
+3. **Randevuyu onayla** ile randevuyu oluşturur.
+
+Müşteriye ayrıntıları içeren bir e-posta gider. Müşteri randevuyu takvimine `.ics`, Google Takvim veya Outlook ile ekleyebilir; izin verdiyseniz e-postadaki bağlantıdan randevuyu yeniden planlayabilir veya iptal edebilir. Tür **Her randevuyu temsilci onaylar** olarak ayarlıysa müşteri önce "Talebiniz alındı" mesajını görür.
+
+## Panelden randevu oluşturma [#booking-from-the-dashboard]
+
+Bir kişi kartından veya konuşmadan **Randevu oluştur** ile tür, görüşmeci ve boş saati seçersiniz. **Onayı müşteriye e-postayla gönder** seçeneği müşteriye takvim bağlantılı bir onay e-postası gönderir.
+
+Randevu ayrıntısında randevuyu **Onayla**, **Yeniden planla**, **Tamamlandı işaretle**, **Gelmedi** olarak işaretleyebilir veya iptal edebilirsiniz. **Müşteri bağlantısını kopyala** ile müşterinin randevu sayfasını paylaşabilirsiniz.
+
+Randevular mobil uygulamada da görünür.

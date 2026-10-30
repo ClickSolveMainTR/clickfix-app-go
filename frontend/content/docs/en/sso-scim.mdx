@@ -1,0 +1,85 @@
+---
+title: SSO and SCIM
+description: Let your team sign in with your identity provider (Okta, Entra ID, Google Workspace) over OIDC or SAML, and provision users automatically with SCIM.
+section: security
+order: 2
+---
+
+With single sign-on (SSO) your team signs in to ClickFix through your own identity provider (IdP). With SCIM 2.0, users and groups are created, updated and deactivated automatically from your identity provider.
+
+SSO, SCIM and IP restrictions are **Enterprise plan** features. The settings are under **Organization → Security**.
+
+## How it works [#how-it-works]
+
+- To sign in with SSO, a user must already be **provisioned through SCIM** and active. ClickFix never links users automatically by email address alone.
+- The SCIM `externalId` **must equal** the OIDC `sub` or the SAML `NameID`. Use a stable, immutable identifier.
+- An SSO session is valid only for that organization. When it expires, users sign in again through the identity provider.
+
+## 1. Configure SSO [#1-configure-sso]
+
+Under **Organization → Security → Single sign-on (SSO)**, choose a **Protocol**.
+
+### OIDC [#oidc]
+
+1. Create an OIDC application (authorization code flow) in your identity provider.
+2. Add the **Redirect URI** shown in ClickFix to your IdP application.
+3. Enter in ClickFix: **Issuer**, **Client ID**, **Client secret**, **Authorization URL**, **Token URL** and **JWKS URL**. All URLs must use `https://`.
+4. Tick **SSO enabled** and save.
+
+ClickFix uses PKCE (S256) and validates the ID token's RS256 signature, issuer, audience and expiry. The client secret is stored encrypted and never shown again; leave the field empty to keep the stored value.
+
+### SAML [#saml]
+
+1. Create a SAML application in your identity provider using the **ACS URL (Assertion Consumer Service)** and **SP Entity ID / metadata URL** shown in ClickFix.
+2. Paste your IdP's **metadata XML** into ClickFix or pick it with **Upload XML file** (up to 1 MB).
+3. Tick **SSO enabled** and save.
+
+For SAML:
+
+- The IdP must send **signed**, **unencrypted** assertions. Encrypted assertions are not supported.
+- Sign-in always starts from ClickFix. IdP-initiated sign-ins are rejected.
+
+## 2. Provision users with SCIM [#2-provision-users-with-scim]
+
+1. After saving the SSO configuration, click **Create / rotate token** under **SCIM provisioning**.
+2. Enter the **SCIM base URL** and **SCIM token** shown into your identity provider's SCIM / provisioning settings. The token is shown **only once**.
+3. Assign users and groups to the ClickFix application in your IdP.
+
+Creating a new token invalidates the old one immediately; update your IdP when you do.
+
+### Supported SCIM operations [#supported-scim-operations]
+
+| Resource | Operations                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Users    | Paged list, GET, POST, PUT, PATCH, DELETE. `userName` and `externalId` equality filters                                            |
+| Groups   | Paged list, GET, POST, PUT, PATCH, DELETE. `displayName` and `externalId` equality filters, adding and removing members with PATCH |
+
+Not supported: Bulk operations, password changes, sorting, ETags and other filter expressions (they return `400`). SCIM requests are limited to 120 per minute per organization.
+
+Notes:
+
+- Deactivating or deleting a user removes their membership in this organization and their team memberships; the ClickFix account itself isn't deleted.
+- To prevent lockouts, members with the **owner** or **admin** role can't be removed through SCIM.
+- Groups map to teams in ClickFix. A group PUT replaces the member list entirely.
+
+## 3. Test sign-in [#3-test-sign-in]
+
+1. Click **Test sign-in**. You're sent to your identity provider and sign in.
+2. If the response is valid and a matching SCIM-provisioned user is found, you see a success message.
+
+If the test fails, check the issuer, client details, metadata and the user's SCIM record.
+
+Share the **Sign-in link for members** with your team; it starts your organization's SSO sign-in directly.
+
+## 4. Enforce SSO [#4-enforce-sso]
+
+With **Require SSO** on, only SSO sessions can access the organization; members who signed in with a password are blocked.
+
+- Enforcement can only be turned on from an **SSO-verified session**. Verify your session with **Test sign-in** first.
+- Before turning it on, make sure admins can sign in with SSO. A broken SSO configuration can lock your team out.
+
+## IP restrictions [#ip-restrictions]
+
+Under **IP restrictions** you can limit access to the organization to specific IP addresses or CIDR blocks (e.g. `203.0.113.0/24`). An empty list means no restriction; up to 100 rules are allowed.
+
+The restriction applies to every request, including the API and the mobile app. ClickFix won't let you save a list that doesn't contain your current IP; add it with **Add my IP**.

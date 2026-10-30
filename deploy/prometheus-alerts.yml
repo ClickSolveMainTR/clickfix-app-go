@@ -1,0 +1,43 @@
+groups:
+  - name: clickfix
+    rules:
+      - alert: ClickFixHTTPErrorRate
+        expr: sum(rate(clickfix_http_request_duration_seconds_count{status=~"5.."}[5m])) / clamp_min(sum(rate(clickfix_http_request_duration_seconds_count[5m])), 0.01) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "ClickFix HTTP error rate exceeds 5%" }
+      - alert: ClickFixQueueBacklog
+        expr: clickfix_asynq_queue_depth > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "ClickFix queue backlog" }
+      - alert: ClickFixSyncQueueBacklog
+        expr: clickfix_asynq_queue_depth{queue="sync"} > 100
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "ClickFix provider sync backlog; check providers and worker-sync capacity" }
+      - alert: ClickFixOutboxLag
+        expr: clickfix_outbox_oldest_pending_seconds > 300 or clickfix_outbox_failed > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "ClickFix outbox requires attention" }
+      - alert: ClickFixChannelErrors
+        expr: clickfix_channel_error_ratio > 0.1
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "ClickFix channel failure ratio exceeds 10%" }
+      - alert: ClickFixAICost
+        expr: sum(clickfix_ai_cost_micros_24h) > 100000000
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "ClickFix AI cost exceeds 100 currency units in 24h; adjust to budget" }
+      - alert: ClickFixAILatency
+        expr: clickfix_ai_latency_seconds_24h > 30
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "ClickFix AI provider mean latency exceeds 30 seconds" }
+      - alert: ClickFixTelemetryUnavailable
+        expr: clickfix_operational_scrape_success == 0 or up{job="clickfix"} == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "ClickFix telemetry unavailable" }

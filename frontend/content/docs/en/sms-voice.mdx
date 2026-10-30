@@ -1,0 +1,52 @@
+---
+title: SMS and phone
+description: Send and receive SMS with your Netgsm, İleti Merkezi or Twilio account; log Twilio and Netgsm calls into conversations.
+section: channels
+order: 8
+---
+
+The SMS and phone channels run on your own provider account: you enter the details of your existing Netgsm, İleti Merkezi or Twilio account in ClickFix.
+
+## SMS [#sms]
+
+| Provider      | Sending                            | Inbound SMS                | Required details                                           |
+| ------------- | ---------------------------------- | -------------------------- | ---------------------------------------------------------- |
+| Netgsm        | Yes (with your approved sender ID) | No                         | Subscriber number (user code), API password, SMS sender ID |
+| İleti Merkezi | Yes                                | No (delivery reports only) | API key, API hash, SMS sender ID                           |
+| Twilio        | Yes                                | Yes                        | Account SID, Auth Token, sender number                     |
+
+### Connect [#connect]
+
+1. Choose **Channels → Add channel → SMS** and pick your provider.
+2. Fill in **Connection details** and click **Connect**.
+3. If a **Webhook URL** is shown, paste it into your provider's dashboard:
+   - **İleti Merkezi**: Settings → Webhook (delivery reports).
+   - **Twilio**: Phone Numbers → your number → Messaging → "A message comes in" (HTTP POST).
+   - **Netgsm** needs no webhook for sending.
+
+Secrets are stored encrypted and never shown again. Copy what you need before closing the screen; if you lose it, generate a new webhook token from the channel settings.
+
+### Commercial messages and İYS [#commercial-messages-and-iys]
+
+Turn on **Commercial messages** to check every SMS from this channel against your İleti Yönetim Sistemi (İYS) consent (MESAJ / ONAY) before it is sent. Fill in **İYS username**, **İYS password**, **İYS business code** and **İYS brand code**.
+
+## Phone (voice) [#phone-voice]
+
+The phone channel logs your calls into customer conversations. Recordings are attached to the conversation and listed in the channel's **Call log**.
+
+| Provider | What's supported                                                                     |
+| -------- | ------------------------------------------------------------------------------------ |
+| Twilio   | Calls to your number, signed status callbacks and call recordings                    |
+| Netgsm   | Your PBX sends call records (CDR) to the webhook. Outbound calling is not supported. |
+
+### Connect [#connect-1]
+
+1. Choose **Channels → Add channel → Phone (voice)** and pick your provider.
+2. Enter the details, click **Connect** and copy the **Webhook URL**.
+3. Paste it into your provider's dashboard:
+   - **Twilio**: Phone Numbers → your number → Voice → "A call comes in" and "Call status changes" (HTTP POST).
+   - **Netgsm**: the CDR / webhook setting of your PBX.
+
+The token in the URL authenticates incoming calls; keep the URL private.
+
+The call log shows each call's direction (inbound / outbound), caller and callee, status, duration and whether it was recorded.

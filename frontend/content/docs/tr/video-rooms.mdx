@@ -1,0 +1,81 @@
+---
+title: Görüntülü görüşme odaları
+description: Müşterilerinizle giriş gerektirmeyen, PIN ve bekleme odasıyla korunan, uçtan uca şifrelenebilen görüntülü görüşmeler yapın.
+section: product
+order: 4
+---
+
+Görüntülü görüşme odaları, müşterilerinizle tarayıcıdan veya mobil uygulamadan görüşmenizi sağlar. Müşterinin hesap açması veya uygulama kurması gerekmez: bağlantıya tıklar, adını yazar ve katılır.
+
+Özellikler: isteğe bağlı PIN, bekleme odası, ekran paylaşımı, sohbet, kamera ve mikrofon kontrolleri, uçtan uca şifreleme (E2EE) ve kayıt.
+
+## Kullanılabilirlik [#availability]
+
+Görüntülü görüşme planınıza bağlıdır ve **Organizasyon → Görüntülü görüşme** ayarlarında açık olmalıdır. Modül kullanılamıyorsa ekranda nedeni gösterilir (plan, organizasyon ayarı veya dakika bakiyesi).
+
+## Oda oluşturma [#create-a-room]
+
+1. Sol menüde **Görüntülü görüşme** sayfasını açın ve **Oda oluştur**'a basın. Bir konuşmanın içinden **Görüntülü görüşme başlat** ile de oda açabilirsiniz.
+2. Ayarları seçin:
+   - **Oda adı**, isteğe bağlı **Başlangıç** zamanı ve **Süre**.
+   - **PIN** (4-12 hane, isteğe bağlı veya organizasyon kuralına göre zorunlu).
+   - **Bekleme odası**: Misafirler siz içeri alana kadar bekler.
+   - **Kayıt yapılabilsin** (aşağıya bakın).
+3. Odayı oluşturun.
+
+## Misafiri davet etme [#invite-the-guest]
+
+Oda ayrıntısındaki **Bağlantı ve davet** bölümünden:
+
+- **Misafir bağlantısı**: Müşteriye gönderilecek bağlantıyı kopyalar. Bağlantı `https://getclickfix.com/r/<kod>` biçimindedir.
+- **Temsilci bağlantısı**: Ekip arkadaşlarınız içindir; yalnızca organizasyon üyeleri giriş yaparak kullanabilir.
+- **Davet gönder**: Müşterinin e-posta adresine davet gönderir.
+
+> PIN davet e-postasında **yer almaz**. Güvenlik için PIN'i müşteriye ayrı bir kanaldan (SMS, telefon, sohbet) iletin.
+
+Bağlantılar, planlı odalarda planlanan bitişten 24 saat sonra, planlanmamış odalarda 7 gün sonra geçersiz olur.
+
+## Misafir deneyimi [#the-guest-experience]
+
+1. Müşteri bağlantıyı açar, adını (ve istenirse PIN'i) girer, **Görüşmeye katıl**'a basar.
+2. Tarayıcı kamera ve mikrofon izni ister.
+3. Bekleme odası açıksa müşteri "Bekleme odasındasınız" mesajını görür ve siz içeri aldığınızda görüşmeye katılır.
+
+Müşteri mobil uygulama yüklüyse aynı bağlantı uygulamada da açılabilir.
+
+## Bekleme odası ve katılımcılar [#waiting-room-and-participants]
+
+Oda ekranındaki **Bekleme odası** listesinden misafirleri **İçeri al** veya **Reddet** ile yönetirsiniz. Görüşmedeki birini **Görüşmeden çıkar** ile çıkarabilirsiniz. Bekleme odasındaki misafir, içeri alınana kadar görüşmenin ses, görüntü veya şifreleme anahtarına erişemez.
+
+Kamera, ekran paylaşımı ve sohbet izinleri odanın ve organizasyonun kurallarına göre sunucu tarafında uygulanır.
+
+## Şifreleme ve kayıt [#encryption-and-recording]
+
+Tüm görüşmelerde bağlantı ve medya taşıma sırasında şifrelidir. Ek olarak:
+
+| Oda türü                    | Uçtan uca şifreleme                                                              | Kayıt                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Kayıt kapalı (varsayılan)   | Açık: medya yalnızca katılımcıların cihazlarında çözülür, sunucu içeriği göremez | Yapılamaz                                                                 |
+| **Kayıt yapılabilsin** açık | Kapalı                                                                           | Yapılabilir; katılımcılara "Bu görüşme kaydedilebilir" uyarısı gösterilir |
+
+Kayıt sunucuda yapıldığı için uçtan uca şifreli bir görüşme kaydedilemez; bu nedenle seçim oda oluşturulurken yapılır. Organizasyon kuralı olarak E2EE zorunlu tutulursa hiçbir oda kaydedilemez.
+
+### Kayıtların saklanması [#storing-recordings]
+
+**Organizasyon → Görüntülü görüşme → Kayıtlar** sekmesinde kayıtları indirebilir veya silebilirsiniz.
+
+- Varsayılan olarak kayıtlar platform deposunda belirli bir süre (ayarlar ekranında gösterilir) tutulur ve sonra otomatik silinir.
+- **Kayıtları kendi S3 bucket'ımıza yükle** seçeneğiyle kayıtlar doğrudan sizin deponuza yüklenir. Endpoint (`https://`), bölge, bucket, isteğe bağlı önek ve erişim anahtarlarını girersiniz. Kendi deponuzdaki kayıtları ClickFix silmez.
+
+## Organizasyon kuralları [#organization-rules]
+
+**Organizasyon → Görüntülü görüşme → Kurallar** sekmesinde platform ve plan sınırları içinde kalarak kuralları sıkılaştırabilirsiniz: kamera, ekran paylaşımı, sohbet, kayıt ve misafir katılımını kapatmak; PIN, bekleme odası veya E2EE'yi zorunlu kılmak; süre ve katılımcı sınırlarını düşürmek.
+
+## Dakikalar ve ücretlendirme [#minutes-and-billing]
+
+Görüntülü görüşme **katılımcı-dakika** üzerinden ücretlendirilir: her katılımcının her bağlantısı dakikaya yukarı yuvarlanır. Kayıt işlemi ayrıca ücretlendirilmez.
+
+- Planınızdaki dakikalar önce harcanır. Planınız sınırsız dakika içeriyorsa ölçüm yapılmaz.
+- Ek dakikaları **Dakikalar** sekmesinden paket olarak satın alırsınız; fatura ödendikten sonra dakikalar hesabınıza yüklenir.
+- Bakiye sıfırsa yeni oda açılamaz ve yeni katılımcı giremez. Bakiye görüşme sırasında biterse oda kapatılır.
+- Bakiye belirlenen eşiğin altına düştüğünde sahip ve yöneticilere günde en fazla bir kez bildirim gider.

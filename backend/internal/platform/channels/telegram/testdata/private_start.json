@@ -1,0 +1,1 @@
+{"update_id":915372000,"message":{"message_id":41,"from":{"id":5012345678,"is_bot":false,"first_name":"Ayşe","username":"ayseyilmaz","language_code":"tr"},"chat":{"id":5012345678,"first_name":"Ayşe","username":"ayseyilmaz","type":"private"},"date":1792828790,"text":"/start","entities":[{"offset":0,"length":6,"type":"bot_command"}]}}

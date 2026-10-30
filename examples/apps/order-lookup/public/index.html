@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Sipariş sorgulama</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Siparişler</h1>
+        <p id="who" class="muted">ClickFix bağlamı bekleniyor…</p>
+      </header>
+      <p id="status" class="muted" role="status"></p>
+      <ul id="orders" class="orders"></ul>
+    </main>
+    <template id="order">
+      <li class="order">
+        <div class="row">
+          <strong class="id"></strong>
+          <span class="badge"></span>
+        </div>
+        <div class="muted meta"></div>
+        <div class="items"></div>
+        <div class="actions">
+          <button type="button" class="note">Nota ekle</button>
+          <button type="button" class="reply secondary">Müşteriye gönder</button>
+        </div>
+      </li>
+    </template>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

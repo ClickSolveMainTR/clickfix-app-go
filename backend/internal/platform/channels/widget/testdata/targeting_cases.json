@@ -1,0 +1,57 @@
+{
+  "_comment": "Shared by widget/targeting_test.go and frontend/widget-sdk/tests/shared.test.mjs: the server and the SDK must agree on every case.",
+  "url": [
+    { "rule": { "op": "contains", "value": "/pricing" }, "url": "https://shop.example.com/pricing?plan=pro", "match": true },
+    { "rule": { "op": "contains", "value": "PRICING" }, "url": "https://shop.example.com/Pricing", "match": true },
+    { "rule": { "op": "contains", "value": "/pricing" }, "url": "https://shop.example.com/#/pricing", "match": false },
+    { "rule": { "op": "equals", "value": "/checkout" }, "url": "https://shop.example.com/checkout/", "match": true },
+    { "rule": { "op": "equals", "value": "/checkout" }, "url": "https://shop.example.com/checkout/done", "match": false },
+    { "rule": { "op": "equals", "value": "https://shop.example.com" }, "url": "https://shop.example.com/", "match": true },
+    { "rule": { "op": "starts_with", "value": "/docs" }, "url": "https://example.com/docs/api", "match": true },
+    { "rule": { "op": "starts_with", "value": "/docs" }, "url": "https://example.com/blog/docs", "match": false },
+    { "rule": { "op": "starts_with", "value": "https://app." }, "url": "https://app.example.com/x", "match": true },
+    { "rule": { "op": "ends_with", "value": ".pdf" }, "url": "https://example.com/files/a.pdf", "match": true },
+    { "rule": { "op": "glob", "value": "/products/*/reviews" }, "url": "https://example.com/products/42/reviews", "match": true },
+    { "rule": { "op": "glob", "value": "/products/*/reviews" }, "url": "https://example.com/products/42/specs", "match": false },
+    { "rule": { "op": "glob", "value": "*://*.example.com/*" }, "url": "https://blog.example.com/post", "match": true },
+    { "rule": { "op": "glob", "value": "/" }, "url": "https://example.com/", "match": true },
+    { "rule": { "op": "not_contains", "value": "/admin" }, "url": "https://example.com/admin/users", "match": false },
+    { "rule": { "op": "not_contains", "value": "/admin" }, "url": "https://example.com/shop", "match": true },
+    { "rule": { "op": "contains", "value": "utm_source=ads" }, "url": "https://example.com/?utm_source=ads", "match": true }
+  ],
+  "visible": [
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "all", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/" }, "visible": true },
+    { "targeting": { "show_on": [], "hide_on": [{ "op": "starts_with", "value": "/checkout" }], "devices": "all", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/checkout/pay" }, "visible": false, "reason": "hidden_page" },
+    { "targeting": { "show_on": [{ "op": "contains", "value": "/help" }, { "op": "contains", "value": "/pricing" }], "hide_on": [], "devices": "all", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/pricing" }, "visible": true },
+    { "targeting": { "show_on": [{ "op": "contains", "value": "/help" }], "hide_on": [], "devices": "all", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/blog" }, "visible": false, "reason": "not_listed_page" },
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "desktop", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/", "device": "mobile" }, "visible": false, "reason": "device" },
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "mobile", "countries": { "mode": "all", "list": [] } }, "ctx": { "url": "https://example.com/", "device": "mobile" }, "visible": true },
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "all", "countries": { "mode": "allow", "list": ["TR", "DE"] } }, "ctx": { "url": "https://example.com/", "country": "us" }, "visible": false, "reason": "country" },
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "all", "countries": { "mode": "allow", "list": ["TR"] } }, "ctx": { "url": "https://example.com/", "country": "" }, "visible": true },
+    { "targeting": { "show_on": [], "hide_on": [], "devices": "all", "countries": { "mode": "block", "list": ["RU"] } }, "ctx": { "url": "https://example.com/", "country": "RU" }, "visible": false, "reason": "country" }
+  ],
+  "triggers": [
+    { "trigger": { "id": "a", "enabled": true, "conditions": { "url": [{ "op": "contains", "value": "/pricing" }] } }, "ctx": { "url": "https://example.com/pricing" }, "eligible": true },
+    { "trigger": { "id": "b", "enabled": false, "conditions": {} }, "ctx": { "url": "https://example.com/" }, "eligible": false },
+    { "trigger": { "id": "c", "enabled": true, "conditions": { "visitor": "returning" } }, "ctx": { "url": "https://example.com/", "returning": false }, "eligible": false },
+    { "trigger": { "id": "d", "enabled": true, "conditions": { "visitor": "new" } }, "ctx": { "url": "https://example.com/", "returning": false }, "eligible": true },
+    { "trigger": { "id": "e", "enabled": true, "conditions": { "utm_source": "Google", "utm_campaign": "spring" } }, "ctx": { "url": "https://example.com/?utm_source=google&utm_campaign=spring" }, "eligible": true },
+    { "trigger": { "id": "f", "enabled": true, "conditions": { "utm_source": "google" } }, "ctx": { "url": "https://example.com/?utm_source=bing" }, "eligible": false },
+    { "trigger": { "id": "g", "enabled": true, "conditions": { "device": "mobile" } }, "ctx": { "url": "https://example.com/", "device": "desktop" }, "eligible": false },
+    { "trigger": { "id": "h", "enabled": true, "conditions": { "identified": "yes" } }, "ctx": { "url": "https://example.com/", "identified": true }, "eligible": true },
+    { "trigger": { "id": "i", "enabled": true, "conditions": { "languages": ["tr"] } }, "ctx": { "url": "https://example.com/", "language": "en" }, "eligible": false },
+    { "trigger": { "id": "j", "enabled": true, "conditions": { "url": [{ "op": "contains", "value": "/shop" }, { "op": "not_contains", "value": "/shop/cart" }] } }, "ctx": { "url": "https://example.com/shop/cart" }, "eligible": false },
+    { "trigger": { "id": "k", "enabled": true, "conditions": { "countries": ["TR"] } }, "ctx": { "url": "https://example.com/", "country": "TR" }, "eligible": true }
+  ],
+  "css": [
+    { "in": ".launcher { border-radius: 4px; }", "out": ".launcher { border-radius: 4px; }", "problems": 0 },
+    { "in": "@import url(https://evil.test/x.css); .a{color:red}", "out": ".a{color:red}", "problems": 1 },
+    { "in": ".a{background:url(http://tracker.test/p.gif)}", "out": ".a{background:none}", "problems": 1 },
+    { "in": ".a{background:url('https://cdn.test/bg.png')}", "out": ".a{background:url('https://cdn.test/bg.png')}", "problems": 0 },
+    { "in": ".a{width:expression(alert(1))}", "out": ".a{width:invalid(alert(1))}", "problems": 1 },
+    { "in": ".a{background:url(javascript:alert(1))}", "out": ".a{background:none)}", "problems": 2 },
+    { "in": ".a{behavior:url(x.htc)}", "out": ".a{x-blocked:none}", "problems": 2 },
+    { "in": "</style><script>alert(1)</script>", "out": "/style>script>alert(1)/script>", "problems": 1 },
+    { "in": ".a{color:r\\65 d} /* @import x; */", "out": ".a{color:r65 d}", "problems": 1 }
+  ]
+}

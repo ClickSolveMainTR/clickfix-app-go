@@ -1,0 +1,32 @@
+{
+  "title": "Dokümantasyon",
+  "pages": [
+    "index",
+    "getting-started",
+    "inbox",
+    "channels",
+    "meta",
+    "email",
+    "web-widget",
+    "telegram",
+    "google-chat",
+    "slack-teams",
+    "sms-voice",
+    "ai",
+    "knowledge-base",
+    "automation",
+    "appointments",
+    "video-rooms",
+    "api",
+    "sdks",
+    "api-reference",
+    "webhooks",
+    "mcp-integrations",
+    "n8n-node",
+    "apps",
+    "order-lookup-sample",
+    "apps-gallery",
+    "sso-scim",
+    "data-protection"
+  ]
+}

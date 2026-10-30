@@ -1,0 +1,293 @@
+---
+title: n8n node definition
+description: Declarative node and credential definitions you can use to package an n8n community node for ClickFix.
+section: developers
+order: 4
+---
+
+The easiest way to connect ClickFix in n8n is the **HTTP Request** node; the endpoints are on [Zapier, Make and n8n](/docs/mcp-integrations?lang=en#per-tool). To package your own community node, start from the two definitions on this page.
+
+## What it contains [#what-it-contains]
+
+- `ClickFix.description.json`: a declarative node description compatible with n8n's `INodeTypeDescription`. It covers creating a conversation, adding an internal note, updating a contact, polling triggers and REST hook subscriptions.
+- `ClickFix.credentials.json`: a generic credential description that adds the `Authorization: Bearer cf_sk_…` header.
+
+In your package, load them as the node's `description` and as the credential's `properties` / `authenticate`; you add the TypeScript wrapper, package metadata and icon. The shape follows [n8n's official declarative node guide](https://docs.n8n.io/integrations/creating-nodes/build/declarative-style-node/).
+
+## Setup notes [#setup-notes]
+
+- Set **API Base URL** to `https://api.getclickfix.com` (without `/v1`). `https://support.example.com` in the definition is only a placeholder.
+- Set **API Key** to a key created on **API and automations → API keys**. Scopes needed: `triggers:read`, `webhooks:write`, `conversations:write`, `contacts:write`.
+- Every write needs an `Idempotency-Key` header; send the same value when retrying.
+- A REST hook trigger node must store the subscription's `uuid` and `secret`, delete the subscription when deactivated, and verify the [webhook signature](/docs/webhooks?lang=en).
+- ClickFix doesn't have an official node published in the n8n marketplace yet.
+
+## Definitions [#definitions]
+
+Each tab is one file; copy it with the button in the top-right corner.
+
+```json tab="ClickFix.credentials.json"
+{
+  "name": "clickFixApi",
+  "displayName": "ClickFix API",
+  "properties": [
+    {
+      "displayName": "API Base URL",
+      "name": "baseUrl",
+      "type": "string",
+      "default": "https://support.example.com",
+      "required": true
+    },
+    {
+      "displayName": "API Key",
+      "name": "apiKey",
+      "type": "string",
+      "typeOptions": {
+        "password": true
+      },
+      "default": "",
+      "required": true
+    }
+  ],
+  "authenticate": {
+    "type": "generic",
+    "properties": {
+      "headers": {
+        "Authorization": "={{\"Bearer \" + $credentials.apiKey}}"
+      }
+    }
+  }
+}
+```
+
+```json tab="ClickFix.description.json"
+{
+  "displayName": "ClickFix",
+  "name": "clickFix",
+  "group": ["transform"],
+  "version": 1,
+  "description": "Organization-scoped ClickFix support actions and REST hook subscriptions",
+  "defaults": {
+    "name": "ClickFix"
+  },
+  "inputs": ["main"],
+  "outputs": ["main"],
+  "credentials": [
+    {
+      "name": "clickFixApi",
+      "required": true
+    }
+  ],
+  "requestDefaults": {
+    "baseURL": "={{$credentials.baseUrl + \"/v1/public-api\"}}",
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    }
+  },
+  "properties": [
+    {
+      "displayName": "Operation",
+      "name": "operation",
+      "type": "options",
+      "noDataExpression": true,
+      "default": "createConversation",
+      "options": [
+        {
+          "name": "Create Conversation",
+          "value": "createConversation",
+          "action": "create conversation",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "/conversations",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Add Note",
+          "value": "addNote",
+          "action": "add note",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "=/conversations/{{$parameter[\"recordUuid\"]}}/messages",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Update Contact",
+          "value": "updateContact",
+          "action": "update contact",
+          "routing": {
+            "request": {
+              "method": "PATCH",
+              "url": "=/contacts/{{$parameter[\"recordUuid\"]}}",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Subscribe Trigger",
+          "value": "subscribe",
+          "action": "subscribe trigger",
+          "routing": {
+            "request": {
+              "method": "POST",
+              "url": "/subscriptions",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              },
+              "body": "={{$parameter[\"body\"]}}"
+            }
+          }
+        },
+        {
+          "name": "Unsubscribe Trigger",
+          "value": "unsubscribe",
+          "action": "unsubscribe trigger",
+          "routing": {
+            "request": {
+              "method": "DELETE",
+              "url": "=/subscriptions/{{$parameter[\"recordUuid\"]}}",
+              "headers": {
+                "Idempotency-Key": "={{$parameter[\"idempotencyKey\"]}}"
+              }
+            }
+          }
+        },
+        {
+          "name": "Poll Triggers",
+          "value": "poll",
+          "action": "poll triggers",
+          "routing": {
+            "request": {
+              "method": "GET",
+              "url": "/triggers"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "displayName": "Idempotency Key",
+      "name": "idempotencyKey",
+      "type": "string",
+      "default": "",
+      "required": true,
+      "description": "Stable per logical action; preserve on retries",
+      "displayOptions": {
+        "hide": {
+          "operation": ["poll"]
+        }
+      }
+    },
+    {
+      "displayName": "Record UUID",
+      "name": "recordUuid",
+      "type": "string",
+      "default": "",
+      "required": true,
+      "displayOptions": {
+        "show": {
+          "operation": ["addNote", "updateContact", "unsubscribe"]
+        }
+      }
+    },
+    {
+      "displayName": "JSON Body",
+      "name": "body",
+      "type": "json",
+      "default": "{}",
+      "required": true,
+      "description": "For Add Note: {\"content\":\"Internal context\",\"private\":true,\"client_id\":\"UUID\"}",
+      "displayOptions": {
+        "show": {
+          "operation": [
+            "createConversation",
+            "addNote",
+            "updateContact",
+            "subscribe"
+          ]
+        }
+      }
+    },
+    {
+      "displayName": "Event",
+      "name": "event",
+      "type": "options",
+      "default": "conversation.created",
+      "options": [
+        {
+          "name": "conversation.created",
+          "value": "conversation.created"
+        },
+        {
+          "name": "conversation.resolved",
+          "value": "conversation.resolved"
+        },
+        {
+          "name": "contact.created",
+          "value": "contact.created"
+        },
+        {
+          "name": "csat.submitted",
+          "value": "csat.submitted"
+        },
+        {
+          "name": "conversation.tag_added",
+          "value": "conversation.tag_added"
+        }
+      ],
+      "displayOptions": {
+        "show": {
+          "operation": ["poll"]
+        }
+      },
+      "routing": {
+        "request": {
+          "qs": {
+            "event": "={{$value}}"
+          }
+        }
+      }
+    },
+    {
+      "displayName": "Cursor",
+      "name": "cursor",
+      "type": "string",
+      "default": "0",
+      "description": "Persist data.next_cursor after successful handling; deduplicate data.items by id",
+      "displayOptions": {
+        "show": {
+          "operation": ["poll"]
+        }
+      },
+      "routing": {
+        "request": {
+          "qs": {
+            "cursor": "={{$value}}"
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+## Next steps [#next-steps]
+
+- [Zapier, Make and n8n](/docs/mcp-integrations?lang=en)
+- [API](/docs/api?lang=en)
+- [Webhooks](/docs/webhooks?lang=en)

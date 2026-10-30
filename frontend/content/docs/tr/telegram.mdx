@@ -1,0 +1,30 @@
+---
+title: Telegram
+description: BotFather ile bir Telegram botu oluşturun ve token'ını ClickFix'e girerek bota gelen mesajları gelen kutusunda yanıtlayın.
+section: channels
+order: 6
+---
+
+Telegram kanalı, kendi Telegram botunuza gelen mesajları gelen kutusuna taşır. Her kanal bir bottur; bir bot yalnızca bir kanala bağlanabilir.
+
+## Bot oluşturma [#create-a-bot]
+
+1. Telegram'da **@BotFather** ile bir sohbet açın.
+2. `/newbot` komutunu gönderin, botunuza bir ad ve `bot` ile biten bir kullanıcı adı verin.
+3. BotFather'ın verdiği **bot token'ını** kopyalayın.
+
+## ClickFix'e bağlama [#connect-to-clickfix]
+
+1. **Kanallar → Kanal ekle → Telegram** seçin.
+2. **Bot token'ı** alanına token'ı yapıştırın ve **Bağla**'ya basın.
+
+ClickFix token'ı doğrular ve Telegram webhook'unu otomatik kurar. Ek bir ayar yapmanız gerekmez.
+
+## Nasıl çalışır [#how-it-works]
+
+- **Özel sohbetler**: Bota yazan her kişinin mesajları kendi konuşmasında toplanır.
+- **Gruplar**: Botu bir gruba eklerseniz yalnızca bota yönelik mesajlar alınır: botun @kullanıcı adının geçtiği mesajlar, `/komut@botadi` biçimindeki komutlar ve botun bir mesajına verilen yanıtlar. Bu durumda konuşma grubun kendisidir; mesajı yazan kişinin adı mesajda görünür.
+
+## Token'ı değiştirme [#changing-the-token]
+
+BotFather'da token'ı yenilediyseniz kanal ayarlarından yeni token'ı girip kanalı yeniden bağlayın. Eski token ile çalışan webhook geçersiz olur.

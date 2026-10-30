@@ -1,0 +1,113 @@
+{
+  "key": "healthcare",
+  "version": 1,
+  "icon": "stethoscope",
+  "accent": "#0d9488",
+  "order": 70,
+  "name": { "tr": "Sağlık — randevulu destek", "en": "Healthcare — appointment-based support" },
+  "description": {
+    "tr": "Klinik, poliklinik ve sağlık merkezleri için: randevu, sonuç ve fatura soruları; kişisel sağlık verisine karşı sıkı kurallar ve randevu tipleri.",
+    "en": "For clinics and health centres: appointment, results and billing questions, strict rules around health data, and appointment types."
+  },
+  "highlights": [
+    { "tr": "Randevu tipleri (modül açıksa)", "en": "Appointment types (when the module is on)" },
+    { "tr": "Sağlık verisi için AI kuralları", "en": "AI guardrails for health data" },
+    { "tr": "Randevu ve sonuç etiketleri", "en": "Appointment and results tags" }
+  ],
+  "industries": ["healthcare", "sağlık", "klinik", "clinic", "hastane", "poliklinik", "diş", "doktor", "randevu"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "healthcare", "locale": "tr", "languages": ["tr", "en"], "tone": "formal" },
+    "branding": { "primary_color": "#0d9488" },
+    "teams": [
+      { "key": "hasta-iletisim", "name": "Hasta İletişim Merkezi", "description": "Randevu ve genel sorular", "color": "#0d9488", "skills": ["randevu"] },
+      { "key": "hasta-hizmetleri", "name": "Hasta Hizmetleri", "description": "Fatura, sigorta ve sonuç talepleri", "color": "#2563eb", "skills": ["sigorta"] }
+    ],
+    "tags": [
+      { "name": "randevu", "color": "#0d9488" },
+      { "name": "randevu-iptali", "color": "#ea580c" },
+      { "name": "tahlil-sonucu", "color": "#7c3aed" },
+      { "name": "sigorta", "color": "#2563eb" },
+      { "name": "fatura", "color": "#b45309" },
+      { "name": "acil-yönlendirme", "color": "#dc2626" }
+    ],
+    "statuses": [
+      { "name": "Randevu verildi", "slug": "randevu-verildi", "category": "resolved", "color": "#16a34a" }
+    ],
+    "business_hours": {
+      "name": "Klinik çalışma saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "08:00", "close": "19:00" }, { "day": "tue", "open": "08:00", "close": "19:00" },
+        { "day": "wed", "open": "08:00", "close": "19:00" }, { "day": "thu", "open": "08:00", "close": "19:00" },
+        { "day": "fri", "open": "08:00", "close": "19:00" }, { "day": "sat", "open": "09:00", "close": "14:00" }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Hasta talepleri", "description": "Randevu ve bilgi talepleri",
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 10, "resolution_minutes": 60 },
+          { "priority": "high", "first_response_minutes": 30, "resolution_minutes": 240 },
+          { "priority": "normal", "first_response_minutes": 120, "resolution_minutes": 1440 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Acil durum uyarısı", "shortcut": "acil", "category": "Güvenlik", "content": "Acil bir sağlık durumu yaşıyorsanız lütfen hemen 112'yi arayın. Bu kanal acil durumlar için uygun değildir." },
+      { "title": "Randevu onayı", "shortcut": "randevu", "category": "Randevu", "content": "Randevunuz oluşturuldu. Randevu saatinizden 15 dakika önce kimliğinizle birlikte kliniğimizde olmanızı rica ederiz." },
+      { "title": "Sonuçlar", "shortcut": "sonuc", "category": "Sonuç", "content": "Tahlil sonuçlarınız hazır olduğunda hasta portalınıza yüklenir ve SMS ile bilgilendirilirsiniz. Sonuçları sohbet üzerinden paylaşamıyoruz." },
+      { "title": "İptal", "shortcut": "iptal", "category": "Randevu", "content": "Randevunuzu iptal ettik. Yeni bir randevu almak isterseniz size uygun gün ve saati yazmanız yeterli." }
+    ],
+    "macros": [
+      { "name": "Acil yönlendirme", "description": "112 uyarısı ve acil öncelik",
+        "actions": [ { "type": "priority", "value": "urgent" }, { "type": "tag", "value": "acil-yönlendirme" }, { "type": "reply", "value": "Acil bir durum yaşıyorsanız lütfen hemen 112'yi arayın. Bu kanal acil durumlar için uygun değildir." } ] },
+      { "name": "Randevu iptali", "description": "İptal etiketi ve onay",
+        "actions": [ { "type": "tag", "value": "randevu-iptali" }, { "type": "reply", "value": "Randevunuzu iptal ettik. Yeni randevu için uygun zamanınızı yazabilirsiniz." }, { "type": "status", "value": "resolved" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "bolum", "label": "Bölüm", "type": "select", "options": ["Dahiliye", "Kardiyoloji", "Ortopedi", "Göz", "Diş", "Kadın Doğum", "Çocuk"] },
+      { "entity": "conversation", "key": "tercih_tarihi", "label": "Tercih edilen tarih", "type": "date" }
+    ],
+    "forms": [
+      { "name": "Randevu talebi", "description": "Online randevu talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "phone", "label": "Telefon", "required": true },
+          { "field": "custom:bolum", "label": "Bölüm", "required": true }, { "field": "custom:tercih_tarihi", "label": "Tercih edilen tarih", "required": false }, { "field": "message", "label": "Not", "required": false } ] }
+    ],
+    "knowledge": [
+      { "slug": "randevu", "name": "Randevu", "articles": [
+        { "slug": "randevu-alma", "title": "Nasıl randevu alırım?", "public": true,
+          "body": "Web sitemizdeki randevu formundan, WhatsApp hattımızdan veya çağrı merkezimizden randevu alabilirsiniz. Randevunuz SMS ile onaylanır." },
+        { "slug": "randevu-oncesi", "title": "Randevuya gelirken nelere dikkat etmeliyim?", "public": true,
+          "body": "Randevu saatinden 15 dakika önce kimliğiniz ve varsa önceki tahlil sonuçlarınızla gelin. Aç karnına yapılması gereken tetkikler için bilgilendirme SMS'ini kontrol edin." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Merhaba, nasıl yardımcı olabiliriz?", "greeting_text": "Randevu ve bilgi talepleriniz için yazın. Acil durumlarda lütfen 112'yi arayın.", "color": "#0d9488" },
+    "ai_agent": {
+      "persona": "Kliniğin nazik hasta iletişim asistanısın. Randevu, çalışma saatleri ve genel bilgi sorularına yardım eder, tıbbi konuları uzmana yönlendirirsin.",
+      "tone": "Nazik, sakin ve resmi. 'Siz' hitabı.",
+      "guardrails": [
+        "Asla tanı koyma, ilaç veya tedavi önerme.",
+        "Acil belirtilerde (göğüs ağrısı, nefes darlığı, bilinç kaybı) hemen 112'yi aramasını söyle.",
+        "Tahlil sonucu veya sağlık verisini sohbet üzerinden paylaşma.",
+        "Kimlik numarası gibi hassas verileri gereksiz yere isteme."
+      ],
+      "handoff_keywords": ["acil", "ağrı", "kanama", "şikayet", "hasta hakları"],
+      "procedures": [
+        { "intent": "book_appointment", "title": "Randevu talebi", "steps": ["Hangi bölüm için randevu istendiğini sor.", "Tercih edilen gün ve saat aralığını al.", "Talebi randevu etiketiyle hasta iletişim ekibine devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Acil durumlar", "team": "hasta-iletisim", "priorities": ["urgent"] },
+      { "name": "Sigorta ve fatura", "team": "hasta-hizmetleri", "channel_types": ["email"] }
+    ],
+    "views": [
+      { "name": "Randevu talepleri", "icon": "calendar", "statuses": ["open"] },
+      { "name": "Acil", "icon": "siren", "statuses": ["open"], "priorities": ["urgent"] }
+    ],
+    "survey": { "name": "Hasta memnuniyeti", "question": "Bugünkü iletişimimizden ne kadar memnun kaldınız?" },
+    "appointment_types": [
+      { "name": "Muayene", "duration_minutes": 20, "description": "Standart poliklinik muayenesi" },
+      { "name": "Kontrol", "duration_minutes": 15, "description": "Tedavi sonrası kontrol" },
+      { "name": "Online görüşme", "duration_minutes": 30, "description": "Görüntülü ön görüşme" }
+    ],
+    "notifications": { "email_digest": "hourly", "digest_hour": 8 }
+  }
+}

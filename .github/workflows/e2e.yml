@@ -1,0 +1,122 @@
+# Launch-critical E2E suite (CF-131). Manual and nightly only: it is NOT part of the required `ci`
+# check. It boots the local compose infra, runs the Go API and the Next.js production build on the
+# runner, seeds the demo organization (seed-demo, docs/demo-org.md) and runs frontend/e2e/app with
+# one Chromium worker. Traces, screenshots and the HTML report are uploaded when a test fails.
+# No secrets: the database is throwaway and the passwords below exist only on the runner.
+name: e2e
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    # Pinned: Playwright has no Chromium build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CI: "true"
+      E2E_BASE_URL: http://127.0.0.1:3000
+      # The Go API itself: public API calls with an API key, MCP OAuth discovery.
+      E2E_API_URL: http://127.0.0.1:8080
+      E2E_ADMIN_EMAIL: platform-admin@example.com
+      E2E_ADMIN_PASSWORD: E2eAdmin2026
+      E2E_DEMO_PASSWORD: E2eDemo2026x
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Environment (.env.example + self-serve sign up)
+        run: |
+          cp .env.example .env
+          {
+            echo "LOG_LEVEL=warn"
+            echo "PUBLIC_FRONTEND_URL=http://127.0.0.1:3000"
+            echo "CORS_ALLOWED_ORIGINS=http://127.0.0.1:3000"
+            echo "AUTH_URL=http://127.0.0.1:3000"
+          } >> .env
+          # Export every KEY=VALUE verbatim to the later steps (values hold JSON, so no shell sourcing).
+          grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env >> "$GITHUB_ENV"
+
+      - name: Start infra (Postgres, Redis, SeaweedFS, Meilisearch, Centrifugo, Mailhog)
+        run: docker compose --env-file .env -f compose.local.yml up -d --wait postgres redis seaweedfs meilisearch centrifugo mailhog
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+          standalone: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Migrate, platform admin and demo organization
+        run: |
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+          make migrate-up
+          make create-super-admin SA_EMAIL="$E2E_ADMIN_EMAIL" SA_PASSWORD="$E2E_ADMIN_PASSWORD"
+          DEMO_PASSWORD="$E2E_DEMO_PASSWORD" make seed-demo ARGS="-dev-catalog"
+          make search-reindex
+
+      - name: Start the API
+        run: |
+          make -C backend build
+          nohup backend/bin/api > api.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/healthz >/dev/null 2>&1 && exit 0; sleep 2; done
+          cat api.log; exit 1
+
+      - name: Install frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Build and start the panel
+        working-directory: frontend
+        run: |
+          pnpm build
+          nohup pnpm exec next start -H 127.0.0.1 -p 3000 > ../next.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/login >/dev/null 2>&1 && exit 0; sleep 2; done
+          cat ../next.log; exit 1
+
+      - name: E2E
+        working-directory: frontend
+        run: pnpm e2e
+
+      - name: Server logs and failure snapshots
+        if: failure()
+        run: |
+          tail -n 200 api.log next.log || true
+          # Page snapshot of each failed test, readable without downloading the artifact.
+          for f in frontend/e2e/app/out/*/error-context.md; do
+            [ -f "$f" ] || continue
+            echo "::group::$f"
+            head -n 150 "$f"
+            echo "::endgroup::"
+          done
+
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: e2e-traces
+          path: |
+            frontend/e2e/app/out/
+            frontend/e2e/app/report/
+            api.log
+            next.log
+          retention-days: 14

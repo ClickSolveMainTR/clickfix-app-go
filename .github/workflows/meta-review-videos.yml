@@ -1,0 +1,72 @@
+# Meta App Review screencasts (CF-2). One-off and manual: it never runs on push or pull requests and
+# is not part of the required `ci` check. It builds the panel, starts it against the fake Go API in
+# frontend/e2e/meta-review/mock-api.ts and records one English video (+ WebVTT captions) per use case.
+# No secrets: every account, message and id in the videos comes from the mock fixtures.
+name: Meta review videos
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Use case to record (messenger, instagram, whatsapp); empty records all"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-review-videos
+  cancel-in-progress: true
+
+jobs:
+  record:
+    # Pinned: Playwright has no Chromium build for ubuntu-latest (26.04) yet.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # No GPU on the runner: Full HD stutters, so CI records smaller; local runs default to 1920x1080.
+      REVIEW_SIZE: 1280x800
+      REVIEW_ONLY: ${{ inputs.only }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium and ffmpeg
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Dry run (scenarios, captions, timing)
+        run: pnpm review:dry-run
+
+      - name: Build the panel for the mock API
+        run: pnpm review:build
+
+      - name: Record
+        run: pnpm review:videos
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: meta-review-videos
+          path: |
+            frontend/e2e/meta-review/out/
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+/*
+ * Brand tokens mirror frontend/src/styles/theme.css (same names, same hex;
+ * React Native does not parse oklch, so the white-alpha borders are hex with
+ * alpha). Change both together. docs/brand.md: "signal on ink". Light is paper
+ * with white cards and an ink primary; dark is ink with signal green as the
+ * primary fill. Green is a fill only: green text uses `text-signal-text`.
+ */
+@layer theme {
+  :root {
+    @variant light {
+      --color-background: #f7f6f2;
+      --color-foreground: #0c110d;
+      --color-card: #ffffff;
+      --color-card-foreground: #0c110d;
+      --color-primary: #0c110d;
+      --color-primary-foreground: #f7f6f2;
+      --color-secondary: #efeee9;
+      --color-secondary-foreground: #0c110d;
+      --color-muted: #efeee9;
+      --color-muted-foreground: #5e655f;
+      --color-accent: #eceae4;
+      --color-accent-foreground: #0c110d;
+      --color-destructive: #c4321f;
+      --color-border: #e2e1da;
+      --color-input: #dad9d2;
+      --color-ring: #0e9f22;
+      --color-success: #087313;
+      --color-warning: #9a5b00;
+      --color-signal-text: #087313;
+      --color-signal-soft: #e6f7e7;
+      /* Wordmark letters (ink on light, white on dark). */
+      --color-brand-glyph: #000000;
+    }
+
+    @variant dark {
+      --color-background: #0a0d0b;
+      --color-foreground: #e8ece9;
+      --color-card: #111412;
+      --color-card-foreground: #e8ece9;
+      --color-primary: #03ff13;
+      --color-primary-foreground: #000000;
+      --color-secondary: #1a1e1b;
+      --color-secondary-foreground: #e8ece9;
+      --color-muted: #1a1e1b;
+      --color-muted-foreground: #9aa39c;
+      --color-accent: #1d221e;
+      --color-accent-foreground: #e8ece9;
+      --color-destructive: #ff6b57;
+      --color-border: #ffffff17;
+      --color-input: #ffffff24;
+      --color-ring: #03ff13;
+      --color-success: #3dff4b;
+      --color-warning: #f2b544;
+      --color-signal-text: #3dff4b;
+      --color-signal-soft: #12301a;
+      --color-brand-glyph: #ffffff;
+    }
+  }
+}
+
+@theme static {
+  /* Native icon tiles and calendar category palette. White labels belong to these solid fills. */
+  --color-tile-blue: #007aff;
+  --color-tile-red: #ff3b30;
+  --color-tile-green: #30b054;
+  --color-tile-indigo: #5856d6;
+  --color-tile-orange: #ff9500;
+  --color-tile-purple: #af52de;
+  --color-tile-gray: #636366;
+  --color-channel-whatsapp: #25a35a;
+  --color-channel-instagram: #c13584;
+  --color-on-tile: #ffffff;
+  --color-calendar-blue: #2877cf;
+  --color-calendar-emerald: #178565;
+  --color-calendar-amber: #8f6010;
+  --color-calendar-rose: #b13d58;
+  --color-calendar-violet: #7450b6;
+  --color-calendar-sky: #267899;
+  --color-calendar-orange: #a95b18;
+  --color-calendar-teal: #207979;
+  --color-calendar-pink: #a8467d;
+  --color-calendar-slate: #596875;
+  --color-calendar-cancelled: #a84646;
+}
+
+@theme {
+  /* Kit colours (docs/brand.md, CF-15): ink is the kit black, the dark page is a lifted #0a0d0b. */
+  --color-ink: #000000;
+  --color-ink-accent: #16301a;
+  --color-ink-foreground: #d9f5db;
+  --color-paper: #f7f6f2;
+  --color-signal: #03ff13;
+  --color-signal-foreground: #000000;
+  /* Panel radius is 0.75rem (12 px) for cards; controls a step tighter. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-sheet: 24px;
+  /* Geist for UI text, Space Grotesk for display; one family per weight (src/core/fonts.ts loads them). */
+  --font-sans: 'Geist_400Regular';
+  --font-sans-medium: 'Geist_500Medium';
+  --font-sans-semibold: 'Geist_600SemiBold';
+  --font-sans-bold: 'Geist_700Bold';
+  --font-display: 'SpaceGrotesk_600SemiBold';
+  --font-display-bold: 'SpaceGrotesk_700Bold';
+}

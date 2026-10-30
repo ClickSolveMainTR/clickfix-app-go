@@ -1,0 +1,31 @@
+@import "tailwindcss" source(none);
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@import "fumadocs-openapi/css/preset.css";
+
+.clickfix-docs,
+body:has(.clickfix-docs) {
+  --color-fd-background: #0a0d0b;
+  --color-fd-foreground: #f2f5f2;
+  --color-fd-primary: #03ff13;
+  --color-fd-primary-foreground: #0a0d0b;
+  --color-fd-muted: #171c18;
+  --color-fd-muted-foreground: #a5b3a7;
+  --color-fd-card: #101611;
+  --color-fd-card-foreground: #f2f5f2;
+  --color-fd-popover: #101611;
+  --color-fd-popover-foreground: #f2f5f2;
+  --color-fd-border: #29392c;
+  --color-fd-accent: #19351e;
+  --color-fd-accent-foreground: #f2f5f2;
+  --fd-banner-height: 4rem;
+  color-scheme: dark;
+}
+.clickfix-docs #nd-sidebar {
+  top: 4rem;
+}
+.clickfix-docs h1,
+.clickfix-docs h2,
+.clickfix-docs h3 {
+  font-family: var(--font-space-grotesk), sans-serif;
+}

@@ -1,0 +1,66 @@
+---
+title: WhatsApp, Instagram ve Messenger
+description: WhatsApp Business numaranızı, Instagram profesyonel hesabınızı ve Facebook sayfanızı Meta ile giriş yaparak ClickFix'e bağlayın.
+section: channels
+order: 3
+---
+
+WhatsApp, Instagram ve Messenger kanalları Meta'nın resmi API'leri üzerinden çalışır. Bağlantı için uygulama oluşturmanız veya erişim anahtarı (token) kopyalamanız gerekmez: Meta hesabınızla giriş yapıp izin verirsiniz, ClickFix gerisini ayarlar.
+
+> Bu kanallar panelde henüz seçilemiyorsa, ClickFix'in Meta uygulama incelemesi tamamlandığında açılacaktır. Ekranda bu durum ayrıca belirtilir.
+
+## Başlamadan önce [#before-you-start]
+
+- Bağlayacağınız varlıkları yöneten bir Facebook hesabıyla giriş yapacaksınız.
+- **WhatsApp** için bir Meta işletme hesabı ve WhatsApp Business'a kaydedilebilecek bir telefon numarası gerekir. Numara, aynı anda WhatsApp Business uygulamasında kullanılıyorsa Meta'nın numara taşıma kurallarına bakın.
+- **Instagram** için hesabınız bir **profesyonel hesap** (işletme veya içerik üreticisi) olmalıdır.
+- **Messenger** için yönettiğiniz bir **Facebook sayfası** gerekir.
+
+## WhatsApp [#whatsapp]
+
+1. **Kanallar → Kanal ekle → WhatsApp** seçin.
+2. **Meta ile WhatsApp bağla** düğmesine basın.
+3. Açılan Meta penceresinde işletme hesabınızı, WhatsApp Business hesabınızı ve numaranızı seçin, izinleri onaylayın.
+4. Pencere kapanınca kanal bağlanır ve gelen mesajlar gelen kutusuna düşmeye başlar.
+
+Birden çok numara bağlayabilirsiniz; her numara ayrı bir kanaldır.
+
+### 24 saat kuralı ve şablonlar [#the-24-hour-rule-and-templates]
+
+WhatsApp'ta müşterinin son mesajından sonraki 24 saat içinde serbest yanıt verebilirsiniz. Bu süre dolduktan sonra konuşmayı yeniden başlatmak için Meta onaylı bir **şablon** gerekir.
+
+Şablonları kanalın **Şablonlar** menüsünden yönetirsiniz:
+
+1. **Yeni şablon** ile ad, kategori (**Hizmet**, **Pazarlama** veya **Doğrulama**), dil ve metni girin.
+2. Metindeki değişkenleri `{{1}}`, `{{2}}` biçiminde yazın ve her biri için bir örnek verin.
+3. **Onaya gönder**'e basın. Şablon, Meta onayladıktan sonra kullanılabilir.
+
+## Instagram [#instagram]
+
+1. **Kanallar → Kanal ekle → Instagram** seçin ve **Meta ile bağlan**'a basın.
+2. Instagram'a yönlendirilirsiniz; hesabınızla giriş yapıp izin verin.
+3. İzin verdikten sonra ClickFix'e dönersiniz ve kanal bağlanır.
+
+Gelen kutusuna şunlar düşer:
+
+- **Doğrudan mesajlar (DM)**, story yanıtları ve story bahsetmeleri.
+- **Gönderi yorumları**: Her üst düzey yorum ayrı bir konuşma açar; yanıtınız yorumun altına herkese açık yanıt olarak gider.
+- Başka bir gönderinin yorumunda hesabınızdan **bahsedilmesi**.
+
+## Messenger [#messenger]
+
+1. **Kanallar → Kanal ekle → Messenger** seçin ve **Meta ile bağlan**'a basın.
+2. Facebook'a yönlendirilirsiniz; giriş yapıp izinleri onaylayın.
+3. **Bağlanacak sayfayı seçin** listesinden sayfanızı seçin.
+
+Messenger'da müşterinin son mesajından sonraki 24 saat geçtiyse ClickFix yanıtınızı Meta'nın **insan temsilci** etiketiyle gönderir; bu etiket yanıt süresini 7 güne uzatır.
+
+## Bağlantı sağlığı ve yeniden bağlanma [#health-and-reconnecting]
+
+Kanallar sayfası, erişim anahtarının bitiş zamanını ve gönderim hatalarını gösterir. Facebook şifrenizi değiştirdiyseniz, uygulamanın iznini kaldırdıysanız veya erişim anahtarının süresi dolduysa kanal **Yeniden bağlanmalı** olarak işaretlenir. Kanal menüsünden **Yeniden bağlan** ile aynı giriş adımlarını tekrarlayın.
+
+## Bağlantıyı kaldırma ve veri silme [#disconnecting-and-data-deletion]
+
+Kanalın bağlantısını kestiğinizde ClickFix o hesap için sakladığı erişim bilgilerini siler ve yeni mesaj almaz. Mevcut konuşmalar silinmez.
+
+Uygulamanın erişimini Facebook veya Instagram ayarlarınızdan kaldırdığınızda da ilgili bağlantılar kapatılır. Veri silme talepleri ve süreç için [hesap ve veri silme](https://getclickfix.com/account-deletion) sayfasına bakın.

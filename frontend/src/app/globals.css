@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../styles/theme.css";
+@import "../components/editor/themes/editor-theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  html {
+    @apply overflow-x-hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground has-[div[data-variant="inset"]]:bg-sidebar min-h-svh w-full font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  .font-accent {
+    font-family: var(--font-accent);
+  }
+
+  ::selection {
+    background: rgb(3 255 19 / 0.35);
+    color: var(--foreground);
+  }
+
+  body[data-scroll-locked] {
+    overflow: unset !important;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  @media screen and (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Guest pages (auth-shell.tsx): below `lg` the card is frosted ink glass over
+   the animated mesh; on desktop it dissolves into the page background. */
+.auth-glass [data-slot="card"] {
+  border-radius: 1.25rem;
+}
+
+@media (width < 64rem) {
+  .auth-glass [data-slot="card"] {
+    background: color-mix(in oklab, #0a0d0b 62%, transparent);
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow:
+      0 24px 60px -12px rgb(0 0 0 / 0.65),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+
+  .auth-glass input,
+  .auth-glass [data-slot="input-group"],
+  .auth-glass [data-slot="button"][data-variant="outline"] {
+    background: rgb(255 255 255 / 0.05);
+    border-color: rgb(255 255 255 / 0.12);
+  }
+
+  .auth-glass [data-slot="input-group"] input {
+    background: transparent;
+  }
+}
+
+/* Tenant branding override seam */
+[data-brand] {
+  --primary: var(--brand-primary, var(--primary));
+  --primary-foreground: var(
+    --brand-primary-foreground,
+    var(--primary-foreground)
+  );
+  --accent: var(--brand-accent, var(--accent));
+  --radius: var(--brand-radius, var(--radius));
+}

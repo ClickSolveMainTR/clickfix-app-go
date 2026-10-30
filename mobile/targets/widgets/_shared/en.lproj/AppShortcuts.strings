@@ -1,0 +1,11 @@
+/* App Shortcut phrases (AppShortcuts.xcstrings needs iOS 17; the app targets 16.4). */
+"Change my status in ${applicationName}" = "Change my status in ${applicationName}";
+"New ${applicationName} conversation" = "New ${applicationName} conversation";
+"Open my unread conversations in ${applicationName}" = "Open my unread conversations in ${applicationName}";
+"Search ${applicationName}" = "Search ${applicationName}";
+"Search in ${applicationName}" = "Search in ${applicationName}";
+"Set my ${applicationName} status to ${status}" = "Set my ${applicationName} status to ${status}";
+"Show my ${applicationName} inbox" = "Show my ${applicationName} inbox";
+"Show today's appointments in ${applicationName}" = "Show today's appointments in ${applicationName}";
+"Start a new conversation in ${applicationName}" = "Start a new conversation in ${applicationName}";
+"What's on my ${applicationName} agenda today" = "What's on my ${applicationName} agenda today";

@@ -1,0 +1,117 @@
+{
+  "key": "e-commerce",
+  "version": 1,
+  "icon": "shopping-bag",
+  "accent": "#db2777",
+  "order": 20,
+  "name": { "tr": "E-ticaret", "en": "E-commerce" },
+  "description": {
+    "tr": "Online mağazalar için: sipariş, kargo, iade ve değişim talepleri; WhatsApp ve Instagram'dan gelen sorular için hazır yanıtlar.",
+    "en": "For online stores: order, shipping, return and exchange requests, with ready replies for WhatsApp and Instagram questions."
+  },
+  "highlights": [
+    { "tr": "Sipariş, kargo ve iade etiketleri", "en": "Order, shipping and return tags" },
+    { "tr": "Sipariş numarası alanı", "en": "Order number field" },
+    { "tr": "İade süreci için AI prosedürü", "en": "AI procedure for returns" }
+  ],
+  "industries": ["ecommerce", "e-ticaret", "mağaza", "store", "shop", "perakende", "retail", "sipariş"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "ecommerce", "locale": "tr", "languages": ["tr"], "tone": "friendly" },
+    "branding": { "primary_color": "#db2777" },
+    "teams": [
+      { "key": "musteri-hizmetleri", "name": "Müşteri Hizmetleri", "description": "Sipariş ve ürün soruları", "color": "#db2777", "skills": ["sipariş", "ürün"] },
+      { "key": "iade-degisim", "name": "İade ve Değişim", "description": "İade, değişim ve geri ödeme", "color": "#ea580c", "skills": ["iade"] }
+    ],
+    "tags": [
+      { "name": "sipariş", "color": "#2563eb" },
+      { "name": "kargo", "color": "#0891b2" },
+      { "name": "iade", "color": "#ea580c" },
+      { "name": "değişim", "color": "#d97706" },
+      { "name": "ödeme", "color": "#16a34a" },
+      { "name": "hasarlı-ürün", "color": "#dc2626" },
+      { "name": "stok", "color": "#7c3aed" }
+    ],
+    "statuses": [
+      { "name": "Kargoda", "slug": "kargoda", "category": "pending", "color": "#0891b2" },
+      { "name": "İade bekleniyor", "slug": "iade-bekleniyor", "category": "pending", "color": "#ea580c" }
+    ],
+    "business_hours": {
+      "name": "Müşteri hizmetleri saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "09:00", "close": "20:00" }, { "day": "tue", "open": "09:00", "close": "20:00" },
+        { "day": "wed", "open": "09:00", "close": "20:00" }, { "day": "thu", "open": "09:00", "close": "20:00" },
+        { "day": "fri", "open": "09:00", "close": "20:00" }, { "day": "sat", "open": "10:00", "close": "17:00" }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Mağaza SLA", "description": "Hızlı ilk yanıt; satış kaçmasın",
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 15, "resolution_minutes": 240 },
+          { "priority": "high", "first_response_minutes": 30, "resolution_minutes": 480 },
+          { "priority": "normal", "first_response_minutes": 60, "resolution_minutes": 1440 },
+          { "priority": "low", "first_response_minutes": 240, "resolution_minutes": 2880 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Sipariş numarası iste", "shortcut": "siparis_no", "category": "Sipariş", "content": "Size yardımcı olabilmem için sipariş numaranızı paylaşabilir misiniz? Sipariş onay e-postanızda yer alıyor." },
+      { "title": "Kargo takibi", "shortcut": "kargo", "category": "Kargo", "content": "Siparişiniz kargoya verildi. Takip numaranızla kargo firmasının sitesinden anlık durumunu görebilirsiniz." },
+      { "title": "İade koşulları", "shortcut": "iade", "category": "İade", "content": "Ürünü teslimden itibaren 14 gün içinde, kullanılmamış ve orijinal ambalajında iade edebilirsiniz. İade kodu oluşturmamı ister misiniz?" },
+      { "title": "Geri ödeme süresi", "shortcut": "geri_odeme", "category": "Ödeme", "content": "İade ürün depomuza ulaştıktan sonra geri ödemeniz 3 iş günü içinde kartınıza yansır; bankanıza göre süre değişebilir." },
+      { "title": "Teşekkür", "shortcut": "tesekkur", "category": "Genel", "content": "Bizi tercih ettiğiniz için teşekkür ederiz! İyi alışverişler dileriz." }
+    ],
+    "macros": [
+      { "name": "İade başlat", "description": "İade etiketi ekler, koşulları gönderir ve beklemeye alır",
+        "actions": [ { "type": "tag", "value": "iade" }, { "type": "reply", "value": "İade talebinizi aldık. İade kodunuz e-posta ile gönderilecek; ürünü kodla birlikte anlaşmalı kargoya teslim edebilirsiniz." }, { "type": "status", "value": "pending" } ] },
+      { "name": "Hasarlı ürün", "description": "Önceliği yükseltir ve fotoğraf ister",
+        "actions": [ { "type": "tag", "value": "hasarlı-ürün" }, { "type": "priority", "value": "high" }, { "type": "reply", "value": "Yaşadığınız sorun için çok üzgünüz. Ürünün ve kargo paketinin fotoğraflarını paylaşabilir misiniz? Hemen yenisini göndereceğiz." } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "siparis_no", "label": "Sipariş numarası", "type": "text" },
+      { "entity": "conversation", "key": "kargo_firmasi", "label": "Kargo firması", "type": "select", "options": ["Yurtiçi", "Aras", "MNG", "PTT", "Sürat", "Trendyol Express"] },
+      { "entity": "contact", "key": "sadakat_seviyesi", "label": "Sadakat seviyesi", "type": "select", "options": ["Yeni", "Bronz", "Gümüş", "Altın"] }
+    ],
+    "forms": [
+      { "name": "Sipariş desteği", "description": "Sipariş, kargo ve iade talepleri",
+        "fields": [ { "field": "name", "label": "Ad soyad", "required": true }, { "field": "email", "label": "E-posta", "required": true },
+          { "field": "custom:siparis_no", "label": "Sipariş numarası", "required": false }, { "field": "message", "label": "Nasıl yardımcı olabiliriz?", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "siparis-ve-kargo", "name": "Sipariş ve kargo", "articles": [
+        { "slug": "kargo-suresi", "title": "Siparişim ne zaman kargoya verilir?", "public": true,
+          "body": "Saat 15:00'e kadar verilen siparişler aynı gün, sonrasında verilenler ertesi iş günü kargoya teslim edilir. Kargoya verildiğinde takip numaranız SMS ve e-posta ile gönderilir." },
+        { "slug": "siparis-iptali", "title": "Siparişimi iptal edebilir miyim?", "public": true,
+          "body": "Kargoya verilmemiş siparişleri **Hesabım > Siparişlerim** ekranından iptal edebilirsiniz. Kargoya verilmiş siparişler için iade süreci uygulanır." }
+      ] },
+      { "slug": "iade-ve-degisim", "name": "İade ve değişim", "articles": [
+        { "slug": "iade-nasil-yapilir", "title": "İade nasıl yapılır?", "public": true,
+          "body": "1. **Hesabım > Siparişlerim** ekranından ürünü seçin ve *İade et*'e tıklayın.\n2. Size verilen iade koduyla ürünü anlaşmalı kargoya teslim edin.\n3. Ürün depomuza ulaşınca geri ödemeniz 3 iş günü içinde yapılır." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Merhaba! 🛍️", "greeting_text": "Siparişiniz, kargonuz veya iadenizle ilgili sorularınızı yanıtlamaya hazırız.", "color": "#db2777" },
+    "ai_agent": {
+      "persona": "Mağazanın güler yüzlü müşteri temsilcisisin. Siparişler, kargo ve iade süreçleri hakkında net, hızlı ve sıcak yanıtlar verirsin.",
+      "tone": "Sıcak, enerjik ve kısa. Emoji kullanımı ölçülü. Müşteriye 'siz' diye hitap et.",
+      "guardrails": [
+        "Kargo teslim tarihi için kesin söz verme; tahmini süre ver.",
+        "İade politikasının dışında istisna tanıma; gerekirse temsilciye devret.",
+        "Kart bilgisi veya şifre isteme."
+      ],
+      "handoff_keywords": ["şikayet", "tüketici hakem", "dolandırıcılık", "avukat"],
+      "procedures": [
+        { "intent": "return_request", "title": "İade talebi", "steps": ["Sipariş numarasını iste.", "Teslimden bu yana 14 gün geçmediğini teyit et.", "İade adımlarını paylaş ve konuşmayı iade etiketiyle beklemeye al."] },
+        { "intent": "order_status", "title": "Sipariş durumu", "steps": ["Sipariş numarasını iste.", "Kargo süresi makalesine göre tahmini süreyi bildir.", "Gecikme 3 iş gününü aştıysa temsilciye devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "İade talepleri", "team": "iade-degisim", "priorities": ["high", "urgent"] },
+      { "name": "Sosyal medya mesajları", "team": "musteri-hizmetleri", "channel_types": ["whatsapp", "instagram"] }
+    ],
+    "views": [
+      { "name": "Açık iadeler", "icon": "undo-2", "statuses": ["open", "pending"] },
+      { "name": "Atanmamış", "icon": "inbox", "statuses": ["open"], "unassigned": true }
+    ],
+    "survey": { "name": "Alışveriş deneyimi", "question": "Bu görüşmedeki yardımımızdan ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "daily", "digest_hour": 9 }
+  }
+}

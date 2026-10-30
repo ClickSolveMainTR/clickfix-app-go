@@ -1,0 +1,182 @@
+---
+title: API ve SDK hızlı başlangıç
+description: API anahtarı oluşturun, ClickFix REST API'sine ilk isteğinizi gönderin; yanıt yapısı, sayfalama, idempotency ve hız sınırları.
+section: developers
+order: 1
+---
+
+ClickFix REST API'si, kendi sistemlerinizden konuşma oluşturmanızı, not eklemenizi, kişileri güncellemenizi ve olaylara abone olmanızı sağlar. Tam uç nokta listesi, şemalar ve her dil için hazır istek örnekleri [API başvurusunda](/docs/api) yer alır; başvuru yalnızca herkese açık ve kararlı uç noktaları içerir. API uç noktaları aşağıdaki başvuru sayfalarında belgelenir.
+
+## 1. API anahtarı oluşturun [#create-api-key]
+
+1. **Organizasyon → API ve otomasyonlar** sayfasını açın.
+2. **API anahtarları** sekmesinde **Yeni API anahtarı**'na basın.
+3. Bir ad girin, yalnızca entegrasyonun ihtiyaç duyduğu **Kapsamları** seçin, isterseniz **Dakikalık istek limiti** ve **Son geçerlilik** tarihi belirleyin.
+4. **Anahtar oluştur**'a basın ve anahtarı hemen kopyalayın. Anahtar `cf_sk_` ile başlar ve **yalnızca bir kez** gösterilir; ClickFix yalnızca özetini saklar.
+
+Anahtar, onu oluşturan üyenin **güncel** yetkileriyle sınırlıdır. Üyenin yetkisi düşerse veya organizasyondan çıkarılırsa anahtar da aynı oranda kısıtlanır. **İptal et** ile bir anahtarı hemen geçersiz kılabilirsiniz.
+
+> API anahtarlarını yalnızca sunucunuzda kullanın. Tarayıcı veya mobil uygulama koduna asla koymayın.
+
+### Kapsamlar [#scopes]
+
+| Kapsam                | İzin verdiği                                       |
+| --------------------- | -------------------------------------------------- |
+| `conversations:read`  | Konuşmaları ve mesajları okuma                     |
+| `conversations:write` | Konuşma oluşturma, güncelleme, mesaj ve not ekleme |
+| `contacts:read`       | Kişileri okuma                                     |
+| `contacts:write`      | Kişileri güncelleme                                |
+| `companies:read`      | Şirketleri okuma                                   |
+| `triggers:read`       | Tetikleyici olaylarını yoklama                     |
+| `webhooks:read`       | Webhook aboneliklerini okuma                       |
+| `webhooks:write`      | Webhook aboneliği oluşturma, güncelleme ve silme   |
+| `revenue:write`       | Şirket gelir verisi gönderme                       |
+| `health:write`        | Müşteri sağlığı (kullanım) sinyali gönderme        |
+| `events:write`        | Şirket zaman çizelgesine ürün olayı gönderme       |
+
+## 2. İlk isteğiniz [#first-request]
+
+Temel adres:
+
+```text
+https://api.getclickfix.com/v1/public-api
+```
+
+Her istekte anahtarı `Authorization` başlığıyla gönderin:
+
+```bash
+curl https://api.getclickfix.com/v1/public-api/contacts?limit=20 \
+  -H "Authorization: Bearer cf_sk_..."
+```
+
+## Yanıt yapısı [#response-format]
+
+Tüm yanıtlar aynı zarfı kullanır:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": { "request_id": "..." }
+}
+```
+
+Hata durumunda:
+
+```json
+{
+  "success": false,
+  "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [] },
+  "meta": { "request_id": "..." }
+}
+```
+
+Hata yönetimini `error.code` değerine göre yapın; mesaj metni değişebilir. Destek talebinde `meta.request_id` değerini paylaşın.
+
+## Sayfalama [#pagination]
+
+Liste uç noktaları `limit` (varsayılan 20, en fazla 100) ve `offset` parametrelerini kabul eder. Kişi listesi ayrıca `q` ile arama destekler.
+
+```json
+{
+  "success": true,
+  "data": { "items": [], "total": 0, "limit": 20, "offset": 0 }
+}
+```
+
+Değişiklikleri sürekli izlemek için sayfalama yerine [tetikleyici yoklama](/docs/mcp-integrations) veya [webhook'lar](/docs/webhooks) kullanın.
+
+## Yazma istekleri ve Idempotency-Key [#idempotency]
+
+`GET` dışındaki tüm isteklerde `Idempotency-Key` başlığı **zorunludur**. Her mantıksal işlem için benzersiz bir değer üretin ve tekrar denemede aynı değeri aynı gövdeyle gönderin. ClickFix tamamlanan yanıtı saklar ve aynı anahtarla gelen tekrar isteğe aynı yanıtı döner. Aynı anahtar farklı bir gövdeyle kullanılırsa `409 IDEMPOTENCY_CONFLICT` döner.
+
+### Örnek: konuşma oluşturma [#create-conversation]
+
+```bash
+curl -X POST https://api.getclickfix.com/v1/public-api/conversations \
+  -H "Authorization: Bearer cf_sk_..." \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-42-support" \
+  -d '{
+    "contact_uuid": "KISI_UUID",
+    "inbox_uuid": "KANAL_UUID",
+    "subject": "Teslimat sorusu"
+  }'
+```
+
+`inbox_uuid` etkin bir kanalınızın kimliğidir. Kişi ve kanal anahtarın organizasyonuna ait olmalıdır. Konuşma, anahtarı oluşturan üyeye atanır.
+
+### Örnek: iç not ekleme [#add-note]
+
+```bash
+curl -X POST https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages \
+  -H "Authorization: Bearer cf_sk_..." \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 6f1c0e3a-note-1" \
+  -d '{ "content": "Sipariş kargoya verildi.", "private": true, "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90" }'
+```
+
+## Uç noktalar [#endpoints]
+
+| İşlem                                   | Uç nokta                                                    | Kapsam                                       |
+| --------------------------------------- | ----------------------------------------------------------- | -------------------------------------------- |
+| Konuşmaları listele                     | `GET /conversations`                                        | `conversations:read`                         |
+| Konuşma getir / güncelle                | `GET` / `PATCH /conversations/{uuid}`                       | `conversations:read` / `conversations:write` |
+| Konuşma oluştur                         | `POST /conversations`                                       | `conversations:write`                        |
+| Mesajları listele / mesaj veya not ekle | `GET` / `POST /conversations/{uuid}/messages`               | `conversations:read` / `conversations:write` |
+| Kişileri listele                        | `GET /contacts`                                             | `contacts:read`                              |
+| Kişiyi güncelle                         | `PATCH /contacts/{uuid}`                                    | `contacts:write`                             |
+| Şirketleri listele                      | `GET /companies`                                            | `companies:read`                             |
+| Tetikleyicileri yokla                   | `GET /triggers`                                             | `triggers:read`                              |
+| Webhook abonelikleri                    | `GET` / `POST /webhooks`, `PUT` / `DELETE /webhooks/{uuid}` | `webhooks:read` / `webhooks:write`           |
+| REST hook abone ol / ayrıl              | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`       | `webhooks:write`                             |
+| Şirket geliri                           | `PUT /company-revenue`                                      | `revenue:write`                              |
+| Şirket kullanım sinyali (0-100)         | `PUT /company-usage`                                        | `health:write`                               |
+| Şirket olayı                            | `POST /company-events`                                      | `events:write`                               |
+
+Gövde alanları ve yanıt şemaları [API başvurusunda](/docs/api) yer alır.
+
+## Hız sınırları ve boyutlar [#rate-limits]
+
+- Her anahtarın dakikalık bir istek limiti vardır (varsayılan 120, 1-6000 arası ayarlanabilir).
+- Limit aşılırsa `429 RATE_LIMITED` ve `Retry-After` başlığı döner; belirtilen süre kadar bekleyip tekrar deneyin.
+- İstek gövdesi en fazla 128 KB olabilir.
+- Doğrulama ve yetki hatalarında (`400`, `401`, `403`) isteği tekrar denemeyin; önce düzeltin.
+
+## SDK'lar [#sdks]
+
+ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için başlıksız bir widget istemcisi vardır. SDK'lar henüz paket olarak yayımlanmadı; her dil için kullanım örnekleri ve aynı çağrıların SDK'sız hâli [SDK'lar ve örnek kod](/docs/sdks) sayfasındadır. Yapılandırmada temel adres olarak `https://api.getclickfix.com` kullanın (sonuna `/v1` eklemeyin).
+
+SDK'lar kimlik doğrulama, sınırlı tekrar deneme, sayfalama ve webhook imza doğrulaması sağlar. Örneğin Node.js:
+
+```ts
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: "https://api.getclickfix.com",
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+await client.request(
+  "/v1/public-api/conversations",
+  "post",
+  {
+    contact_uuid: contactUUID,
+    inbox_uuid: inboxUUID,
+    subject: "Teslimat sorusu",
+  },
+  { idempotencyKey: "order-42-support" },
+);
+```
+
+## Sonraki adımlar [#next-steps]
+
+- [Webhook'lar ve imza doğrulama](/docs/webhooks)
+- [Zapier, Make ve n8n](/docs/mcp-integrations)
+- [Kendi uygulamanızı yapın](/docs/apps)
+
+## Uç nokta başvurusu [#endpoint-reference]
+
+API uç noktaları ve şemaları sol menüdeki **API başvurusu** bölümünde listelenir. Bu sayfalar yayınlanan API sözleşmesinden derleme sırasında üretilir.
+
+[API başvurusunu açın](/docs/api-reference/conversations).

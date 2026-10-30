@@ -1,0 +1,226 @@
+[
+  {
+    "source": "/ozellikler/gelistiriciler",
+    "destination": "/features/developers"
+  },
+  {
+    "source": "/ozellikler/mobil",
+    "destination": "/features/mobile"
+  },
+  {
+    "source": "/ozellikler/guvenlik",
+    "destination": "/security"
+  },
+  {
+    "source": "/ozellikler/durum-sayfasi",
+    "destination": "/features/status-page"
+  },
+  {
+    "source": "/ozellikler/analitik",
+    "destination": "/features/analytics"
+  },
+  {
+    "source": "/ozellikler/muhendislik-koprusu",
+    "destination": "/features/engineering"
+  },
+  {
+    "source": "/ozellikler/musteri-iliskileri",
+    "destination": "/features/customer-relationships"
+  },
+  {
+    "source": "/ozellikler/randevu-ve-video",
+    "destination": "/features/appointments-video"
+  },
+  {
+    "source": "/ozellikler/otomasyon",
+    "destination": "/features/automation"
+  },
+  {
+    "source": "/ozellikler/bilgi-bankasi",
+    "destination": "/features/knowledge-base"
+  },
+  {
+    "source": "/ozellikler/yapay-zeka",
+    "destination": "/features/ai"
+  },
+  {
+    "source": "/ozellikler/gelen-kutusu",
+    "destination": "/features/inbox"
+  },
+  {
+    "source": "/guvenlik/:path*",
+    "destination": "/security/:path*"
+  },
+  {
+    "source": "/hesap-silme/:path*",
+    "destination": "/account-deletion/:path*"
+  },
+  {
+    "source": "/iletisim/:path*",
+    "destination": "/contact/:path*"
+  },
+  {
+    "source": "/karsilastirma/:path*",
+    "destination": "/compare/:path*"
+  },
+  {
+    "source": "/ozellikler/:path*",
+    "destination": "/features/:path*"
+  },
+  {
+    "source": "/kurulum/:path*",
+    "destination": "/setup/:path*"
+  },
+  {
+    "source": "/baslangic",
+    "destination": "/getting-started"
+  },
+  {
+    "source": "/baslangic/:path*",
+    "destination": "/getting-started/:path*"
+  },
+  {
+    "source": "/tanitim",
+    "destination": "/"
+  },
+  {
+    "source": "/kayit",
+    "destination": "/register"
+  },
+  {
+    "source": "/platform/register",
+    "destination": "/register"
+  },
+  {
+    "source": "/platform/login/:path*",
+    "destination": "/login/:path*"
+  },
+  {
+    "source": "/yasal/kvkk",
+    "destination": "/legal/data-protection"
+  },
+  {
+    "source": "/yasal/gizlilik",
+    "destination": "/legal/privacy"
+  },
+  {
+    "source": "/yasal/kosullar",
+    "destination": "/legal/terms"
+  },
+  {
+    "source": "/yasal/cerezler",
+    "destination": "/legal/cookies"
+  },
+  {
+    "source": "/yasal/kullanim-kosullari",
+    "destination": "/legal/terms"
+  },
+  {
+    "source": "/yasal/gizlilik-politikasi",
+    "destination": "/legal/privacy"
+  },
+  {
+    "source": "/yasal/cerez-politikasi",
+    "destination": "/legal/cookies"
+  },
+  {
+    "source": "/docs/baslangic",
+    "destination": "/docs/getting-started"
+  },
+  {
+    "source": "/docs/gelen-kutusu",
+    "destination": "/docs/inbox"
+  },
+  {
+    "source": "/docs/kanallar",
+    "destination": "/docs/channels"
+  },
+  {
+    "source": "/docs/e-posta",
+    "destination": "/docs/email"
+  },
+  {
+    "source": "/docs/yapay-zeka",
+    "destination": "/docs/ai"
+  },
+  {
+    "source": "/docs/bilgi-bankasi",
+    "destination": "/docs/knowledge-base"
+  },
+  {
+    "source": "/docs/randevular",
+    "destination": "/docs/appointments"
+  },
+  {
+    "source": "/docs/video-odalari",
+    "destination": "/docs/video-rooms"
+  },
+  {
+    "source": "/docs/mcp-ve-entegrasyonlar",
+    "destination": "/docs/mcp-integrations"
+  },
+  {
+    "source": "/docs/uygulamalar",
+    "destination": "/docs/apps"
+  },
+  {
+    "source": "/docs/sms-ses",
+    "destination": "/docs/sms-voice"
+  },
+  {
+    "source": "/docs/kvkk",
+    "destination": "/docs/data-protection"
+  },
+  {
+    "source": "/docs/webhooklar",
+    "destination": "/docs/webhooks"
+  },
+  {
+    "source": "/docs/otomasyon",
+    "destination": "/docs/automation"
+  },
+  {
+    "source": "/yardim/:org/topluluk/kategori/:slug",
+    "destination": "/help/:org/community/category/:slug"
+  },
+  {
+    "source": "/yardim/:org/topluluk/konu/:slug",
+    "destination": "/help/:org/community/topic/:slug"
+  },
+  {
+    "source": "/yardim/:org/topluluk",
+    "destination": "/help/:org/community"
+  },
+  {
+    "source": "/yardim/:org/makale/:slug",
+    "destination": "/help/:org/article/:slug"
+  },
+  {
+    "source": "/yardim/:org/ara",
+    "destination": "/help/:org/search"
+  },
+  {
+    "source": "/yardim/:path*",
+    "destination": "/help/:path*"
+  },
+  {
+    "source": "/docs/arama.json",
+    "destination": "/docs/search"
+  },
+  {
+    "source": "/giris",
+    "destination": "/login"
+  },
+  {
+    "source": "/features/security",
+    "destination": "/security"
+  },
+  {
+    "source": "/pricing",
+    "destination": "/#pricing"
+  },
+  {
+    "source": "/fiyatlar",
+    "destination": "/#pricing"
+  }
+]

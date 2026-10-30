@@ -1,0 +1,61 @@
+---
+title: Email channel
+description: Connect your support mailbox to ClickFix by forwarding or over IMAP and SMTP, and verify your sender domain.
+section: channels
+order: 2
+---
+
+The email channel turns mail sent to your support address (e.g. `support@yourcompany.com`) into inbox conversations. Your replies reach the customer as email and stay in the same thread.
+
+There are two connection methods:
+
+| Method                           | When                                                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Forwarding**                   | You forward your support address to a routing address unique to you. Recommended.                           |
+| **My own mailbox (IMAP + SMTP)** | ClickFix reads your mailbox over IMAP and sends replies over SMTP. Use it when you can't set up forwarding. |
+
+## Connect with forwarding [#connect-with-forwarding]
+
+1. Choose **Channels → Add channel → Email** and set **Connection method** to **Forwarding**.
+2. In **Routing address**, enter the first part of the address (3-64 characters: lowercase letters, digits, dots or dashes). Leave it empty to have one generated.
+3. Fill in **From address** and **From name**. If the from address is empty, replies go out from the routing address.
+4. After **Connect**, the screen shows your routing address.
+5. In your mail provider (Google Workspace, Microsoft 365, Yandex, etc.) create a rule that forwards mail sent to your support address to that routing address.
+
+The Reply-To address is always the routing address, so customer replies come back to ClickFix even before you set up forwarding.
+
+### Verify your sender domain [#verify-your-sender-domain]
+
+To send replies from your own domain (`@yourcompany.com`), verify it:
+
+1. In the channel settings, enter your domain under **Sender domain** and click **Register**.
+2. Add the DNS records listed on screen at your DNS provider.
+3. Click **Verify**. Once the status is **Verified**, replies are sent from your domain.
+
+DNS changes can take from a few minutes to a few hours to propagate. If the status is **Pending verification**, try again later.
+
+### Your own SMTP server [#your-own-smtp-server]
+
+Choose **My own SMTP server** as the sending provider to send replies through your SMTP server. You'll need the SMTP host, port, username, password and TLS mode.
+
+## Connect over IMAP and SMTP [#connect-over-imap-and-smtp]
+
+1. Set **Connection method** to **My own mailbox (IMAP + SMTP)**.
+2. Under **Incoming mail (IMAP)** enter the IMAP host, port, username, password, TLS mode and the folder to read.
+3. Under **Outgoing mail (SMTP)** enter the SMTP details. The **From address** is usually the mailbox's own address.
+4. Optional settings:
+   - **Initial sync (days)**: how many days of mail to import on first connect (1-365, default 3).
+   - **Move after import**: a folder imported messages are moved to.
+   - **Mark imported messages as read**.
+5. Check the details with **Test connection**, then save.
+
+> For Gmail, Outlook and Yandex use an **app password** instead of your account password.
+
+TLS mode can be **Automatic (by port)**, **SSL/TLS** or **STARTTLS**. Passwords are stored encrypted; leave a password field empty when editing to keep the stored password.
+
+## How it works [#how-it-works]
+
+- Messages are threaded into the right conversation using the `References`, `In-Reply-To` and `Message-ID` headers.
+- Quoted history and signatures are stripped so you see the visible reply. CCs and attachments are kept.
+- Automatic replies (out-of-office, mailing lists) are ignored to prevent loops.
+- Bounced mail marks the related message as failed.

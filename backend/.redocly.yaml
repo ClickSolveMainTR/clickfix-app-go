@@ -1,0 +1,18 @@
+apis:
+  app@v1:
+    root: docs/openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  # Operation-level security is declared per route (public vs bearer).
+  security-defined: off
+  # Errors, not warnings (CF-153): reviewed exceptions live in
+  # .redocly.lint-ignore.yaml.
+  no-unused-components: error
+  operation-4xx-response: error
+  operation-operationId: error
+  operation-summary: error
+  no-server-example.com: off
+  info-license-strict: warn

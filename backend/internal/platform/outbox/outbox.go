@@ -1,0 +1,561 @@
+// Package outbox provides a transactional outbox for platform domain events.
+//
+// Domain mutations insert pending rows in the same DB transaction as the
+// business write. A Publisher claims batches (FOR UPDATE SKIP LOCKED),
+// records each event in domain_event_log, hands it to the durable Sink
+// (Asynq fan-out to idempotent consumers, see platform/eventdispatch),
+// publishes it to the in-process events.Bus, and marks rows published or
+// retries with backoff. Delivery is at least once: a crash between the sink
+// and markPublished replays the row, and the sink/consumers dedupe by event id.
+package outbox
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"math"
+	"sync"
+	"time"
+
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/dbtx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/reqid"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/safeconv"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const (
+	StatusPending   = "pending"
+	StatusPublished = "published"
+	StatusFailed    = "failed"
+
+	DefaultMaxAttempts = 8
+	DefaultBatchSize   = 50
+	DefaultInterval    = 500 * time.Millisecond
+	DefaultLease       = 30 * time.Second
+)
+
+// Enqueuer inserts an outbox row in a transaction.
+type Enqueuer interface {
+	Enqueue(ctx context.Context, tx pgx.Tx, ev events.Event) error
+}
+
+// Drainer publishes pending outbox rows to the bus.
+type Drainer interface {
+	Drain(ctx context.Context) (int, error)
+}
+
+// Row is a durable outbox record (memory or DB).
+type Row struct {
+	ID             int64
+	UUID           uuid.UUID
+	OrganizationID *int64
+	EventName      string
+	Payload        []byte
+	Status         string
+	Attempts       int32
+	LastError      string
+	AvailableAt    time.Time
+	PublishedAt    *time.Time
+	CreatedAt      time.Time
+}
+
+// envelope is stored inside payload JSONB alongside the free-form event data.
+type envelope struct {
+	RequestID   string         `json:"request_id,omitempty"`
+	EventID     uuid.UUID      `json:"event_id"`
+	Version     int            `json:"version,omitempty"`
+	TenantID    *int64         `json:"tenant_id,omitempty"`
+	ActorUserID *int64         `json:"actor_user_id,omitempty"`
+	EntityType  string         `json:"entity_type,omitempty"`
+	EntityID    *int64         `json:"entity_id,omitempty"`
+	EntityUUID  *uuid.UUID     `json:"entity_uuid,omitempty"`
+	OccurredAt  time.Time      `json:"occurred_at"`
+	Data        map[string]any `json:"data"`
+}
+
+// Sink receives every event before it is marked published. It must be
+// idempotent per EventID: a row can be handed over more than once.
+type Sink interface {
+	Fanout(ctx context.Context, ev events.Event) error
+}
+
+// Store is the Postgres-backed outbox.
+type Store struct {
+	pool *pgxpool.Pool
+	q    *db.Queries
+}
+
+// NewStore creates a Postgres outbox store.
+func NewStore(pool *pgxpool.Pool, q *db.Queries) *Store {
+	return &Store{pool: pool, q: q}
+}
+
+// Enqueue inserts a pending outbox row using tx when provided, otherwise the
+// ambient transaction from dbtx context. Returns an error if neither is set.
+func (s *Store) Enqueue(ctx context.Context, tx pgx.Tx, ev events.Event) error {
+	if s == nil {
+		return fmt.Errorf("outbox: store is nil")
+	}
+	if tx == nil {
+		var ok bool
+		tx, ok = dbtx.Tx(ctx)
+		if !ok {
+			return fmt.Errorf("outbox: transaction required")
+		}
+	}
+	return EnqueueQueries(ctx, s.q.WithTx(tx), ev)
+}
+
+// EnqueueQueries inserts a pending outbox row through q, which must be bound
+// to the caller's transaction (db.Queries.WithTx). Bulk adapters get only
+// the bound queries, not the pgx.Tx. The row uuid is the event id, so an
+// event enqueued twice (same EventID, see events.WithIdempotencyKey) is kept once.
+func EnqueueQueries(ctx context.Context, q *db.Queries, ev events.Event) error {
+	if q == nil {
+		return fmt.Errorf("outbox: queries are nil")
+	}
+	ev = normalize(ev)
+	if ev.RequestID == "" {
+		ev.RequestID = reqid.From(ctx)
+	}
+	body, err := marshalEvent(ev)
+	if err != nil {
+		return err
+	}
+	org := pgtype.Int8{}
+	if ev.TenantID != nil {
+		org = pgtype.Int8{Int64: *ev.TenantID, Valid: true}
+	}
+	if _, err := q.InsertOutboxEventIdempotent(ctx, db.InsertOutboxEventIdempotentParams{
+		Uuid:           ev.EventID,
+		EventName:      ev.Name,
+		EventVersion:   safeconv.ToInt32(ev.Version),
+		OrganizationID: org,
+		Payload:        body,
+	}); err != nil {
+		return fmt.Errorf("outbox: insert: %w", err)
+	}
+	return nil
+}
+
+func normalize(ev events.Event) events.Event {
+	if ev.EventID == uuid.Nil {
+		ev.EventID = uuid.New()
+	}
+	if ev.OccurredAt.IsZero() {
+		ev.OccurredAt = time.Now().UTC()
+	}
+	if ev.Payload == nil {
+		ev.Payload = map[string]any{}
+	}
+	if ev.Version <= 0 {
+		ev.Version = 1
+	}
+	return ev
+}
+
+func marshalEvent(ev events.Event) ([]byte, error) {
+	if ev.Version > math.MaxInt32 {
+		return nil, fmt.Errorf("outbox: event version exceeds int32 range")
+	}
+	if err := events.ValidateEventName(ev.Name); err != nil {
+		return nil, err
+	}
+	ev = normalize(ev)
+	env := envelope{
+		RequestID:   ev.RequestID,
+		EventID:     ev.EventID,
+		Version:     ev.Version,
+		TenantID:    ev.TenantID,
+		ActorUserID: ev.ActorUserID,
+		EntityType:  ev.EntityType,
+		EntityID:    ev.EntityID,
+		EntityUUID:  ev.EntityUUID,
+		OccurredAt:  ev.OccurredAt.UTC(),
+		Data:        ev.Payload,
+	}
+	body, err := json.Marshal(env)
+	if err != nil {
+		return nil, fmt.Errorf("outbox: marshal payload: %w", err)
+	}
+	return body, nil
+}
+
+// MarshalEnvelope encodes an event as the outbox JSON envelope (event id,
+// organization, actor, entity, data). Dispatchers reuse it for task payloads.
+func MarshalEnvelope(ev events.Event) ([]byte, error) {
+	return marshalEvent(ev)
+}
+
+// UnmarshalEnvelope is the inverse of MarshalEnvelope.
+func UnmarshalEnvelope(eventName string, raw []byte) (events.Event, error) {
+	return unmarshalEvent(eventName, raw)
+}
+
+func unmarshalEvent(eventName string, raw []byte) (events.Event, error) {
+	var env envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return events.Event{}, fmt.Errorf("outbox: unmarshal payload: %w", err)
+	}
+	if env.Data == nil {
+		env.Data = map[string]any{}
+	}
+	env.Data = events.NormalizeNumbers(env.Data).(map[string]any)
+	if env.Version <= 0 {
+		env.Version = 1
+	}
+	return events.Event{
+		Name:        eventName,
+		RequestID:   env.RequestID,
+		Version:     env.Version,
+		TenantID:    env.TenantID,
+		ActorUserID: env.ActorUserID,
+		EntityType:  env.EntityType,
+		EntityID:    env.EntityID,
+		EntityUUID:  env.EntityUUID,
+		Payload:     env.Data,
+		OccurredAt:  env.OccurredAt,
+		EventID:     env.EventID,
+	}, nil
+}
+
+// logEvent appends the event to domain_event_log (once per event id).
+func (s *Store) logEvent(ctx context.Context, ev events.Event) error {
+	if ev.Version > math.MaxInt32 {
+		return fmt.Errorf("outbox: event version exceeds int32 range")
+	}
+	data, err := json.Marshal(ev.Payload)
+	if err != nil {
+		return fmt.Errorf("outbox: marshal log payload: %w", err)
+	}
+	params := db.InsertDomainEventLogParams{
+		EventID:      ev.EventID,
+		EventName:    ev.Name,
+		EventVersion: safeconv.ToInt32(ev.Version),
+		Payload:      data,
+		OccurredAt:   pgtype.Timestamptz{Time: ev.OccurredAt.UTC(), Valid: true},
+	}
+	if ev.TenantID != nil {
+		params.OrganizationID = pgtype.Int8{Int64: *ev.TenantID, Valid: true}
+	}
+	if ev.ActorUserID != nil {
+		params.ActorUserID = pgtype.Int8{Int64: *ev.ActorUserID, Valid: true}
+	}
+	if ev.EntityType != "" {
+		params.EntityType = pgtype.Text{String: ev.EntityType, Valid: true}
+	}
+	if ev.EntityID != nil {
+		params.EntityID = pgtype.Int8{Int64: *ev.EntityID, Valid: true}
+	}
+	if ev.EntityUUID != nil {
+		params.EntityUuid = pgtype.UUID{Bytes: *ev.EntityUUID, Valid: true}
+	}
+	if _, err := s.q.InsertDomainEventLog(ctx, params); err != nil {
+		return fmt.Errorf("outbox: event log: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) claimBatch(ctx context.Context, limit int32, lease time.Duration) ([]Row, error) {
+	if lease <= 0 {
+		lease = DefaultLease
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("outbox: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	rows, err := s.q.WithTx(tx).ClaimOutboxEvents(ctx, db.ClaimOutboxEventsParams{
+		BatchLimit: limit,
+		LeaseMs:    lease.Milliseconds(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("outbox: claim: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("outbox: commit claim: %w", err)
+	}
+	out := make([]Row, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, rowFromDB(r))
+	}
+	return out, nil
+}
+
+func (s *Store) markPublished(ctx context.Context, id int64) error {
+	return s.q.MarkOutboxPublished(ctx, id)
+}
+
+func (s *Store) markRetry(ctx context.Context, id int64, attempts int32, lastErr string, availableAt time.Time) error {
+	return s.q.MarkOutboxRetry(ctx, db.MarkOutboxRetryParams{
+		ID:          id,
+		Attempts:    attempts,
+		LastError:   pgtype.Text{String: lastErr, Valid: lastErr != ""},
+		AvailableAt: pgtype.Timestamptz{Time: availableAt.UTC(), Valid: true},
+	})
+}
+
+func (s *Store) markFailed(ctx context.Context, id int64, attempts int32, lastErr string) error {
+	return s.q.MarkOutboxFailed(ctx, db.MarkOutboxFailedParams{
+		ID:        id,
+		Attempts:  attempts,
+		LastError: pgtype.Text{String: lastErr, Valid: lastErr != ""},
+	})
+}
+
+func rowFromDB(r db.OutboxEvent) Row {
+	out := Row{
+		ID:        r.ID,
+		UUID:      r.Uuid,
+		EventName: r.EventName,
+		Payload:   r.Payload,
+		Status:    r.Status,
+		Attempts:  r.Attempts,
+	}
+	if r.OrganizationID.Valid {
+		org := r.OrganizationID.Int64
+		out.OrganizationID = &org
+	}
+	if r.LastError.Valid {
+		out.LastError = r.LastError.String
+	}
+	if r.AvailableAt.Valid {
+		out.AvailableAt = r.AvailableAt.Time.UTC()
+	}
+	if r.PublishedAt.Valid {
+		t := r.PublishedAt.Time.UTC()
+		out.PublishedAt = &t
+	}
+	if r.CreatedAt.Valid {
+		out.CreatedAt = r.CreatedAt.Time.UTC()
+	}
+	return out
+}
+
+type backend interface {
+	claimBatch(ctx context.Context, limit int32, lease time.Duration) ([]Row, error)
+	markPublished(ctx context.Context, id int64) error
+	markRetry(ctx context.Context, id int64, attempts int32, lastErr string, availableAt time.Time) error
+	markFailed(ctx context.Context, id int64, attempts int32, lastErr string) error
+	logEvent(ctx context.Context, ev events.Event) error
+}
+
+// Publisher claims pending rows and publishes them to the bus.
+type Publisher struct {
+	store       backend
+	bus         events.Bus
+	sink        Sink
+	log         *slog.Logger
+	maxAttempts int32
+	batchSize   int32
+	interval    time.Duration
+	lease       time.Duration
+
+	mu     sync.Mutex
+	cancel context.CancelFunc
+}
+
+// PublisherOption configures a Publisher.
+type PublisherOption func(*Publisher)
+
+// WithMaxAttempts sets the attempts before status=failed.
+func WithMaxAttempts(n int) PublisherOption {
+	return func(p *Publisher) {
+		if n > 0 {
+			p.maxAttempts = safeconv.ToInt32(n)
+		}
+	}
+}
+
+// WithBatchSize sets claim batch size.
+func WithBatchSize(n int) PublisherOption {
+	return func(p *Publisher) {
+		if n > 0 {
+			p.batchSize = safeconv.ToInt32(n)
+		}
+	}
+}
+
+// WithInterval sets the ticker interval for Run.
+func WithInterval(d time.Duration) PublisherOption {
+	return func(p *Publisher) {
+		if d > 0 {
+			p.interval = d
+		}
+	}
+}
+
+// WithLease sets the claim lease duration.
+func WithLease(d time.Duration) PublisherOption {
+	return func(p *Publisher) {
+		if d > 0 {
+			p.lease = d
+		}
+	}
+}
+
+// WithSink hands every event to s (durable consumer fan-out) before it is
+// marked published; a sink error retries the row.
+func WithSink(s Sink) PublisherOption {
+	return func(p *Publisher) {
+		p.sink = s
+	}
+}
+
+// NewPublisher wires a Postgres store to the event bus.
+func NewPublisher(store *Store, bus events.Bus, log *slog.Logger, opts ...PublisherOption) *Publisher {
+	return newPublisher(store, bus, log, opts...)
+}
+
+func newPublisher(store backend, bus events.Bus, log *slog.Logger, opts ...PublisherOption) *Publisher {
+	if log == nil {
+		log = slog.Default()
+	}
+	p := &Publisher{
+		store:       store,
+		bus:         bus,
+		log:         log,
+		maxAttempts: DefaultMaxAttempts,
+		batchSize:   DefaultBatchSize,
+		interval:    DefaultInterval,
+		lease:       DefaultLease,
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// Drain claims and publishes one batch. Safe to call concurrently.
+func (p *Publisher) Drain(ctx context.Context) (int, error) {
+	if p == nil || p.store == nil || p.bus == nil {
+		return 0, nil
+	}
+	rows, err := p.store.claimBatch(ctx, p.batchSize, p.lease)
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	published := 0
+	for _, row := range rows {
+		if err := p.publishOne(ctx, row); err != nil {
+			// WARN: the row is retried with backoff; the last attempt logs
+			// outbox_event_failed_permanently at ERROR (one report).
+			p.log.Warn(
+				"outbox_publish_failed",
+				"outbox_id", row.ID,
+				"event", row.EventName,
+				"attempts", row.Attempts+1,
+				"error", err,
+			)
+			continue
+		}
+		published++
+	}
+	return published, nil
+}
+
+func (p *Publisher) publishOne(ctx context.Context, row Row) error {
+	ev, err := unmarshalEvent(row.EventName, row.Payload)
+	ctx = reqid.With(ctx, ev.RequestID)
+	if err != nil {
+		_ = p.store.markFailed(ctx, row.ID, row.Attempts+1, err.Error())
+		return err
+	}
+	if err := p.store.logEvent(ctx, ev); err != nil {
+		return p.failOrRetry(ctx, row, err)
+	}
+	if p.sink != nil {
+		if err := p.sink.Fanout(ctx, ev); err != nil {
+			return p.failOrRetry(ctx, row, err)
+		}
+	}
+	if err := p.bus.Publish(ctx, ev); err != nil {
+		return p.failOrRetry(ctx, row, err)
+	}
+	if err := p.store.markPublished(ctx, row.ID); err != nil {
+		return fmt.Errorf("outbox: mark published: %w", err)
+	}
+	return nil
+}
+
+func (p *Publisher) failOrRetry(ctx context.Context, row Row, publishErr error) error {
+	attempts := row.Attempts + 1
+	msg := publishErr.Error()
+	if attempts >= p.maxAttempts {
+		if err := p.store.markFailed(ctx, row.ID, attempts, msg); err != nil {
+			return fmt.Errorf("outbox: mark failed: %w", err)
+		}
+		p.log.Error(
+			"outbox_event_failed_permanently",
+			"outbox_id", row.ID,
+			"event", row.EventName,
+			"attempts", attempts,
+			"error", publishErr,
+		)
+		return publishErr
+	}
+	availableAt := time.Now().UTC().Add(backoff(attempts))
+	if err := p.store.markRetry(ctx, row.ID, attempts, msg, availableAt); err != nil {
+		return fmt.Errorf("outbox: mark retry: %w", err)
+	}
+	return publishErr
+}
+
+func backoff(attempts int32) time.Duration {
+	d := time.Second << (attempts - 1)
+	if d > 5*time.Minute {
+		d = 5 * time.Minute
+	}
+	if d < time.Second {
+		d = time.Second
+	}
+	return d
+}
+
+// Run polls until ctx is cancelled.
+func (p *Publisher) Run(ctx context.Context) {
+	if p == nil {
+		return
+	}
+	ticker := time.NewTicker(p.interval)
+	defer ticker.Stop()
+	for {
+		if _, err := p.Drain(ctx); err != nil && ctx.Err() == nil {
+			p.log.Error("outbox_drain_failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// StartRun launches Run in a goroutine and returns a stop function.
+func (p *Publisher) StartRun(parent context.Context) (stop func()) {
+	if p == nil {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(parent)
+	p.mu.Lock()
+	p.cancel = cancel
+	p.mu.Unlock()
+	go p.Run(ctx)
+	return func() {
+		cancel()
+		p.mu.Lock()
+		p.cancel = nil
+		p.mu.Unlock()
+	}
+}

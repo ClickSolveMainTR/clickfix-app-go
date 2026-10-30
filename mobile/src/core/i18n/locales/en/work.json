@@ -1,0 +1,15 @@
+{
+  "incidents.title": "Incidents",
+  "incidents.active": "Ongoing",
+  "incidents.resolved": "Resolved",
+  "incidents.state_resolved": "Resolved",
+  "incidents.public": "On the status page",
+  "incidents.started": "Started {{at}}",
+  "incidents.resolved_at": "Resolved {{at}}",
+  "incidents.empty": "No incidents",
+  "incidents.empty_hint": "Outages and maintenance show up here.",
+  "incidents.banner_one": "There is an ongoing incident",
+  "incidents.banner_many_one": "{{count}} ongoing incident",
+  "incidents.banner_many_other": "{{count}} ongoing incidents",
+  "incidents.open_hint": "Opens the incident details"
+}

@@ -1,0 +1,122 @@
+{
+  "key": "saas-b2b",
+  "version": 1,
+  "icon": "cloud",
+  "accent": "#4f46e5",
+  "order": 10,
+  "name": { "tr": "SaaS B2B destek", "en": "B2B SaaS support" },
+  "description": {
+    "tr": "Yazılım ürünü satan ekipler için: seviyeli destek, hata bildirimi, kurumsal SLA ve hesap yöneticisine yönlendirme.",
+    "en": "For teams selling software: tiered support, bug reports, enterprise SLAs and routing to account managers."
+  },
+  "highlights": [
+    { "tr": "L1 / L2 ekipleri ve hata etiketi", "en": "L1 / L2 teams and a bug tag" },
+    { "tr": "Kurumsal ve standart SLA", "en": "Enterprise and standard SLAs" },
+    { "tr": "Başlangıç bilgi bankası", "en": "Starter knowledge base" }
+  ],
+  "industries": ["saas", "yazılım", "software", "platform", "uygulama", "api"],
+  "plan": {
+    "version": 1,
+    "summary": { "industry": "saas", "locale": "tr", "languages": ["tr", "en"], "tone": "friendly" },
+    "branding": { "primary_color": "#4f46e5" },
+    "teams": [
+      { "key": "l1-destek", "name": "L1 Destek", "description": "İlk yanıt, hesap ve kullanım soruları", "color": "#4f46e5", "skills": ["hesap", "kullanım"] },
+      { "key": "l2-teknik", "name": "L2 Teknik", "description": "Hata ayıklama, entegrasyon ve API soruları", "color": "#0f766e", "skills": ["api", "entegrasyon"] },
+      { "key": "hesap-yonetimi", "name": "Hesap Yönetimi", "description": "Faturalandırma, yenileme ve kurumsal müşteriler", "color": "#b45309", "skills": ["fatura"] }
+    ],
+    "tags": [
+      { "name": "hata", "color": "#dc2626" },
+      { "name": "özellik-talebi", "color": "#7c3aed" },
+      { "name": "fatura", "color": "#b45309" },
+      { "name": "entegrasyon", "color": "#0f766e" },
+      { "name": "hesap-erişimi", "color": "#2563eb" },
+      { "name": "onboarding", "color": "#16a34a" }
+    ],
+    "statuses": [
+      { "name": "Geliştiricide", "slug": "gelistiricide", "category": "pending", "color": "#7c3aed" },
+      { "name": "Müşteri yanıtı bekleniyor", "slug": "musteri-yaniti", "category": "pending", "color": "#f59e0b" }
+    ],
+    "business_hours": {
+      "name": "Mesai saatleri", "timezone": "Europe/Istanbul", "holiday_country": "TR",
+      "days": [
+        { "day": "mon", "open": "09:00", "close": "18:00" }, { "day": "tue", "open": "09:00", "close": "18:00" },
+        { "day": "wed", "open": "09:00", "close": "18:00" }, { "day": "thu", "open": "09:00", "close": "18:00" },
+        { "day": "fri", "open": "09:00", "close": "18:00" }, { "day": "sat", "closed": true }, { "day": "sun", "closed": true }
+      ]
+    },
+    "sla_policies": [
+      { "name": "Kurumsal SLA", "description": "Acil ve yüksek öncelikli talepler", "priorities": ["urgent", "high"],
+        "targets": [
+          { "priority": "urgent", "first_response_minutes": 30, "next_response_minutes": 60, "resolution_minutes": 240 },
+          { "priority": "high", "first_response_minutes": 60, "next_response_minutes": 120, "resolution_minutes": 480 }
+        ] },
+      { "name": "Standart SLA", "description": "Diğer tüm talepler",
+        "targets": [
+          { "priority": "normal", "first_response_minutes": 240, "next_response_minutes": 480, "resolution_minutes": 2880 },
+          { "priority": "low", "first_response_minutes": 480, "next_response_minutes": 960, "resolution_minutes": 4320 }
+        ] }
+    ],
+    "canned_replies": [
+      { "title": "Karşılama", "shortcut": "selam", "category": "Genel", "content": "Merhaba, yazdığınız için teşekkürler! Konuyu hemen inceliyorum." },
+      { "title": "Ekran görüntüsü iste", "shortcut": "ekran", "category": "Teknik", "content": "Sorunu daha hızlı çözebilmemiz için hatanın ekran görüntüsünü ve oluştuğu saati paylaşabilir misiniz?" },
+      { "title": "Hata ekibe iletildi", "shortcut": "hata_iletildi", "category": "Teknik", "content": "Bildirdiğiniz hatayı geliştirme ekibimize ilettik. Düzeltme yayına alındığında size buradan haber vereceğiz." },
+      { "title": "Özellik talebi alındı", "shortcut": "talep", "category": "Ürün", "content": "Öneriniz için teşekkürler! Ürün ekibimizin yol haritası değerlendirmesine ekledik." },
+      { "title": "Kapanış", "shortcut": "kapanis", "category": "Genel", "content": "Sorununuz çözüldüğü için sevindik. Başka bir konuda yardıma ihtiyacınız olursa buradayız." }
+    ],
+    "macros": [
+      { "name": "Hata bildirimi", "description": "Hata etiketi ekler, önceliği yükseltir ve not düşer",
+        "actions": [ { "type": "tag", "value": "hata" }, { "type": "priority", "value": "high" }, { "type": "note", "value": "Hata olarak işaretlendi; L2 ekibine aktarılmalı." } ] },
+      { "name": "Bilgi bekleniyor", "description": "Ek bilgi ister ve beklemeye alır",
+        "actions": [ { "type": "reply", "value": "Konuyu inceleyebilmemiz için hesap e-postanızı ve hatanın adımlarını paylaşabilir misiniz?" }, { "type": "status", "value": "pending" } ] },
+      { "name": "Özellik talebini kaydet ve çöz", "description": "Talebi etiketler, teşekkür eder ve çözer",
+        "actions": [ { "type": "tag", "value": "özellik-talebi" }, { "type": "reply", "value": "Öneriniz ürün ekibimize iletildi, teşekkür ederiz!" }, { "type": "status", "value": "resolved" } ] }
+    ],
+    "custom_fields": [
+      { "entity": "conversation", "key": "urun_modulu", "label": "Ürün modülü", "type": "select", "options": ["Panel", "API", "Mobil uygulama", "Entegrasyonlar", "Faturalandırma"] },
+      { "entity": "contact", "key": "plan", "label": "Abonelik planı", "type": "select", "options": ["Ücretsiz", "Başlangıç", "Pro", "Kurumsal"] },
+      { "entity": "conversation", "key": "hata_adresi", "label": "Hatanın görüldüğü adres", "type": "url" }
+    ],
+    "forms": [
+      { "name": "Teknik destek talebi", "description": "Widget'tan gelen teknik talepler",
+        "fields": [ { "field": "email", "label": "E-posta", "required": true }, { "field": "subject", "label": "Konu", "required": true },
+          { "field": "custom:urun_modulu", "label": "Hangi modül?", "required": false }, { "field": "message", "label": "Sorunu anlatın", "required": true } ] }
+    ],
+    "knowledge": [
+      { "slug": "baslarken", "name": "Başlarken", "articles": [
+        { "slug": "hesap-olusturma", "title": "Hesabınızı oluşturun ve ekibinizi davet edin", "public": true,
+          "body": "## Hesap oluşturma\n\n1. Kayıt sayfasından iş e-postanızla hesap açın.\n2. E-postanıza gelen bağlantıyla adresinizi doğrulayın.\n3. **Ayarlar > Ekip** ekranından ekip arkadaşlarınızı davet edin.\n\nDavet edilen kişiler kendi hesaplarıyla katılır ve rolleri yetkilerini belirler." },
+        { "slug": "sifre-sifirlama", "title": "Şifremi unuttum, ne yapmalıyım?", "public": true,
+          "body": "Giriş ekranındaki **Şifremi unuttum** bağlantısına tıklayın ve e-posta adresinizi girin. Sıfırlama bağlantısı birkaç dakika içinde gelir; gelmezse spam klasörünü kontrol edin." }
+      ] },
+      { "slug": "faturalandirma", "name": "Faturalandırma", "articles": [
+        { "slug": "fatura-indirme", "title": "Faturalarımı nereden indirebilirim?", "public": true,
+          "body": "Faturalarınız **Ayarlar > Faturalandırma** ekranında listelenir. Her faturanın yanındaki indirme düğmesiyle PDF olarak alabilirsiniz." }
+      ] }
+    ],
+    "widget": { "greeting_title": "Merhaba 👋", "greeting_text": "Ürünle ilgili her sorunuzda buradayız. Ekibimiz genellikle birkaç dakika içinde yanıt verir.", "color": "#4f46e5" },
+    "ai_agent": {
+      "persona": "Ürünü çok iyi tanıyan, sabırlı ve çözüm odaklı bir destek uzmanısın. Teknik konuları sade bir dille anlatır, adım adım yönlendirirsin.",
+      "tone": "Samimi ama profesyonel; kısa paragraflar, gerektiğinde numaralı adımlar. Müşteriye 'siz' diye hitap et.",
+      "guardrails": [
+        "Fiyat indirimi, iade veya sözleşme değişikliği sözü verme; hesap yönetimi ekibine aktar.",
+        "Bilmediğin bir özelliğin var olduğunu söyleme; emin değilsen insan temsilciye devret.",
+        "Müşteriden şifre veya tam kart numarası isteme."
+      ],
+      "handoff_keywords": ["iptal", "iade", "avukat", "şikayet", "yönetici"],
+      "procedures": [
+        { "intent": "password_reset", "title": "Şifre sıfırlama", "steps": ["Müşterinin hesap e-postasını teyit et.", "Şifremi unuttum bağlantısını ve adımlarını paylaş.", "E-posta gelmezse spam klasörünü kontrol etmesini iste; yine gelmezse temsilciye devret."] },
+        { "intent": "bug_report", "title": "Hata bildirimi", "steps": ["Hatanın adımlarını, saatini ve ekran görüntüsünü iste.", "Bilinen bir sorunsa bilgi bankası makalesini paylaş.", "Değilse konuşmayı hata etiketiyle L2 ekibine devret."] }
+      ]
+    },
+    "routing_rules": [
+      { "name": "Acil talepler L2'ye", "team": "l2-teknik", "priorities": ["urgent"] },
+      { "name": "E-posta talepleri L1'e", "team": "l1-destek", "channel_types": ["email", "widget"] }
+    ],
+    "views": [
+      { "name": "Acil ve yüksek", "icon": "flame", "statuses": ["open", "pending"], "priorities": ["urgent", "high"] },
+      { "name": "Atanmamış", "icon": "inbox", "statuses": ["open"], "unassigned": true }
+    ],
+    "survey": { "name": "Çözüm sonrası memnuniyet", "question": "Destek ekibimizden aldığınız yardımdan ne kadar memnun kaldınız?" },
+    "notifications": { "email_digest": "daily", "digest_hour": 9 }
+  }
+}

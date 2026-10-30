@@ -1,0 +1,73 @@
+---
+title: KVKK tools
+description: Handle data subject requests (export and erasure), retention periods, consent records and the VERBİS inventory in ClickFix.
+section: security
+order: 1
+---
+
+ClickFix gives you tools to meet your KVKK (Turkish Personal Data Protection Law) and GDPR obligations for your customers' personal data. They live under **Organization → Privacy & GDPR** in four tabs: **Requests**, **Retention**, **Consent records** and **VERBİS inventory**.
+
+Every action on this page is written to the audit log. You need permission to edit organization settings to use it.
+
+> For your own customers, you are the data controller. ClickFix's tools make the process easier; decisions about your privacy notice, legal bases and request process are yours.
+
+## Data subject requests [#data-subject-requests]
+
+Handle requests under KVKK art. 11 (GDPR art. 15 and 17) on the **Requests** tab. Verify the requester's identity through your own process before opening a request.
+
+### Data export [#data-export]
+
+1. In **Data subject**, search for the contact by name, email or phone and select them.
+2. Click **Start data export**.
+3. The request runs in the background; follow its status in the request log.
+4. When it completes, get the file with **Download ZIP**.
+
+The ZIP contains the contact's details, conversations, messages, attachments, AI records and consent history. The download link is valid for 7 days; expired files are deleted automatically.
+
+### Erasure / anonymization [#erasure-anonymization]
+
+1. Select the contact and click **Start erasure**.
+2. In the confirmation dialog, confirm the request has been verified and click **Erase permanently**.
+
+The contact's name, contact details, channel identities, conversation and message content, attachments (including retained backup versions) and AI records are deleted or anonymized. The contact is blocked and no new consent can be recorded for them. The record skeleton stays, anonymized, so your reports aren't broken. **This cannot be undone.**
+
+Erasure covers data inside ClickFix. Review places you copied data by hand (articles you wrote, connected issue trackers (Jira, Linear, GitHub), external systems) with your own erasure procedure.
+
+## Retention [#retention]
+
+On the **Retention** tab you set expired data to be deleted or anonymized automatically:
+
+| Category             | Counted from | What is cleared                                                  |
+| -------------------- | ------------ | ---------------------------------------------------------------- |
+| Closed conversations | Closing date | Message content and contact details                              |
+| Attachments          | Upload date  | Files are deleted from storage                                   |
+| AI run logs          | Run date     | Input, output and tool call content (cost and counters are kept) |
+
+Enter a number of days for each category; categories left **Off** are kept indefinitely. Choose the action to apply when the period ends:
+
+- **Anonymize**: clears personal content and keeps the record skeleton for statistics and reports.
+- **Delete**: removes content permanently and hides it from reports too.
+
+Rules run every night in the background. Open conversations are never touched.
+
+## Consent records [#consent-records]
+
+On the **Consent records** tab you record which privacy notice version a person consented to (or withdrew from) and for which purpose:
+
+1. Select the contact and click **Record consent**.
+2. Fill in **Purpose** (e.g. marketing communication), **Decision** (consent given / withdrawn), **Privacy notice version** and **Source** (e.g. web form, call center).
+
+Records can't be edited. Withdrawing consent doesn't erase history; it's added as a new record.
+
+For İYS consent checks on commercial SMS, see [SMS and phone](/docs/sms-voice?lang=en).
+
+## VERBİS inventory [#verbis-inventory]
+
+The **VERBİS inventory** tab provides a draft inventory of the personal data categories processed in ClickFix (category, purpose, legal basis). Use it as a starting point for your VERBİS registration; recipient groups, transfers and legal bases must be reviewed and completed by you as the data controller.
+
+## Related security tools [#related-security-tools]
+
+- **Organization → Audit log**: who did what in your organization and when. Personal data in the log is masked.
+- **Organization → Support access**: let the ClickFix support team access your organization for a limited time; every action they take is written to the audit log.
+- **Organization → Security**: SSO, SCIM and IP restrictions. See [SSO and SCIM](/docs/sso-scim?lang=en).
+- Personal data is masked in AI run logs. See [AI](/docs/ai?lang=en).

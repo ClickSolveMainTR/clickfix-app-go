@@ -1,0 +1,11 @@
+{
+  "home.title": "Genel bakış",
+  "home.subtitle": "Ekibinizin konuşmaları, kanalları ve kurulum adımları burada toplanır.",
+  "home.greeting": "Merhaba {{name}}",
+  "home.eyebrow": "Organizasyon",
+  "home.empty_title": "Henüz konuşma yok",
+  "home.empty_description": "İlk kanalınızı bağladığınızda gelen müşteri mesajları burada görünür. Web widget'ı veya e-posta ile birkaç dakikada başlayabilirsiniz.",
+  "home.no_org_title": "Önce organizasyonunuzu oluşturun",
+  "home.no_org_description": "Kanallar, ekip ve konuşmalar bir organizasyona aittir. Organizasyonunuza bir ad verin, kurulum sihirbazı gerisinde size eşlik etsin.",
+  "home.no_org_action": "Organizasyon oluştur"
+}

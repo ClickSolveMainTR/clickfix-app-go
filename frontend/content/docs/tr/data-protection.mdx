@@ -1,0 +1,73 @@
+---
+title: KVKK araçları
+description: İlgili kişi başvurularını (veri dışa aktarma ve silme), saklama sürelerini, açık rıza kayıtlarını ve VERBİS envanterini ClickFix'te yönetin.
+section: security
+order: 1
+---
+
+ClickFix, müşterilerinizin kişisel verileriyle ilgili KVKK ve GDPR yükümlülüklerinizi yerine getirmenize yardımcı olan araçlar sunar. Bu araçlar **Organizasyon → Gizlilik ve KVKK** sayfasındadır ve dört sekmeden oluşur: **Başvurular**, **Saklama süreleri**, **Rıza kayıtları** ve **VERBİS envanteri**.
+
+Bu sayfadaki tüm işlemler denetim kaydına yazılır. Sayfayı kullanmak için organizasyon ayarlarını düzenleme yetkisi gerekir.
+
+> Kendi müşterileriniz açısından veri sorumlusu sizsiniz. ClickFix'in araçları süreci kolaylaştırır; aydınlatma metniniz, hukuki sebepleriniz ve başvuru sürecinizle ilgili kararlar size aittir.
+
+## İlgili kişi başvuruları [#data-subject-requests]
+
+KVKK md. 11 (GDPR md. 15 ve 17) kapsamındaki talepleri **Başvurular** sekmesinden işlersiniz. Başvuruyu açmadan önce talep edenin kimliğini kendi sürecinizle doğrulayın.
+
+### Veri dışa aktarma [#data-export]
+
+1. **İlgili kişi** alanında kişiyi ad, e-posta veya telefonla arayıp seçin.
+2. **Veri dışa aktarımı başlat**'a basın.
+3. Başvuru arka planda işlenir; durumunu **Başvuru kaydı** listesinden izleyin.
+4. Tamamlandığında **ZIP indir** ile dosyayı alın.
+
+ZIP dosyası kişinin bilgilerini, konuşmalarını, mesajlarını, dosya eklerini, yapay zekâ kayıtlarını ve rıza geçmişini içerir. İndirme bağlantısı 7 gün geçerlidir; süresi dolan dosyalar otomatik silinir.
+
+### Silme / anonimleştirme [#erasure-anonymization]
+
+1. Kişiyi seçip **Silme başlat**'a basın.
+2. Onay penceresinde talebin doğrulandığını işaretleyip **Kalıcı olarak sil** ile onaylayın.
+
+Kişinin adı, iletişim bilgileri, kanal kimlikleri, konuşma ve mesaj içerikleri, dosya ekleri (yedek sürümleri dahil) ve yapay zekâ kayıtları silinir veya anonimleştirilir. Kişi engellenir ve yeni rıza kaydı alınamaz. Raporlarınızın bozulmaması için kayıt iskeleti anonim olarak kalır. **Bu işlem geri alınamaz.**
+
+Silme işlemi ClickFix içindeki verileri kapsar. Verileri elle kopyaladığınız yerleri (ör. kendi yazdığınız bilgi bankası makaleleri, bağlı ürün talebi araçları (Jira, Linear, GitHub), dış sistemler) kendi silme prosedürünüzle ayrıca gözden geçirin.
+
+## Saklama süreleri [#retention]
+
+**Saklama süreleri** sekmesinde süresi dolan verilerin otomatik olarak silinmesini veya anonimleştirilmesini ayarlarsınız:
+
+| Kategori                   | Süre neye göre sayılır | Ne temizlenir                                                         |
+| -------------------------- | ---------------------- | --------------------------------------------------------------------- |
+| Kapanmış konuşmalar        | Kapanış tarihi         | Mesaj içerikleri ve kişi bilgisi                                      |
+| Dosya ekleri               | Yükleme tarihi         | Dosyalar depolamadan silinir                                          |
+| Yapay zekâ işlem kayıtları | Kayıt tarihi           | Girdi, çıktı ve araç çağrısı içerikleri (maliyet ve sayaçlar korunur) |
+
+Her kategori için gün sayısı girin; **Kapalı** bırakılan kategoriler süresiz saklanır. Süresi dolunca uygulanacak işlemi seçin:
+
+- **Anonimleştir**: Kişisel içeriği temizler, istatistik ve raporlar için kayıt iskeletini korur.
+- **Sil**: İçerikleri kalıcı olarak kaldırır ve raporlardan da gizler.
+
+Kurallar her gece arka planda uygulanır. Açık konuşmalara dokunulmaz.
+
+## Açık rıza kayıtları [#consent-records]
+
+**Rıza kayıtları** sekmesinde bir kişinin hangi aydınlatma metni sürümüyle hangi amaç için rıza verdiğini veya geri aldığını kayıt altına alırsınız:
+
+1. Kişiyi seçin ve **Rıza kaydı ekle**'ye basın.
+2. **Amaç** (ör. pazarlama iletişimi), **Karar** (rıza verildi / geri alındı), **Aydınlatma metni sürümü** ve **Kaynak** (ör. web formu, çağrı merkezi) alanlarını doldurun.
+
+Kayıtlar değiştirilemez. Rızanın geri alınması geçmişi silmez; yeni bir kayıt olarak eklenir.
+
+Ticari SMS gönderimlerinde İYS izin kontrolü için bkz. [SMS ve telefon](/docs/sms-voice).
+
+## VERBİS envanteri [#verbis-inventory]
+
+**VERBİS envanteri** sekmesi, ClickFix'te işlenen kişisel veri kategorileri için bir taslak envanter sunar (kategori, işleme amacı, hukuki sebep). Bu taslağı VERBİS kaydınıza temel olarak kullanabilirsiniz; alıcı grupları, aktarımlar ve hukuki sebepler veri sorumlusu olarak sizin tarafınızdan incelenip tamamlanmalıdır.
+
+## İlgili güvenlik araçları [#related-security-tools]
+
+- **Organizasyon → Denetim kaydı**: Organizasyonda kimin, ne zaman, ne yaptığı. Kayıtlardaki kişisel veriler maskelenir.
+- **Organizasyon → Destek erişimi**: ClickFix destek ekibinin organizasyonunuza sınırlı süre erişmesine izin verirsiniz; destek ekibinin her işlemi denetim kaydına yazılır.
+- **Organizasyon → Güvenlik**: SSO, SCIM ve IP kısıtlaması. Bkz. [SSO ve SCIM](/docs/sso-scim).
+- Yapay zekâ çalışma kayıtlarında kişisel veriler maskelenir. Bkz. [Yapay zekâ](/docs/ai).

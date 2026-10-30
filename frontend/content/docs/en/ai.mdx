@@ -1,0 +1,102 @@
+---
+title: AI agent and Copilot
+description: Configure the AI agent's mode, triage, procedures and tools, and use Copilot to help agents reply faster.
+section: product
+order: 1
+---
+
+AI works in two ways in ClickFix:
+
+- **AI agent**: triages customer conversations, drafts replies grounded in your knowledge base, or sends the reply itself under the conditions you choose.
+- **Copilot**: works next to the agent in the inbox; suggests replies, summarizes and edits text.
+
+AI usage is charged against the AI credits in your plan. When credits run out, the agent hands conversations over to a human.
+
+Configure the agent under **Organization → AI**. The page has four tabs: **Agent**, **Procedures**, **Tools** and **Run log**.
+
+## Mode [#mode]
+
+| Mode             | What it does                                                                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Off              | The agent writes no replies. With triage on, only topic, priority and a summary are extracted.                                                                               |
+| Summary only     | Every new message is triaged and summarized for agents; nothing is sent to the customer.                                                                                     |
+| Draft + approval | The agent drafts a reply grounded in the knowledge base; an agent approves and sends it.                                                                                     |
+| Autonomous       | Sends the reply itself when it passes the confidence threshold and can cite a source; otherwise hands over to a human with a summary. Stays silent once a human has replied. |
+
+Mode changes apply immediately. If you're new, we recommend starting with **Draft + approval** and moving to autonomous once you're happy with the reply quality.
+
+## Behavior [#behavior]
+
+- **Automatic triage**: extracts the language, intent, category, sentiment and urgency of incoming messages.
+- **Persona and tone**: your brand voice and style preferences. This text can't override safety rules.
+- **Confidence threshold**: in autonomous mode a reply is sent only when the model's confidence is above this value; otherwise it waits as a draft and is handed to a human.
+- **Handoff keywords**: if a customer message contains one of these words (e.g. "agent"), the agent hands over to a human right away.
+
+## Scope and working hours [#scope-and-working-hours]
+
+- **Channels**: the agent only works on the selected channel types. With none selected it never steps in.
+- **Categories**: when set, the agent only replies autonomously in conversations triaged into one of these categories.
+- **Reply language**, **Time zone**, **Days** and **Working hours**.
+
+You can also switch the agent on or off per channel with the **AI agent** option in each channel's **Settings**.
+
+## Knowledge source [#knowledge-source]
+
+The agent grounds customer-facing replies in the **public**, **published** articles of your knowledge base. Write your frequent questions as articles for better answers. See [Knowledge base](/docs/knowledge-base?lang=en).
+
+## Procedures [#procedures]
+
+A procedure is the steps the agent follows for a specific customer intent. For a refund request, for example: ask for the order number first, call the order tool, hand over to a human if more than 14 days have passed.
+
+1. Start with **Procedures → New procedure**.
+2. Enter the **Intent** exactly as triage produces it (e.g. `refund_request`) and pick the language. Intent and language can't be changed later.
+3. Write the title and steps, save, then publish.
+
+Only the published version is used. A procedure can't grant the agent new tools and can't override safety rules.
+
+## Tools [#tools]
+
+**Built-in tools** come with every organization and only work inside the related conversation:
+
+| Tool                   | What it does                                          |
+| ---------------------- | ----------------------------------------------------- |
+| `lookup_contact`       | Reads the contact's details in the conversation       |
+| `conversation_history` | Reads the conversation's public message history       |
+| `knowledge_search`     | Searches published knowledge base articles            |
+| `create_note`          | Adds an internal note (with agent approval)           |
+| `set_status`           | Changes the conversation status (with agent approval) |
+
+**Organization tools (HTTP)** turn an endpoint in your own system into a tool the agent can call (order, license or invoice lookup, for example):
+
+- The agent calls the tool with a JSON `POST` request.
+- The **Tool name** starts with a lowercase letter and is 3-50 characters (a-z, 0-9, \_). It can't be changed later.
+- The **Daily call limit** is between 1 and 1000.
+- With **Needs approval** on, the agent only proposes the call and an agent approves it. Keep it on for tools that change data.
+- Credentials are stored encrypted and never shown again. Tools aren't deleted; they're disabled.
+
+## Test chat and run log [#test-chat-and-run-log]
+
+In the **Test chat**, write a message as a customer would and see the agent's reply and the sources it used. Every test is a real run and uses credits.
+
+The **Run log** records every AI run with personal data masked: input, knowledge chunks, tool calls, output, tokens, cost and latency. Use it to see why a reply was given.
+
+## Safety [#safety]
+
+- The agent stops requests that look like prompt injection or would produce unsafe output.
+- When daily call, concurrency or budget limits are reached, no new run starts.
+- Set how long AI logs are kept under **Privacy & GDPR → Retention**. See [KVKK tools](/docs/data-protection?lang=en).
+
+## Copilot [#copilot]
+
+With a conversation open in the inbox, Copilot can:
+
+- **Suggest a reply** and **Summarize conversation**
+- **Rewrite**, **Translate**, **Change tone**, **Shorten** or **Expand** your draft
+- **Suggest next step**
+- **Ask Copilot**: a free-form question about the conversation
+
+Open the Copilot menu from the reply editor or with keyboard shortcuts (`?` lists them all). Copilot suggestions never reach the customer unless you send them.
+
+## AI during set-up [#ai-during-set-up]
+
+When you open a new organization, the set-up wizard can use your website and a few answers to suggest teams, SLAs, canned replies, starter articles and the agent's persona. See [Getting started](/docs/getting-started?lang=en).

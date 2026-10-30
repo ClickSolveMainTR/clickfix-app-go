@@ -1,0 +1,52 @@
+---
+title: SMS ve telefon
+description: Netgsm, İleti Merkezi veya Twilio hesabınızla SMS gönderip alın; Twilio ve Netgsm çağrılarını konuşmalara kaydedin.
+section: channels
+order: 8
+---
+
+SMS ve telefon kanalları kendi sağlayıcı hesabınızla çalışır: mevcut Netgsm, İleti Merkezi veya Twilio hesabınızın bilgilerini ClickFix'e girersiniz.
+
+## SMS [#sms]
+
+| Sağlayıcı     | Gönderim                  | Gelen SMS                       | Gerekli bilgiler                                           |
+| ------------- | ------------------------- | ------------------------------- | ---------------------------------------------------------- |
+| Netgsm        | Var (onaylı başlığınızla) | Yok                             | Abone numarası (kullanıcı kodu), API parolası, SMS başlığı |
+| İleti Merkezi | Var                       | Yok (yalnızca iletim raporları) | API anahtarı, API hash, SMS başlığı                        |
+| Twilio        | Var                       | Var                             | Account SID, Auth Token, gönderici numarası                |
+
+### Bağlama [#connect]
+
+1. **Kanallar → Kanal ekle → SMS** seçin ve sağlayıcınızı işaretleyin.
+2. **Bağlantı bilgileri** alanlarını doldurup **Bağla**'ya basın.
+3. Ekranda bir **Webhook adresi** gösterilirse sağlayıcınızın paneline yapıştırın:
+   - **İleti Merkezi**: Ayarlar → Webhook (iletim raporları).
+   - **Twilio**: Phone Numbers → numaranız → Messaging → "A message comes in" (HTTP POST).
+   - **Netgsm** ile gönderim için webhook gerekmez.
+
+Gizli anahtarlar şifreli saklanır ve bir daha gösterilmez. Ekranı kapatmadan önce gerekli değerleri kopyalayın; kaybederseniz kanal ayarlarından yeni bir webhook anahtarı üretebilirsiniz.
+
+### Ticari ileti ve İYS [#commercial-messages-and-iys]
+
+**Ticari ileti** seçeneğini açarsanız bu kanaldan giden her SMS, gönderimden önce İleti Yönetim Sistemi (İYS) iznine (MESAJ / ONAY) göre kontrol edilir. Bunun için **İYS kullanıcı adı**, **İYS parolası**, **İYS işletme kodu** ve **İYS marka kodu** alanlarını doldurun.
+
+## Telefon (sesli) [#phone-voice]
+
+Telefon kanalı, çağrılarınızı müşteri konuşmalarına kaydeder. Kayıtlar konuşmaya ek olarak düşer ve kanalın **Çağrı kaydı** ekranında listelenir.
+
+| Sağlayıcı | Ne desteklenir                                                                        |
+| --------- | ------------------------------------------------------------------------------------- |
+| Twilio    | Numaranıza gelen çağrılar, imzalı durum bildirimleri ve çağrı kayıtları               |
+| Netgsm    | Santralinizin çağrı kayıtlarını (CDR) webhook'a göndermesi. Giden arama desteklenmez. |
+
+### Bağlama [#connect-1]
+
+1. **Kanallar → Kanal ekle → Telefon (sesli)** seçin ve sağlayıcınızı işaretleyin.
+2. Bilgileri girip **Bağla**'ya basın ve gösterilen **Webhook adresi**'ni kopyalayın.
+3. Adresi sağlayıcı paneline yapıştırın:
+   - **Twilio**: Phone Numbers → numaranız → Voice → "A call comes in" ve "Call status changes" (HTTP POST).
+   - **Netgsm**: Santralinizdeki CDR / webhook ayarı.
+
+Adresteki anahtar gelen çağrıyı doğrular; adresi gizli tutun.
+
+Çağrı kaydı ekranında her çağrının yönü (gelen / giden), arayan ve aranan numara, durumu, süresi ve kaydedilip kaydedilmediği görünür.

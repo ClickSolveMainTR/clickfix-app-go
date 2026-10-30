@@ -1,0 +1,191 @@
+{
+  "schema_version": 2,
+  "color": "#4f46e5",
+  "position": "right",
+  "locale": "auto",
+  "greeting_title": "",
+  "greeting_text": "",
+  "show_team": true,
+  "team_member_uuids": [],
+  "prechat": {
+    "enabled": true,
+    "name": "optional",
+    "email": "optional",
+    "phone": "hidden",
+    "fields": [],
+    "consent": {
+      "enabled": false,
+      "required": true,
+      "text": {},
+      "url": ""
+    }
+  },
+  "business_hours": {
+    "enabled": false,
+    "timezone": "Europe/Istanbul",
+    "days": {}
+  },
+  "offline_message": "",
+  "allowed_domains": [],
+  "require_identity": false,
+  "file_upload": true,
+  "csat": true,
+  "appearance": {
+    "theme": "light",
+    "launcher_color": "",
+    "header_color": "",
+    "bubble_color": "",
+    "font": "system",
+    "radius": 16,
+    "launcher": {
+      "icon": "chat",
+      "image_url": "",
+      "label": {},
+      "size": 56,
+      "shape": "circle",
+      "offset_x": 20,
+      "offset_y": 20
+    },
+    "logo_url": "",
+    "pattern": "none",
+    "z_index": 2147483000,
+    "custom_css": "",
+    "show_branding": true
+  },
+  "texts": {
+    "en": {
+      "greeting_title": "",
+      "greeting_text": "",
+      "team_intro": "",
+      "offline_message": "",
+      "away_message": "",
+      "placeholder": ""
+    },
+    "tr": {
+      "greeting_title": "",
+      "greeting_text": "",
+      "team_intro": "",
+      "offline_message": "",
+      "away_message": "",
+      "placeholder": ""
+    }
+  },
+  "reply_time": {
+    "mode": "auto",
+    "value": "minutes"
+  },
+  "home": {
+    "cards": [
+      {
+        "id": "conversation",
+        "type": "conversation",
+        "enabled": true,
+        "title": {},
+        "description": {},
+        "url": ""
+      },
+      {
+        "id": "help_search",
+        "type": "help_search",
+        "enabled": true,
+        "title": {},
+        "description": {},
+        "url": ""
+      },
+      {
+        "id": "articles",
+        "type": "articles",
+        "enabled": true,
+        "title": {},
+        "description": {},
+        "url": ""
+      },
+      {
+        "id": "booking",
+        "type": "booking",
+        "enabled": true,
+        "title": {},
+        "description": {},
+        "url": ""
+      },
+      {
+        "id": "channels",
+        "type": "channels",
+        "enabled": true,
+        "title": {},
+        "description": {},
+        "url": ""
+      }
+    ]
+  },
+  "quick_replies": [],
+  "csat_options": {
+    "scale": "stars",
+    "comment": true,
+    "question": {}
+  },
+  "offline": {
+    "mode": "form",
+    "collect_email": true
+  },
+  "away_mode": false,
+  "channels": {
+    "chat": true,
+    "email": "",
+    "whatsapp": "",
+    "instagram": "",
+    "telegram": "",
+    "messenger": "",
+    "phone": "",
+    "callback": false,
+    "video": false
+  },
+  "ai": {
+    "enabled": true,
+    "human_button": true,
+    "handoff_keywords": []
+  },
+  "attachments": {
+    "max_mb": 10,
+    "types": [
+      "image",
+      "pdf",
+      "document",
+      "spreadsheet",
+      "text"
+    ]
+  },
+  "features": {
+    "emoji": true,
+    "typing": true,
+    "read_receipts": true,
+    "sound": true,
+    "notifications": false,
+    "markdown": true,
+    "history": true
+  },
+  "triggers": [],
+  "targeting": {
+    "show_on": [],
+    "hide_on": [],
+    "devices": "all",
+    "countries": {
+      "mode": "all",
+      "list": []
+    }
+  },
+  "privacy": {
+    "consent_required": false,
+    "cookieless": false,
+    "consent_text": {},
+    "privacy_url": "",
+    "persistence": "local"
+  },
+  "rate_limit": {
+    "messages_per_minute": 30
+  },
+  "mobile": {
+    "fullscreen": true
+  },
+  "attribute_mapping": []
+}

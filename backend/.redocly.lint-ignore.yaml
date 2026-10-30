@@ -1,0 +1,17 @@
+# Reviewed exceptions for `redocly lint` (CF-153). Every other warning fails CI
+# (.redocly.yaml raises these rules to error); add an entry only with a reason.
+docs/openapi.yaml:
+  # Unauthenticated, parameterless probes and public config: no 4xx exists.
+  operation-4xx-response:
+    - '#/paths/~1healthz/get/responses'
+    - '#/paths/~1readyz/get/responses'
+    - '#/paths/~1v1~1public~1marketing/get/responses'
+    - '#/paths/~1v1~1app~1config/get/responses'
+  # SSE event payloads of POST /v1/tenant/assistant/threads/{uuid}/messages/stream,
+  # referenced from the media type's x-events map, which Redocly does not walk.
+  # The web and mobile clients type the stream with them.
+  no-unused-components:
+    - '#/components/schemas/AssistantStreamStatus'
+    - '#/components/schemas/AssistantStreamDelta'
+    - '#/components/schemas/AssistantStreamDone'
+    - '#/components/schemas/AssistantStreamError'

@@ -1,0 +1,57 @@
+---
+title: Kanallara genel bakış
+description: ClickFix'e bağlayabileceğiniz tüm kanallar, nasıl bağlandıkları ve her kanal için ayrıntılı kurulum rehberleri.
+section: channels
+order: 1
+---
+
+Her kanal, müşterilerinizin size ulaştığı bir yoldur. Bağlanan her kanalın mesajları aynı gelen kutusunda konuşma olarak toplanır; yanıtınız mesajın geldiği kanaldan geri gider.
+
+Kanalları sol menüdeki **Kanallar** sayfasından **Kanal ekle** ile bağlarsınız.
+
+## Desteklenen kanallar [#supported-channels]
+
+| Kanal           | Nasıl bağlanır                                                | Rehber                              |
+| --------------- | ------------------------------------------------------------- | ----------------------------------- |
+| E-posta         | Yönlendirme adresi veya kendi posta kutunuz (IMAP + SMTP)     | [E-posta](/docs/email)              |
+| WhatsApp        | Meta hesabınızla giriş, WhatsApp Business numarası seçimi     | [Meta kanalları](/docs/meta)        |
+| Instagram       | Instagram profesyonel hesabıyla giriş                         | [Meta kanalları](/docs/meta)        |
+| Messenger       | Facebook ile giriş, sayfa seçimi                              | [Meta kanalları](/docs/meta)        |
+| Telegram        | BotFather'dan alınan bot token'ı                              | [Telegram](/docs/telegram)          |
+| Slack           | ClickFix'i Slack çalışma alanınıza ekleme                     | [Slack ve Teams](/docs/slack-teams) |
+| Microsoft Teams | Kendi Azure bot kaydınız                                      | [Slack ve Teams](/docs/slack-teams) |
+| Google Chat     | Kendi Google Chat uygulamanız (Cloud projesi + hizmet hesabı) | [Google Chat](/docs/google-chat)    |
+| SMS             | Kendi Netgsm, İleti Merkezi veya Twilio hesabınız             | [SMS ve telefon](/docs/sms-voice)   |
+| Telefon (sesli) | Twilio numaranız veya Netgsm santraliniz                      | [SMS ve telefon](/docs/sms-voice)   |
+| API kanalı      | İmzalı HTTP ile herhangi bir sistem                           | Bu sayfada, aşağıda                 |
+| Web widget      | Sitenize eklenen tek satır kod                                | [Web widget](/docs/web-widget)      |
+
+## Kanal ayarları [#channel-settings]
+
+Her kanalın **Ayarlar** menüsünde şunları belirlersiniz:
+
+- **AI ajanı**: Bu kanaldaki konuşmaları önce AI ajanı yanıtlasın.
+- **Otomatik karşılama**: Yeni konuşmaya giden ilk mesaj.
+- **Çalışma saatleri** ve **Saat dilimi**.
+
+## Kanal sağlığı [#channel-health]
+
+Kanallar sayfası her kanalın durumunu gösterir: son gelen mesaj, son webhook, son 24 saatteki gönderim ve hata sayısı, varsa erişim anahtarının (token) bitiş zamanı. Sağlayıcı bağlantıyı reddederse kanal **Yeniden bağlanmalı** olarak işaretlenir. **Kontrol et** ile durumu elle yenileyebilir, **Duraklat** ile kanalı geçici olarak durdurabilirsiniz.
+
+Bir kanalın bağlantısını kestiğinizde kanal yeni mesaj almaz ve gönderemez; mevcut konuşmalar silinmez.
+
+## API kanalı [#api-channel]
+
+API kanalı, ClickFix'in doğrudan desteklemediği bir sistemi (kendi uygulamanız, başka bir mesajlaşma servisi) gelen kutusuna bağlar:
+
+1. **Kanal ekle → API kanalı** ile kanalı oluşturun. Ekranda **Gelen mesaj adresi** ve bir imzalama anahtarı gösterilir. Gizli anahtarlar yalnızca bir kez gösterilir.
+2. Müşteri mesajlarını bu adrese JSON olarak POST edin.
+3. Temsilci yanıtları, aynı imzayla sizin belirttiğiniz webhook adresine gönderilir.
+
+Her istekte iki başlık bulunur: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature`. İmza şöyle hesaplanır:
+
+```text
+X-ClickFix-Signature = sha256=hex(HMAC-SHA256(anahtar, timestamp + "." + gövde))
+```
+
+Mesaj gövdesinin şeması [API başvurusunda](/docs/api) yer alır.

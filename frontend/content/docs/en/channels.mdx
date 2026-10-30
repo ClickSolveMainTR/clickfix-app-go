@@ -1,0 +1,57 @@
+---
+title: Channels overview
+description: Every channel you can connect to ClickFix, how each one connects, and links to the detailed set-up guides.
+section: channels
+order: 1
+---
+
+A channel is a way your customers reach you. Messages from every connected channel land in the same inbox as conversations, and your reply goes back through the channel the message came from.
+
+Connect channels from **Channels → Add channel** in the left menu.
+
+## Supported channels [#supported-channels]
+
+| Channel         | How it connects                                            | Guide                                        |
+| --------------- | ---------------------------------------------------------- | -------------------------------------------- |
+| Email           | Routing address or your own mailbox (IMAP + SMTP)          | [Email](/docs/email?lang=en)                 |
+| WhatsApp        | Sign in with Meta, pick a WhatsApp Business number         | [Meta channels](/docs/meta?lang=en)          |
+| Instagram       | Sign in with an Instagram professional account             | [Meta channels](/docs/meta?lang=en)          |
+| Messenger       | Sign in with Facebook, pick a page                         | [Meta channels](/docs/meta?lang=en)          |
+| Telegram        | Bot token from BotFather                                   | [Telegram](/docs/telegram?lang=en)           |
+| Slack           | Add ClickFix to your Slack workspace                       | [Slack and Teams](/docs/slack-teams?lang=en) |
+| Microsoft Teams | Your own Azure bot registration                            | [Slack and Teams](/docs/slack-teams?lang=en) |
+| Google Chat     | Your own Google Chat app (Cloud project + service account) | [Google Chat](/docs/google-chat?lang=en)     |
+| SMS             | Your own Netgsm, İleti Merkezi or Twilio account           | [SMS and phone](/docs/sms-voice?lang=en)     |
+| Phone (voice)   | Your Twilio number or Netgsm PBX                           | [SMS and phone](/docs/sms-voice?lang=en)     |
+| API channel     | Any system over signed HTTP                                | Below on this page                           |
+| Web widget      | One line of code on your site                              | [Web widget](/docs/web-widget?lang=en)       |
+
+## Channel settings [#channel-settings]
+
+Each channel's **Settings** menu lets you set:
+
+- **AI agent**: let the AI agent answer this channel's conversations first.
+- **Automatic greeting**: the first message sent to a new conversation.
+- **Business hours** and **Time zone**.
+
+## Channel health [#channel-health]
+
+The Channels page shows each channel's status: last inbound message, last webhook, messages sent and failed in the last 24 hours, and the access token expiry when there is one. If the provider rejects the connection, the channel is marked **Needs reconnect**. Use **Check** to refresh the status and **Pause** to stop a channel temporarily.
+
+When you disconnect a channel it stops receiving and sending messages; existing conversations are kept.
+
+## API channel [#api-channel]
+
+The API channel connects a system ClickFix does not support directly (your own app, another messaging service) to the inbox:
+
+1. Create it with **Add channel → API channel**. The screen shows the **Inbound message URL** and a signing secret. Secrets are shown only once.
+2. POST customer messages to that URL as JSON.
+3. Agent replies are sent to the webhook URL you provide, signed the same way.
+
+Every request carries two headers: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature`, computed as:
+
+```text
+X-ClickFix-Signature = sha256=hex(HMAC-SHA256(secret, timestamp + "." + body))
+```
+
+The message body schema is in the [API reference](/docs/api?lang=en).

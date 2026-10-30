@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS conversation_reads;
+DROP TABLE IF EXISTS conversation_participants;
+DROP TABLE IF EXISTS message_mentions;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS conversation_tags;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS conversations;
+DROP TABLE IF EXISTS conversation_counters;
+DROP TABLE IF EXISTS conversation_statuses;
+DROP TABLE IF EXISTS contact_identities;
+DROP TABLE IF EXISTS channel_instances;
+DROP TABLE IF EXISTS contacts;
+DROP TABLE IF EXISTS companies;

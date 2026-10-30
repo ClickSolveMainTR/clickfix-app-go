@@ -1,0 +1,23 @@
+{
+  "back": "Geri",
+  "cancel": "İptal",
+  "retry": "Tekrar dene",
+  "save": "Kaydet",
+  "error_generic": "Bir şeyler ters gitti. Tekrar deneyin.",
+  "offline_title": "Bağlantı yok",
+  "offline_body": "İnternet bağlantınızı kontrol edip tekrar deneyin.",
+  "load_failed": "Yüklenemedi",
+  "forbidden": "Bu bölümü görme yetkiniz yok.",
+  "search": "Ara",
+  "close": "Kapat",
+  "loading": "Yükleniyor…",
+  "no_results": "Sonuç yok.",
+  "done": "Tamam",
+  "error_network": "Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+  "error_timeout": "Sunucu zamanında yanıt vermedi. Biraz sonra tekrar deneyin.",
+  "error_invalid_response": "Sunucudan beklenmeyen bir yanıt geldi. Biraz sonra tekrar deneyin.",
+  "unreachable_banner": "Sunucuya ulaşılamıyor. Yazdıklarınız sırada, bağlantı düzelince gönderilir.",
+  "undo": "Geri al",
+  "confirm": "Uygula",
+  "filter": "Filtre"
+}

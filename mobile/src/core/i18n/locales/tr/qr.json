@@ -1,0 +1,21 @@
+{
+  "scan_title": "Web’de giriş yap",
+  "scan_subtitle": "Web panelindeki QR kodu tarayın",
+  "scan_hint": "Web panelinin giriş sayfasındaki QR kodu çerçeveye alın.",
+  "scan_unknown": "Bu bir ClickFix giriş kodu değil. Web panelindeki QR kodu tarayın.",
+  "permission_title": "Kamera izni gerekli",
+  "permission_body": "QR kodu taramak için kameraya izin verin.",
+  "permission_button": "Kameraya izin ver",
+  "title": "Web girişi onayı",
+  "body": "Bir tarayıcı {{email}} hesabıyla giriş yapmak istiyor. Bu siz değilseniz reddedin.",
+  "browser": "Tarayıcı",
+  "ip": "IP ve konum",
+  "expires": "Son geçerlilik",
+  "warning": "Yalnızca şu an önünüzdeki ekranda gördüğünüz kodu onaylayın.",
+  "approve": "Onayla",
+  "reject": "Reddet",
+  "approved": "Web’de giriş yapıldı",
+  "rejected": "Giriş isteği reddedildi",
+  "expired": "Bu QR kodunun süresi doldu ya da kullanıldı. Web panelinde yeni bir kod açın.",
+  "scan_again": "Yeniden tara"
+}

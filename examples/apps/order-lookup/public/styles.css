@@ -1,0 +1,35 @@
+:root {
+  --bg: #ffffff;
+  --fg: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --badge: #f3f4f6;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f17;
+    --fg: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #1f2937;
+    --accent: #3b82f6;
+    --badge: #1f2937;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); }
+main { padding: 12px; }
+h1 { font-size: 15px; margin: 0 0 2px; }
+.muted { color: var(--muted); font-size: 12px; margin: 0; }
+.orders { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.order { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.badge { background: var(--badge); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+.items { margin-top: 6px; font-size: 13px; }
+.actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+button { border: 0; border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; background: var(--accent); color: var(--accent-fg); }
+button.secondary { background: var(--badge); color: var(--fg); }
+button:disabled { opacity: 0.5; cursor: default; }
