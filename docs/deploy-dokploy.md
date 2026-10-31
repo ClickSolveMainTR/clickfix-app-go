@@ -12,9 +12,9 @@ compose ortam değişkenlerinde durur. Genel kurallar için `docs/DEVELOPMENT.md
 | Sunucu | Dokploy'un kendi sunucusu (uzak sunucu yok). DigitalOcean sabit IP `134.199.188.121`, droplet IP `164.90.185.156` |
 | Proje / ortam | `ClickFix` / `production` |
 | Servis | Compose `ClickFix`, Dokploy appName `clickfix-qjlddr` |
-| Kaynak | GitHub sağlayıcısı "Dokploy Getclickfix V2", repo `furkanmeclis/clickfix-app-go`, dal `main`, dosya `./compose.prod.yml` |
+| Kaynak | GitHub sağlayıcısı "Dokploy Getclickfix V2", repo `ClickSolveMainTR/clickfix-app-go`, dal `main`, dosya `./compose.prod.yml` |
 | Tetik | `tag` (otomatik deploy açık). CI'daki `release-tag` işi her yeşil `main` çalıştırmasında `v0.N` etiketi koyar ve Dokploy bu etiketle yeniden kurar |
-| Build | İmajlar sunucuda `docker compose up --build` ile derlenir (`clickfix-backend:prod`, `clickfix-frontend:prod`) |
+| İmajlar | CI'daki `publish-images` işi her yeşil `main` çalıştırmasında `ghcr.io/clicksolvemaintr/clickfix-backend` ve `clickfix-frontend` imajlarını `:main` ve `:sha-<kısa>` etiketleriyle GHCR'a gönderir. Sunucuda derleme yoktur; Dokploy imajları çeker (`pull_policy: always`). GHCR kaydı Dokploy → Registry'de `ghcr.io`, `read:packages` yetkili token ile tanımlıdır |
 
 Aynı sunucuda başka yığınlar da çalışıyor (Ledgerbot, YMG, Easytrade WhatsApp). Çakışma olmaması için tüm konteyner,
 volume ve ağ adları `NAME_PREFIX=clickfix` ile başlar. Özel ağ adı `clickfix-app`'tir. İç adresler her zaman
@@ -98,7 +98,7 @@ bilgileri (GitHub App, Apple .p8, kanal sırları) okunamaz.
 | Değişken | Değer |
 | --- | --- |
 | `NAME_PREFIX` | `clickfix` |
-| `BACKEND_IMAGE` / `FRONTEND_IMAGE` | `clickfix-backend:prod` / `clickfix-frontend:prod` |
+| `BACKEND_IMAGE` / `FRONTEND_IMAGE` | `ghcr.io/clicksolvemaintr/clickfix-backend:main` / `ghcr.io/clicksolvemaintr/clickfix-frontend:main`. Geri dönmek için `:sha-<kısa>` etiketine sabitlenir |
 | `DB_USER` / `DB_NAME` / `DB_SSLMODE` | `clickfix` / `clickfix` / `disable` |
 | `STORAGE_DRIVER` / `S3_BUCKET` / `S3_REGION` | `s3` / `clickfix` / `us-east-1` |
 | `CENTRIFUGO_WS_URL` | `wss://rt.getclickfix.com/connection/websocket` |
@@ -150,10 +150,12 @@ değişkenler sadece yerel geliştirme içindir. Üretimde `compose.prod.yml` bu
 ## Deploy akışı
 
 1. PR `main`'e birleşir, `ci` yeşil biter.
-2. `release-tag` işi `v0.N` etiketini koyar.
-3. GitHub etiket olayı Dokploy'a gelir, Dokploy `main` dalını çekip `compose.prod.yml`'i yeniden kurar:
-   imajlar derlenir, `migrate` çalışır, ardından backend, worker, worker-sync ve frontend yenilenir.
-4. Elle deploy: Dokploy → ClickFix → Deploy (veya Redeploy).
+2. `publish-images` işi backend ve frontend imajlarını GHCR'a `:main` ve `:sha-<kısa>` olarak gönderir.
+3. `release-tag` işi (imajlar gönderildikten sonra) `v0.N` etiketini koyar.
+4. GitHub etiket olayı Dokploy'a gelir, Dokploy `main` dalını çekip `compose.prod.yml`'i yeniden kurar:
+   imajlar GHCR'dan çekilir, `migrate` çalışır, ardından backend, worker, worker-sync ve frontend yenilenir.
+5. Elle deploy: Dokploy → ClickFix → Deploy (veya Redeploy).
+6. Geri dönüş: `BACKEND_IMAGE` / `FRONTEND_IMAGE` değerini önceki `:sha-<kısa>` etiketine çevirip Deploy.
 
 Kontroller:
 

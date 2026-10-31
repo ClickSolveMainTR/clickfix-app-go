@@ -542,11 +542,47 @@ jobs:
             --auto-submit --non-interactive --no-wait
           echo "EAS production build queued for $platforms (auto-submit to TestFlight / Play internal)" >> "$GITHUB_STEP_SUMMARY"
 
-  # Every green main run not cancelled by a newer push tags its HEAD with the
-  # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes.
-  release-tag:
+  # Green main runs push the backend and frontend images to GHCR as :main and
+  # :sha-<short>. Dokploy only pulls them (compose.prod.yml has no build:), so
+  # the server no longer compiles anything.
+  publish-images:
     needs: [ci]
     if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: crazy-max/ghaction-github-runtime@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend and frontend
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          short="${GITHUB_SHA::7}"
+          for svc in backend frontend; do
+            image="ghcr.io/$owner/clickfix-$svc"
+            docker buildx build "./$svc" --push \
+              --platform linux/amd64 \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              --cache-from "type=gha,scope=$svc" \
+              --cache-to "type=gha,scope=$svc,mode=max" \
+              -t "$image:main" -t "$image:sha-$short"
+            echo "pushed $image:main ($short)" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  # Every green main run not cancelled by a newer push tags its HEAD with the
+  # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls
+  # the :main images, so the tag waits until they are pushed.
+  release-tag:
+    needs: [ci, publish-images]
+    if: ${{ !failure() && needs.ci.result == 'success' && needs.publish-images.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

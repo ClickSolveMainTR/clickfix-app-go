@@ -13,17 +13,16 @@
 # like `backend` could resolve to another stack's container on dokploy-network.
 name: ${COMPOSE_PROJECT_NAME:-${NAME_PREFIX:?NAME_PREFIX is required}-prod}
 
+# Images come from GHCR (pushed by CI on every green main run). No build: here,
+# so Dokploy only pulls; `make prod-up` adds compose.build.yml to build locally.
+# Pin a rollback with e.g. BACKEND_IMAGE=ghcr.io/clicksolvemaintr/clickfix-backend:sha-abc1234.
 x-backend-image: &backend-image
   image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
-  build:
-    context: ./backend
-    dockerfile: Dockerfile
+  pull_policy: ${IMAGE_PULL_POLICY:-always}
 
 x-frontend-image: &frontend-image
   image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
-  build:
-    context: ./frontend
-    dockerfile: Dockerfile
+  pull_policy: ${IMAGE_PULL_POLICY:-always}
 
 x-backend-environment: &backend-environment
   APP_NAME: ${APP_NAME:-api}
