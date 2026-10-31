@@ -206,6 +206,7 @@
         }
       ],
       "./plugins/with-clickfix-surfaces",
+      "./plugins/with-android-proguard",
       "@bacons/apple-targets",
       [
         "react-native-android-widget",
