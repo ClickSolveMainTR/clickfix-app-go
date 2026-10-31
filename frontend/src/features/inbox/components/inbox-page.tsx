@@ -23,7 +23,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsXl } from "@/hooks/use-mobile";
 import { useApplyMacro, useMacros } from "@/features/macros/hooks/use-macros";
 import {
   usePaletteActions,
@@ -124,6 +126,8 @@ export function InboxPage() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [unread, setUnread] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const isXl = useIsXl();
   const [helpOpen, setHelpOpen] = useState(false);
   // Bulk selection (CF-51): X toggles the open conversation, the row
   // checkboxes toggle any; Esc clears.
@@ -595,19 +599,25 @@ export function InboxPage() {
               </button>
             </div>
           )}
-          <div className="flex items-center justify-between gap-2">
-            <Tabs
-              value={status}
-              onValueChange={(v) => setParams({ status: v, c: null })}
-            >
-              <TabsList className="h-7">
-                {STATUSES.map((s) => (
-                  <TabsTrigger key={s} value={s} className="h-6 px-2 text-xs">
+          <Tabs
+            value={status}
+            onValueChange={(v) => setParams({ status: v, c: null })}
+          >
+            <TabsList className="grid h-8 w-full grid-cols-4">
+              {STATUSES.map((s) => (
+                <TabsTrigger
+                  key={s}
+                  value={s}
+                  className="h-7 min-w-0 px-1.5 text-xs"
+                >
+                  <span className="truncate">
                     {t(`inbox.status_tabs.${s}`)}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <div className="flex min-w-0 items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => setUnread((u) => !u)}
@@ -688,8 +698,10 @@ export function InboxPage() {
               conversation={detail.data}
               canManage={scope.canManage}
               canAssign={scope.canAssign}
-              contextOpen={contextOpen}
-              onToggleContext={() => setContextOpen((o) => !o)}
+              contextOpen={isXl ? contextOpen : sheetOpen}
+              onToggleContext={() =>
+                isXl ? setContextOpen((o) => !o) : setSheetOpen((o) => !o)
+              }
             />
             <MessageTimeline
               conversationUuid={activeUuid}
@@ -737,14 +749,34 @@ export function InboxPage() {
       </section>
 
       {/* Pane 3: context */}
-      {activeUuid && detail.data && contextOpen && (
-        <section className="bg-muted/20 hidden w-[300px] shrink-0 border-l xl:block">
+      {activeUuid && detail.data && isXl && contextOpen && (
+        <section className="bg-muted/20 w-[320px] shrink-0 border-l">
           <ContextPanel
             conversation={detail.data}
             onOpen={(uuid) => select(uuid)}
           />
         </section>
       )}
+      {/* Below xl there is no room for a third column, so it slides in. */}
+      <Sheet
+        open={!isXl && sheetOpen && Boolean(activeUuid && detail.data)}
+        onOpenChange={setSheetOpen}
+      >
+        <SheetContent side="right" className="w-[92vw] p-0 sm:max-w-[360px]">
+          <SheetTitle className="sr-only">
+            {t("inbox.context.label")}
+          </SheetTitle>
+          {detail.data && (
+            <ContextPanel
+              conversation={detail.data}
+              onOpen={(uuid) => {
+                setSheetOpen(false);
+                select(uuid);
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
 
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
