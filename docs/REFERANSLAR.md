@@ -1,6 +1,6 @@
 # Zorunlu referanslar
 
-Bu dosya itsplan'deki "Repo kuralları ve zorunlu referanslar" dokümanının repodaki kopyasıdır. İkisi değişirse birlikte güncellenir.
+Bu dosya, repodaki zorunlu referans kurallarının tek kaynağıdır (eskiden itsplan'deki "Repo kuralları ve zorunlu referanslar" dokümanının kopyasıydı).
 
 ## Kural
 
