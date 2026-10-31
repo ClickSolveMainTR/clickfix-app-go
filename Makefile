@@ -113,7 +113,7 @@ prod-config:
 	docker compose --env-file $(PROD_ENV_FILE) -f compose.prod.yml config
 
 prod-up:
-	docker compose --env-file $(PROD_ENV_FILE) -f compose.prod.yml up -d --build
+	IMAGE_PULL_POLICY=missing docker compose --env-file $(PROD_ENV_FILE) -f compose.prod.yml -f compose.build.yml up -d --build
 
 prod-down:
 	docker compose --env-file $(PROD_ENV_FILE) -f compose.prod.yml down

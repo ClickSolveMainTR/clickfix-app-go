@@ -1,0 +1,16 @@
+# Local/self-hosted builds: `make prod-up` layers this on compose.prod.yml so
+# the images are built here instead of pulled from GHCR. Dokploy does not use it.
+x-backend-build: &backend-build
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+
+services:
+  migrate: *backend-build
+  backend: *backend-build
+  worker: *backend-build
+  worker-sync: *backend-build
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
