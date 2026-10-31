@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
 import { isApiError } from '@/core/api/errors';
-import { login, requestEmailCode } from '@/core/auth/api';
+import { login, requestEmailCode, signInWithApple } from '@/core/auth/api';
 import { useSession } from '@/core/auth/session';
 import { WEB_URL } from '@/core/config';
 import { errorMessage } from '@/core/i18n';
@@ -21,6 +21,8 @@ import { Input } from '@/ui/input';
 import { brandIn, riseIn } from '@/ui/motion';
 import { Text } from '@/ui/text';
 
+import { type AppleCredential, AppleSignInButton } from './apple-sign-in-button';
+
 const AwareScrollView = withUniwind(KeyboardAwareScrollView);
 
 /**
@@ -28,7 +30,9 @@ const AwareScrollView = withUniwind(KeyboardAwareScrollView);
  * `mobile/src/features/auth/sign-in-screen.tsx`). When the account has 2FA
  * the API answers `MFA_REQUIRED`; the same form then asks for the code and
  * sends all three again. "E-mail me a code" starts the passwordless sign-in
- * (`/v1/auth/email-code/request`) and opens the code step.
+ * (`/v1/auth/email-code/request`) and opens the code step. On iOS, Sign in
+ * with Apple posts the native `id_token` to `/v1/auth/oauth/apple/native`
+ * when the panel has it enabled; its `MFA_REQUIRED` uses the same code field.
  */
 export function SignInScreen() {
   const { t } = useTranslation('auth');
@@ -49,23 +53,45 @@ export function SignInScreen() {
     },
   });
 
+  // Kept after `MFA_REQUIRED` so the code step resends the same Apple sign-in.
+  const [appleCredential, setAppleCredential] = useState<AppleCredential | null>(null);
+  // The native Apple sheet failing (not a cancel) before any API call.
+  const [appleError, setAppleError] = useState<unknown>(null);
+  const apple = useMutation({
+    mutationFn: async ({ credential, totpCode }: { credential: AppleCredential; totpCode?: string }) => {
+      const tokens = await signInWithApple({ ...credential, totpCode });
+      await useSession.getState().signIn(tokens);
+    },
+    onError: (e, { credential }) => {
+      if (isApiError(e, 'MFA_REQUIRED')) {
+        setAppleCredential(credential);
+        setNeedsTotp(true);
+      }
+    },
+  });
+
   const code = useMutation({
     mutationFn: () => requestEmailCode(email),
     onSuccess: () => router.push({ pathname: '/code', params: { email: email.trim() } }),
   });
 
-  const failed = code.error ?? signIn.error;
+  const failed = code.error ?? signIn.error ?? apple.error ?? appleError;
   const error =
     failed && !isApiError(failed, 'MFA_REQUIRED')
-      ? errorMessage(isApiError(failed) ? failed.code : undefined)
+      ? isApiError(failed, 'OAUTH_LINK_CHOICE_REQUIRED')
+        ? t('apple_link_required')
+        : errorMessage(isApiError(failed) ? failed.code : undefined)
       : undefined;
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
-  const ready = validEmail && password && (!needsTotp || totp.trim());
+  const ready = appleCredential ? totp.trim() : validEmail && password && (!needsTotp || totp.trim());
   const submit = () => {
     if (!ready) return;
     code.reset();
-    signIn.mutate();
+    setAppleError(null);
+    if (appleCredential) apple.mutate({ credential: appleCredential, totpCode: totp });
+    else signIn.mutate();
   };
+  const busy = signIn.isPending || apple.isPending;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -142,7 +168,7 @@ export function SignInScreen() {
             icon="signIn"
             title={t('sign_in')}
             size="lg"
-            loading={signIn.isPending}
+            loading={busy}
             disabled={!ready || code.isPending}
             onPress={submit}
           />
@@ -153,15 +179,32 @@ export function SignInScreen() {
             </Text>
             <View className="h-px flex-1 bg-border" />
           </View>
+          <AppleSignInButton
+            disabled={busy || code.isPending}
+            onCredential={(credential) => {
+              signIn.reset();
+              code.reset();
+              setAppleError(null);
+              setAppleCredential(null);
+              setNeedsTotp(false);
+              setTotp('');
+              apple.mutate({ credential });
+            }}
+            onError={(e) => {
+              apple.reset();
+              setAppleError(e);
+            }}
+          />
           <Button
             icon="mail"
             title={t('email_code_cta')}
             variant="outline"
             size="lg"
             loading={code.isPending}
-            disabled={!validEmail || signIn.isPending}
+            disabled={!validEmail || busy}
             onPress={() => {
               signIn.reset();
+              apple.reset();
               code.mutate();
             }}
           />
@@ -178,11 +221,7 @@ export function SignInScreen() {
         </Animated.View>
 
         <Animated.View entering={riseIn(6)} className="flex-row justify-center gap-4">
-          <Button
-            title={t('settings:privacy')}
-            variant="ghost"
-            onPress={() => void openLegalPage('privacy')}
-          />
+          <Button title={t('settings:privacy')} variant="ghost" onPress={() => void openLegalPage('privacy')} />
           <Button title={t('settings:terms')} variant="ghost" onPress={() => void openLegalPage('terms')} />
         </Animated.View>
       </AwareScrollView>
