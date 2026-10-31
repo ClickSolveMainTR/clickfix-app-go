@@ -1,5 +1,7 @@
 {
-  "CFBundleDisplayName": "ClickFix",
-  "NSCameraUsageDescription": "ClickFix, web panelinde oturum açmak için QR kodu taramak üzere kamerayı kullanır.",
-  "NSMotionUsageDescription": "ClickFix, telefonu sallayarak geri bildirim göndermeniz için hareket sensörünü kullanır."
+  "ios": {
+    "CFBundleDisplayName": "ClickFix",
+    "NSCameraUsageDescription": "ClickFix, web panelinde oturum açmak için QR kodu taramak üzere kamerayı kullanır.",
+    "NSMotionUsageDescription": "ClickFix, telefonu sallayarak geri bildirim göndermeniz için hareket sensörünü kullanır."
+  }
 }
