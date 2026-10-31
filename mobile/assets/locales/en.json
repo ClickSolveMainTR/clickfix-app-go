@@ -1,5 +1,7 @@
 {
-  "CFBundleDisplayName": "ClickFix",
-  "NSCameraUsageDescription": "ClickFix uses the camera to scan the QR code that signs you in on the web panel.",
-  "NSMotionUsageDescription": "ClickFix uses motion so you can shake the phone to send feedback."
+  "ios": {
+    "CFBundleDisplayName": "ClickFix",
+    "NSCameraUsageDescription": "ClickFix uses the camera to scan the QR code that signs you in on the web panel.",
+    "NSMotionUsageDescription": "ClickFix uses motion so you can shake the phone to send feedback."
+  }
 }
