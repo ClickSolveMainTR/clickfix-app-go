@@ -1870,6 +1870,8 @@ export interface paths {
          *     e-mail (`owner_email`): the organization then starts without members
          *     and an owner invitation is e-mailed (same flow as staff invitations).
          *     The slug is derived from the name with Turkish folding when omitted.
+         *     With `demo_data` the organization is filled with demo content in the
+         *     background on the all-features `demo-full` plan (see the request).
          */
         post: operations["postPlatformOrganization"];
         delete?: never;
@@ -19908,6 +19910,23 @@ export interface components {
             /** @description ISO 3166-1 alpha-2 */
             country_code?: string;
             company?: components["schemas"]["OrganizationCompany"];
+            /** @description Fill the organization with fictional demo data (teams, demo staff, channels, customers, conversations, SLA, knowledge base, appointments and the other modules) in the background. Needs `platform.plans.write` as well (403 otherwise). The organization starts a 365-day trial on the hidden all-features plan `demo-full`, which is created (or republished with every catalog feature) when needed; its prices are 0, so after the trial it continues free. Not together with `trial_price_uuid` (400). The outcome is written to the organization's activity log as `organizations.demo_data_finished` or `organizations.demo_data_failed`; a failed fill leaves a partly filled organization, which is deleted and created again. Only for demo and sales organizations: the demo staff share one password, so remove them before the organization is used for real. */
+            demo_data?: boolean;
+        };
+        CreateOrganizationDemo: {
+            /**
+             * @description The fill runs in the background and usually takes under a minute.
+             * @enum {string}
+             */
+            status: "seeding";
+            /** @description Shared password of the demo staff accounts; shown once, never stored in plain text. Remove these accounts before the organization is used for real. */
+            password: string;
+            accounts: {
+                /** Format: email */
+                email: string;
+                name: string;
+                role: string;
+            }[];
         };
         CreateOrganizationResult: {
             organization: components["schemas"]["OrganizationSummary"];
@@ -19915,6 +19934,8 @@ export interface components {
             owner_invitation: components["schemas"]["Invitation"] | null;
             /** @description Profile fields (timezone, locale, country, company) that failed validation; the organization was still created. `null` when all saved. */
             profile_errors?: components["schemas"]["ErrorDetail"][] | null;
+            /** @description Demo staff logins when `demo_data` was requested, else `null`. */
+            demo?: components["schemas"]["CreateOrganizationDemo"] | null;
         };
         OwnerRef: {
             /** Format: uuid */

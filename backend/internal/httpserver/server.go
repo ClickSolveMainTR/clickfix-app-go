@@ -20,6 +20,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/config"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/demoseed"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/developerplatform"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/eventconsumers"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/inbox"
@@ -245,6 +246,9 @@ type Server struct {
 	oauthProvSvc  *oauthproviderusecase.Service
 	authSettings  *authsettingsusecase.Service
 	http          *http.Server
+
+	// demoCancel stops background demo data fills (CF-158).
+	demoCancel context.CancelFunc
 }
 
 // New wires router and middleware for the API skeleton.
@@ -413,6 +417,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	orgH.SetManagement(orgMgmt)
 	orgH.SetStorage(deps.Storage)
 	orgH.SetRegistrationLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	// Background demo fills stop when the server shuts down.
+	demoCtx, demoCancel := context.WithCancel(context.Background())
+	s.demoCancel = demoCancel
+	orgH.SetDemoSeeder(demoSeeder{demoseed.NewPlatform(demoCtx, deps.DB, billingService, searchIndexer, log)})
 	var tenantResolver orgctx.Resolver
 	if cfg.Tenancy.Enabled {
 		orgCache := orgcache.New(orgSvc, deps.Redis, cfg.Tenancy.CacheTTL, cfg.App.Env)
@@ -881,6 +889,9 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully stops the HTTP server, queue worker, and queue client.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.demoCancel != nil {
+		s.demoCancel()
+	}
 	if s.outboxStop != nil {
 		s.outboxStop()
 	}

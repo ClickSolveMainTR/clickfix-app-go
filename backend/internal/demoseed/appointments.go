@@ -22,7 +22,7 @@ func (s *seeder) seedAppointments(ctx context.Context) error {
 	}
 	definitions := []struct{ name, slug, color, location, address string }{
 		{"Ürün demosu", "urun-demosu", "blue", "video", ""},
-		{"Kurulum oturumu", "kurulum", "emerald", "in_person", "Demo · Anadolu Yazılım ofisi"},
+		{"Kurulum oturumu", "kurulum", "emerald", "in_person", s.brand() + " ofisi"},
 		{"Müşteri eğitimi", "egitim", "violet", "phone", "Telefonla görüşme"},
 	}
 	types := make([]db.AppointmentType, 0, len(definitions))

@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  Database,
   Bot,
   Building2,
   Pencil,
@@ -170,6 +171,57 @@ function CreationBanner({
   );
 }
 
+/** Demo logins left by the create wizard (shown once). */
+function DemoBanner({
+  demo,
+  onDismiss,
+}: {
+  demo: NonNullable<CreationNotice["demo"]>;
+  onDismiss: () => void;
+}) {
+  const { t } = useLocale();
+  return (
+    <div
+      role="status"
+      className="bg-primary/5 border-primary/20 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm"
+    >
+      <Database className="text-primary mt-0.5 size-4 shrink-0" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="font-medium">{t("commerce.wizard.demo.notice_title")}</p>
+        <p>{t("commerce.wizard.demo.notice_body")}</p>
+        <p>
+          {t("commerce.wizard.demo.password")}:{" "}
+          <code className="bg-muted rounded px-1.5 py-0.5 text-xs select-all">
+            {demo.password}
+          </code>
+        </p>
+        <ul className="grid gap-1 sm:grid-cols-2">
+          {demo.accounts.map((account) => (
+            <li key={account.email} className="min-w-0 truncate">
+              <span className="font-mono text-xs select-all">
+                {account.email}
+              </span>{" "}
+              <span className="text-muted-foreground text-xs">
+                · {account.name} · {account.role}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        aria-label={t("commerce.org.common.dismiss")}
+        onClick={onDismiss}
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
 /**
  * Platform organization page: header with status, plan and balances; tabs
  * Genel / Abonelik / Cüzdan ve krediler / Kullanım / Faturalar / Üyeler /
@@ -272,8 +324,20 @@ export function OrganizationDetailPage({
       ) : null}
       {org ? (
         <div className="space-y-6">
-          {notice ? (
-            <CreationBanner notice={notice} onDismiss={() => setNotice(null)} />
+          {notice?.demo ? (
+            <DemoBanner
+              demo={notice.demo}
+              onDismiss={() => setNotice({ ...notice, demo: null })}
+            />
+          ) : null}
+          {notice &&
+          (notice.profileFields.length || notice.failedCredits.length) ? (
+            <CreationBanner
+              notice={notice}
+              onDismiss={() =>
+                setNotice({ ...notice, profileFields: [], failedCredits: [] })
+              }
+            />
           ) : null}
           <EntityHeader
             leading={

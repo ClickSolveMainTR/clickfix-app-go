@@ -13,6 +13,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/storage"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/apiquery"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
@@ -35,12 +36,34 @@ type RegistrationLimiter interface {
 	AllowRegister(ctx context.Context, ip string) (bool, time.Duration)
 }
 
+// DemoAccount is one demo staff login of a demo organization.
+type DemoAccount struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Role  string `json:"role"`
+}
+
+// DemoSeeder fills organizations created with demo_data (demoseed.Platform).
+type DemoSeeder interface {
+	// TrialPrice returns the trial price of the all-features demo plan,
+	// creating the plan when the catalog does not have it.
+	TrialPrice(ctx context.Context, actor int64) (uuid.UUID, error)
+	// NewPassword returns the shared password of the demo staff.
+	NewPassword() (string, error)
+	// Accounts lists the demo logins of an organization with this slug.
+	Accounts(slug string) []DemoAccount
+	// Start fills the organization in the background; it cannot fail
+	// (the outcome lands in the organization's activity log).
+	Start(org uuid.UUID, slug, password string, actor int64)
+}
+
 type Handler struct {
 	svc      *orgusecase.Service
 	mgmt     *orgusecase.Management
 	activity *activity.Recorder
 	storage  storage.Driver
 	limiter  RegistrationLimiter
+	demo     DemoSeeder
 }
 
 func New(svc *orgusecase.Service, rec *activity.Recorder) *Handler {
@@ -52,6 +75,9 @@ func (h *Handler) SetManagement(m *orgusecase.Management) { h.mgmt = m }
 
 // SetStorage attaches object storage for organization logos.
 func (h *Handler) SetStorage(d storage.Driver) { h.storage = d }
+
+// SetDemoSeeder enables demo_data on POST /v1/platform/organizations.
+func (h *Handler) SetDemoSeeder(d DemoSeeder) { h.demo = d }
 
 // SetRegistrationLimiter limits POST /v1/invitations/{token}/register per IP.
 func (h *Handler) SetRegistrationLimiter(l RegistrationLimiter) { h.limiter = l }
@@ -103,11 +129,42 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Locale      *string           `json:"locale"`
 		CountryCode *string           `json:"country_code"`
 		Company     *orgmodel.Company `json:"company"`
+		// DemoData fills the organization with sample data on the
+		// all-features demo plan.
+		DemoData bool `json:"demo_data"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
+	// Everything that can fail for demo data happens before the organization
+	// exists, so a failure never leaves an organization behind.
+	var demoPassword string
+	if in.DemoData {
+		if h.demo == nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "demo_data", Message: "demo data is not available on this server", Code: "invalid"}})
+			return
+		}
+		// The demo plan is created or republished in the billing catalog.
+		if !p.HasPermission(rbac.PermPlatformPlansWrite) {
+			response.Forbidden(w, r, "demo data needs "+rbac.PermPlatformPlansWrite)
+			return
+		}
+		if in.TrialPriceUUID != uuid.Nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "trial_price_uuid", Message: "demo data always uses the demo-full plan; omit trial_price_uuid", Code: "invalid"}})
+			return
+		}
+		price, err := h.demo.TrialPrice(r.Context(), p.UserInternal)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		in.TrialPriceUUID = price
+		if demoPassword, err = h.demo.NewPassword(); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
 	input := orgmodel.CreateOrganizationInput{
 		TrialPriceUUID: in.TrialPriceUUID, Name: in.Name, Slug: in.Slug, OwnerUserUUID: in.OwnerUserUUID, OwnerUserID: p.UserInternal,
 	}
@@ -159,7 +216,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	response.JSON(w, r, http.StatusCreated, map[string]any{"organization": summary, "owner_invitation": invitation, "profile_errors": profileErrors})
+	var demo map[string]any
+	if in.DemoData {
+		accounts := h.demo.Accounts(org.Slug)
+		h.demo.Start(org.UUID, org.Slug, demoPassword, p.UserInternal)
+		h.record(r, "organizations.demo_data_started", &org.UUID, map[string]any{"accounts": len(accounts)})
+		demo = map[string]any{"status": "seeding", "password": demoPassword, "accounts": accounts}
+	}
+	response.JSON(w, r, http.StatusCreated, map[string]any{"organization": summary, "owner_invitation": invitation, "profile_errors": profileErrors, "demo": demo})
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
