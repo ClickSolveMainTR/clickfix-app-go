@@ -19910,7 +19910,7 @@ export interface components {
             /** @description ISO 3166-1 alpha-2 */
             country_code?: string;
             company?: components["schemas"]["OrganizationCompany"];
-            /** @description Fill the organization with fictional demo data (teams, demo staff, channels, customers, conversations, SLA, knowledge base, appointments and the other modules) in the background. Without `trial_price_uuid` the organization starts its trial on the hidden all-features plan `demo-full`, which is created (or republished with every catalog feature) when needed. */
+            /** @description Fill the organization with fictional demo data (teams, demo staff, channels, customers, conversations, SLA, knowledge base, appointments and the other modules) in the background. Needs `platform.plans.write` as well (403 otherwise). The organization starts a 365-day trial on the hidden all-features plan `demo-full`, which is created (or republished with every catalog feature) when needed; its prices are 0, so after the trial it continues free. Not together with `trial_price_uuid` (400). The outcome is written to the organization's activity log as `organizations.demo_data_finished` or `organizations.demo_data_failed`; a failed fill leaves a partly filled organization, which is deleted and created again. Only for demo and sales organizations: the demo staff share one password, so remove them before the organization is used for real. */
             demo_data?: boolean;
         };
         CreateOrganizationDemo: {
@@ -19919,7 +19919,7 @@ export interface components {
              * @enum {string}
              */
             status: "seeding";
-            /** @description Shared password of the demo staff accounts; shown once, never stored in plain text. */
+            /** @description Shared password of the demo staff accounts; shown once, never stored in plain text. Remove these accounts before the organization is used for real. */
             password: string;
             accounts: {
                 /** Format: email */

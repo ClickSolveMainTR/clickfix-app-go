@@ -181,7 +181,7 @@
   "wizard.credits.title": "Opening credits",
   "wizard.credits.video_hint": "Spent on video calls.",
   "wizard.demo.hint": "Teams, demo staff accounts, channels, customers and companies, sample conversations, SLA, macros, surveys, knowledge base, appointments and the other modules are filled with fictional Turkish data.",
-  "wizard.demo.notice_body": "Sample data is written in the background and usually finishes within a minute. The demo staff accounts are below; the password is shown only now.",
+  "wizard.demo.notice_body": "Sample data is written in the background and usually finishes within a minute. The demo staff accounts are below; the password is shown only now. The demo accounts share one password, so remove them before the organization is used for real.",
   "wizard.demo.notice_title": "Demo data is being filled",
   "wizard.demo.password": "Shared password",
   "wizard.demo.plan_name": "Demo · All features (demo-full)",

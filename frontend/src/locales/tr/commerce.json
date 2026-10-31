@@ -181,7 +181,7 @@
   "wizard.credits.title": "Başlangıç kredileri",
   "wizard.credits.video_hint": "Görüntülü görüşmelerde harcanır.",
   "wizard.demo.hint": "Ekipler, demo personel hesapları, kanallar, müşteri ve firmalar, örnek konuşmalar, SLA, makrolar, anketler, bilgi bankası, randevular ve diğer modüller kurgusal Türkçe veriyle doldurulur.",
-  "wizard.demo.notice_body": "Örnek veri arka planda yazılıyor ve genellikle bir dakika içinde tamamlanır. Demo personel hesapları aşağıda; şifre yalnızca şimdi gösterilir.",
+  "wizard.demo.notice_body": "Örnek veri arka planda yazılıyor ve genellikle bir dakika içinde tamamlanır. Demo personel hesapları aşağıda; şifre yalnızca şimdi gösterilir. Demo hesaplar ortak şifre kullandığı için organizasyon gerçek kullanıma geçmeden önce kaldırılmalı.",
   "wizard.demo.notice_title": "Demo veri dolduruluyor",
   "wizard.demo.password": "Ortak şifre",
   "wizard.demo.plan_name": "Demo · Tüm özellikler (demo-full)",

@@ -275,6 +275,32 @@ func TestPlanChangePreviewPaidActivationAndDowngrade(t *testing.T) {
 		t.Fatalf("downgrade %+v %v", downgrade, e)
 	}
 }
+
+// TestPlanChangeRejectsHiddenPlans keeps hidden plans (the free demo-full
+// plan) out of self-service plan changes; only platform billing assigns them.
+func TestPlanChangeRejectsHiddenPlans(t *testing.T) {
+	f := fixture(t)
+	configureInvoiceFixture(t, f)
+	hidden, e := f.svc.Create(f.ctx, model.PlanInput{Code: "hidden-" + uuid.NewString(), Name: "Hidden", Visibility: "hidden"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	f.input.Prices[0].Amount = 0
+	version, e := f.svc.SaveVersion(f.ctx, hidden.UUID, uuid.Nil, f.input)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if version, e = f.svc.Publish(f.ctx, hidden.UUID, version.UUID, f.actor); e != nil {
+		t.Fatal(e)
+	}
+	input := usecase.PlanChangeInput{PriceUUID: version.Prices[0].UUID, Seats: 1, IdempotencyKey: "hidden"}
+	if _, e = f.svc.PreviewPlanChange(f.ctx, f.org, input); !errors.Is(e, model.ErrNotFound) {
+		t.Fatalf("preview of a hidden plan: %v", e)
+	}
+	if _, e = f.svc.ApplyPlanChange(f.ctx, f.org, input); !errors.Is(e, model.ErrNotFound) {
+		t.Fatalf("apply of a hidden plan: %v", e)
+	}
+}
 func payWithFake(t *testing.T, f *billingFixture, p *payments.Fake, invoice uuid.UUID, key string) uuid.UUID {
 	t.Helper()
 	out, e := f.svc.Checkout(f.ctx, f.org, usecase.CheckoutInput{InvoiceUUID: invoice, Provider: "fake", IdempotencyKey: key}, payments.Buyer{Name: "Buyer", Email: "buyer@example.test", IP: "127.0.0.1"})

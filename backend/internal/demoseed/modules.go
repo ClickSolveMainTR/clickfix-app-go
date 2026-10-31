@@ -261,21 +261,33 @@ func (s *seeder) seedBrands(ctx context.Context) error {
 
 var statusSlugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{2,62}$`)
 
-func (s *seeder) statusSlug() string {
+// statusSlug picks the page slug. Status slugs are unique across the
+// installation and organizations choose their own, so the organization slug
+// is used only while no other organization's page took it.
+func (s *seeder) statusSlug(ctx context.Context) (string, error) {
+	fallback := fmt.Sprintf("durum-%d", s.org.ID)
 	slug := s.org.Slug
 	if len(slug) > 63 {
 		slug = strings.TrimRight(slug[:63], "-")
 	}
-	if statusSlugRE.MatchString(slug) {
-		return slug
+	if !statusSlugRE.MatchString(slug) {
+		return fallback, nil
 	}
-	return fmt.Sprintf("durum-%d", s.org.ID)
+	var taken bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM status_pages WHERE slug = $1 AND organization_id <> $2)`, slug, s.org.ID).Scan(&taken)
+	if err != nil || !taken {
+		return slug, err
+	}
+	return fallback, nil
 }
 
 func (s *seeder) seedStatusPage(ctx context.Context) error {
-	// The slug is globally unique: the organization slug is unique too.
+	slug, err := s.statusSlug(ctx)
+	if err != nil {
+		return err
+	}
 	if _, err := s.q.StatusSavePage(ctx, db.StatusSavePageParams{
-		OrganizationID: s.org.ID, Slug: s.statusSlug(), Title: "Anadolu Yazılım Sistem Durumu", Published: true,
+		OrganizationID: s.org.ID, Slug: slug, Title: s.brand() + " Sistem Durumu", Published: true,
 	}); err != nil {
 		return err
 	}

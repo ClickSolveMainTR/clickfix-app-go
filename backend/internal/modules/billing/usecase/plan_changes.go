@@ -36,6 +36,9 @@ func (s *Service) planPreview(ctx context.Context, r *repository.Repository, sub
 	if err != nil {
 		return out, target, err
 	}
+	if err = tenantCanBuy(ctx, r, sub, target); err != nil {
+		return out, target, err
+	}
 	current, err := r.Q.BillingGetPriceID(ctx, sub.PriceID)
 	if err != nil {
 		return out, target, err
@@ -114,6 +117,29 @@ func (s *Service) planPreview(ctx context.Context, r *repository.Repository, sub
 	}
 	return out, target, nil
 }
+
+// tenantCanBuy limits self-service plan changes to public plans. Hidden and
+// custom plans (such as the free demo-full plan) are assigned only from
+// platform billing; an organization already on such a plan may still switch
+// between that plan's own prices.
+func tenantCanBuy(ctx context.Context, r *repository.Repository, sub db.BillingSubscription, target db.BillingCommercePriceRow) error {
+	plan, err := r.Q.BillingGetPlanID(ctx, target.PlanID)
+	if err != nil {
+		return err
+	}
+	if plan.Visibility == "public" {
+		return nil
+	}
+	current, err := r.Q.BillingGetVersionID(ctx, sub.PlanVersionID)
+	if err != nil {
+		return err
+	}
+	if current.PlanID == plan.ID {
+		return nil
+	}
+	return model.ErrNotFound
+}
+
 func (s *Service) PreviewPlanChange(ctx context.Context, org int64, in PlanChangeInput) (PlanChangePreview, error) {
 	var out PlanChangePreview
 	err := s.repo.Within(ctx, func(r *repository.Repository) error {

@@ -211,6 +211,7 @@ export function OrganizationCreateWizard() {
   const create = useCreateOrganization();
   const canReadPlans = can(permissions.billing.plansRead);
   const canCredit = can(permissions.billing.subscriptionsWrite);
+  const canDemo = can(permissions.billing.plansWrite);
   const plans = usePlanCatalog(canReadPlans);
   const options = useMemo(
     () => publishedPlanOptions(plans.data?.items),
@@ -436,6 +437,7 @@ export function OrganizationCreateWizard() {
                   options={options}
                   isLoading={canReadPlans && plans.isLoading}
                   canReadPlans={canReadPlans}
+                  canDemo={canDemo}
                 />
               ) : null}
               {step === "credits" ? (

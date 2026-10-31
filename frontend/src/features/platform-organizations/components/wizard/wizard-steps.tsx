@@ -407,10 +407,13 @@ export function PlanStep({
   options,
   isLoading,
   canReadPlans,
+  canDemo,
 }: {
   options: PlanOption[];
   isLoading: boolean;
   canReadPlans: boolean;
+  /** Demo data writes the demo plan, so it needs plans write. */
+  canDemo: boolean;
 }) {
   const { t } = useLocale();
   const priceLabel = usePriceLabel();
@@ -436,7 +439,7 @@ export function PlanStep({
         title={t("commerce.wizard.plan.title")}
         description={t("commerce.wizard.plan.description")}
       />
-      <DemoDataToggle />
+      {canDemo ? <DemoDataToggle /> : null}
       {demo ? (
         <DemoPlanOutcome />
       ) : isLoading ? (

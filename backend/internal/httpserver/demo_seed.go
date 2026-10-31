@@ -16,14 +16,17 @@ func (d demoSeeder) TrialPrice(ctx context.Context, actor int64) (uuid.UUID, err
 	return d.p.TrialPrice(ctx, actor)
 }
 
-func (d demoSeeder) Start(org uuid.UUID) (string, []orghandler.DemoAccount, error) {
-	res, err := d.p.Start(org)
-	if err != nil {
-		return "", nil, err
+func (d demoSeeder) NewPassword() (string, error) { return d.p.NewPassword() }
+
+func (d demoSeeder) Accounts(slug string) []orghandler.DemoAccount {
+	src := demoseed.Accounts(slug)
+	out := make([]orghandler.DemoAccount, 0, len(src))
+	for _, a := range src {
+		out = append(out, orghandler.DemoAccount(a))
 	}
-	accounts := make([]orghandler.DemoAccount, 0, len(res.Accounts))
-	for _, a := range res.Accounts {
-		accounts = append(accounts, orghandler.DemoAccount(a))
-	}
-	return res.Password, accounts, nil
+	return out
+}
+
+func (d demoSeeder) Start(org uuid.UUID, slug, password string, actor int64) {
+	d.p.Start(org, slug, password, actor)
 }

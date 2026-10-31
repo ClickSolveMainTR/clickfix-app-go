@@ -13,6 +13,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/storage"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/apiquery"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
@@ -47,9 +48,13 @@ type DemoSeeder interface {
 	// TrialPrice returns the trial price of the all-features demo plan,
 	// creating the plan when the catalog does not have it.
 	TrialPrice(ctx context.Context, actor int64) (uuid.UUID, error)
-	// Start fills the organization in the background and returns the demo
-	// logins with their shared password.
-	Start(org uuid.UUID) (password string, accounts []DemoAccount, err error)
+	// NewPassword returns the shared password of the demo staff.
+	NewPassword() (string, error)
+	// Accounts lists the demo logins of an organization with this slug.
+	Accounts(slug string) []DemoAccount
+	// Start fills the organization in the background; it cannot fail
+	// (the outcome lands in the organization's activity log).
+	Start(org uuid.UUID, slug, password string, actor int64)
 }
 
 type Handler struct {
@@ -132,18 +137,32 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := authctx.MustPrincipal(r.Context())
+	// Everything that can fail for demo data happens before the organization
+	// exists, so a failure never leaves an organization behind.
+	var demoPassword string
 	if in.DemoData {
 		if h.demo == nil {
 			response.ValidationError(w, r, []response.Detail{{Field: "demo_data", Message: "demo data is not available on this server", Code: "invalid"}})
 			return
 		}
-		if in.TrialPriceUUID == uuid.Nil {
-			price, err := h.demo.TrialPrice(r.Context(), p.UserInternal)
-			if err != nil {
-				writeError(w, r, err)
-				return
-			}
-			in.TrialPriceUUID = price
+		// The demo plan is created or republished in the billing catalog.
+		if !p.HasPermission(rbac.PermPlatformPlansWrite) {
+			response.Forbidden(w, r, "demo data needs "+rbac.PermPlatformPlansWrite)
+			return
+		}
+		if in.TrialPriceUUID != uuid.Nil {
+			response.ValidationError(w, r, []response.Detail{{Field: "trial_price_uuid", Message: "demo data always uses the demo-full plan; omit trial_price_uuid", Code: "invalid"}})
+			return
+		}
+		price, err := h.demo.TrialPrice(r.Context(), p.UserInternal)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		in.TrialPriceUUID = price
+		if demoPassword, err = h.demo.NewPassword(); err != nil {
+			writeError(w, r, err)
+			return
 		}
 	}
 	input := orgmodel.CreateOrganizationInput{
@@ -199,13 +218,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	var demo map[string]any
 	if in.DemoData {
-		pw, accounts, derr := h.demo.Start(org.UUID)
-		if derr != nil {
-			writeError(w, r, derr)
-			return
-		}
+		accounts := h.demo.Accounts(org.Slug)
+		h.demo.Start(org.UUID, org.Slug, demoPassword, p.UserInternal)
 		h.record(r, "organizations.demo_data_started", &org.UUID, map[string]any{"accounts": len(accounts)})
-		demo = map[string]any{"status": "seeding", "password": pw, "accounts": accounts}
+		demo = map[string]any{"status": "seeding", "password": demoPassword, "accounts": accounts}
 	}
 	response.JSON(w, r, http.StatusCreated, map[string]any{"organization": summary, "owner_invitation": invitation, "profile_errors": profileErrors, "demo": demo})
 }

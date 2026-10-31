@@ -13,6 +13,8 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	billingmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
 	billingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 )
 
 const (
@@ -34,18 +36,21 @@ type Reindexer interface {
 // Platform fills organizations created from the platform wizard with demo
 // data (POST /v1/platform/organizations with demo_data).
 type Platform struct {
+	// base is cancelled when the API shuts down, so a fill in flight stops.
+	base    context.Context
 	pool    *pgxpool.Pool
 	billing *billingusecase.Service
 	search  Reindexer
 	log     *slog.Logger
 }
 
-// NewPlatform wires the platform demo seeder; search may be nil.
-func NewPlatform(pool *pgxpool.Pool, billing *billingusecase.Service, search Reindexer, log *slog.Logger) *Platform {
+// NewPlatform wires the platform demo seeder; search may be nil. base bounds
+// background fills (cancel it on shutdown).
+func NewPlatform(base context.Context, pool *pgxpool.Pool, billing *billingusecase.Service, search Reindexer, log *slog.Logger) *Platform {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Platform{pool: pool, billing: billing, search: search, log: log}
+	return &Platform{base: base, pool: pool, billing: billing, search: search, log: log}
 }
 
 // TrialPrice returns the trial price of the published FullPlanCode plan,
@@ -55,49 +60,83 @@ func (p *Platform) TrialPrice(ctx context.Context, actor int64) (uuid.UUID, erro
 	return EnsureFullPlan(ctx, p.billing, actor)
 }
 
-// Start prepares the demo accounts of a freshly created organization and
-// fills it in the background (a full fill takes longer than an HTTP write
-// timeout). The returned accounts can sign in once the fill finishes.
-func (p *Platform) Start(orgUUID uuid.UUID) (Result, error) {
-	pw, err := GeneratePassword()
-	if err != nil {
-		return Result{}, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), seedTimeout)
-	org, err := db.New(p.pool).GetOrganizationByUUID(ctx, orgUUID)
-	if err != nil {
-		cancel()
-		return Result{}, err
-	}
-	s := &seeder{tenant: true, org: org, domain: tenantDomain(org.Slug), opts: Options{Password: pw}}
-	res := Result{OrganizationUUID: org.Uuid, OrganizationSlug: org.Slug, Created: true, Password: pw, Accounts: s.accounts()}
+// NewPassword returns the shared password of a new demo organization's
+// staff. It is generated before the organization is created so nothing can
+// fail after the creation.
+func (p *Platform) NewPassword() (string, error) { return GeneratePassword() }
+
+// Accounts lists the demo logins an organization with this slug gets.
+func Accounts(slug string) []Account {
+	return (&seeder{tenant: true, domain: tenantDomain(slug)}).accounts()
+}
+
+// Start fills a freshly created organization in the background (a full fill
+// can outlast an HTTP write timeout). The outcome is logged and written to
+// the organization's activity log (organizations.demo_data_finished /
+// organizations.demo_data_failed); a failed fill leaves a partly filled
+// organization, which is deleted and created again.
+func (p *Platform) Start(org uuid.UUID, slug, pw string, actor int64) {
+	p.log.Info("demo_seed_started", "organization", org, "slug", slug)
 	go func() {
+		ctx, cancel := context.WithTimeout(p.base, seedTimeout)
 		defer cancel()
 		started := time.Now()
-		out, err := SeedOrganization(ctx, p.pool, orgUUID, Options{Password: pw, Log: p.log})
+		var (
+			out Result
+			err error
+		)
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("panic: %v", r)
+				}
+			}()
+			out, err = seedOrganization(ctx, p.pool, org, Options{Password: pw, Log: p.log})
+		}()
+		var payload map[string]any
+		action := "organizations.demo_data_finished"
 		if err != nil {
-			p.log.Error("demo_seed_failed", "organization", orgUUID, "error", err)
-			return
+			p.log.Error("demo_seed_failed", "organization", org, "error", err)
+			action, payload = "organizations.demo_data_failed", map[string]any{"error": err.Error()}
+		} else {
+			p.log.Info("demo_seed_finished", "organization", org, "conversations", out.Conversations,
+				"articles", out.Articles, "duration", time.Since(started).Round(time.Millisecond))
+			payload = map[string]any{"conversations": out.Conversations, "articles": out.Articles}
+			// The reindex is queued (or run inline without a queue) before cancel.
+			if p.search != nil {
+				p.search.EnqueueReindex(ctx, "")
+			}
 		}
-		if p.search != nil {
-			p.search.EnqueueReindex(ctx, "")
+		// Record with a fresh context: the fill's may be cancelled or timed out.
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer rcancel()
+		q := db.New(p.pool)
+		if row, lerr := q.GetOrganizationByUUID(rctx, org); lerr == nil {
+			activity.NewRecorder(q, p.log).Record(orgctx.WithOrganizationID(rctx, row.ID), &actor, action,
+				"platform.organizations", &org, payload, nil)
 		}
-		p.log.Info("demo_seed_finished", "organization", orgUUID, "conversations", out.Conversations,
-			"articles", out.Articles, "duration", time.Since(started).Round(time.Millisecond))
 	}()
-	return res, nil
 }
 
 // tenantDomain is the e-mail domain of a customer organization's demo staff.
 func tenantDomain(slug string) string { return slug + ".demo.example.com" }
 
-// SeedOrganization fills an existing, freshly created organization with the
+// seedOrganization fills an existing, freshly created organization with the
 // demo content. The organization keeps its owner; the demo staff join with
 // their roles (the demo owner as admin) and the setup wizard is marked done.
-func SeedOrganization(ctx context.Context, pool *pgxpool.Pool, orgUUID uuid.UUID, opts Options) (Result, error) {
+// It refuses an organization that already has conversations, so it never
+// mixes demo rows into a customer's real data.
+func seedOrganization(ctx context.Context, pool *pgxpool.Pool, orgUUID uuid.UUID, opts Options) (Result, error) {
 	org, err := db.New(pool).GetOrganizationByUUID(ctx, orgUUID)
 	if err != nil {
 		return Result{}, fmt.Errorf("organization: %w", err)
+	}
+	var used bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM conversations WHERE organization_id = $1)`, org.ID).Scan(&used); err != nil {
+		return Result{}, err
+	}
+	if used {
+		return Result{}, fmt.Errorf("organization %s already has conversations; demo data is only written into new organizations", org.Slug)
 	}
 	s, err := newSeeder(pool, opts, tenantDomain(org.Slug))
 	if err != nil {
