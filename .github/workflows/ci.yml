@@ -493,44 +493,54 @@ jobs:
         if: ${{ !failure() && steps.changed.outputs.run == 'true' }}
         working-directory: mobile
         run: npm ci
+      # Checked per platform: a platform with no finished store build yet, or
+      # whose native fingerprint changed, gets a build; the other gets an OTA update.
       - name: Fingerprint vs latest store build
         if: ${{ !failure() && steps.changed.outputs.run == 'true' }}
         id: fp
         working-directory: mobile
         run: |
-          last=$(npx eas-cli@latest build:list -p ios --status finished \
-            --distribution store --limit 1 --json --non-interactive \
-            | sed -n '/^\[/,$p' | jq -r '.[0].id // empty')
-          if [ -z "$last" ]; then
-            echo "no finished store build on EAS yet -> build"
-            echo "mode=build" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          cmp=$(npx eas-cli@latest fingerprint:compare --build-id "$last" \
-            --environment production --json --non-interactive | sed -n '/^{/,$p')
-          remote=$(jq -r '.fingerprint1.hash // empty' <<<"$cmp")
-          local=$(jq -r '.fingerprint2.hash // empty' <<<"$cmp")
-          echo "latest build $last fingerprint=$remote local=$local"
-          if [ -n "$remote" ] && [ "$remote" = "$local" ]; then
-            echo "mode=update" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=build" >> "$GITHUB_OUTPUT"
-          fi
-          echo "last=$last" >> "$GITHUB_OUTPUT"
+          build=""; update=""
+          for p in ios android; do
+            last=$(npx eas-cli@latest build:list -p "$p" --status finished \
+              --distribution store --limit 1 --json --non-interactive \
+              | sed -n '/^\[/,$p' | jq -r '.[0].id // empty')
+            if [ -z "$last" ]; then
+              echo "$p: no finished store build on EAS yet -> build"
+              build="$build $p"; continue
+            fi
+            cmp=$(npx eas-cli@latest fingerprint:compare --build-id "$last" \
+              --environment production --json --non-interactive | sed -n '/^{/,$p')
+            remote=$(jq -r '.fingerprint1.hash // empty' <<<"$cmp")
+            local=$(jq -r '.fingerprint2.hash // empty' <<<"$cmp")
+            echo "$p: latest build $last fingerprint=$remote local=$local"
+            if [ -n "$remote" ] && [ "$remote" = "$local" ]; then
+              update="$update $p"
+            else
+              build="$build $p"
+            fi
+          done
+          echo "build=${build# }" >> "$GITHUB_OUTPUT"
+          echo "update=${update# }" >> "$GITHUB_OUTPUT"
       - name: OTA update (fingerprint unchanged)
-        if: ${{ !failure() && steps.fp.outputs.mode == 'update' }}
+        if: ${{ !failure() && steps.fp.outputs.update != '' }}
         working-directory: mobile
         run: |
-          npx eas-cli@latest update --channel production --platform all \
-            --environment production --non-interactive \
-            --message "${GITHUB_SHA::8}: $(git log -1 --format=%s | cut -c1-100)"
-          echo "EAS OTA update published to channel production" >> "$GITHUB_STEP_SUMMARY"
+          for p in ${{ steps.fp.outputs.update }}; do
+            npx eas-cli@latest update --channel production --platform "$p" \
+              --environment production --non-interactive \
+              --message "${GITHUB_SHA::8}: $(git log -1 --format=%s | cut -c1-100)"
+            echo "EAS OTA update published to channel production ($p)" >> "$GITHUB_STEP_SUMMARY"
+          done
       - name: EAS build + store submit (fingerprint changed)
-        if: ${{ !failure() && steps.fp.outputs.mode == 'build' }}
+        if: ${{ !failure() && steps.fp.outputs.build != '' }}
         working-directory: mobile
         run: |
-          npx eas-cli@latest build -p all --profile production \
+          platforms="${{ steps.fp.outputs.build }}"
+          [ "$platforms" = "ios android" ] && platforms=all
+          npx eas-cli@latest build -p "$platforms" --profile production \
             --auto-submit --non-interactive --no-wait
-          echo "EAS production build queued (auto-submit to TestFlight and Play internal)" >> "$GITHUB_STEP_SUMMARY"
+          echo "EAS production build queued for $platforms (auto-submit to TestFlight / Play internal)" >> "$GITHUB_STEP_SUMMARY"
 
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes.

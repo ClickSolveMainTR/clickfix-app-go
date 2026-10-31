@@ -1,1 +1,3 @@
 **/*.test.ts
+# EAS writes file env vars (google-services.json) here; local `eas build` never has them.
+**/eas-environment-secrets/**
