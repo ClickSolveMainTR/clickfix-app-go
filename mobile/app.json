@@ -2,6 +2,7 @@
   "expo": {
     "name": "ClickFix",
     "slug": "clickfix",
+    "owner": "getclickfix",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,6 +10,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.getclickfix.app",
+      "appleTeamId": "42UJB2ZNC5",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -247,7 +249,13 @@
     },
     "updates": {
       "checkAutomatically": "NEVER",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/27090ce5-f699-441d-9423-33b82417d300"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "27090ce5-f699-441d-9423-33b82417d300"
+      }
     }
   }
 }
