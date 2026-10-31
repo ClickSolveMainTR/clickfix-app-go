@@ -84,6 +84,7 @@ export function createOrganizationWizardSchema(t: Translate) {
       owner_user_uuid: z.string(),
       owner_email: z.string().trim(),
       plan_mode: z.enum(["default", "choose"]),
+      demo_data: z.boolean(),
       price_uuid: z.string(),
       ai_credits: count,
       video_minutes: count,
@@ -115,7 +116,11 @@ export function createOrganizationWizardSchema(t: Translate) {
           message: t("organizations.validation.owner_email_invalid"),
         });
       }
-      if (values.plan_mode === "choose" && !values.price_uuid) {
+      if (
+        !values.demo_data &&
+        values.plan_mode === "choose" &&
+        !values.price_uuid
+      ) {
         ctx.addIssue({
           code: "custom",
           path: ["price_uuid"],
@@ -155,6 +160,7 @@ export const WIZARD_DEFAULTS: OrganizationWizardValues = {
   owner_user_uuid: "",
   owner_email: "",
   plan_mode: "default",
+  demo_data: false,
   price_uuid: "",
   ai_credits: "",
   video_minutes: "",
@@ -179,7 +185,7 @@ export const STEP_FIELDS: Record<WizardStep, string[]> = {
     "company.website",
   ],
   owner: ["owner_mode", "owner_user_uuid", "owner_email"],
-  plan: ["plan_mode", "price_uuid"],
+  plan: ["plan_mode", "demo_data", "price_uuid"],
   credits: ["ai_credits", "video_minutes", "credit_reason"],
   region: ["locale", "timezone", "country_code"],
   review: [],

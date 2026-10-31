@@ -304,9 +304,11 @@ export function OrganizationCreateWizard() {
       ...(values.owner_mode === "existing"
         ? { owner_user_uuid: values.owner_user_uuid }
         : { owner_email: values.owner_email.trim() }),
-      ...(values.plan_mode === "choose" && values.price_uuid
-        ? { trial_price_uuid: values.price_uuid }
-        : {}),
+      ...(values.demo_data
+        ? { demo_data: true }
+        : values.plan_mode === "choose" && values.price_uuid
+          ? { trial_price_uuid: values.price_uuid }
+          : {}),
       locale: values.locale,
       timezone: values.timezone,
       country_code: values.country_code,
@@ -366,7 +368,12 @@ export function OrganizationCreateWizard() {
         }),
       );
     }
-    saveCreationNotice(uuid, { profileFields, failedCredits });
+    if (result.demo) appToast.success(t("commerce.wizard.demo.toast"));
+    saveCreationNotice(uuid, {
+      profileFields,
+      failedCredits,
+      demo: result.demo ?? null,
+    });
     router.push(routes.platform.organizations.detail(uuid));
   };
 

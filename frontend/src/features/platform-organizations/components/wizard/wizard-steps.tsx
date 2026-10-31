@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarClock,
   CircleDollarSign,
+  Database,
   Globe,
   Hash,
   Landmark,
@@ -38,6 +39,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   ChoiceCard,
   ChoiceCards,
@@ -345,6 +347,62 @@ export function PlanOutcome({
   );
 }
 
+/** "Fill with demo data": seeds every module on the all-features plan. */
+function DemoDataToggle() {
+  const { t } = useLocale();
+  const { control, setValue } = useFormContext<OrganizationWizardValues>();
+  return (
+    <Controller
+      control={control}
+      name="demo_data"
+      render={({ field }) => (
+        <label
+          htmlFor="wizard-demo-data"
+          className={cn(
+            "flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors",
+            field.value ? "border-primary bg-primary/5" : "hover:bg-muted/40",
+          )}
+        >
+          <Database className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0 flex-1 space-y-1">
+            <span className="block text-sm font-medium">
+              {t("commerce.wizard.demo.title")}
+            </span>
+            <span className="text-muted-foreground block text-sm">
+              {t("commerce.wizard.demo.hint")}
+            </span>
+          </span>
+          <Switch
+            id="wizard-demo-data"
+            checked={field.value}
+            onCheckedChange={(on) => {
+              field.onChange(on);
+              if (on) {
+                setValue("plan_mode", "default");
+                setValue("price_uuid", "", { shouldValidate: true });
+              }
+            }}
+          />
+        </label>
+      )}
+    />
+  );
+}
+
+/** Outcome line when the demo plan is used. */
+function DemoPlanOutcome() {
+  const { t } = useLocale();
+  return (
+    <div
+      className="bg-primary/5 border-primary/20 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
+      aria-live="polite"
+    >
+      <CalendarClock className="mt-0.5 size-4 shrink-0" />
+      <p>{t("commerce.wizard.demo.plan_outcome")}</p>
+    </div>
+  );
+}
+
 export function PlanStep({
   options,
   isLoading,
@@ -364,6 +422,9 @@ export function PlanStep({
   const priceUuid = useWatch<OrganizationWizardValues, "price_uuid">({
     name: "price_uuid",
   });
+  const demo = useWatch<OrganizationWizardValues, "demo_data">({
+    name: "demo_data",
+  });
   const selected =
     mode === "choose" && priceUuid ? findPrice(options, priceUuid) : null;
   const value = mode === "default" ? "default" : priceUuid;
@@ -375,7 +436,10 @@ export function PlanStep({
         title={t("commerce.wizard.plan.title")}
         description={t("commerce.wizard.plan.description")}
       />
-      {isLoading ? (
+      <DemoDataToggle />
+      {demo ? (
+        <DemoPlanOutcome />
+      ) : isLoading ? (
         <div className="grid gap-3">
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-20 w-full" />
@@ -449,14 +513,14 @@ export function PlanStep({
           )}
         />
       )}
-      {!isLoading && options.length === 0 ? (
+      {!demo && !isLoading && options.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           {canReadPlans
             ? t("commerce.wizard.plan.none")
             : t("commerce.wizard.plan.no_access")}
         </p>
       ) : null}
-      <PlanOutcome option={selected} />
+      {demo ? null : <PlanOutcome option={selected} />}
     </div>
   );
 }
@@ -712,13 +776,28 @@ export function ReviewStep({
             wide
             label={t("commerce.wizard.steps.plan")}
             value={
-              selected
-                ? `${selected.plan.name} · ${priceLabel(selected.price)}`
-                : t("commerce.wizard.plan.default")
+              values.demo_data
+                ? t("commerce.wizard.demo.plan_name")
+                : selected
+                  ? `${selected.plan.name} · ${priceLabel(selected.price)}`
+                  : t("commerce.wizard.plan.default")
+            }
+          />
+          <ReviewItem
+            wide
+            label={t("commerce.wizard.demo.title")}
+            value={
+              values.demo_data
+                ? t("commerce.wizard.demo.review_on")
+                : t("commerce.wizard.demo.review_off")
             }
           />
           <div className="sm:col-span-2">
-            <PlanOutcome option={selected} />
+            {values.demo_data ? (
+              <DemoPlanOutcome />
+            ) : (
+              <PlanOutcome option={selected} />
+            )}
           </div>
         </ReviewSection>
         <ReviewSection

@@ -82,13 +82,19 @@ type Result struct {
 
 // seeder carries the ids created along the way.
 type seeder struct {
-	pool  *pgxpool.Pool
-	q     *db.Queries
-	opts  Options
-	rnd   *mrand.Rand
-	org   db.Organization
-	users map[string]db.User // by demoUser.key
-	teams map[string]db.Team
+	pool *pgxpool.Pool
+	q    *db.Queries
+	opts Options
+	rnd  *mrand.Rand
+	org  db.Organization
+	// domain is the e-mail domain of the demo staff accounts and channels.
+	domain string
+	// tenant is set when the organization belongs to a real customer (created
+	// from the platform wizard): its owner already exists, so the demo
+	// "owner" joins as admin and channel ids are derived from the slug.
+	tenant bool
+	users  map[string]db.User // by demoUser.key
+	teams  map[string]db.Team
 	// team name -> member user ids
 	teamMembers map[string][]int64
 	tags        map[string]db.Tag
@@ -109,41 +115,17 @@ type seededCompany struct {
 
 // Run creates or refreshes the demo organization.
 func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) (Result, error) {
-	if opts.Conversations <= 0 {
-		opts.Conversations = DefaultConversations
+	s, err := newSeeder(pool, opts, AgentDomain)
+	if err != nil {
+		return Result{}, err
 	}
-	if opts.Now.IsZero() {
-		opts.Now = time.Now()
-	}
-	opts.Now = opts.Now.UTC()
-	if opts.Log == nil {
-		opts.Log = slog.Default()
-	}
-	if opts.Password == "" {
-		p, err := GeneratePassword()
-		if err != nil {
-			return Result{}, err
-		}
-		opts.Password = p
-	}
-	if err := password.ValidatePassword(opts.Password); err != nil {
-		return Result{}, fmt.Errorf("demo password: %w", err)
-	}
-	s := &seeder{
-		pool: pool, q: db.New(pool), opts: opts,
-		// A fixed seed keeps the sample data the same on every refresh.
-		rnd:   mrand.New(mrand.NewPCG(134, 2026)), // #nosec G404 -- reproducible fixture data, not a secret
-		users: map[string]db.User{}, teams: map[string]db.Team{}, teamMembers: map[string][]int64{},
-		tags: map[string]db.Tag{}, channels: map[string]db.ChannelInstance{}, policies: map[string]db.SlaPolicy{},
-		targets: map[string]map[string]int32{}, convByScn: map[int][]db.Conversation{},
-	}
-	res := Result{Password: opts.Password, OrganizationSlug: OrgSlug}
+	res := Result{Password: s.opts.Password, OrganizationSlug: OrgSlug}
 
 	if err := s.upsertUsers(ctx); err != nil {
 		return res, fmt.Errorf("users: %w", err)
 	}
 	billing := billingusecase.New(billingrepo.New(pool, s.q))
-	if opts.DevCatalog {
+	if s.opts.DevCatalog {
 		if err := s.ensureDevCatalog(ctx, billing); err != nil {
 			return res, fmt.Errorf("dev catalog: %w", err)
 		}
@@ -158,9 +140,54 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) (Result, error) 
 	res.Created = created
 	res.OrganizationUUID = s.org.Uuid
 
-	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	articles, err := s.fill(ctx, !created)
+	if err != nil {
+		return res, err
+	}
+	res.Articles = articles
+	res.Conversations = s.opts.Conversations
+	res.WidgetPublicID = s.channels["widget"].Uuid
+	res.Accounts = s.accounts()
+	return res, nil
+}
+
+func newSeeder(pool *pgxpool.Pool, opts Options, domain string) (*seeder, error) {
+	if opts.Conversations <= 0 {
+		opts.Conversations = DefaultConversations
+	}
+	if opts.Now.IsZero() {
+		opts.Now = time.Now()
+	}
+	opts.Now = opts.Now.UTC()
+	if opts.Log == nil {
+		opts.Log = slog.Default()
+	}
+	if opts.Password == "" {
+		p, err := GeneratePassword()
+		if err != nil {
+			return nil, err
+		}
+		opts.Password = p
+	}
+	if err := password.ValidatePassword(opts.Password); err != nil {
+		return nil, fmt.Errorf("demo password: %w", err)
+	}
+	return &seeder{
+		pool: pool, q: db.New(pool), opts: opts, domain: domain,
+		// A fixed seed keeps the sample data the same on every refresh.
+		rnd:   mrand.New(mrand.NewPCG(134, 2026)), // #nosec G404 -- reproducible fixture data, not a secret
+		users: map[string]db.User{}, teams: map[string]db.Team{}, teamMembers: map[string][]int64{},
+		tags: map[string]db.Tag{}, channels: map[string]db.ChannelInstance{}, policies: map[string]db.SlaPolicy{},
+		targets: map[string]map[string]int32{}, convByScn: map[int][]db.Conversation{},
+	}, nil
+}
+
+// fill writes the demo content into s.org (after a wipe when refreshing)
+// and returns the number of help center articles.
+func (s *seeder) fill(ctx context.Context, refresh bool) (int, error) {
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		s.q = db.New(tx)
-		if !created {
+		if refresh {
 			if err := wipe(ctx, tx, s.org.ID); err != nil {
 				return fmt.Errorf("wipe: %w", err)
 			}
@@ -181,6 +208,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) (Result, error) 
 			{"surveys", s.seedSurveys},
 			{"engineering", s.seedEngineering},
 			{"appointments", s.seedAppointments},
+			{"modules", s.seedModules},
 		}
 		for _, st := range steps {
 			if err := st.fn(ctx); err != nil {
@@ -189,30 +217,38 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) (Result, error) 
 		}
 		return nil
 	})
-	s.q = db.New(pool)
+	s.q = db.New(s.pool)
 	if err != nil {
-		return res, err
+		return 0, err
 	}
 	articles, err := s.seedKnowledge(ctx)
 	if err != nil {
-		return res, fmt.Errorf("knowledge: %w", err)
+		return 0, fmt.Errorf("knowledge: %w", err)
 	}
 	if err := s.seedHealth(ctx); err != nil {
-		return res, fmt.Errorf("health: %w", err)
+		return 0, fmt.Errorf("health: %w", err)
 	}
-
 	// Fixtures bypass domain events, so project reports explicitly after all ratings/SLA data exist.
-	if err := analyticsrepo.New(pool, s.q).Backfill(ctx, s.org.ID); err != nil {
-		return res, fmt.Errorf("analytics: %w", err)
+	if err := analyticsrepo.New(s.pool, s.q).Backfill(ctx, s.org.ID); err != nil {
+		return 0, fmt.Errorf("analytics: %w", err)
 	}
+	return articles, nil
+}
 
-	res.Articles = articles
-	res.Conversations = opts.Conversations
-	res.WidgetPublicID = s.channels["widget"].Uuid
-	for _, u := range demoUsers {
-		res.Accounts = append(res.Accounts, Account{Email: userEmail(u), Name: u.name + " " + u.surname, Role: u.role})
+// role is the organization role a demo account gets.
+func (s *seeder) role(u demoUser) string {
+	if s.tenant && u.role == "owner" {
+		return "admin"
 	}
-	return res, nil
+	return u.role
+}
+
+func (s *seeder) accounts() []Account {
+	out := make([]Account, 0, len(demoUsers))
+	for _, u := range demoUsers {
+		out = append(out, Account{Email: s.email(u), Name: u.name + " " + u.surname, Role: s.role(u)})
+	}
+	return out
 }
 
 // GeneratePassword returns a random password that passes the password
@@ -250,7 +286,7 @@ func pick(set string) (byte, error) {
 	return set[n.Int64()], nil
 }
 
-func userEmail(u demoUser) string { return u.key + "@" + AgentDomain }
+func (s *seeder) email(u demoUser) string { return u.key + "@" + s.domain }
 
 func (s *seeder) upsertUsers(ctx context.Context) error {
 	hash, err := password.Hash(s.opts.Password)
@@ -259,7 +295,7 @@ func (s *seeder) upsertUsers(ctx context.Context) error {
 	}
 	verified := ts(s.opts.Now)
 	for _, u := range demoUsers {
-		email := userEmail(u)
+		email := s.email(u)
 		row, err := s.q.GetUserByEmail(ctx, email)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -323,9 +359,9 @@ func (s *seeder) memberships(ctx context.Context) error {
 	members := orgrepo.NewPostgres(s.pool, s.q)
 	for _, u := range demoUsers {
 		user := s.users[u.key]
-		role, err := s.q.GetTenantRoleByKey(ctx, db.GetTenantRoleByKeyParams{OrganizationID: i8(s.org.ID), RoleKey: u.role})
+		role, err := s.q.GetTenantRoleByKey(ctx, db.GetTenantRoleByKeyParams{OrganizationID: i8(s.org.ID), RoleKey: s.role(u)})
 		if err != nil {
-			return fmt.Errorf("role %s: %w", u.role, err)
+			return fmt.Errorf("role %s: %w", s.role(u), err)
 		}
 		m, err := members.GetOrganizationMember(ctx, s.q, s.org.ID, user.ID)
 		if errors.Is(err, orgrepo.ErrNotFound) {
@@ -434,6 +470,26 @@ func (s *seeder) seedTags(ctx context.Context) error {
 	return nil
 }
 
+// brand is the company name used in customer-facing demo texts.
+func (s *seeder) brand() string {
+	if !s.tenant {
+		return "Anadolu Yazılım"
+	}
+	return s.org.Name
+}
+
+// channelExternalID keeps channel ids unique per organization; they are
+// unique per channel type across the whole installation.
+func (s *seeder) channelExternalID(c demoChannel) string {
+	if !s.tenant || c.externalID == "" {
+		return c.externalID
+	}
+	if c.kind == "email" {
+		return "destek@" + s.domain
+	}
+	return "demo-" + c.kind + "-" + s.org.Slug
+}
+
 func (s *seeder) seedChannels(ctx context.Context) error {
 	owner := s.users[demoUsers[0].key].ID
 	for _, c := range demoChannels {
@@ -441,15 +497,12 @@ func (s *seeder) seedChannels(ctx context.Context) error {
 		if c.kind == "widget" {
 			settings = map[string]any{
 				"demo": true, "color": "#0f766e", "locale": "tr", "greeting_title": "Merhaba 👋",
-				"greeting_text": "Anadolu Yazılım destek ekibi genellikle birkaç dakika içinde yanıt verir.",
+				"greeting_text": s.brand() + " destek ekibi genellikle birkaç dakika içinde yanıt verir.",
 				"show_team":     true, "prechat": map[string]any{"enabled": true, "name": "optional", "email": "required"},
 				"csat": true, "file_upload": true,
 			}
 		}
-		ext := pgtype.Text{}
-		if c.externalID != "" {
-			ext = pgtype.Text{String: c.externalID, Valid: true}
-		}
+		ext := txt(s.channelExternalID(c))
 		row, err := s.q.InsertChannelInstance(ctx, db.InsertChannelInstanceParams{
 			Uuid: uuid.New(), OrganizationID: s.org.ID, ChannelType: c.kind, Name: c.name, Status: "active",
 			ExternalID: ext, Settings: mustJSON(settings), CreatedBy: i8(owner),
@@ -575,7 +628,7 @@ func (s *seeder) seedConversations(ctx context.Context, tx pgx.Tx) error {
 		}
 		thread := pgtype.Text{}
 		if channelKey == "email" {
-			thread = txt(fmt.Sprintf("<demo-%d-%d@%s>", s.org.ID, number, AgentDomain))
+			thread = txt(fmt.Sprintf("<demo-%d-%d@%s>", s.org.ID, number, s.domain))
 		}
 		conv, err := s.q.InsertConversation(ctx, db.InsertConversationParams{
 			OrganizationID: s.org.ID, Number: number, ChannelType: ch.ChannelType, ChannelInstanceID: i8(ch.ID),
@@ -778,7 +831,7 @@ func (s *seeder) seedSurveys(ctx context.Context) error {
 	}
 	nps, err := s.q.SurveyCreateTemplate(ctx, db.SurveyCreateTemplateParams{
 		OrganizationID: s.org.ID, Name: "Çeyreklik NPS", Kind: "nps",
-		Question: "Anadolu Yazılım'ı bir iş arkadaşınıza tavsiye etme olasılığınız nedir?", Enabled: true,
+		Question: s.brand() + "'ı bir iş arkadaşınıza tavsiye etme olasılığınız nedir?", Enabled: true,
 	})
 	if err != nil {
 		return err

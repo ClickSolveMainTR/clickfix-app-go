@@ -20,6 +20,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/config"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/demoseed"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/developerplatform"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/eventconsumers"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/inbox"
@@ -413,6 +414,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	orgH.SetManagement(orgMgmt)
 	orgH.SetStorage(deps.Storage)
 	orgH.SetRegistrationLimiter(ratelimit.New(deps.Redis, cfg.App.Env))
+	orgH.SetDemoSeeder(demoSeeder{demoseed.NewPlatform(deps.DB, billingService, searchIndexer, log)})
 	var tenantResolver orgctx.Resolver
 	if cfg.Tenancy.Enabled {
 		orgCache := orgcache.New(orgSvc, deps.Redis, cfg.Tenancy.CacheTTL, cfg.App.Env)
