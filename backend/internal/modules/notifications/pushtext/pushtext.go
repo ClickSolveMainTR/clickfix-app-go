@@ -64,8 +64,8 @@ var catalog = map[string]pair{
 		en: Text{"SLA breached", "An SLA target was missed."},
 	},
 	"company.health_dropped": {
-		tr: Text{"Kayıp riski", "Şirketin sağlık skoru {{score}} oldu: {{company}}"},
-		en: Text{"Churn risk", "Health score of {{company}} dropped to {{score}}."},
+		tr: Text{"Kayıp riski", "Bir şirketin sağlık skoru düştü."},
+		en: Text{"Churn risk", "A company's health score dropped."},
 	},
 	"csat.submitted": {
 		tr: Text{"Yeni memnuniyet puanı", "Bir müşteri {{rating}}/5 puan verdi."},
@@ -74,6 +74,94 @@ var catalog = map[string]pair{
 	"bulk.failed": {
 		tr: Text{"Toplu işlem başarısız", "Bir toplu işlem tamamlanamadı."},
 		en: Text{"Bulk action failed", "A bulk action could not be completed."},
+	},
+	"imports.failed": {
+		tr: Text{"İçe aktarım başarısız", "{{resource}} içe aktarımı tamamlanamadı."},
+		en: Text{"Import failed", "The {{resource}} import could not be completed."},
+	},
+	"notifications.test": {
+		tr: Text{"Test bildirimi", "Bildirimler bu cihazda çalışıyor."},
+		en: Text{"Test notification", "Notifications work on this device."},
+	},
+	"auth.welcome": {
+		tr: Text{"ClickFix’e hoş geldiniz", "Hesabınız hazır."},
+		en: Text{"Welcome to ClickFix", "Your account is ready."},
+	},
+	"auth.profile_updated": {
+		tr: Text{"Profil güncellendi", "Hesap bilgileriniz değiştirildi."},
+		en: Text{"Profile updated", "Your account details were changed."},
+	},
+	"billing.welcome": {
+		tr: Text{"Aboneliğiniz başladı", "ClickFix aboneliğiniz etkinleştirildi."},
+		en: Text{"Subscription started", "Your ClickFix subscription is active."},
+	},
+	"billing.payment_received": {
+		tr: Text{"Ödeme alındı", "Ödemeniz başarıyla alındı."},
+		en: Text{"Payment received", "Your payment was received."},
+	},
+	"billing.payment_failed": {
+		tr: Text{"Ödeme başarısız", "Son ödeme alınamadı. Ödeme yönteminizi kontrol edin."},
+		en: Text{"Payment failed", "The last payment failed. Check your payment method."},
+	},
+	"billing.payment_required": {
+		tr: Text{"Ödeme gerekiyor", "Hizmetin sürmesi için ödeme gerekiyor."},
+		en: Text{"Payment required", "A payment is needed to keep the service running."},
+	},
+	"billing.invoice_issued": {
+		tr: Text{"Yeni fatura", "Yeni bir faturanız düzenlendi."},
+		en: Text{"New invoice", "A new invoice was issued."},
+	},
+	"billing.refund_succeeded": {
+		tr: Text{"İade tamamlandı", "İadeniz işlendi."},
+		en: Text{"Refund completed", "Your refund was processed."},
+	},
+	"billing.transfer_pending": {
+		tr: Text{"Havale onay bekliyor", "Havale bildiriminiz alındı, onay bekliyor."},
+		en: Text{"Transfer pending", "Your bank transfer was received and awaits approval."},
+	},
+	"billing.transfer_approved": {
+		tr: Text{"Havale onaylandı", "Havale ödemeniz onaylandı."},
+		en: Text{"Transfer approved", "Your bank transfer was approved."},
+	},
+	"billing.transfer_rejected": {
+		tr: Text{"Havale reddedildi", "Havale bildiriminiz onaylanmadı."},
+		en: Text{"Transfer rejected", "Your bank transfer was not approved."},
+	},
+	"billing.reconciliation_mismatch": {
+		tr: Text{"Ödeme uyuşmazlığı", "Bir ödeme kaydında uyuşmazlık bulundu."},
+		en: Text{"Payment mismatch", "A payment record does not match."},
+	},
+	"billing.card_expiring": {
+		tr: Text{"Kartınızın süresi doluyor", "Kayıtlı kartınızın süresi yakında doluyor."},
+		en: Text{"Card expiring", "Your saved card expires soon."},
+	},
+	"billing.renewal_reminder": {
+		tr: Text{"Yenileme yaklaşıyor", "Aboneliğiniz yakında yenilenecek."},
+		en: Text{"Renewal coming up", "Your subscription renews soon."},
+	},
+	"billing.trial_ending": {
+		tr: Text{"Deneme süresi bitiyor", "Deneme süreniz yakında sona eriyor."},
+		en: Text{"Trial ending", "Your trial ends soon."},
+	},
+	"billing.quota_warning": {
+		tr: Text{"Kota dolmak üzere", "Kullanım kotanız dolmak üzere."},
+		en: Text{"Quota almost used", "You are close to your usage quota."},
+	},
+	"billing.quota_exhausted": {
+		tr: Text{"Kota doldu", "Kullanım kotanız doldu."},
+		en: Text{"Quota used up", "You have used up your usage quota."},
+	},
+	"billing.wallet_low": {
+		tr: Text{"Bakiye azaldı", "Cüzdan bakiyeniz azaldı."},
+		en: Text{"Low balance", "Your wallet balance is low."},
+	},
+	"billing.suspended": {
+		tr: Text{"Hizmet askıya alındı", "Ödeme alınamadığı için hizmet askıya alındı."},
+		en: Text{"Service suspended", "The service was suspended because payment failed."},
+	},
+	"billing.canceled": {
+		tr: Text{"Abonelik iptal edildi", "Aboneliğiniz iptal edildi."},
+		en: Text{"Subscription canceled", "Your subscription was canceled."},
 	},
 }
 
