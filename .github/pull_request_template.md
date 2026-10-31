@@ -1,8 +1,8 @@
-## itsplan maddesi
+## Issue
 
-<!-- PR gövdesi, tamamladığı her madde için ayrı bir `Fixes CF-<n>` satırı içermeli; itsplan birleşince bu maddeleri kapatır. Madde devam ediyorsa `Refs CF-<n>` yazın: sadece bağlantı kurar, kapatmaz. -->
+<!-- Tamamladığı her issue için ayrı bir `Fixes #<n>` satırı; PR birleşince GitHub kapatır ve ClickFix panosu Done'a alır. İş devam ediyorsa `Refs #<n>`: sadece bağlar. -->
 
-Fixes CF-
+Fixes #
 
 ## Ne değişti
 
@@ -22,8 +22,7 @@ Fixes CF-
 
 ## Kontrol
 
-- [ ] itsplan'de madde In Progress ve PR bağlantısı yorum olarak eklendi
+- [ ] Issue bana atandı ve ClickFix panosunda In Progress
 - [ ] Testler eklendi veya güncellendi
 - [ ] OpenAPI ve üretilmiş tipler güncel (`backend/docs/openapi.yaml`, `frontend/src/generated/`)
-- [ ] Gizli bilgi, gerçek `.env` veya kişisel veri yok (repo public)
-- [ ] Birleşince itsplan'de madde Done'a alınacak
+- [ ] Gizli bilgi, gerçek `.env` veya kişisel veri yok

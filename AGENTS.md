@@ -4,23 +4,23 @@
 
 ClickFix, B2B müşteri destek platformudur. Bu repo nextjs-go-boilerplate üzerine kurulmuştur. Aşağıdaki kurallar boilerplate kurallarının önündedir.
 
-### 1. İş takibi sadece itsplan'de
+### 1. İş takibi GitHub Projects'te
 
-- Tek doğruluk kaynağı itsplan'deki **ClickFix (CF)** projesidir. GitHub Issues kapalıdır; madde, durum ve tartışma itsplan'de tutulur.
-- **Durum değişikliğini herkes (insan ve AI ajanı) itsplan'de kendisi yapar:**
-  - İşe başlarken maddeyi kendine ata ve **In Progress**'e al.
-  - PR açınca PR bağlantısını maddeye yorum olarak yaz.
-  - PR `main`'e birleşince maddeyi **Done**'a al, kapanış yorumuna "Kullanılan referanslar" listesini ekle.
-  - Engel çıkarsa "Engelli" etiketini ekle ve nedenini yorumla.
-- AI ajanları bunu itsplan MCP'si üzerinden yapar (`update_issue`, `add_comment`).
-- PR gövdesi, tamamladığı her madde için `Fixes CF-<n>` satırı içerir (itsplan birleşince kapatır); madde başka PR'da sürecekse `Refs CF-<n>` yazılır, bu sadece bağlar.
-- Dal adı: `cf-<numara>-<kisa-ad>` (örnek `cf-26-paytr`). Commit ve PR başlığı `CF-<numara>: ...` ile başlar.
+- Tek doğruluk kaynağı repo issue'ları ve org panosu **[ClickFix](https://github.com/orgs/ClickSolveMainTR/projects/1)**'tir (Status: Todo → In Progress → Done). itsplan artık kullanılmaz; eski `CF-<n>` numaraları itsplan arşivindeki maddelerdir ve taşınmadı.
+- Yeni iş issue olarak açılır ve panoya eklenir: `gh issue create --repo ClickSolveMainTR/clickfix-app-go --project ClickFix`.
+- **Durum değişikliğini herkes (insan ve AI ajanı) kendisi yapar:**
+  - İşe başlarken issue'yu kendine ata (`gh issue edit <n> --add-assignee @me`) ve panoda **In Progress**'e al.
+  - PR gövdesindeki `Fixes #<n>` issue'yu PR'a bağlar; ayrıca yorum gerekmez.
+  - PR `main`'e birleşince issue kapanır ve pano onu **Done**'a alır. Kapanmazsa elle kapat.
+  - Engel çıkarsa `Engelli` etiketini ekle ve nedenini issue'ya yorumla.
+- PR gövdesi, tamamladığı her issue için `Fixes #<n>` satırı içerir; iş başka PR'da sürecekse `Refs #<n>` yazılır, bu sadece bağlar.
+- Dal adı: `gh-<issue>-<kisa-ad>` (örnek `gh-14-inbox-filtre`). Commit ve PR başlığı `GH-<issue>: ...` ile başlar. Issue'su olmayan küçük düzeltmelerde `gh-<kisa-ad>` dalı ve `GH: ...` başlığı kullanılır.
 
 ### 2. Referans kullanımı zorunludur
 
-- Bir maddeye başlamadan önce maddenin **Referans** bölümündeki ve "Referans repo" alanındaki kod okunur.
+- Bir işe başlamadan önce issue'nun **Referans** bölümündeki ve "Referans repo" alanındaki kod okunur.
 - Aynı işi yapan kod referans repolarda varsa sıfırdan yazılmaz; taşınır ve bu reponun konvansiyonlarına uyarlanır.
-- Referanstan sapma nedeni PR açıklamasına ve maddeye yazılır.
+- Referanstan sapma nedeni PR açıklamasına ve issue'ya yazılır.
 - PR açıklamasında "Kullanılan referanslar" bölümü zorunludur (repo + yol + ne alındı). Şablon: `.github/pull_request_template.md`.
 - Referans haritası: [docs/REFERANSLAR.md](./docs/REFERANSLAR.md).
 

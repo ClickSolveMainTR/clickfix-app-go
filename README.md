@@ -2,7 +2,7 @@
 
 B2B müşteri destek platformu: her işletme kendi kanallarını (WhatsApp, Instagram, Messenger, e-posta, web widget, Slack ve diğerleri) bağlar, konuşmalar tek gelen kutusunda toplanır, AI ajanı yanıtlar, talepler mühendislik işine bağlanır. Web (Next.js), API (Go) ve mobil (Expo) aynı repoda.
 
-İş takibi itsplan'deki **ClickFix (CF)** projesindedir. Katkıdan önce [AGENTS.md](./AGENTS.md) başındaki ClickFix kurallarını ve [docs/REFERANSLAR.md](./docs/REFERANSLAR.md) dosyasını okuyun.
+İş takibi GitHub issue'ları ve [ClickFix panosu](https://github.com/orgs/ClickSolveMainTR/projects/1) üzerindedir. Katkıdan önce [AGENTS.md](./AGENTS.md) başındaki ClickFix kurallarını ve [docs/REFERANSLAR.md](./docs/REFERANSLAR.md) dosyasını okuyun.
 
 Taban: nextjs-go-boilerplate. Aşağıdaki bölümler boilerplate'ten gelir.
 
