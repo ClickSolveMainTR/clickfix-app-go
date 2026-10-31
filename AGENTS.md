@@ -6,15 +6,16 @@ ClickFix, B2B müşteri destek platformudur. Bu repo nextjs-go-boilerplate üzer
 
 ### 1. İş takibi GitHub Projects'te
 
-- Tek doğruluk kaynağı repo issue'ları ve org panosu **[ClickFix](https://github.com/orgs/ClickSolveMainTR/projects/1)**'tir (Status: Todo → In Progress → Done). itsplan artık kullanılmaz; eski `CF-<n>` numaraları itsplan arşivindeki maddelerdir ve taşınmadı.
-- Yeni iş issue olarak açılır ve panoya eklenir: `gh issue create --repo ClickSolveMainTR/clickfix-app-go --project ClickFix`.
+- Tek doğruluk kaynağı repo issue'ları ve org panosu **[ClickFix](https://github.com/orgs/ClickSolveMainTR/projects/1)**'tir (Status: Todo → In Progress → Done). itsplan artık kullanılmaz; CF-158 ve öncesi itsplan arşivindeki maddelerdir ve taşınmadı.
+- **Numara:** CF numaraları itsplan'deki sıradan devam eder (CF-159'dan başladı). Yeni issue'nun başlığı `CF-<n>: ...` olur; `<n>`, başlıklardaki en büyük CF numarasının bir fazlasıdır. GitHub'ın `#<issue>` numarası ayrıdır ve sadece bağlamak için kullanılır.
+- Yeni iş issue olarak açılır ve panoya eklenir: `gh issue create --repo ClickSolveMainTR/clickfix-app-go --project ClickFix --title "CF-<n>: ..."`.
 - **Durum değişikliğini herkes (insan ve AI ajanı) kendisi yapar:**
   - İşe başlarken issue'yu kendine ata (`gh issue edit <n> --add-assignee @me`) ve panoda **In Progress**'e al.
   - PR gövdesindeki `Fixes #<n>` issue'yu PR'a bağlar; ayrıca yorum gerekmez.
   - PR `main`'e birleşince issue kapanır ve pano onu **Done**'a alır. Kapanmazsa elle kapat.
   - Engel çıkarsa `Engelli` etiketini ekle ve nedenini issue'ya yorumla.
 - PR gövdesi, tamamladığı her issue için `Fixes #<n>` satırı içerir; iş başka PR'da sürecekse `Refs #<n>` yazılır, bu sadece bağlar.
-- Dal adı: `gh-<issue>-<kisa-ad>` (örnek `gh-14-inbox-filtre`). Commit ve PR başlığı `GH-<issue>: ...` ile başlar. Issue'su olmayan küçük düzeltmelerde `gh-<kisa-ad>` dalı ve `GH: ...` başlığı kullanılır.
+- Dal adı: `cf-<n>-<kisa-ad>` (örnek `cf-159-engineering-web`). Commit ve PR başlığı `CF-<n>: ...` ile başlar. Issue'su olmayan küçük düzeltmelerde `cf-<kisa-ad>` dalı ve `CF: ...` başlığı kullanılır.
 
 ### 2. Referans kullanımı zorunludur
 

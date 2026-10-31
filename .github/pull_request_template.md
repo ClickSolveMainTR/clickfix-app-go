@@ -1,6 +1,6 @@
 ## Issue
 
-<!-- Tamamladığı her issue için ayrı bir `Fixes #<n>` satırı; PR birleşince GitHub kapatır ve ClickFix panosu Done'a alır. İş devam ediyorsa `Refs #<n>`: sadece bağlar. -->
+<!-- Tamamladığı her issue için ayrı bir `Fixes #<issue>` satırı (GitHub numarası; CF numarası başlıkta); PR birleşince GitHub kapatır ve ClickFix panosu Done'a alır. İş devam ediyorsa `Refs #<n>`: sadece bağlar. -->
 
 Fixes #
 

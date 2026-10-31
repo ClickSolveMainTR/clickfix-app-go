@@ -11,7 +11,7 @@ Project setup checked into the repo (works the same in every app cloned from thi
 - **MCP servers** (`.mcp.json`, approve once per machine): `shadcn` (component registry, runs in `frontend/`), `context7` (current library docs), `playwright` (browser checks).
 - **Subagent**: `boilerplate-reviewer` checks a diff against the hard rules above before a PR.
 - **Before saying done**: follow the `verify-changes` skill. Schema work: `db-migration` skill.
-- **Shipping**: push a `gh-<issue>-<kisa-ad>` branch and open a PR to `main` using the PR template. The single required check is `ci`; merge when it is green. Every green `main` run is tagged `v0.N` (Dokploy deploys on that tag) and ships `mobile/` changes through EAS.
+- **Shipping**: push a `cf-<n>-<kisa-ad>` branch and open a PR to `main` using the PR template. The single required check is `ci`; merge when it is green. Every green `main` run is tagged `v0.N` (Dokploy deploys on that tag) and ships `mobile/` changes through EAS.
 
 ## Repo kuralları
 
@@ -19,11 +19,11 @@ Repo `ClickSolveMainTR/clickfix-app-go` (private). Eski `furkanmeclis/clickfix-a
 
 GitHub'ın Free planında private repoda branch protection yok, bu yüzden aşağıdaki kuralları GitHub zorlamaz; herkes (insan ve ajan) kendisi uyar:
 
-- `main`'e doğrudan push yapılmaz. Her değişiklik `gh-<issue>-<kisa-ad>` dalından PR ile girer.
+- `main`'e doğrudan push yapılmaz. Her değişiklik `cf-<n>-<kisa-ad>` dalından PR ile girer (`<n>` issue başlığındaki CF numarası).
 - `main`'e force-push yapılmaz, `main` ve `v0.N` etiketleri silinmez veya taşınmaz.
-- PR'lar sadece **squash** ile birleşir; dal birleşince silinir. Squash commit başlığı PR başlığıdır (`GH-<issue>: ...`).
+- PR'lar sadece **squash** ile birleşir; dal birleşince silinir. Squash commit başlığı PR başlığıdır (`CF-<n>: ...`).
 - `ci` kontrolü yeşil olmadan birleştirme yapılmaz. CI kapalıysa (Actions dakikası nedeniyle) birleştirmeden önce `verify-changes` yerelde çalıştırılır ve PR'a yazılır.
 - `v0.N` etiketini sadece `ci.yml` içindeki `release-tag` işi basar; elle etiket basılmaz.
 - Commit mesajlarına ve PR gövdelerine Claude/AI atıf satırı (`Co-Authored-By`, "Generated with ...") eklenmez.
 - Sır, gerçek `.env`, müşteri verisi commit edilmez (repo private olsa da).
-- **GitHub Projects**: assign the issue, move it to In Progress on the [ClickFix board](https://github.com/orgs/ClickSolveMainTR/projects/1) and put `Fixes #<n>` in the PR body; merging closes it and the board moves it to Done. itsplan is no longer used. See the ClickFix rules at the top of `AGENTS.md`.
+- **GitHub Projects**: assign the issue, move it to In Progress on the [ClickFix board](https://github.com/orgs/ClickSolveMainTR/projects/1) and put `Fixes #<issue>` in the PR body (CF numbers continue from itsplan and live in the issue title); merging closes it and the board moves it to Done. itsplan is no longer used. See the ClickFix rules at the top of `AGENTS.md`.
