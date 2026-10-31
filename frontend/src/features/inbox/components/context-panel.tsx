@@ -40,74 +40,77 @@ export function ContextPanel({
   const name = contactLabel(c);
   return (
     <aside
-      className="flex h-full flex-col gap-5 overflow-y-auto p-4"
+      className="flex h-full flex-col overflow-y-auto [&>*]:px-4 [&>*]:py-4 [&>*+*]:border-t [&>*:empty]:hidden"
       aria-label={t("inbox.context.label")}
     >
-      <section className="flex items-center gap-3">
-        <div className="bg-ink text-paper flex size-11 items-center justify-center rounded-full text-sm font-semibold">
-          {initials(name)}
+      <section className="flex flex-col gap-3 pr-12">
+        <div className="flex items-center gap-3">
+          <div className="bg-ink text-paper flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+            {initials(name)}
+          </div>
+          <div className="min-w-0">
+            <Link
+              href={`/contacts?c=${c.contact.uuid}`}
+              className="block truncate font-semibold hover:underline"
+            >
+              {name}
+            </Link>
+            {c.company && (
+              <p className="text-muted-foreground truncate text-xs">
+                {c.company.name}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="min-w-0">
-          <Link
-            href={`/contacts?c=${c.contact.uuid}`}
-            className="block truncate font-semibold hover:underline"
-          >
-            {name}
-          </Link>
-          {c.company && (
-            <p className="text-muted-foreground truncate text-xs">
-              {c.company.name}
-            </p>
+        <div className="flex flex-col gap-1.5 text-xs">
+          {c.contact.email && (
+            <a
+              href={`mailto:${c.contact.email}`}
+              className="hover:text-foreground text-muted-foreground flex min-w-0 items-center gap-2"
+            >
+              <Mail className="size-3.5 shrink-0" />
+              <span className="truncate">{c.contact.email}</span>
+            </a>
           )}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-1.5 text-sm">
-        {c.contact.email && (
-          <a
-            href={`mailto:${c.contact.email}`}
-            className="hover:text-foreground text-muted-foreground flex items-center gap-2 truncate"
-          >
-            <Mail className="size-3.5 shrink-0" />
-            <span className="truncate">{c.contact.email}</span>
-          </a>
-        )}
-        {c.contact.phone && (
-          <span className="text-muted-foreground flex items-center gap-2">
-            <Phone className="size-3.5 shrink-0" />
-            {c.contact.phone}
+          {c.contact.phone && (
+            <span className="text-muted-foreground flex items-center gap-2">
+              <Phone className="size-3.5 shrink-0" />
+              {c.contact.phone}
+            </span>
+          )}
+          <span className="text-muted-foreground flex min-w-0 items-center gap-2">
+            <ChannelGlyph type={c.channel_type} className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {t(`channels.types.${c.channel_type}`)} · {c.inbox?.name ?? "—"}
+            </span>
           </span>
-        )}
-        <span className="text-muted-foreground flex items-center gap-2">
-          <ChannelGlyph type={c.channel_type} className="size-3.5 shrink-0" />
-          {t(`channels.types.${c.channel_type}`)} · {c.inbox?.name ?? "—"}
-        </span>
+        </div>
       </section>
 
       <section>
         <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold tracking-wide uppercase">
           {t("inbox.context.details")}
         </h3>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-          <Row label={t("inbox.context.status")}>
+        <dl className="grid grid-cols-2 gap-2 text-xs">
+          <Stat label={t("inbox.context.status")}>
             {t(`inbox.status.${c.status}`)}
-          </Row>
-          <Row label={t("inbox.context.created")}>
+          </Stat>
+          <Stat label={t("inbox.context.messages")}>{c.message_count}</Stat>
+          <Stat label={t("inbox.context.created")}>
             {datetime(c.created_at, "dd.MM.yyyy HH:mm")}
-          </Row>
-          <Row label={t("inbox.context.first_response")}>
+          </Stat>
+          <Stat label={t("inbox.context.first_response")}>
             {c.first_response_at
               ? datetime(c.first_response_at, "dd.MM HH:mm")
               : "—"}
-          </Row>
+          </Stat>
           {c.waiting_since && isWaitingStatus(c.status) && (
-            <Row label={t("inbox.context.waiting")}>
+            <Stat label={t("inbox.context.waiting")}>
               <span className="text-amber-600 dark:text-amber-400">
                 {shortAgo(c.waiting_since, locale)}
               </span>
-            </Row>
+            </Stat>
           )}
-          <Row label={t("inbox.context.messages")}>{c.message_count}</Row>
         </dl>
       </section>
 
@@ -211,7 +214,7 @@ export function ContextPanel({
   );
 }
 
-function Row({
+function Stat({
   label,
   children,
 }: {
@@ -219,9 +222,9 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate">{children}</dd>
-    </>
+    <div className="bg-muted/50 min-w-0 rounded-md px-2.5 py-2">
+      <dt className="text-muted-foreground truncate text-[11px]">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium">{children}</dd>
+    </div>
   );
 }
