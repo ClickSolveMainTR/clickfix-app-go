@@ -151,6 +151,12 @@ export type DataTableFeatures = {
    * Default: true
    */
   facetedFilters?: boolean;
+  /**
+   * Toolbar row above the table (search, filters, view / density / column
+   * menus, reset). Turn off for small tables embedded in a card or dialog.
+   * Default: true
+   */
+  toolbar?: boolean;
   /** Persist table UI state to localStorage under this key */
   persistKey?: string;
 };
@@ -175,8 +181,17 @@ export type DataTableProps<TData> = {
   state?: DataTableControlledState;
   initialState?: Partial<DataTableState>;
 
+  /**
+   * Server mode (`manual.pagination`): total rows across all pages. Drives the
+   * pagination counter and the page count. Prefer this over `pageCount`.
+   */
+  rowCount?: number;
+  /** Server mode: explicit page count. Not needed when `rowCount` is set. */
   pageCount?: number;
   pageSizeOptions?: number[];
+
+  /** Placeholder of the toolbar search box; defaults to `table.search`. */
+  searchPlaceholder?: string;
 
   toolbar?: ReactNode | ((table: Table<TData>) => ReactNode);
   /**
@@ -231,4 +246,5 @@ export type UseDataTableOptions<TData> = Pick<
   | "state"
   | "initialState"
   | "pageCount"
+  | "rowCount"
 >;

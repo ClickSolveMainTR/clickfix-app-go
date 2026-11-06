@@ -135,5 +135,7 @@
   "roles.supervisor_description": "Destek ekibini, tüm konuşmaları, atamaları, raporları, ekipleri ve bilgi bankasını yönetir.",
   "roles.agent_description": "Ekiplerinin konuşmalarını ve destek taleplerini yanıtlar.",
   "notifications.empty_title": "Bildirim yok",
-  "more.replies": "Hazır yanıtlar"
+  "more.replies": "Hazır yanıtlar",
+  "more.workflows": "İş akışları",
+  "more.rules": "Kurallar"
 }

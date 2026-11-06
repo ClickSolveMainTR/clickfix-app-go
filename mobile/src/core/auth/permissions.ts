@@ -39,6 +39,9 @@ export const P = {
   membersRead: 'tenant.members.read',
   membersWrite: 'tenant.members.write',
   billingRead: 'tenant.billing.read',
+  /** Workflows and automation rules; the on/off switch needs the write slug (`automation/routes.go`). */
+  automationsRead: 'tenant.automations.read',
+  automationsWrite: 'tenant.automations.write',
 } as const;
 
 export type Permission = (typeof P)[keyof typeof P];

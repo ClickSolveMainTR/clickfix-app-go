@@ -222,10 +222,6 @@ export function InvitationsTable({
   );
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   const hasFilters = Boolean(listParams.q) || Boolean(listParams.status);
 
   let inviteButton: ReactNode = null;
@@ -258,7 +254,7 @@ export function InvitationsTable({
             ? t("invitations.empty_filtered_description")
             : t("invitations.empty_description")
         }
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey }}
         toolbarExtra={
