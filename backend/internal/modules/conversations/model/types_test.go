@@ -12,6 +12,8 @@ func TestPreview(t *testing.T) {
 		"  Merhaba\n\n  dünya\t ": "Merhaba dünya",
 		"tek":                     "tek",
 		"satır\r\nsonu":           "satır sonu",
+		// CF-177: formatting marks are dropped, plain text is kept.
+		"**Kargonuz** *yolda*: [takip](https://ex.com/t_1), 2*3*4 ve dosya_adi.pdf": "Kargonuz yolda: takip, 2*3*4 ve dosya_adi.pdf",
 	}
 	for in, want := range cases {
 		if got := Preview(in); got != want {

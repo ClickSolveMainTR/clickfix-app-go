@@ -9,6 +9,7 @@ Human and agent entry points for this boilerplate. Prefer these files over lefto
 | [EXTENDING.md](./EXTENDING.md) | Adding a feature on top of the starter |
 | [onboarding-kurulum.md](./onboarding-kurulum.md) | AI-assisted sign-up, template gallery, SetupPlan, undo (CF-140) |
 | [odeme.md](./odeme.md) | Payments runbook: iyzico/PayTR env, webhook URLs, sandbox vs live (CF-154) |
+| [channels/mesaj-bicimi.md](./channels/mesaj-bicimi.md) | Message format per channel: source Markdown subset, what each channel receives, API channel note (CF-177) |
 | [bildirimler.md](./bildirimler.md) | Notification inventory: every event, channels, text, preferences and quiet hours (CF-157) |
 | [../AGENTS.md](../AGENTS.md) | Agent skill index |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Day-to-day contribution rules |

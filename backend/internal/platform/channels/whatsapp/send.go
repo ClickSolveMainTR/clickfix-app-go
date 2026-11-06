@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 )
 
 // Send implements channels.Adapter. A template wins over attachments,
@@ -18,6 +19,11 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	to := digits(firstNonEmpty(msg.To.ExternalID, msg.To.Phone))
 	if to == "" {
 		return channels.SendResult{}, channels.Permanent("invalid_recipient", errors.New("whatsapp: recipient has no phone number"))
+	}
+	if msg.Template == nil {
+		// Source format → WhatsApp marks (CF-177); the limit applies to what
+		// is actually sent. Approved templates are never rewritten.
+		msg.Text = format.WhatsApp(msg.Text)
 	}
 	if len([]rune(msg.Text)) > 4096 {
 		return channels.SendResult{}, channels.Permanent("too_long", errors.New("whatsapp: text longer than 4096 characters"))

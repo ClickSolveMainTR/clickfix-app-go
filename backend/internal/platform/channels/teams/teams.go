@@ -18,6 +18,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -294,7 +295,10 @@ func (a *Adapter) Send(ctx context.Context,
 	if err != nil || json.Unmarshal(b, &ref) != nil || !serviceURL(ref.Service) || ref.Conversation == "" {
 		return channels.SendResult{}, channels.Permanent("thread", errors.New("valid Teams conversation reference required"))
 	}
-	if len(m.Attachments) > 0 || m.Text == "" || len([]rune(m.Text)) > 4000 {
+	// CommonMark for textFormat "extendedmarkdown" (CF-177); the limit
+	// applies to the text that is sent.
+	text := format.Teams(m.Text)
+	if len(m.Attachments) > 0 || text == "" || len([]rune(text)) > 4000 {
 		return channels.SendResult{},
 			channels.Permanent("content",
 				errors.New("teams adapter accepts up to 4000 text characters"))
@@ -303,25 +307,35 @@ func (a *Adapter) Send(ctx context.Context,
 	if err != nil {
 		return channels.SendResult{}, err
 	}
-	payload,
-		_ := json.Marshal(map[string]any{"type": "message",
-		"text":       m.Text,
-		"textFormat": "plain",
-		"replyToId":  ref.Root})
 	path := strings.TrimRight(ref.Service, "/") + "/v3/conversations/" + url.PathEscape(ref.Conversation) + "/activities"
 	if ref.Root != "" {
 		path += "/" + url.PathEscape(ref.Root)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(payload))
-	if err != nil {
-		return channels.SendResult{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
 	var out struct {
 		ID string `json:"id"`
 	}
-	if err := channelhttp.Do(a.cfg.Client, req, &out); err != nil {
+	post := func(text, textFormat string) error {
+		payload, _ := json.Marshal(map[string]any{"type": "message",
+			"text":       text,
+			"textFormat": textFormat,
+			"replyToId":  ref.Root})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, path, bytes.NewReader(payload))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		return channelhttp.Do(a.cfg.Client, req, &out)
+	}
+	err = post(text, "extendedmarkdown")
+	if channelhttp.Rejected(err) {
+		// The formatted activity was refused: the message must still arrive,
+		// so send it once more as plain text.
+		if plain := format.Plain(m.Text); plain != "" {
+			err = post(plain, "plain")
+		}
+	}
+	if err != nil {
 		return channels.SendResult{}, err
 	}
 	if out.ID == "" {

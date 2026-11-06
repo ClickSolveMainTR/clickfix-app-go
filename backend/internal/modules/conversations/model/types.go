@@ -3,7 +3,11 @@
 // senders and kinds shared by the repository, usecases and handlers.
 package model
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
+)
 
 // Resource is the activity / realtime slug of the inbox.
 const Resource = "tenant.conversations"
@@ -92,8 +96,10 @@ func Valid(v string, allowed []string) bool {
 	return slices.Contains(allowed, v)
 }
 
-// Preview shortens a message text for the inbox list (rune safe, single line).
+// Preview shortens a message text for the inbox list (rune safe, single
+// line). Formatting marks of the source format are dropped (CF-177).
 func Preview(text string) string {
+	text = format.Strip(text)
 	out := make([]rune, 0, PreviewLength)
 	space := false
 	for _, r := range text {

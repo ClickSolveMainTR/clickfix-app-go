@@ -48,6 +48,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/google/uuid"
 )
 
@@ -584,7 +585,7 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 		if replyTo != "" && (a.cfg.InboundDomain != "" || provider(c) == ProviderIMAP || inst.Settings["brand_reply_to"] != nil) {
 			headers["Reply-To"] = replyTo
 		}
-		raw, err := Build(Outgoing{From: from, To: []string{to}, Cc: cc, Subject: subject, Text: msg.Text, HTML: TextToHTML(msg.Text), Headers: headers, Files: files})
+		raw, err := Build(Outgoing{From: from, To: []string{to}, Cc: cc, Subject: subject, Text: format.Plain(msg.Text), HTML: TextToHTML(msg.Text), Headers: headers, Files: files})
 		if err != nil {
 			return channels.SendResult{}, channels.Permanent("invalid_message", err)
 		}
@@ -600,7 +601,7 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	}
 	req := SendRequest{
 		From: from.String(), To: []string{to}, Cc: cc, Bcc: bcc, Subject: subject,
-		Text: msg.Text, HTML: TextToHTML(msg.Text), Headers: headers,
+		Text: format.Plain(msg.Text), HTML: TextToHTML(msg.Text), Headers: headers,
 		Tags: []ResendTag{{Name: TagInstance, Value: tagValue(Alias(inst))}},
 	}
 	if a.cfg.InboundDomain != "" || inst.Settings["brand_reply_to"] != nil {

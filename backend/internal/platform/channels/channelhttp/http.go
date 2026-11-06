@@ -56,6 +56,14 @@ func Do(c Client, r *http.Request, out any) error {
 	return nil
 }
 
+// Rejected reports whether err is a provider's 4xx answer (Do's
+// "provider_rejected"): the request itself was refused, so a formatted
+// message may be worth one more try as plain text.
+func Rejected(err error) bool {
+	var se *channels.SendError
+	return errors.As(err, &se) && se.Code == "provider_rejected"
+}
+
 // Sign signs a timestamp and the exact body. Used by the custom channel in both directions.
 func Sign(secret, timestamp string, body []byte) string {
 	m := hmac.New(sha256.New, []byte(secret))

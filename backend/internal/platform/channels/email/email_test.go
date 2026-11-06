@@ -308,6 +308,21 @@ func TestSendResend(t *testing.T) {
 		t.Fatalf("html = %v", b["html"])
 	}
 
+	// CF-177: the HTML part is formatted, the text part carries no marks.
+	sent = nil
+	if _, err := a.Send(context.Background(), inst, channels.OutboundMessage{
+		MessageUUID: uuid.New(), To: channels.Recipient{ExternalID: "ayse@musteri.com.tr"},
+		Text: "**Çözüldü** <script>\n- [kayıt](https://ex.com/a_b)",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if h := sent[0]["html"].(string); !strings.Contains(h, "<p><strong>Çözüldü</strong> &lt;script&gt;</p>\n<ul><li><a href=\"https://ex.com/a_b\">kayıt</a></li></ul>") {
+		t.Fatalf("html = %v", h)
+	}
+	if txt := sent[0]["text"]; txt != "Çözüldü <script>\n- kayıt (https://ex.com/a_b)" {
+		t.Fatalf("text = %q", txt)
+	}
+
 	_, err = a.Send(context.Background(), inst, channels.OutboundMessage{MessageUUID: uuid.New(), To: channels.Recipient{ExternalID: "a@b.co"}, Text: "#reject"})
 	if !channels.IsPermanent(err) {
 		t.Fatalf("422 must be permanent: %v", err)

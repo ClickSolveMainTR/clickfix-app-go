@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 )
 
 type sentMessage struct {
@@ -35,21 +35,31 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 		return channels.SendResult{}, channels.Permanent("invalid_recipient", errors.New("telegram: recipient chat id is empty"))
 	}
 
-	text := msg.Text
-	caption := ""
-	if len(msg.Attachments) > 0 && utf16Len(text) <= maxCaption {
-		caption, text = text, ""
+	// Source format → plain text plus entities (CF-177): nothing has to be
+	// escaped, limits count the text that is sent and a split never cuts
+	// through markup.
+	text := format.Telegram(msg.Text)
+	var caption format.Rich
+	if len(msg.Attachments) > 0 && text.Len() <= maxCaption {
+		caption, text = text, format.Rich{}
 	}
 	var steps []sendStep
-	for _, chunk := range splitText(text, maxText) {
-		steps = append(steps, sendStep{method: "sendMessage", params: map[string]any{"chat_id": chatID, "text": chunk}})
+	for _, chunk := range text.Split(maxText) {
+		p := map[string]any{"chat_id": chatID, "text": chunk.Text}
+		if len(chunk.Entities) > 0 {
+			p["entities"] = chunk.Entities
+		}
+		steps = append(steps, sendStep{method: "sendMessage", params: p})
 	}
 	for i := range msg.Attachments {
 		att := &msg.Attachments[i]
 		method, field := mediaMethod(*att)
 		p := map[string]any{"chat_id": chatID}
-		if i == 0 && strings.TrimSpace(caption) != "" {
-			p["caption"] = caption
+		if i == 0 && strings.TrimSpace(caption.Text) != "" {
+			p["caption"] = caption.Text
+			if len(caption.Entities) > 0 {
+				p["caption_entities"] = caption.Entities
+			}
 		}
 		steps = append(steps, sendStep{method: method, field: field, att: att, params: p})
 	}
@@ -72,7 +82,25 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	return channels.SendResult{ExternalID: msgRef(last.Chat.ID, last.MessageID)}, nil
 }
 
+// sendOne sends a step; when Telegram refuses its entities the step is
+// sent once more without them, so the message arrives as plain text.
 func (a *Adapter) sendOne(ctx context.Context, token string, s sendStep, out *sentMessage) error {
+	err := a.sendStep(ctx, token, s, out)
+	var ae *APIError
+	if err == nil || !errors.As(err, &ae) || ae.Code != http.StatusBadRequest || !strings.Contains(strings.ToLower(ae.Description), "entit") {
+		return err
+	}
+	_, hasText := s.params["entities"]
+	_, hasCaption := s.params["caption_entities"]
+	if !hasText && !hasCaption {
+		return err
+	}
+	delete(s.params, "entities")
+	delete(s.params, "caption_entities")
+	return a.sendStep(ctx, token, s, out)
+}
+
+func (a *Adapter) sendStep(ctx context.Context, token string, s sendStep, out *sentMessage) error {
 	if s.att == nil {
 		return a.call(ctx, token, s.method, s.params, out)
 	}
@@ -186,67 +214,6 @@ func truncateBytes(s string, n int) string {
 		cut = i
 	}
 	return s[:cut]
-}
-
-func utf16Len(s string) int {
-	n := 0
-	for _, r := range s {
-		if r >= 0x10000 {
-			n += 2
-		} else {
-			n++
-		}
-	}
-	return n
-}
-
-// splitText cuts s into chunks of at most limit UTF-16 units on rune
-// boundaries, preferring a newline, then a space, in the chunk's second half.
-func splitText(s string, limit int) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	if utf16Len(s) <= limit {
-		return []string{s}
-	}
-	var out []string
-	runes := []rune(s)
-	for len(runes) > 0 {
-		n, units := 0, 0
-		for n < len(runes) {
-			w := 1
-			if runes[n] >= 0x10000 {
-				w = 2
-			}
-			if units+w > limit {
-				break
-			}
-			units += w
-			n++
-		}
-		if n < len(runes) {
-			if cut := lastBreak(runes[:n], func(r rune) bool { return r == '\n' }); cut > n/2 {
-				n = cut
-			} else if cut := lastBreak(runes[:n], unicode.IsSpace); cut > n/2 {
-				n = cut
-			}
-		}
-		if chunk := string(runes[:n]); strings.TrimSpace(chunk) != "" {
-			out = append(out, chunk)
-		}
-		runes = runes[n:]
-	}
-	return out
-}
-
-// lastBreak returns the index just after the last rune matching f (0 = none).
-func lastBreak(rs []rune, f func(rune) bool) int {
-	for i := len(rs) - 1; i >= 0; i-- {
-		if f(rs[i]) {
-			return i + 1
-		}
-	}
-	return 0
 }
 
 // mapSendError classifies Bot API failures for the outbound queue.

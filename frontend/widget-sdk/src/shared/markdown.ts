@@ -20,6 +20,38 @@ export type Block =
 const LINK = /^\[([^\]\n]{1,300})\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/;
 const AUTO = /^https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/;
 
+const isSpace = (c: string | undefined) =>
+  c === " " || c === "\t" || c === "\u00a0";
+const isWord = (c: string | undefined) =>
+  c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
+/** Index of the "**" closing a strong opened at rest[0..2], or -1. */
+function closeStrong(rest: string): number {
+  for (let from = 3; from < rest.length;) {
+    const e = rest.indexOf("**", from);
+    if (e < 0) return -1;
+    if (!isSpace(rest[e - 1])) return e;
+    from = e + 1;
+  }
+  return -1;
+}
+
+/**
+ * Index of the "*" or "_" closing an emphasis opened at rest[0], or -1: not
+ * after a space, not part of a doubled marker and, for "_", not inside a
+ * word.
+ */
+function closeEm(rest: string): number {
+  const d = rest[0];
+  for (let e = 2; e < rest.length; e++) {
+    if (rest[e] !== d || rest[e - 1] === d || isSpace(rest[e - 1])) continue;
+    if (rest[e + 1] === d) continue;
+    if (d === "_" && isWord(rest[e + 1])) continue;
+    return e;
+  }
+  return -1;
+}
+
 /** Inline tokens of one line. */
 export function inline(src: string): Inline[] {
   const out: Inline[] = [];
@@ -41,18 +73,33 @@ export function inline(src: string): Inline[] {
         continue;
       }
     }
-    if (rest.startsWith("**")) {
-      const end = rest.indexOf("**", 2);
-      if (end > 2) {
+    // A marker opens only at a word boundary and before a non-space, so
+    // 2*3*4, snake_case and a lone * stay text (the Go parser of the channel
+    // translator applies the same rules; see markdown_cases.json).
+    const opens = !isWord(src[i - 1]);
+    if (
+      opens &&
+      rest.startsWith("**") &&
+      rest.length > 2 &&
+      !isSpace(rest[2])
+    ) {
+      const end = closeStrong(rest);
+      if (end > 0) {
         flush();
         out.push({ t: "strong", c: inline(rest.slice(2, end)) });
         i += end + 2;
         continue;
       }
     }
-    if ((rest[0] === "*" || rest[0] === "_") && rest[1] !== " ") {
-      const end = rest.indexOf(rest[0], 1);
-      if (end > 1 && rest[end - 1] !== " ") {
+    if (
+      opens &&
+      (rest[0] === "*" || rest[0] === "_") &&
+      rest.length > 1 &&
+      rest[1] !== rest[0] &&
+      !isSpace(rest[1])
+    ) {
+      const end = closeEm(rest);
+      if (end > 0) {
         flush();
         out.push({ t: "em", c: inline(rest.slice(1, end)) });
         i += end + 1;
@@ -65,7 +112,10 @@ export function inline(src: string): Inline[] {
       i += m[0].length;
       continue;
     }
-    if ((m = AUTO.exec(rest)) && (i === 0 || /\s|\(/.test(src[i - 1]!))) {
+    if (
+      (i === 0 || isSpace(src[i - 1]) || src[i - 1] === "(") &&
+      (m = AUTO.exec(rest))
+    ) {
       flush();
       out.push({ t: "link", href: m[0], c: [{ t: "text", v: m[0] }] });
       i += m[0].length;
@@ -127,7 +177,7 @@ export function parse(src: string, markdown = true): Block[] {
       blocks.push({ t: "pre", v: body.join("\n") });
       continue;
     }
-    const item = /^\s*(?:([-*•])|(\d{1,3})[.)])\s+(.*)$/.exec(line);
+    const item = /^[ \t]*(?:([-*•])|(\d{1,3})[.)])[ \t]+(.*)$/.exec(line);
     if (item) {
       endPara();
       const ordered = Boolean(item[2]);

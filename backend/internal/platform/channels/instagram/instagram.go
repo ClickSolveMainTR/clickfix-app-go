@@ -56,6 +56,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/metagraph"
 )
 
@@ -510,6 +511,9 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	if token == "" {
 		return channels.SendResult{}, channels.Permanent("not_configured", errors.New("instagram: access token is missing"))
 	}
+	// Instagram documents no text formatting: direct messages, comment
+	// replies and mention replies go out without marks (CF-177).
+	msg.Text = format.Plain(msg.Text)
 	switch {
 	case strings.HasPrefix(msg.ThreadID, ThreadMention):
 		return a.sendMention(ctx, inst, token, msg)

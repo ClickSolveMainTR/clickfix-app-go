@@ -141,6 +141,7 @@ func TestPreview(t *testing.T) {
 	cases := map[string]string{
 		"<p>Merhaba&nbsp;<b>dünya</b></p>\n\n<script>alert(1)</script>": "Merhaba dünya",
 		"  çok   boşluklu\tmetin ":                                      "çok boşluklu metin",
+		"**Kargonuz** `yolda`, snake_case":                              "Kargonuz yolda, snake_case",
 		"":                                                              "",
 	}
 	for in, want := range cases {
