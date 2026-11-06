@@ -163,5 +163,6 @@
   "dashboard.pending_setup_other": "{{count}} setup steps left",
   "dashboard.pending_incidents_one": "{{count}} ongoing incident",
   "dashboard.pending_incidents_other": "{{count}} ongoing incidents",
-  "dashboard.load_failed": "This section could not be loaded"
+  "dashboard.load_failed": "This section could not be loaded",
+  "more.forum": "Community forum"
 }

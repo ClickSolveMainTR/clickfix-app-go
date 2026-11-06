@@ -163,5 +163,6 @@
   "dashboard.pending_setup_other": "Kurulumda {{count}} adım kaldı",
   "dashboard.pending_incidents_one": "Süren {{count}} olay",
   "dashboard.pending_incidents_other": "Süren {{count}} olay",
-  "dashboard.load_failed": "Bu bölüm yüklenemedi"
+  "dashboard.load_failed": "Bu bölüm yüklenemedi",
+  "more.forum": "Topluluk forumu"
 }
