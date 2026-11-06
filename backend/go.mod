@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.30
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.0
+	github.com/beevik/etree v1.6.0
 	github.com/crewjam/saml v0.5.1
 	github.com/emersion/go-imap v1.2.1
 	github.com/furkanmeclis/go-ubltr v0.0.0-20260816110918-5b412e96178d
@@ -36,7 +37,7 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.14 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.31 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.31 // indirect
@@ -47,7 +48,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.32 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
-	github.com/beevik/etree v1.6.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
