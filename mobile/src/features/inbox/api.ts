@@ -224,6 +224,7 @@ export function useUpdateConversation(uuid: string) {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.sla(org, uuid) });
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.messages(org, uuid) });
     },
@@ -284,6 +285,7 @@ export function useInboxLive(activeUuid?: string, onInbound?: () => void) {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     }, 250);
   });
@@ -445,6 +447,7 @@ export function useQuickUpdate() {
     onSuccess: (detail) => qc.setQueryData(inboxKeys.detail(org, detail.uuid), detail),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });
@@ -534,6 +537,7 @@ export function useBulk() {
       unwrap(api.POST('/v1/tenant/conversations/bulk', { params: { header: orgHeader() }, body })),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });
@@ -551,6 +555,7 @@ export function useUndoBulk() {
       ),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });

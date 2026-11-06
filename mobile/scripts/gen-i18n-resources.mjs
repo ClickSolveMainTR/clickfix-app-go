@@ -29,6 +29,7 @@ const WEB = {
   common: 'web',
   calendar: 'calendar',
   appointments: 'appointments',
+  workforce: 'workforce',
 };
 const WEB_NS = Object.values(WEB);
 
