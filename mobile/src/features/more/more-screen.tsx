@@ -65,6 +65,7 @@ export function MoreScreen() {
         { key: 'team_chat', icon: 'chat', to: '/more/team-chat', show: can(P.teamChat), badge: chatUnread },
         { key: 'oncall', icon: 'alert', to: '/more/oncall', show: can(P.schedulesRead) },
         { key: 'workforce', icon: 'calendar', to: '/more/workforce', show: can(P.schedulesRead) },
+        { key: 'coaching', icon: 'chart', to: '/more/coaching', show: can(P.schedulesRead, P.qualityManage) },
       ],
     },
     {
@@ -85,6 +86,7 @@ export function MoreScreen() {
         { key: 'channels', icon: 'channel', to: '/more/channels', show: can(P.channelsRead) },
         { key: 'members', icon: 'staff', to: '/more/members', show: can(P.membersRead) },
         { key: 'teams', icon: 'customers', to: '/more/teams', show: can(P.teamsRead) },
+        { key: 'forum', icon: 'chat', to: '/more/forum', show: can(P.feedbackManage) },
         { key: 'ai', icon: 'sparkles', to: '/more/ai', show: can(P.settingsRead) },
         { key: 'billing', icon: 'wallet', to: '/more/billing', show: can(P.billingRead) },
       ],

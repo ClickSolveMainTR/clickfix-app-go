@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { formatDateTime, localizeInstants } from './date-format.ts';
+import { formatDateTime, localizeInstants, inOtherYear } from './date-format.ts';
 
 const ymd: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
 
@@ -39,4 +39,12 @@ test('localizeInstants rewrites RFC 3339 instants inside text', () => {
   assert.equal(localizeInstants('2026-10-27T08:45:00Z', short), '27 Oct, 11:45');
   assert.equal(localizeInstants('until 2026-10-27T08:45:00.123+03:00 · ok', short), 'until 27 Oct, 08:45 · ok');
   assert.equal(localizeInstants('2026-10-27 plain date', short), '2026-10-27 plain date');
+});
+
+test('inOtherYear is true only for an instant from another year', () => {
+  const now = new Date('2026-11-06T12:00:00Z');
+  assert.equal(inOtherYear('2026-03-01T09:00:00Z', now), false);
+  assert.equal(inOtherYear('2025-12-03T09:00:00Z', now), true);
+  assert.equal(inOtherYear(null, now), false);
+  assert.equal(inOtherYear('not a date', now), false);
 });

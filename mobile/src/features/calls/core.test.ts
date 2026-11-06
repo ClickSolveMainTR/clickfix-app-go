@@ -7,7 +7,6 @@ import {
   directionLabel,
   duration,
   findCall,
-  needsYear,
   statusLabel,
   type T,
   transcriptProblem,
@@ -54,14 +53,6 @@ test('findCall looks through every loaded page', () => {
   assert.deepEqual(findCall(pages, 'c'), { uuid: 'c' });
   assert.equal(findCall(pages, 'z'), undefined);
   assert.equal(findCall(undefined, 'a'), undefined);
-});
-
-test('needsYear is true only for a call from another year', () => {
-  const now = new Date('2026-11-06T12:00:00Z');
-  assert.equal(needsYear('2026-03-01T09:00:00Z', now), false);
-  assert.equal(needsYear('2025-12-03T09:00:00Z', now), true);
-  assert.equal(needsYear(null, now), false);
-  assert.equal(needsYear('not a date', now), false);
 });
 
 test('transcriptProblem tells erased, forbidden and failed apart', () => {
