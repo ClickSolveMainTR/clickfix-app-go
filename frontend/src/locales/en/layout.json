@@ -100,5 +100,6 @@
   "nav_rules": "Rules",
   "nav_platform_assistant": "ClickFix Assistant",
   "nav_platform_guides": "Module guides",
-  "nav_platform_product_feedback": "Product feedback"
+  "nav_platform_product_feedback": "Product feedback",
+  "nav_engineering": "Product requests"
 }
