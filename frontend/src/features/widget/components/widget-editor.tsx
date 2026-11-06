@@ -327,6 +327,7 @@ function Editor({
       case "security":
         return (
           <SecuritySection
+            widgetId={widget.uuid}
             canManage={canManage}
             secretHint={widget.credential_hints?.identity_secret}
             onSaveSecret={(secret) =>
@@ -337,7 +338,13 @@ function Editor({
       case "replay":
         return <ReplaySection />;
       case "install":
-        return <InstallSection widgetId={widget.uuid} />;
+        return (
+          <InstallSection
+            widgetId={widget.uuid}
+            hasSecret={Boolean(widget.credential_hints?.identity_secret)}
+            onOpenSecurity={() => setSection("security")}
+          />
+        );
     }
   })();
 
