@@ -224,6 +224,7 @@ export function useUpdateConversation(uuid: string) {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.sla(org, uuid) });
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.messages(org, uuid) });
     },
@@ -284,6 +285,7 @@ export function useInboxLive(activeUuid?: string, onInbound?: () => void) {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     }, 250);
   });
@@ -445,6 +447,7 @@ export function useQuickUpdate() {
     onSuccess: (detail) => qc.setQueryData(inboxKeys.detail(org, detail.uuid), detail),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });
@@ -483,15 +486,26 @@ export function useTags(enabled = true) {
   });
 }
 
-export function useTeams(enabled = true) {
+/**
+ * Teams of the organization, by name: the pickers' list and, with `q`, the
+ * team management screen's search (CF-166). Team writes refresh every query
+ * whose key carries `'teams'` (`features/team/api.ts`).
+ */
+export function useTeams(enabled = true, q = '') {
   const { org } = useInboxScope();
   const can = useCan();
+  const query = q.trim();
   return useQuery({
-    queryKey: [...inboxKeys.all(org), 'teams'] as const,
+    queryKey: [...inboxKeys.all(org), 'teams', query] as const,
     enabled: !!org && enabled && can(P.teamsRead),
     staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
     queryFn: () =>
-      unwrap(api.GET('/v1/tenant/teams', { params: { header: orgHeader(), query: { limit: 100 } } })),
+      unwrap(
+        api.GET('/v1/tenant/teams', {
+          params: { header: orgHeader(), query: { limit: 100, ...(query ? { q: query } : {}) } },
+        }),
+      ),
   });
 }
 
@@ -523,6 +537,7 @@ export function useBulk() {
       unwrap(api.POST('/v1/tenant/conversations/bulk', { params: { header: orgHeader() }, body })),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });
@@ -540,6 +555,7 @@ export function useUndoBulk() {
       ),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
       void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
     },
   });

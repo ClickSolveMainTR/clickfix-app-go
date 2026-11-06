@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, View } from 'react-native';
 import { P, useCan } from '@/core/auth/permissions';
@@ -51,6 +51,16 @@ export function ChannelScreen() {
                     last
                   />
                 </List>
+                {channel.type === 'voice' ? (
+                  <List>
+                    <ListRow
+                      icon="phone"
+                      title={t('calls.open')}
+                      onPress={() => router.push({ pathname: '/more/calls', params: { uuid } })}
+                      last
+                    />
+                  </List>
+                ) : null}
                 {can(P.channelsManage) ? (
                   <Button
                     title={t('channels.check')}

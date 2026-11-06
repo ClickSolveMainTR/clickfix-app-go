@@ -121,7 +121,9 @@ function Field({ field, query }: { field: FormField; query: string }) {
   return (
     <Column>
       {field.options
-        .filter((o) => !query || o.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+        .filter(
+          (o) => !query || `${o.label} ${o.description ?? ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+        )
         .map((option) => (
           <Row key={option.value}>
             <Checkbox
@@ -211,7 +213,7 @@ export function FormSheet({
                 <Column key={i} modifiers={[paddingAll(8), fillMaxWidth()]}>
                   {section.title ? <Text>{section.title}</Text> : null}
                   {section.fields.map((field) => (
-                    <Field key={field.key} field={field} query={query} />
+                    <Field key={field.key} field={field} query={onSearch ? '' : query} />
                   ))}
                   {section.footer ? <Text>{section.footer}</Text> : null}
                 </Column>

@@ -220,7 +220,7 @@ export function FormSheet({
                       footer={section.footer ? <Text>{section.footer}</Text> : undefined}>
                       {section.fields.map((field) => (
                         <Group key={field.key}>
-                          <Field field={field} query={query} />
+                          <Field field={field} query={onSearch ? '' : query} />
                           {field.error || field.hint ? (
                             <Text
                               modifiers={[font({ size: 13 }), foregroundStyle(field.error ? String(destructive) : 'secondary')]}>

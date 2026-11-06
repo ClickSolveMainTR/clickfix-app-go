@@ -2,9 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Video } from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useState } from "react";
 
+import { ErrorState } from "@/components/common/error-state";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn, DataTable } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +27,7 @@ import { appToast } from "@/providers/toast-provider";
 import { videoErrorKey } from "../lib/use-video-scope";
 import {
   platformVideoService,
+  type CreditPackage as MinutePackage,
   type VideoPlatformSettings,
   type VideoPolicy,
 } from "../services/video.service";
@@ -252,8 +256,67 @@ function MinutePackages() {
     },
     onError: (err) => appToast.error(t(`video.errors.${videoErrorKey(err)}`)),
   });
-  const items = (list.data?.items ?? []).filter(
-    (p) => p.unit === "video_minutes",
+  const items = useMemo(
+    () => (list.data?.items ?? []).filter((p) => p.unit === "video_minutes"),
+    [list.data],
+  );
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<MinutePackage>({
+          accessorKey: "name",
+          labelKey: "video.platform.package.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="font-medium">{row.original.name}</span>
+          ),
+        }),
+        createColumn<MinutePackage>({
+          accessorKey: "code",
+          labelKey: "video.platform.package.code",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground">{row.original.code}</span>
+          ),
+        }),
+        createColumn<MinutePackage>({
+          id: "credits",
+          accessorFn: (row) => row.credits ?? 0,
+          labelKey: "video.platform.package.minutes",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+          cell: ({ row }) =>
+            t("video.minutes.amount", { minutes: row.original.credits ?? 0 }),
+        }),
+        createColumn<MinutePackage>({
+          id: "amount_minor",
+          accessorFn: (row) => row.amount_minor ?? 0,
+          labelKey: "video.platform.package.price",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+          cell: ({ row }) =>
+            ((row.original.amount_minor ?? 0) / 100).toLocaleString(undefined, {
+              style: "currency",
+              currency: "TRY",
+            }),
+        }),
+        createColumn<MinutePackage>({
+          id: "expires_days",
+          accessorFn: (row) => row.expires_days ?? 0,
+          labelKey: "video.platform.package.columns.validity",
+          cell: ({ row }) =>
+            row.original.expires_days ? (
+              t("video.minutes.valid_days", { days: row.original.expires_days })
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+      ] as ColumnDef<MinutePackage, unknown>[],
+    [t],
   );
   const input = (k: keyof typeof form, label: string, type = "text") => (
     <div className="space-y-1.5">
@@ -268,35 +331,29 @@ function MinutePackages() {
   );
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="space-y-2 p-4 text-sm">
-          {items.length === 0 ? (
-            <p className="text-muted-foreground">
-              {t("video.minutes.no_packages")}
-            </p>
-          ) : null}
-          {items.map((p) => (
-            <div key={p.uuid} className="flex flex-wrap gap-3">
-              <span className="font-medium">{p.name}</span>
-              <span className="text-muted-foreground">{p.code}</span>
-              <span>
-                {t("video.minutes.amount", { minutes: p.credits ?? 0 })}
-              </span>
-              <span>
-                {((p.amount_minor ?? 0) / 100).toLocaleString(undefined, {
-                  style: "currency",
-                  currency: "TRY",
-                })}
-              </span>
-              {p.expires_days ? (
-                <span>
-                  {t("video.minutes.valid_days", { days: p.expires_days })}
-                </span>
-              ) : null}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {list.isError ? (
+        <ErrorState
+          title={t("common.error_generic")}
+          onRetry={() => void list.refetch()}
+          retryLabel={t("common.retry")}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={items}
+          getRowId={(row) => row.uuid ?? row.code ?? ""}
+          isLoading={list.isLoading}
+          emptyDescription={t("video.minutes.no_packages")}
+          features={{
+            toolbar: false,
+            pagination: false,
+            globalFilter: false,
+            columnFilters: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">

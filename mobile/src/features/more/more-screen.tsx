@@ -52,6 +52,7 @@ export function MoreScreen() {
     {
       title: t('more.group_find'),
       items: [
+        { key: 'dashboard', icon: 'home', to: '/more/dashboard', show: true },
         { key: 'search', icon: 'search', to: '/search', show: true },
         { key: 'agenda', icon: 'calendar', to: '/agenda', show: can(P.appointmentsRead) },
         { key: 'video', icon: 'video', to: '/more/video', show: can(P.videoUse) },
@@ -63,6 +64,7 @@ export function MoreScreen() {
         { key: 'team', icon: 'customers', to: '/more/team', show: true },
         { key: 'team_chat', icon: 'chat', to: '/more/team-chat', show: can(P.teamChat), badge: chatUnread },
         { key: 'oncall', icon: 'alert', to: '/more/oncall', show: can(P.schedulesRead) },
+        { key: 'workforce', icon: 'calendar', to: '/more/workforce', show: can(P.schedulesRead) },
       ],
     },
     {
@@ -73,6 +75,8 @@ export function MoreScreen() {
         { key: 'incidents', icon: 'megaphone', to: '/more/incidents', show: can(P.conversationsRead) },
         { key: 'knowledge', icon: 'book', to: '/more/knowledge', show: can(P.settingsRead) },
         { key: 'replies', icon: 'note', to: '/more/replies', show: can(P.macrosRead) },
+        { key: 'workflows', icon: 'split', to: '/more/workflows', show: can(P.automationsRead) },
+        { key: 'rules', icon: 'macro', to: '/more/rules', show: can(P.automationsRead) },
       ],
     },
     {
@@ -80,6 +84,7 @@ export function MoreScreen() {
       items: [
         { key: 'channels', icon: 'channel', to: '/more/channels', show: can(P.channelsRead) },
         { key: 'members', icon: 'staff', to: '/more/members', show: can(P.membersRead) },
+        { key: 'teams', icon: 'customers', to: '/more/teams', show: can(P.teamsRead) },
         { key: 'ai', icon: 'sparkles', to: '/more/ai', show: can(P.settingsRead) },
         { key: 'billing', icon: 'wallet', to: '/more/billing', show: can(P.billingRead) },
       ],

@@ -20,6 +20,11 @@ import {
 } from "@tanstack/react-table";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  fromPersistedState,
+  toPersistedState,
+} from "@/components/tables/persist-state";
+import { searchTextIncludes } from "@/components/tables/search-text";
 import type {
   DataTableFeatures,
   DataTableState,
@@ -47,6 +52,7 @@ const DEFAULT_FEATURES: Required<Omit<DataTableFeatures, "persistKey">> & {
   rowReorder: false,
   inlineEdit: false,
   facetedFilters: true,
+  toolbar: true,
 };
 
 function readPersisted(
@@ -55,7 +61,7 @@ function readPersisted(
   if (!key || typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Partial<DataTableState>) : null;
+    return raw ? fromPersistedState(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -67,7 +73,7 @@ function writePersisted(
 ) {
   if (!key || typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(key, JSON.stringify(state));
+    window.localStorage.setItem(key, JSON.stringify(toPersistedState(state)));
   } catch {
     // ignore quota
   }
@@ -98,6 +104,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     state: controlled,
     initialState,
     pageCount,
+    rowCount,
   } = options;
 
   const features = { ...DEFAULT_FEATURES, ...featuresProp };
@@ -116,10 +123,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       [],
   );
   const [globalFilter, setGlobalFilter] = useState(
-    controlled?.globalFilter ??
-      persisted?.globalFilter ??
-      initialState?.globalFilter ??
-      "",
+    controlled?.globalFilter ?? initialState?.globalFilter ?? "",
   );
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     controlled?.columnVisibility ??
@@ -146,10 +150,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       {},
   );
   const [rowSelection, setRowSelection] = useState<RowSelectionState>(
-    controlled?.rowSelection ??
-      persisted?.rowSelection ??
-      initialState?.rowSelection ??
-      {},
+    controlled?.rowSelection ?? initialState?.rowSelection ?? {},
   );
   const [pagination, setPagination] = useState<PaginationState>(
     controlled?.pagination ??
@@ -209,12 +210,22 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     viewMode,
   ]);
 
+  // Uncontrolled pagination only: a controlled list (`useServerListState`)
+  // resets its own page when search, filters or sorting change.
+  const toFirstPage = () => {
+    if (controlled?.onPaginationChange) return;
+    setPagination((prev) =>
+      prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 },
+    );
+  };
+
   // TanStack Table returns functions that React Compiler cannot memoize safely.
   // eslint-disable-next-line react-hooks/incompatible-library -- library API
   const table = useReactTable({
     data,
     columns,
     pageCount,
+    rowCount,
     getRowId,
     state: {
       sorting: controlled?.sorting ?? sorting,
@@ -227,10 +238,18 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       rowSelection: controlled?.rowSelection ?? rowSelection,
       pagination: controlled?.pagination ?? pagination,
     },
-    onSortingChange: controlled?.onSortingChange ?? setSorting,
-    onColumnFiltersChange:
-      controlled?.onColumnFiltersChange ?? setColumnFilters,
-    onGlobalFilterChange: controlled?.onGlobalFilterChange ?? setGlobalFilter,
+    onSortingChange: (updater) => {
+      (controlled?.onSortingChange ?? setSorting)(updater);
+      toFirstPage();
+    },
+    onColumnFiltersChange: (updater) => {
+      (controlled?.onColumnFiltersChange ?? setColumnFilters)(updater);
+      toFirstPage();
+    },
+    onGlobalFilterChange: (updater) => {
+      (controlled?.onGlobalFilterChange ?? setGlobalFilter)(updater);
+      toFirstPage();
+    },
     onColumnVisibilityChange:
       controlled?.onColumnVisibilityChange ?? setColumnVisibility,
     onColumnOrderChange: controlled?.onColumnOrderChange ?? setColumnOrder,
@@ -241,6 +260,9 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onPaginationChange: controlled?.onPaginationChange ?? setPagination,
 
     enableSorting: features.sorting,
+    // Hiding a column needs a way to bring it back: the toolbar's column
+    // menu. Without that menu the header's "hide column" must go too.
+    enableHiding: features.columnVisibility && features.toolbar,
     enableMultiSort: features.multiSort,
     enableSortingRemoval: true,
     enableFilters: features.columnFilters || features.globalFilter,
@@ -271,7 +293,14 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       ? getFacetedUniqueValues()
       : undefined,
 
-    globalFilterFn: "includesString",
+    // Turkish-aware and accent-insensitive; TanStack's "includesString" lower
+    // cases with toLowerCase(), which never matches İ / I against i / ı.
+    globalFilterFn: (row, columnId, filterValue) =>
+      searchTextIncludes(row.getValue(columnId), filterValue),
+
+    // Client mode: a data refresh (edit, toggle) must not jump to page 1.
+    // The page resets below when search, filters or sorting change.
+    autoResetPageIndex: false,
   });
 
   const resetAll = () => {
@@ -283,7 +312,9 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     table.resetColumnPinning();
     table.resetColumnSizing();
     table.resetRowSelection();
-    table.resetPagination();
+    // Back to the first page only: `resetPagination()` would also drop the
+    // page size to TanStack's default (10), whatever the screen started with.
+    table.setPageIndex(0);
     setDensity(initialState?.density ?? "comfortable");
     setViewMode(initialState?.viewMode ?? "table");
     controlled?.onDensityChange?.(initialState?.density ?? "comfortable");

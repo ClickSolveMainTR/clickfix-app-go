@@ -19,6 +19,8 @@ export const P = {
   /** Shared (organization) canned responses; personal ones only need `macrosRead` (`macros/routes.go`). */
   macrosWrite: 'tenant.macros.write',
   teamsRead: 'tenant.teams.read',
+  /** Create, edit and delete teams, add and remove their members (`teams/routes.go`). */
+  teamsWrite: 'tenant.teams.write',
   appointmentsRead: 'tenant.appointments.read',
   appointmentsWrite: 'tenant.appointments.write',
   videoUse: 'tenant.video.use',
@@ -29,6 +31,8 @@ export const P = {
   settingsWrite: 'tenant.settings.write',
   teamChat: 'tenant.team_chat.use',
   schedulesRead: 'tenant.schedules.read',
+  /** Agent timesheets (`workforce/routes.go`). */
+  schedulesManage: 'tenant.schedules.manage',
   /** Engineering issues (`engineering/routes.go`). */
   ticketsRead: 'tenant.tickets.read',
   ticketsWrite: 'tenant.tickets.write',
@@ -37,6 +41,9 @@ export const P = {
   membersRead: 'tenant.members.read',
   membersWrite: 'tenant.members.write',
   billingRead: 'tenant.billing.read',
+  /** Workflows and automation rules; the on/off switch needs the write slug (`automation/routes.go`). */
+  automationsRead: 'tenant.automations.read',
+  automationsWrite: 'tenant.automations.write',
 } as const;
 
 export type Permission = (typeof P)[keyof typeof P];

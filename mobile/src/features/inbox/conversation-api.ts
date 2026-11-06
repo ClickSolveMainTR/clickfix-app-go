@@ -40,6 +40,7 @@ function useRefresh(uuid: string) {
     void qc.invalidateQueries({ queryKey: inboxKeys.detail(org, uuid) });
     void qc.invalidateQueries({ queryKey: inboxKeys.messages(org, uuid) });
     void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+    void qc.invalidateQueries({ queryKey: inboxKeys.dashboardSla(org) });
   };
 }
 

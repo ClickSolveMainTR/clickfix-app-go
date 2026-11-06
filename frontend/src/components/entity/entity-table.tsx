@@ -12,8 +12,14 @@ import { useLocale } from "@/providers/locale-provider";
 
 type EntityTableProps<TData> = Omit<
   DataTableProps<TData>,
-  "isLoading" | "emptyTitle" | "emptyDescription"
+  "isLoading" | "errorState" | "emptyTitle" | "emptyDescription" | "rowCount"
 > & {
+  /**
+   * Total rows across all pages, as returned by the list endpoint (`total`).
+   * Drives the page count and the "from–to / total" counter; do not compute
+   * `pageCount` by hand.
+   */
+  total?: number;
   isLoading?: boolean;
   isError?: boolean;
   errorTitle?: string;
@@ -28,6 +34,11 @@ type EntityTableProps<TData> = Omit<
 /**
  * DataTable wrapper with shared loading / empty / error conventions
  * for platform entity list pages.
+ *
+ * Server mode is the default (`manual` filtering / sorting / pagination), so
+ * search, column filters and sorting are shown but only work when the page
+ * sends them to the endpoint. Turn off what the endpoint does not support:
+ * `features={{ globalFilter: false, columnFilters: false, sorting: false }}`.
  */
 export function EntityTable<TData>({
   isLoading,
@@ -35,6 +46,7 @@ export function EntityTable<TData>({
   errorTitle,
   errorDescription,
   onRetry,
+  total,
   emptyTitle,
   emptyDescription,
   toolbar,
@@ -43,16 +55,14 @@ export function EntityTable<TData>({
 }: EntityTableProps<TData>) {
   const { t } = useLocale();
 
-  if (isError) {
-    return (
-      <ErrorState
-        title={errorTitle ?? t("common.error_generic")}
-        description={errorDescription}
-        onRetry={onRetry}
-        retryLabel={t("common.retry")}
-      />
-    );
-  }
+  const errorState = isError ? (
+    <ErrorState
+      title={errorTitle ?? t("common.error_generic")}
+      description={errorDescription}
+      onRetry={onRetry}
+      retryLabel={t("common.retry")}
+    />
+  ) : undefined;
 
   const mergedToolbar =
     toolbar || toolbarExtra ? (
@@ -67,7 +77,9 @@ export function EntityTable<TData>({
   return (
     <DataTable
       {...props}
+      rowCount={total}
       isLoading={isLoading}
+      errorState={errorState}
       emptyTitle={emptyTitle ?? t("common.empty_title")}
       emptyDescription={emptyDescription ?? t("common.empty_description")}
       toolbar={

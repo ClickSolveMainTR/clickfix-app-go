@@ -147,11 +147,7 @@ export function UsersPage() {
     [meta?.bulk_actions],
   );
 
-  const pageCount = useMemo(() => {
-    const total = listQuery.data?.total ?? 0;
-    const size = listState.pagination.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [listQuery.data?.total, listState.pagination.pageSize]);
+  const total = listQuery.data?.total ?? 0;
 
   return (
     <EntityPage
@@ -194,7 +190,7 @@ export function UsersPage() {
         onRetry={() => void listQuery.refetch()}
         emptyTitle={t("users.empty_title")}
         emptyDescription={t("users.empty_description")}
-        pageCount={pageCount}
+        total={total}
         state={{
           ...listState.tableState,
           rowSelection: bulkSelection.rowSelection,
