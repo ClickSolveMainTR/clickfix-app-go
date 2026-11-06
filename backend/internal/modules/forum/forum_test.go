@@ -242,13 +242,24 @@ func TestForumModerationDecidesAPendingPostOnce(t *testing.T) {
 	must(pool.QueryRow(ctx, "INSERT INTO organizations(name,slug) VALUES('Forum race',$1) RETURNING id", suffix).Scan(&org))
 	must(pool.QueryRow(ctx, "INSERT INTO users(email,password_hash,name,surname,status) VALUES($1,'test','Forum','Agent','active') RETURNING id", suffix+"@example.test").Scan(&actor))
 	must(pool.QueryRow(ctx, "INSERT INTO contacts(organization_id,name) VALUES($1,'Author') RETURNING id", org).Scan(&author))
+	// Leaves nothing behind, the outbox rows of the emitted events included;
+	// a failed delete fails the test instead of leaking rows silently.
 	defer func() {
-		_, _ = pool.Exec(ctx, "DELETE FROM forum_subscriptions WHERE organization_id=$1", org)
-		_, _ = pool.Exec(ctx, "DELETE FROM forum_posts WHERE organization_id=$1", org)
-		_, _ = pool.Exec(ctx, "DELETE FROM forum_categories WHERE organization_id=$1", org)
-		_, _ = pool.Exec(ctx, "DELETE FROM contacts WHERE organization_id=$1", org)
-		_, _ = pool.Exec(ctx, "DELETE FROM organizations WHERE id=$1", org)
-		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id=$1", actor)
+		for _, stmt := range []string{
+			"DELETE FROM outbox_events WHERE organization_id=$1",
+			"DELETE FROM forum_subscriptions WHERE organization_id=$1",
+			"DELETE FROM forum_posts WHERE organization_id=$1",
+			"DELETE FROM forum_categories WHERE organization_id=$1",
+			"DELETE FROM contacts WHERE organization_id=$1",
+			"DELETE FROM organizations WHERE id=$1",
+		} {
+			if _, err := pool.Exec(ctx, stmt, org); err != nil {
+				t.Errorf("cleanup %q: %v", stmt, err)
+			}
+		}
+		if _, err := pool.Exec(ctx, "DELETE FROM users WHERE id=$1", actor); err != nil {
+			t.Errorf("cleanup user: %v", err)
+		}
 	}()
 	_, err = q.ForumCreateCategory(ctx, db.ForumCreateCategoryParams{OrganizationID: org, Slug: "general", Name: "General"})
 	must(err)
