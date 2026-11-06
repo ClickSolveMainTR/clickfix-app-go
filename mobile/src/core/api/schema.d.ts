@@ -13662,7 +13662,7 @@ export interface paths {
         };
         /**
          * Validate MCP authorization request and redirect to consent
-         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. A valid request redirects to the staff consent screen /oauth/consent?request=UUID. Every error is shown as an error page and never redirected to redirect_uri (registration is anonymous, so that would be an open redirect); the browser goes to the client only after a decision on the consent screen.
+         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. A valid request redirects to the staff consent screen /oauth/consent?request=UUID. Errors are shown as an error page; only for a loopback redirect_uri (a program on the user's computer) is a request error redirected there per RFC 6749 §4.1.2.1. A remote redirect_uri never receives a redirect before a decision on the consent screen (registration is anonymous, so that would be an open redirect).
          */
         get: operations["getOauthAuthorize"];
         put?: never;
@@ -58423,7 +58423,7 @@ export interface operations {
                     "application/json": components["schemas"]["IntegrationEnvelope"];
                 };
             };
-            /** @description Redirect to the consent screen of this origin. Never to the client: an invalid request is answered with an error page (400), not a redirect. */
+            /** @description Redirect to the consent screen of this origin, or (request errors of a loopback redirect_uri only) to the client with error, state and iss. A remote client never receives a redirect before the consent decision; its invalid request is answered with an error page (400). */
             302: {
                 headers: {
                     [name: string]: unknown;

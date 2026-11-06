@@ -147,6 +147,21 @@ func TestAuthorizeNeverRedirectsToTheClient(t *testing.T) {
 
 	svc := New(tx, nil, issuer, nil)
 	svc.SetGate(&fakeGate{allowed: true})
+	q := db.New(tx)
+	var orgID int64
+	var orgUUID uuid.UUID
+	if err = tx.QueryRow(ctx, "INSERT INTO organizations(name,slug) VALUES('MCP sec test',$1) RETURNING id,uuid", uuid.NewString()).Scan(&orgID, &orgUUID); err != nil {
+		t.Fatal(err)
+	}
+	user, err := q.CreateUser(ctx, db.CreateUserParams{
+		Email: "mcpsec-" + uuid.NewString()[:8] + "@example.test", PasswordHash: "x", Name: "M", Surname: "S", Status: "active",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, "INSERT INTO organization_members(organization_id,user_id,role_id) SELECT $1,$2,id FROM roles WHERE scope='tenant' AND organization_id IS NULL AND slug='owner'", orgID, user.ID); err != nil {
+		t.Fatal(err)
+	}
 	evil := "https://evil.example/landing"
 	client, err := svc.Register(ctx, "203.0.113.9", model.RegisterInput{ClientName: "Claude\nverified", RedirectURIs: []string{evil, "http://127.0.0.1:7777/cb"}})
 	if err != nil {
@@ -179,7 +194,26 @@ func TestAuthorizeNeverRedirectsToTheClient(t *testing.T) {
 		}
 	}
 
-	to, err := svc.Authorize(ctx, "203.0.113.9", valid)
+	// A loopback client (a program on the user's computer) does get the RFC
+	// error redirect for a request error, since nothing else can show it the
+	// error; an unknown client or an unregistered redirect_uri still never does.
+	loopbackBad := valid
+	loopbackBad.RedirectURI, loopbackBad.Scope = "http://127.0.0.1:7777/cb", "mcp:admin"
+	to, err := svc.Authorize(ctx, "203.0.113.9", loopbackBad)
+	if err != nil {
+		t.Fatalf("loopback request error: %v", err)
+	}
+	lu, _ := url.Parse(to)
+	if lu.Host != "127.0.0.1:7777" || lu.Query().Get("error") != model.ErrInvalidScope || lu.Query().Get("state") != "s" || lu.Query().Get("iss") != issuer {
+		t.Fatalf("loopback error redirect %s", to)
+	}
+	unregistered := loopbackBad
+	unregistered.RedirectURI = "http://127.0.0.1:9999/other"
+	if to, err = svc.Authorize(ctx, "203.0.113.9", unregistered); to != "" || err == nil {
+		t.Fatalf("unregistered loopback redirect_uri: redirect %q, err %v", to, err)
+	}
+
+	to, err = svc.Authorize(ctx, "203.0.113.9", valid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,13 +223,6 @@ func TestAuthorizeNeverRedirectsToTheClient(t *testing.T) {
 	}
 
 	// The consent screen data: ASCII host, loopback told apart, lifetimes.
-	q := db.New(tx)
-	user, err := q.CreateUser(ctx, db.CreateUserParams{
-		Email: "mcpsec-" + uuid.NewString()[:8] + "@example.test", PasswordHash: "x", Name: "M", Surname: "S", Status: "active",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	id, _ := uuid.Parse(u.Query().Get("request"))
 	info, err := svc.Consent(ctx, Actor{UserID: user.ID}, id)
 	if err != nil {
@@ -217,6 +244,21 @@ func TestAuthorizeNeverRedirectsToTheClient(t *testing.T) {
 	id, _ = uuid.Parse(u.Query().Get("request"))
 	if info, err = svc.Consent(ctx, Actor{UserID: user.ID}, id); err != nil || !info.RedirectLoopback || info.RedirectHost != "127.0.0.1:7777" {
 		t.Fatalf("loopback redirect: %+v %v", info, err)
+	}
+
+	// Connected apps list the cleaned name too.
+	approved, err := svc.Authorize(ctx, "203.0.113.9", local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	au, _ := url.Parse(approved)
+	aid, _ := uuid.Parse(au.Query().Get("request"))
+	if _, err = svc.Decide(ctx, Actor{UserID: user.ID}, aid, model.DecideInput{Decision: model.DecisionApprove, OrganizationUUID: &orgUUID}); err != nil {
+		t.Fatal(err)
+	}
+	grants, _, err := svc.ListGrants(ctx, Actor{UserID: user.ID}, ListFilter{Limit: 10})
+	if err != nil || len(grants) != 1 || grants[0].ClientName != "Claude verified" {
+		t.Fatalf("grants %+v %v", grants, err)
 	}
 
 	// A denial on the consent screen is the one error that goes to the client.

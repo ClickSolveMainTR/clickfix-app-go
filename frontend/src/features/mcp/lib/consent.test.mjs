@@ -19,6 +19,7 @@ const {
   consentView,
   decideBody,
   decideErrorKey,
+  decisionGate,
   lifetime,
   safeClientRedirect,
   selectedOrganization,
@@ -196,4 +197,14 @@ test("lifetimes read as hours or days", () => {
   assert.deepEqual(lifetime(1800), { unit: "hours", count: 1 });
   assert.equal(lifetime(0), null);
   assert.equal(lifetime(undefined), null);
+});
+
+test("the decision gate lets one decision through until it is reset", () => {
+  const gate = decisionGate();
+  assert.equal(gate.take(), true);
+  assert.equal(gate.take(), false, "a second click in the same frame");
+  assert.equal(gate.take(), false);
+  gate.reset();
+  assert.equal(gate.take(), true, "after a refused decision");
+  assert.equal(gate.take(), false);
 });

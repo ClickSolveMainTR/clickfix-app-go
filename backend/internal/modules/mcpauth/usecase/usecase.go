@@ -369,8 +369,8 @@ func (s *Service) Register(ctx context.Context, ip string, in model.RegisterInpu
 // CreateAuthRequest validates an authorize request and stores it for
 // consent. PKCE is required with code_challenge_method S256 and resource must
 // name one of the MCP endpoints. Errors found after the client and its
-// redirect_uri are verified are marked Redirectable (RFC 6749 §4.1.2.1), but
-// Authorize does not act on that: see there.
+// redirect_uri are verified are marked Redirectable (RFC 6749 §4.1.2.1);
+// Authorize redirects them only for a loopback redirect_uri.
 func (s *Service) CreateAuthRequest(ctx context.Context, in model.AuthorizeInput) (model.AuthRequest, error) {
 	client, err := s.q.GetMCPOAuthClient(ctx, in.ClientID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && client.RevokedAt.Valid) {
