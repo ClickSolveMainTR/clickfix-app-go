@@ -65,6 +65,8 @@
   "toast.approved": "Post published.",
   "toast.rejected": "Post rejected.",
   "toast.spam": "Post rejected as spam.",
+  "toast.already_moderated": "This post was already handled. The queue was refreshed.",
+  "toast.reply_conflict": "The reply could not be published: it was already handled or its topic is not published yet. The queue was refreshed.",
   "toast.ai_flagged": "AI warning: {{reason}}",
   "toast.ai_clean": "AI found no issue.",
   "toast.ai_limited": "AI credits ran out or the daily limit was reached.",
