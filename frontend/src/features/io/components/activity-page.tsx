@@ -80,11 +80,7 @@ export function ActivityPage() {
     [t],
   );
 
-  const pageCount = useMemo(() => {
-    const total = listQuery.data?.total ?? 0;
-    const size = listState.pagination.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [listQuery.data?.total, listState.pagination.pageSize]);
+  const total = listQuery.data?.total ?? 0;
 
   return (
     <EntityPage
@@ -111,7 +107,7 @@ export function ActivityPage() {
         onRetry={() => void listQuery.refetch()}
         emptyTitle={t("activity.empty_title")}
         emptyDescription={t("activity.empty_description")}
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "platform-activity-v1", rowSelection: false }}
         toolbarExtra={

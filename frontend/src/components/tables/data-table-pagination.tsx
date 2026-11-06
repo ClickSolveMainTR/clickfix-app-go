@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { paginationSummary } from "@/components/tables/pagination-summary";
 import { useLocale } from "@/providers/locale-provider";
 import { cn } from "@/lib/utils";
 
@@ -32,9 +33,14 @@ export function DataTablePagination<TData>({
 }: DataTablePaginationProps<TData>) {
   const { t } = useLocale();
   const { pageIndex, pageSize } = table.getState().pagination;
-  const total = table.getFilteredRowModel().rows.length;
-  const from = total === 0 ? 0 : pageIndex * pageSize + 1;
-  const to = Math.min(total, (pageIndex + 1) * pageSize);
+  const { from, to, total } = paginationSummary({
+    pageIndex,
+    pageSize,
+    manual: Boolean(table.options.manualPagination),
+    rowCount: table.options.rowCount,
+    pageRows: table.getRowModel().rows.length,
+    filteredRows: table.getFilteredRowModel().rows.length,
+  });
 
   return (
     <div
@@ -46,7 +52,9 @@ export function DataTablePagination<TData>({
       )}
     >
       <p className="text-muted-foreground text-xs">
-        {t("table.showing", { from, to, total })}
+        {total === null
+          ? t("table.showing_range", { from, to })
+          : t("table.showing", { from, to, total })}
       </p>
 
       <div

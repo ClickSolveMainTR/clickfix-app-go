@@ -109,10 +109,6 @@ export function MembersPage() {
   });
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = useMemo(() => {
-    const size = listState.pagination.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [listState.pagination.pageSize, total]);
   const hasFilters = Boolean(listParams.q) || Boolean(listParams.role);
 
   const removingName = removing
@@ -179,7 +175,7 @@ export function MembersPage() {
                 ? t("tenant_members.empty_filtered_description")
                 : t("tenant_members.empty_description")
             }
-            pageCount={pageCount}
+            total={total}
             state={listState.tableState}
             features={{ persistKey: "tenant-members-v1", viewMode: true }}
             toolbarExtra={
