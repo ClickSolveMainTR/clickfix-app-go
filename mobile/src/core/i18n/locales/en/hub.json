@@ -56,6 +56,7 @@
   "more.oncall": "On-call",
   "more.oncall_hint": "Who is on call, open alerts",
   "more.workforce": "Workforce planning",
+  "more.coaching": "Coaching and gamification",
   "more.reports": "Reports",
   "more.reports_hint": "Volume, first response, resolution, CSAT, SLA",
   "more.engineering": "Product requests",
@@ -163,5 +164,6 @@
   "dashboard.pending_setup_other": "{{count}} setup steps left",
   "dashboard.pending_incidents_one": "{{count}} ongoing incident",
   "dashboard.pending_incidents_other": "{{count}} ongoing incidents",
-  "dashboard.load_failed": "This section could not be loaded"
+  "dashboard.load_failed": "This section could not be loaded",
+  "more.forum": "Community forum"
 }

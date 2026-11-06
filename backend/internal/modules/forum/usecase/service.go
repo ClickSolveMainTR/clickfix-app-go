@@ -4,6 +4,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strings"
 
@@ -90,9 +91,11 @@ func (s *Service) Moderate(ctx context.Context, org, actor int64, id uuid.UUID, 
 		if err != nil {
 			return err
 		}
-		if old.Status == status {
-			out = old
-			return nil
+		// Only a pending post can be decided. A second moderator working from
+		// a stale queue gets a conflict instead of overwriting the first
+		// decision; ForumPost holds the row lock until this transaction ends.
+		if old.Status != "pending" {
+			return supportops.ErrConflict
 		}
 		if old.TopicID.Valid && status == "published" {
 			topic, err := r.Q.ForumTopicByID(ctx, db.ForumTopicByIDParams{OrganizationID: org, ID: old.TopicID.Int64})
@@ -104,6 +107,11 @@ func (s *Service) Moderate(ctx context.Context, org, actor int64, id uuid.UUID, 
 			}
 		}
 		out, err = r.Q.ForumModerate(ctx, db.ForumModerateParams{OrganizationID: org, Uuid: id, Status: status})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The post exists (read above), so the update matched nothing
+			// only because it is no longer pending.
+			return supportops.ErrConflict
+		}
 		if err != nil {
 			return err
 		}
