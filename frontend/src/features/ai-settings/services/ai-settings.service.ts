@@ -54,12 +54,12 @@ export const aiSettingsService = {
     });
   },
 
-  procedures(slug: string) {
+  procedures(slug: string, limit = 100, offset = 0) {
     return tenantRequest<Page<AIProcedureRecord>>(
       slug,
       "GET",
       `${AI}/procedures`,
-      { query: { limit: 100 } },
+      { query: { limit, offset } },
     );
   },
   createProcedure(slug: string, body: AIProcedureInput) {

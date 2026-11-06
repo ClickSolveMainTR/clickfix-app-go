@@ -264,7 +264,7 @@
   "versions.restored": "Sürüm taslağa yüklendi; kaydedip yayınlayın.",
   "runs.empty": "Henüz çalışma yok.",
   "runs.error": "Çalışmalar yüklenemedi.",
-  "runs.more": "Daha fazla göster",
+  "runs.column": "Çalışma",
   "runs.never": "Hiç çalışmadı",
   "runs.detail": "Çalışma ayrıntısı",
   "runs.detail_description": "v{{version}} sürümüne bağlı adım günlüğü",
