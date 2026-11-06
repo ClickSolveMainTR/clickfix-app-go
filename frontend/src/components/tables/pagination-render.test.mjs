@@ -338,3 +338,42 @@ test("empty-page fallback waits while the list is loading", () => {
   });
   assert.equal(fallback.busy, null);
 });
+
+test("columns can be hidden only when the column menu can bring them back", () => {
+  const canHide = (features) => {
+    let result;
+    function Probe() {
+      const { table } = useDataTable({
+        columns: nameColumns,
+        data: rows,
+        features,
+      });
+      result = table.getAllLeafColumns().map((column) => column.getCanHide());
+      return null;
+    }
+    renderToStaticMarkup(createElement(Probe));
+    return result;
+  };
+  assert.deepEqual(canHide(undefined), [true]);
+  assert.deepEqual(canHide({ columnVisibility: false }), [false]);
+  // No toolbar, no column menu: a hidden column could never come back.
+  assert.deepEqual(canHide({ toolbar: false }), [false]);
+});
+
+test("the header offers no hide action on a table without a toolbar", () => {
+  const html = (features) =>
+    text(
+      renderToStaticMarkup(
+        createElement(DataTable, {
+          columns: [
+            { accessorKey: "name", header: "name", enableSorting: false },
+          ],
+          data: rows,
+          features: { columnPinning: false, ...features },
+        }),
+      ),
+    );
+  // With nothing left to do (no sort, no pin, no hide) the header is plain
+  // text; otherwise it is a menu button.
+  assert.ok(!html({ toolbar: false }).includes("aria-haspopup"));
+});

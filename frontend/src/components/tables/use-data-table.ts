@@ -260,6 +260,9 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onPaginationChange: controlled?.onPaginationChange ?? setPagination,
 
     enableSorting: features.sorting,
+    // Hiding a column needs a way to bring it back: the toolbar's column
+    // menu. Without that menu the header's "hide column" must go too.
+    enableHiding: features.columnVisibility && features.toolbar,
     enableMultiSort: features.multiSort,
     enableSortingRemoval: true,
     enableFilters: features.columnFilters || features.globalFilter,
