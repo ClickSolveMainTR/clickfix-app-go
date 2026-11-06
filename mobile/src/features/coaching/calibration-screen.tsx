@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, View } from 'react-native';
 
 import { P, useCan } from '@/core/auth/permissions';
-import { formatCompactDate, formatNumber } from '@/core/format';
+import { formatNumber } from '@/core/format';
 import { useMemberNames } from '@/features/team/names';
 import { Card, Stat } from '@/ui/card';
 import { List, ListRow, SectionHeader } from '@/ui/list';
@@ -16,6 +16,7 @@ import { useManualRefresh } from '@/ui/use-manual-refresh';
 import { useCalibration, useCoachingScope } from './api';
 import { NoAccess } from './coaching-screen';
 import { criteriaRows, SPREAD_FLAG } from './core';
+import { coachingDate } from './dates';
 
 const nf = (value: number) => formatNumber(value, 1);
 
@@ -35,6 +36,8 @@ export function CalibrationScreen() {
   const refresh = useManualRefresh(query);
   const nameOf = useMemberNames();
   if (!canQuality) return <NoAccess title={t('calibrations.session')} body={t('forbidden')} />;
+  // Opened without a session (a broken link): nothing to load, so no request and no endless skeleton.
+  if (!uuid) return <NoAccess title={t('calibrations.session')} body={t('work:coaching.not_found')} />;
   return (
     <>
       <Stack.Screen options={{ title: query.data?.name ?? t('calibrations.session') }} />
@@ -50,7 +53,7 @@ export function CalibrationScreen() {
                   <ListRow
                     title={s.name}
                     titleLines={2}
-                    subtitle={formatCompactDate(s.created_at)}
+                    subtitle={coachingDate(s.created_at)}
                     trailing={
                       <StatusPill
                         label={closed ? t('calibrations.status_closed') : t('calibrations.status_open')}

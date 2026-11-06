@@ -8,7 +8,9 @@ import {
   kindKey,
   leaderboardWindow,
   metricKey,
+  otherYear,
   readable,
+  shortSeconds,
   thresholdParts,
 } from './core.ts';
 
@@ -109,4 +111,21 @@ test('criteriaRows joins rubric and statistics and flags a high spread', () => {
   assert.equal(criteriaRows([{ key: 'tone' }], undefined)[0]!.stats, null);
   // Not fooled by inherited object keys.
   assert.equal(criteriaRows([{ key: 'toString' }], {})[0]!.stats, null);
+});
+
+test('shortSeconds keeps sub-minute thresholds in seconds', () => {
+  assert.equal(shortSeconds(20), 20);
+  assert.equal(shortSeconds(45.4), 45);
+  assert.equal(shortSeconds(0), 0);
+  assert.equal(shortSeconds(60), null);
+  assert.equal(shortSeconds(300), null);
+});
+
+test('otherYear asks for the year only outside the current one', () => {
+  const now = new Date('2026-11-06T12:00:00Z');
+  assert.equal(otherYear('2026-03-01T12:00:00Z', now), false);
+  assert.equal(otherYear('2025-06-15T12:00:00Z', now), true);
+  assert.equal(otherYear('2027-06-15T12:00:00Z', now), true);
+  assert.equal(otherYear(null, now), false);
+  assert.equal(otherYear('soon', now), false);
 });

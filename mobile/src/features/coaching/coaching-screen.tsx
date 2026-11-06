@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, View } from 'react-native';
 
-import { formatCompactDate, formatNumber } from '@/core/format';
+import { formatNumber } from '@/core/format';
 import { formatDuration } from '@/features/inbox/helpers';
 import { useTeamPresence } from '@/features/team/api';
 import { useMemberNames } from '@/features/team/names';
@@ -28,7 +28,17 @@ import {
   useLeaderboard,
   useLeaderboardPreference,
 } from './api';
-import { groupItems, itemState, kindKey, LEADERBOARD_RANGES, metricKey, readable, thresholdParts } from './core';
+import {
+  groupItems,
+  itemState,
+  kindKey,
+  LEADERBOARD_RANGES,
+  metricKey,
+  readable,
+  shortSeconds,
+  thresholdParts,
+} from './core';
+import { coachingDate } from './dates';
 
 const TABS = ['leaderboard', 'rules', 'calibrations', 'coaching'] as const;
 type Tab = (typeof TABS)[number];
@@ -162,7 +172,14 @@ function Rules({ tabs }: { tabs: React.ReactNode }) {
   const refresh = useManualRefresh(query);
   const threshold = (metric: string, value: number) => {
     const p = thresholdParts(metric, value);
-    const text = p.seconds ? formatDuration(value, i18n.language) : formatNumber(value, 2);
+    // Like the panel: a first response target under a minute reads in seconds, not as "0 min".
+    const seconds = p.seconds ? shortSeconds(value) : null;
+    const text =
+      seconds !== null
+        ? t('work:coaching.seconds', { count: seconds })
+        : p.seconds
+          ? formatDuration(value, i18n.language)
+          : formatNumber(value, 2);
     return `${p.sign} ${text}${p.scale ? ` / ${p.scale}` : ''}`;
   };
   return (
@@ -224,7 +241,7 @@ function Calibrations({ tabs }: { tabs: React.ReactNode }) {
                   <ListRow
                     key={c.uuid}
                     title={c.name}
-                    subtitle={formatCompactDate(c.created_at)}
+                    subtitle={coachingDate(c.created_at)}
                     trailing={
                       <StatusPill
                         label={c.closed_at ? t('calibrations.status_closed') : t('calibrations.status_open')}
@@ -258,12 +275,15 @@ function Calibrations({ tabs }: { tabs: React.ReactNode }) {
 }
 
 function Items({ tabs }: { tabs: React.ReactNode }) {
-  const { t } = useTranslation('coaching');
+  const { t, i18n } = useTranslation('coaching');
   const presence = useTeamPresence();
+  // One name lookup and one "now" for every row (overdue compares against when the tab was opened).
+  const nameOf = useMemberNames();
+  const [now] = useState(() => Date.now());
   const [agent, setAgent] = useState<string | null>(null);
   const query = useCoachingItems(agent ?? '');
   const refresh = useManualRefresh(query);
-  const members = [...(presence.data?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  const members = [...(presence.data?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name, i18n.language));
   return (
     <Screen refreshControl={agent ? <RefreshControl {...refresh} /> : undefined}>
       {tabs}
@@ -287,9 +307,16 @@ function Items({ tabs }: { tabs: React.ReactNode }) {
                     <View className="gap-3">
                       {g.goals.map((goal) => (
                         <List key={goal.uuid}>
-                          <ItemRow item={goal} last={!g.tasks.get(goal.uuid)?.length} />
+                          <ItemRow item={goal} nameOf={nameOf} now={now} last={!g.tasks.get(goal.uuid)?.length} />
                           {(g.tasks.get(goal.uuid) ?? []).map((task, i, all) => (
-                            <ItemRow key={task.uuid} item={task} indent last={i === all.length - 1} />
+                            <ItemRow
+                              key={task.uuid}
+                              item={task}
+                              nameOf={nameOf}
+                              now={now}
+                              indent
+                              last={i === all.length - 1}
+                            />
                           ))}
                         </List>
                       ))}
@@ -304,7 +331,9 @@ function Items({ tabs }: { tabs: React.ReactNode }) {
                   <SectionHeader title={t('items.notes')} />
                   <List>
                     {g.notes.length ? (
-                      g.notes.map((n, i) => <ItemRow key={n.uuid} item={n} last={i === g.notes.length - 1} />)
+                      g.notes.map((n, i) => (
+                        <ItemRow key={n.uuid} item={n} nameOf={nameOf} now={now} last={i === g.notes.length - 1} />
+                      ))
                     ) : (
                       <ListRow title={t('items.no_notes')} last />
                     )}
@@ -315,7 +344,14 @@ function Items({ tabs }: { tabs: React.ReactNode }) {
                     <SectionHeader title={t('work:coaching.other')} />
                     <List>
                       {g.other.map((o, i) => (
-                        <ItemRow key={o.uuid} item={o} showKind last={i === g.other.length - 1} />
+                        <ItemRow
+                          key={o.uuid}
+                          item={o}
+                          nameOf={nameOf}
+                          now={now}
+                          showKind
+                          last={i === g.other.length - 1}
+                        />
                       ))}
                     </List>
                   </View>
@@ -342,19 +378,20 @@ function Items({ tabs }: { tabs: React.ReactNode }) {
 /** One note, goal or task: its text, who wrote it and its date state. */
 function ItemRow({
   item,
+  nameOf,
+  now,
   last,
   indent,
   showKind,
 }: {
   item: CoachingItem;
+  nameOf: (uuid: string | null | undefined) => string;
+  now: number;
   last: boolean;
   indent?: boolean;
   showKind?: boolean;
 }) {
   const { t } = useTranslation('coaching');
-  const nameOf = useMemberNames();
-  // Overdue compares against the time the row was first shown, like the panel's tab.
-  const [now] = useState(() => Date.now());
   const state = itemState(item, now);
   const kind = kindKey(item.kind);
   const coach = item.coach_uuid ? nameOf(item.coach_uuid) : null;
@@ -366,7 +403,7 @@ function ItemRow({
       subtitle={[
         showKind ? (kind ? t(`kind.${kind}`) : readable(item.kind)) : null,
         coach && coach !== '—' ? coach : null,
-        formatCompactDate(item.created_at),
+        coachingDate(item.created_at),
       ]
         .filter(Boolean)
         .join(' · ')}
@@ -375,10 +412,10 @@ function ItemRow({
           <StatusPill
             label={
               state === 'completed'
-                ? t('items.completed', { date: formatCompactDate(item.completed_at) })
+                ? t('items.completed', { date: coachingDate(item.completed_at) })
                 : state === 'overdue'
-                  ? t('items.overdue', { date: formatCompactDate(item.due_at) })
-                  : t('items.due', { date: formatCompactDate(item.due_at) })
+                  ? t('items.overdue', { date: coachingDate(item.due_at) })
+                  : t('items.due', { date: coachingDate(item.due_at) })
             }
             tone={state === 'completed' ? 'done' : state === 'overdue' ? 'problem' : 'neutral'}
           />

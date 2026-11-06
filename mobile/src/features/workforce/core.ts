@@ -25,14 +25,17 @@ function floorUtcHour(d: Date) {
 /**
  * `[since, until)` of a forecast for `days` days starting today: whole UTC
  * hours, from the current hour (the API takes no past hour) to local
- * midnight `days` days on.
+ * midnight `days` days on. In a zone with a half-hour offset the last hour
+ * of the day floors both ends to the same hour; the window then covers that
+ * one hour, so it is never empty (the API answers 400 to an empty one).
  */
 export function forecastWindow(days: number, now = new Date()) {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const since = floorUtcHour(now);
-  const until = floorUtcHour(new Date(start.getTime() + days * DAY));
-  return { since: since.toISOString(), until: until.toISOString() };
+  let until = floorUtcHour(new Date(start.getTime() + days * DAY));
+  if (until <= since) until = new Date(since.getTime() + HOUR);
+  return { since: since.toISOString(), until: until.toISOString(), valid: days >= 1 && !Number.isNaN(until.getTime()) };
 }
 
 type Hour = {
@@ -109,46 +112,34 @@ export function coverage(row: ForecastRow): 'gap' | 'covered' | 'surplus' {
 }
 
 /**
- * Bucket label in the organization's zone (the API groups by that zone, not
- * the phone's). A date is formatted at noon UTC so no zone shifts the day.
+ * What to format for a bucket label: an hour in the organization's zone
+ * (the API groups by that zone, not the phone's), or a calendar date at
+ * noon UTC so no zone shifts the day. `null` when the API value is not a date.
  */
-export function bucketLabel(
-  row: ForecastRow,
-  granularity: Granularity,
-  timeZone: string,
-  locale: string,
-  long = false,
-) {
-  try {
-    if (granularity === 'day')
-      return new Intl.DateTimeFormat(locale, {
-        timeZone: 'UTC',
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-      }).format(new Date(`${row.at}T12:00:00Z`));
-    return new Intl.DateTimeFormat(locale, {
-      timeZone,
-      weekday: 'short',
-      ...(long ? { day: 'numeric', month: 'short' } : {}),
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(row.at));
-  } catch {
-    return row.at;
-  }
+export function bucketInstant(row: ForecastRow, granularity: Granularity, timeZone: string) {
+  const date = new Date(granularity === 'day' ? `${row.at}T12:00:00Z` : row.at);
+  if (Number.isNaN(date.getTime())) return null;
+  return { date, timeZone: granularity === 'day' ? 'UTC' : timeZone };
 }
 
 /** The timesheet API accepts at most 31 days per request. */
 export const TIMESHEET_RANGES = [7, 14, 31] as const;
 export type TimesheetRange = (typeof TIMESHEET_RANGES)[number];
 
-/** `[since, until)`: the last `days` local days, today included. */
+/** The API rejects a window longer than 31 × 24 hours. */
+const MAX_TIMESHEET_MS = 31 * DAY;
+
+/**
+ * `[since, until)`: the last `days` local days, today included. Across the
+ * end of daylight saving time 31 local days are 745 hours, so the start is
+ * moved up to keep the window inside the API's limit.
+ */
 export function timesheetWindow(days: number, now = new Date()) {
   const until = new Date(now);
   until.setHours(24, 0, 0, 0);
-  const since = new Date(until);
+  let since = new Date(until);
   since.setDate(since.getDate() - days);
+  if (until.getTime() - since.getTime() > MAX_TIMESHEET_MS) since = new Date(until.getTime() - MAX_TIMESHEET_MS);
   return { since: since.toISOString(), until: until.toISOString() };
 }
 

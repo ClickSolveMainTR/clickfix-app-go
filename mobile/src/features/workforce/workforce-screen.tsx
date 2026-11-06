@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, View } from 'react-native';
 
 import { P, useCan } from '@/core/auth/permissions';
+import { formatDateTime } from '@/core/date-format';
 import { appLocale, formatNumber } from '@/core/format';
 import { formatDuration } from '@/features/inbox/helpers';
 import { useMemberNames } from '@/features/team/names';
@@ -22,7 +23,8 @@ import { useManualRefresh } from '@/ui/use-manual-refresh';
 import { useForecast, useTimesheets, useWorkforceScope } from './api';
 import {
   agentTimes,
-  bucketLabel,
+  bucketInstant,
+  type ForecastRow,
   coverage,
   forecastRows,
   forecastTotals,
@@ -73,6 +75,21 @@ export function WorkforceScreen() {
 }
 
 const num = (value: number) => formatNumber(value, 1);
+
+/**
+ * Bucket label, formatted by the app's safe formatter (an unknown zone falls
+ * back instead of throwing). A value that is not a date is shown as "—",
+ * never as a raw timestamp.
+ */
+function bucketLabel(row: ForecastRow, granularity: Granularity, zone: string, long: boolean) {
+  const at = bucketInstant(row, granularity, zone);
+  if (!at) return '—';
+  const options: Intl.DateTimeFormatOptions =
+    granularity === 'day'
+      ? { weekday: 'short', day: 'numeric', month: 'short' }
+      : { weekday: 'short', ...(long ? { day: 'numeric', month: 'short' } : {}), hour: '2-digit', minute: '2-digit' };
+  return formatDateTime(appLocale(), { ...options, timeZone: at.timeZone }, at.date) || '—';
+}
 
 function ForecastView({ tabs }: { tabs: React.ReactNode }) {
   const { t } = useTranslation('workforce');
@@ -152,7 +169,7 @@ function ForecastView({ tabs }: { tabs: React.ReactNode }) {
                     return (
                       <ListRow
                         key={r.key}
-                        title={bucketLabel(r, granularity, zone, appLocale(), horizon > 1)}
+                        title={bucketLabel(r, granularity, zone, horizon > 1)}
                         subtitle={[
                           `${t('forecast.volume')} ${num(r.volume)}`,
                           `${t('forecast.required')} ${r.capacityLimited ? '≥ ' : ''}${num(r.required)}`,
@@ -270,6 +287,16 @@ export function AgentTimeScreen() {
   const dur = useDuration();
   const name = nameOf(params.agent);
   if (!canTimesheets) return <NoAccess title={t('tabs.timesheets')} body={t('work:workforce.no_timesheets')} />;
+  // Opened without an agent (a broken link): nothing to look up, so no request and no endless skeleton.
+  if (!params.agent)
+    return (
+      <>
+        <Stack.Screen options={{ title: t('tabs.timesheets') }} />
+        <Screen>
+          <EmptyState icon="calendar" title={t('work:workforce.agent_not_found')} />
+        </Screen>
+      </>
+    );
   return (
     <>
       <Stack.Screen options={{ title: name === '—' ? t('tabs.timesheets') : name }} />
@@ -277,7 +304,7 @@ export function AgentTimeScreen() {
         <QueryState query={query}>
           {(rows) => {
             const a = agentTimes(rows).find((x) => x.agent === params.agent);
-            if (!a) return <EmptyState icon="calendar" title={t('timesheets.empty')} />;
+            if (!a) return <EmptyState icon="calendar" title={t('work:workforce.agent_not_found')} />;
             const openable = can(P.conversationsRead);
             return (
               <View className="gap-4">

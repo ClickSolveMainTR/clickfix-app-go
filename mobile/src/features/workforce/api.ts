@@ -21,34 +21,38 @@ export function useWorkforceScope() {
   return { canForecast: can(P.schedulesRead), canTimesheets: can(P.schedulesRead) && can(P.schedulesManage) };
 }
 
+// Keys hold what the member picked, not the computed window: the window moves every hour, and a key
+// that moved with it would miss the persisted cache offline and leave one stored entry per hour.
 const keys = {
   all: (org: string) => orgKey(org, 'workforce'),
-  forecast: (org: string, since: string, until: string, granularity: Granularity) =>
-    [...keys.all(org), 'forecast', since, until, granularity] as const,
-  timesheets: (org: string, since: string, until: string) => [...keys.all(org), 'timesheets', since, until] as const,
+  forecast: (org: string, days: number, granularity: Granularity) =>
+    [...keys.all(org), 'forecast', granularity, days] as const,
+  timesheets: (org: string, days: number) => [...keys.all(org), 'timesheets', days] as const,
 };
 
 /**
  * Demand and staffing for the next `days` days with the panel's default
  * model parameters. `POST /v1/tenant/workforce/forecast` only calculates;
- * it stores nothing.
+ * it stores nothing. While another horizon loads the previous rows stay on
+ * screen, but never across hourly ↔ daily: those rows mean different things.
  */
 export function useForecast(days: number, granularity: Granularity) {
   const org = useOrgSlug();
   const { canForecast } = useWorkforceScope();
-  const { since, until } = forecastWindow(days);
   return useQuery({
-    queryKey: keys.forecast(org, since, until, granularity),
-    enabled: !!org && canForecast,
+    queryKey: keys.forecast(org, days, granularity),
+    enabled: !!org && canForecast && forecastWindow(days).valid,
     staleTime: 5 * 60_000,
-    placeholderData: (prev) => prev,
-    queryFn: () =>
-      unwrap(
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey.includes(granularity) ? prev : undefined),
+    queryFn: () => {
+      const { since, until } = forecastWindow(days);
+      return unwrap(
         api.POST('/v1/tenant/workforce/forecast', {
           params: { header: orgHeader() },
           body: { since, until, granularity, ...MODEL },
         }),
-      ),
+      );
+    },
   });
 }
 
@@ -56,13 +60,16 @@ export function useForecast(days: number, granularity: Granularity) {
 export function useTimesheets(days: number, enabled = true) {
   const org = useOrgSlug();
   const { canTimesheets } = useWorkforceScope();
-  const { since, until } = timesheetWindow(days);
   return useQuery({
-    queryKey: keys.timesheets(org, since, until),
+    queryKey: keys.timesheets(org, days),
     enabled: !!org && enabled && canTimesheets,
     staleTime: 60_000,
     placeholderData: (prev) => prev,
-    queryFn: () =>
-      unwrap(api.GET('/v1/tenant/workforce/timesheets', { params: { header: orgHeader(), query: { since, until } } })),
+    queryFn: () => {
+      const { since, until } = timesheetWindow(days);
+      return unwrap(
+        api.GET('/v1/tenant/workforce/timesheets', { params: { header: orgHeader(), query: { since, until } } }),
+      );
+    },
   });
 }

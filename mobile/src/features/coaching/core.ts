@@ -105,3 +105,15 @@ export function criteriaRows(rubric: Criterion[], criteria: Record<string, Varia
     };
   });
 }
+
+/** Whole seconds when a duration is under a minute (`20` → 20), else `null`: longer ones read as minutes. */
+export function shortSeconds(seconds: number) {
+  return seconds >= 0 && seconds < 60 ? Math.round(seconds) : null;
+}
+
+/** True when the date is in another calendar year than `now`, so the year has to be shown. */
+export function otherYear(iso: string | null | undefined, now = new Date()) {
+  if (!iso) return false;
+  const date = new Date(iso);
+  return !Number.isNaN(date.getTime()) && date.getFullYear() !== now.getFullYear();
+}
