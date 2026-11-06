@@ -37,7 +37,9 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/status/components", h.Components, false)
 	route("POST /v1/tenant/status/components", h.Components, true)
 	route("PATCH /v1/tenant/status/components/{uuid}", h.Components, true)
-	route("GET /v1/tenant/status/incidents", h.Incidents, false)
+	// Agents read incidents without organization-wide conversation access
+	// (CF-162): they answer differently during an outage. Managing stays above.
+	mux.Handle("GET /v1/tenant/status/incidents", middleware.Chain(http.HandlerFunc(h.Incidents), middleware.Authenticate(tokens, loader), middleware.RequireOrganization(resolver), middleware.RequireTenantPermission(rbac.PermTenantConversationsRead)))
 	route("POST /v1/tenant/status/incidents", h.Incidents, true)
 	route("POST /v1/tenant/status/incidents/{uuid}/updates", h.Update, true)
 	route("POST /v1/tenant/status/incidents/{uuid}/conversations", h.Link, true)

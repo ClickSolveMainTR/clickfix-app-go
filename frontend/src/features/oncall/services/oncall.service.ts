@@ -131,11 +131,19 @@ export const oncallService = {
         body,
       },
     ),
-  incidents: (slug: string) =>
-    tenantRequest<{ items?: StatusIncident[] }>(
+  /**
+   * One page of incidents, newest first. Needs tenant.conversations.read
+   * only, so agents can read it (CF-162).
+   */
+  incidentsPage: (slug: string, params: { limit: number; offset: number }) =>
+    tenantRequest<Partial<Page<StatusIncident>>>(
       slug,
       "GET",
       "/v1/tenant/status/incidents",
-      { query: { limit: 50, offset: 0 } },
-    ).then((page) => page.items ?? []),
+      { query: params },
+    ),
+  incidents: (slug: string) =>
+    oncallService
+      .incidentsPage(slug, { limit: 50, offset: 0 })
+      .then((page) => page.items ?? []),
 };

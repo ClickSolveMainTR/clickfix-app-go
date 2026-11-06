@@ -9,13 +9,13 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
 import { StatusChip } from "@/components/common/status-chip";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, datetime, relativeDatetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
 import { useOncallError } from "../lib/use-oncall-error";
+import { IncidentSeverityBadge, IncidentStatusChip } from "./incident-badges";
 import {
   oncallService,
   type OncallAlert,
@@ -206,7 +206,6 @@ function IncidentRow({
   focused: boolean;
 }) {
   const { t, locale } = useLocale();
-  const resolved = Boolean(incident.resolved_at);
   return (
     <li
       id={incident.uuid ? incidentAnchor(incident.uuid) : undefined}
@@ -216,13 +215,8 @@ function IncidentRow({
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <StatusChip
-          label={incident.status ?? "—"}
-          tone={resolved ? "success" : "warning"}
-        />
-        {incident.severity && (
-          <Badge variant="outline">{incident.severity}</Badge>
-        )}
+        <IncidentStatusChip incident={incident} />
+        <IncidentSeverityBadge incident={incident} />
         <span className="text-sm font-medium">{incident.title}</span>
       </div>
       <p className="text-muted-foreground text-xs">
