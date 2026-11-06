@@ -17,5 +17,6 @@
   "workforce.last_days_one": "Son {{count}} gün",
   "workforce.last_days_other": "Son {{count}} gün",
   "workforce.model": "Bu görünüm panelin varsayılan parametreleriyle hesaplanır: konuşmaların %{{target}}'ine {{wait}} sn içinde yanıt, ortalama işlem süresi {{handle}} sn. Parametreler, kanal ve ekip filtresi panelden değiştirilir.",
-  "workforce.no_timesheets": "Çalışma süreleri için vardiyaları yönetme yetkisi gerekir. Organizasyon yöneticinizden yetki isteyin."
+  "workforce.no_timesheets": "Çalışma süreleri için vardiyaları yönetme yetkisi gerekir. Organizasyon yöneticinizden yetki isteyin.",
+  "workforce.agent_not_found": "Bu aralıkta bu temsilci için kayıt bulunamadı."
 }

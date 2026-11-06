@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import {
   agentTimes,
-  bucketLabel,
+  bucketInstant,
   coverage,
   forecastRows,
   forecastTotals,
@@ -95,13 +95,49 @@ test('forecastTotals and coverage', () => {
   assert.deepEqual(forecastTotals([]), { volume: 0, peakRequired: 0, gapBuckets: 0, gap: 0, capacityLimited: false });
 });
 
-test('bucketLabel uses the organization zone and never throws', () => {
+test('bucketInstant picks the zone to format in and rejects a bad value', () => {
   const [row] = forecastRows(hours);
-  assert.match(bucketLabel(row!, 'hour', 'Europe/Istanbul', 'en-GB'), /13:00/);
-  assert.match(bucketLabel(row!, 'hour', 'UTC', 'en-GB'), /10:00/);
-  assert.equal(bucketLabel(row!, 'hour', 'Not/AZone', 'en-GB'), row!.at);
+  assert.deepEqual(bucketInstant(row!, 'hour', 'Europe/Istanbul'), {
+    date: new Date('2026-11-06T10:00:00Z'),
+    timeZone: 'Europe/Istanbul',
+  });
   const day = { ...row!, at: '2026-11-06', key: '2026-11-06' };
-  assert.match(bucketLabel(day, 'day', 'America/Los_Angeles', 'en-GB'), /6 Nov/);
+  assert.deepEqual(bucketInstant(day, 'day', 'America/Los_Angeles'), {
+    date: new Date('2026-11-06T12:00:00Z'),
+    timeZone: 'UTC',
+  });
+  assert.equal(bucketInstant({ ...row!, at: 'soon' }, 'hour', 'UTC'), null);
+});
+
+/** Runs `fn` with the process in another time zone (Node re-reads `TZ` on change). */
+function inZone<T>(zone: string, fn: () => T): T {
+  const before = process.env.TZ;
+  process.env.TZ = zone;
+  try {
+    return fn();
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+}
+
+test('forecastWindow is never empty in a half-hour zone late in the day', () => {
+  // 23:40 in Kolkata (UTC+5:30): local midnight is 18:30Z, the same UTC hour as now.
+  const w = inZone('Asia/Kolkata', () => forecastWindow(1, new Date('2026-11-06T18:10:00Z')));
+  assert.equal(w.since, '2026-11-06T18:00:00.000Z');
+  assert.equal(w.until, '2026-11-06T19:00:00.000Z');
+  assert.equal(w.valid, true);
+  assert.equal(forecastWindow(0).valid, false);
+});
+
+test('timesheetWindow stays within 744 hours across the end of daylight saving time', () => {
+  // Berlin leaves summer time on 25 October 2026: 31 local days up to 6 November are 745 hours.
+  const w = inZone('Europe/Berlin', () => timesheetWindow(31, new Date('2026-11-06T10:00:00Z')));
+  const hours = (new Date(w.until).getTime() - new Date(w.since).getTime()) / 3_600_000;
+  assert.equal(hours, 744);
+  assert.equal(w.until, '2026-11-06T23:00:00.000Z');
+  const short = inZone('Europe/Berlin', () => timesheetWindow(7, new Date('2026-11-06T10:00:00Z')));
+  assert.equal((new Date(short.until).getTime() - new Date(short.since).getTime()) / 3_600_000, 168);
 });
 
 test('timesheetWindow covers whole local days, today included', () => {
