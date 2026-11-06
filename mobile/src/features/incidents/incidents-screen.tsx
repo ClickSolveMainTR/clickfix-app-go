@@ -1,11 +1,12 @@
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, View } from 'react-native';
 
 import { formatRelative, formatShort } from '@/core/format';
 import { Card } from '@/ui/card';
 import { EmptyState } from '@/ui/empty-state';
-import { SectionHeader } from '@/ui/list';
+import { useOncallScope } from '@/features/team/api';
+import { List, ListRow, SectionHeader } from '@/ui/list';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 import { QueryState } from '@/ui/query-state';
 import { Screen } from '@/ui/screen';
@@ -19,10 +20,23 @@ export function IncidentsScreen() {
   const { t } = useTranslation('work');
   const incidents = useIncidents();
   const refresh = useManualRefresh(incidents);
+  // Status components (CF-168) need organization-wide conversation access on top of this screen's permission.
+  const { canComponents } = useOncallScope();
   return (
     <>
       <Stack.Screen options={{ title: t('incidents.title') }} />
       <Screen refreshControl={<RefreshControl {...refresh} />}>
+        {canComponents ? (
+          <List>
+            <ListRow
+              icon="check"
+              title={t('team:setup.components')}
+              subtitle={t('team:setup.components_hint')}
+              onPress={() => router.push('/more/status-components')}
+              last
+            />
+          </List>
+        ) : null}
         <QueryState query={incidents}>
           {(d) => {
             const items = d.items ?? [];

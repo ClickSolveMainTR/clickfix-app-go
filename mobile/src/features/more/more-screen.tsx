@@ -52,6 +52,7 @@ export function MoreScreen() {
     {
       title: t('more.group_find'),
       items: [
+        { key: 'dashboard', icon: 'home', to: '/more/dashboard', show: true },
         { key: 'search', icon: 'search', to: '/search', show: true },
         { key: 'agenda', icon: 'calendar', to: '/agenda', show: can(P.appointmentsRead) },
         { key: 'video', icon: 'video', to: '/more/video', show: can(P.videoUse) },
@@ -63,6 +64,7 @@ export function MoreScreen() {
         { key: 'team', icon: 'customers', to: '/more/team', show: true },
         { key: 'team_chat', icon: 'chat', to: '/more/team-chat', show: can(P.teamChat), badge: chatUnread },
         { key: 'oncall', icon: 'alert', to: '/more/oncall', show: can(P.schedulesRead) },
+        { key: 'workforce', icon: 'calendar', to: '/more/workforce', show: can(P.schedulesRead) },
       ],
     },
     {
