@@ -220,8 +220,7 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: Reachable Go vulnerabilities (all severities)
-        working-directory: backend
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: python3 scripts/govulncheck.py backend backend/.govulncheck-ignore
       - name: Go security analysis (high severity)
         working-directory: backend
         run: go run github.com/securego/gosec/v2/cmd/gosec@v2.22.11 -severity high -exclude-generated ./...
