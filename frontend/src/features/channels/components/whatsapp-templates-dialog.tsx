@@ -153,7 +153,15 @@ export function WhatsAppTemplatesDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="sm:max-w-2xl"
+        // Focus the dialog itself, not its first control: that is the search
+        // box, and focusing it opens the keyboard on phones.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("channels.templates.title")}</DialogTitle>
           <DialogDescription>{t("channels.templates.hint")}</DialogDescription>

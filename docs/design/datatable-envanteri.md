@@ -272,8 +272,8 @@ CF-179 kuralı gereği tek ekrana özel çözüm çekirdeğe konmaz; aşağıdak
 
 | İşlem | Dosya |
 |---|---|
-| WhatsApp şablonu sil | `channels/components/whatsapp-templates-dialog.tsx:127` |
-| Video kaydı sil; katılımcı çıkar | `video/components/video-room-page.tsx:506`, `:364` |
+| WhatsApp şablonu sil: **onay eklendi (PR #66)** | `channels/components/whatsapp-templates-dialog.tsx` |
+| Video kaydı sil: **onay eklendi (PR #52)**; katılımcı çıkar (hâlâ onaysız) | `video/components/video-room-page.tsx` |
 | Plan geçersiz kılmasını sil | `video/components/platform-video-page.tsx:175` |
 | Tatil sil | `sla/components/sla-settings-page.tsx:553` |
 | Sözleşmeli firmayı kaldır | `sla/components/contracted-companies.tsx:149` |
