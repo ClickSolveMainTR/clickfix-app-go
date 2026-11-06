@@ -249,6 +249,21 @@ func newFlowEnv(t *testing.T) *flowEnv {
 	return &flowEnv{repo: repo, uc: uc, notif: notif, verify: v, apple: apple}
 }
 
+// rejectsPasswordLogin: an account created without a password (CF-181) keeps
+// an unusable hash, so no password signs in to it: not an empty one, not a
+// guess, not the stored hash itself.
+func (e *flowEnv) rejectsPasswordLogin(t *testing.T, u model.User) {
+	t.Helper()
+	if !strings.HasPrefix(u.PasswordHash, "$argon2id$") {
+		t.Fatalf("passwordless account must store an unusable hash, got %q", u.PasswordHash)
+	}
+	for _, guess := range []string{"", " ", "Password1", u.Email, u.PasswordHash} {
+		if _, err := e.uc.Login(context.Background(), u.Email, guess, "", model.SessionMeta{}); !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("password login with %q on a passwordless account: %v", guess, err)
+		}
+	}
+}
+
 func (e *flowEnv) user(t *testing.T, email string) model.User {
 	t.Helper()
 	hash, _ := password.Hash("Secret123!")
@@ -324,6 +339,7 @@ func TestEmailCodeSignUpCreatesAccount(t *testing.T) {
 	if !u.EmailVerified || u.PasswordSet || u.Name != "new.person" || u.Surname != "" || u.Status != "active" {
 		t.Fatalf("user = %+v", u)
 	}
+	e.rejectsPasswordLogin(t, u)
 	if e.notif.count("auth.welcome") != 1 || e.notif.count("auth.email_verification") != 0 {
 		t.Fatalf("welcome=%d verification=%d", e.notif.count("auth.welcome"), e.notif.count("auth.email_verification"))
 	}
@@ -710,9 +726,11 @@ func TestNativeSignUpHasNoPassword(t *testing.T) {
 	if _, err := e.uc.NativeOAuthLogin(context.Background(), NativeOAuthInput{Provider: "google", IDToken: "t"}, model.SessionMeta{}); err != nil {
 		t.Fatal(err)
 	}
-	if e.repo.byEmail["np@example.com"].PasswordSet {
+	created := e.repo.byEmail["np@example.com"]
+	if created.PasswordSet {
 		t.Fatal("OAuth sign-up must not count as a password")
 	}
+	e.rejectsPasswordLogin(t, created)
 	if !e.user(t, "pw@example.com").PasswordSet {
 		t.Fatal("password user must have PasswordSet")
 	}
