@@ -325,5 +325,6 @@
   "calls.transcript_gone": "The transcript was erased or its retention period ended.",
   "calls.transcript_failed": "The transcript could not be loaded. Tap to try again.",
   "calls.transcript_empty": "There is no transcript text yet.",
-  "calls.open": "Call log"
+  "calls.open": "Call log",
+  "calls.transcript_forbidden": "You do not have permission to view this transcript."
 }

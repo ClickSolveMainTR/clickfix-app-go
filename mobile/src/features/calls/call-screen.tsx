@@ -2,7 +2,6 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { RefreshControl, View } from 'react-native';
 
 import { isApiError } from '@/core/api/errors';
-import { formatShort } from '@/core/format';
 import { EmptyState } from '@/ui/empty-state';
 import { List, ListRow, SectionHeader } from '@/ui/list';
 import { QueryState } from '@/ui/query-state';
@@ -12,7 +11,7 @@ import { Text } from '@/ui/text';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 
 import { useCallScope, useCallTranscript, useVoiceCalls, type VoiceCall } from './api';
-import { useCallT } from './calls-screen';
+import { callTime, MissingCall, useCallT } from './calls-screen';
 import {
   callFailed,
   counterpart,
@@ -20,6 +19,7 @@ import {
   duration,
   findCall,
   statusLabel,
+  transcriptProblem,
   transcriptStatusLabel,
 } from './core';
 
@@ -53,6 +53,9 @@ export function CallScreen() {
       </>
     );
 
+  const openLog = () => router.replace({ pathname: '/more/calls', params: { uuid: channel } });
+  if (!channel || !uuid) return <MissingCall title={t('calls.call')} onOpen={channel ? openLog : undefined} />;
+
   return (
     <>
       <Stack.Screen options={{ title: t('calls.call') }} />
@@ -69,7 +72,7 @@ export function CallScreen() {
                 action={{
                   title: t('calls.open_log'),
                   icon: 'phone',
-                  onPress: () => router.replace({ pathname: '/more/calls', params: { uuid: channel } }),
+                  onPress: openLog,
                 }}
               />
             )
@@ -82,7 +85,9 @@ export function CallScreen() {
   function detail(c: VoiceCall) {
     const text = (transcript.data?.transcript || c.transcript || '').trim();
     const summary = transcript.data && 'summary' in transcript.data.summary ? transcript.data.summary : null;
-    const gone = isApiError(transcript.error) && transcript.error.status === 404;
+    const problem = transcript.isError
+      ? transcriptProblem(isApiError(transcript.error) ? transcript.error.status : null)
+      : null;
     return (
       <View className="gap-4">
         <List>
@@ -112,9 +117,9 @@ export function CallScreen() {
                 .join(' · ')}
             />
             <ListRow title={t('calls.duration')} subtitle={duration(c.duration_seconds)} />
-            <ListRow title={t('calls.started')} subtitle={formatShort(c.initiated_at ?? c.created_at)} />
-            {c.answered_at ? <ListRow title={t('calls.answered')} subtitle={formatShort(c.answered_at)} /> : null}
-            {c.ended_at ? <ListRow title={t('calls.ended')} subtitle={formatShort(c.ended_at)} /> : null}
+            <ListRow title={t('calls.started')} subtitle={callTime(c.initiated_at ?? c.created_at)} />
+            {c.answered_at ? <ListRow title={t('calls.answered')} subtitle={callTime(c.answered_at)} /> : null}
+            {c.ended_at ? <ListRow title={t('calls.ended')} subtitle={callTime(c.ended_at)} /> : null}
             <ListRow title={t('calls.provider')} subtitle={PROVIDERS[c.provider] ?? c.provider} last />
           </List>
         </View>
@@ -156,14 +161,12 @@ export function CallScreen() {
                     ? t('calls.transcript_no_permission')
                     : transcript.isLoading
                       ? '…'
-                      : gone
-                        ? t('calls.transcript_gone')
-                        : transcript.isError
-                          ? t('calls.transcript_failed')
-                          : t('calls.transcript_empty')
+                      : problem
+                        ? t(`calls.transcript_${problem}`)
+                        : t('calls.transcript_empty')
                 }
                 titleLines={3}
-                onPress={transcript.isError && !gone ? () => void transcript.refetch() : undefined}
+                onPress={problem === 'failed' ? () => void transcript.refetch() : undefined}
                 last
               />
             ) : null}

@@ -325,5 +325,6 @@
   "calls.transcript_gone": "Transkript silinmiş ya da saklama süresi dolmuş.",
   "calls.transcript_failed": "Transkript yüklenemedi. Tekrar denemek için dokunun.",
   "calls.transcript_empty": "Transkript metni henüz yok.",
-  "calls.open": "Çağrı kaydı"
+  "calls.open": "Çağrı kaydı",
+  "calls.transcript_forbidden": "Bu transkripti görme yetkiniz yok."
 }
