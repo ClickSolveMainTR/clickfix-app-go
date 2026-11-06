@@ -11,5 +11,11 @@
   "incidents.banner_one": "Devam eden bir olay var",
   "incidents.banner_many_one": "{{count}} devam eden olay var",
   "incidents.banner_many_other": "{{count}} devam eden olay var",
-  "incidents.open_hint": "Olay ayrıntılarını açar"
+  "incidents.open_hint": "Olay ayrıntılarını açar",
+  "workforce.days_one": "{{count}} gün",
+  "workforce.days_other": "{{count}} gün",
+  "workforce.last_days_one": "Son {{count}} gün",
+  "workforce.last_days_other": "Son {{count}} gün",
+  "workforce.model": "Bu görünüm panelin varsayılan parametreleriyle hesaplanır: konuşmaların %{{target}}'ine {{wait}} sn içinde yanıt, ortalama işlem süresi {{handle}} sn. Parametreler, kanal ve ekip filtresi panelden değiştirilir.",
+  "workforce.no_timesheets": "Çalışma süreleri için vardiyaları yönetme yetkisi gerekir. Organizasyon yöneticinizden yetki isteyin."
 }
