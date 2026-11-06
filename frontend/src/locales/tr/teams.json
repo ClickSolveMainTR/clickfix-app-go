@@ -54,6 +54,8 @@
   "members.remove_description": "Üye organizasyonda kalır; yalnızca bu ekipten çıkarılır.",
   "members.joined": "Katılım: {{date}}",
   "members.skills": "Beceriler",
+  "members.columns.member": "Üye",
+  "members.columns.role": "Rol",
   "roles.lead": "Lider",
   "roles.member": "Üye",
   "actions.create": "Ekip oluştur",
