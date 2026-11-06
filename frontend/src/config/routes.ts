@@ -127,6 +127,11 @@ export const routes = {
       root: "/apps",
       detail: (uuid: string) => `/apps?app=${encodeURIComponent(uuid)}`,
     },
+    /** Product requests handed to engineering (CF-159). */
+    engineering: {
+      root: "/engineering",
+      detail: (uuid: string) => `/engineering/${encodeURIComponent(uuid)}`,
+    },
     teams: {
       root: "/teams",
       create: "/teams/create",

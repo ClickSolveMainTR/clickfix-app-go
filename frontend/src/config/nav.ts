@@ -1,4 +1,5 @@
 import {
+  Bug,
   Blocks,
   Puzzle,
   Workflow,
@@ -411,6 +412,13 @@ export const cmsNav = defineNav({
           titleKey: "layout.nav_replies",
           href: "/replies",
           icon: MessageSquareText,
+        },
+        {
+          id: "engineering",
+          titleKey: "layout.nav_engineering",
+          href: routes.cms.engineering.root,
+          icon: Bug,
+          permission: permissions.tenant.tickets.read,
         },
         {
           id: "incidents",
