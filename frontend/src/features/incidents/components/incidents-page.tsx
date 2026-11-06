@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
 import {
@@ -22,6 +22,7 @@ import {
   oncallService,
   type StatusIncident,
 } from "@/features/oncall/services/oncall.service";
+import { usePermission } from "@/providers/permission-provider";
 import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { datetime, relativeDatetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
@@ -38,13 +39,16 @@ export function IncidentsPage() {
   const { slug } = useTenant();
   const listState = useServerListState({ initialPageSize: 20 });
   const columns = useIncidentsColumns();
-  const [open, setOpen] = useState<StatusIncident | null>(null);
+  const { can } = usePermission();
+  // Only the uuid: the drawer reads the row from the current page, so it
+  // follows the 2-minute refresh instead of showing a stale copy.
+  const [openUuid, setOpenUuid] = useState<string | null>(null);
   const { limit, offset } = listState.params;
 
   const listQuery = useQuery({
     queryKey: ["tenant", slug, "status", "incidents", "page", limit, offset],
     queryFn: () => oncallService.incidentsPage(slug, { limit, offset }),
-    enabled: Boolean(slug),
+    enabled: Boolean(slug) && can(permissions.tenant.conversations.read),
     placeholderData: keepPreviousData,
     refetchInterval: 2 * 60_000,
   });
@@ -52,6 +56,14 @@ export function IncidentsPage() {
   const pageCount = Math.max(
     1,
     Math.ceil((listQuery.data?.total ?? 0) / (limit || 20)),
+  );
+
+  const open = useMemo(
+    () =>
+      openUuid
+        ? (listQuery.data?.items?.find((i) => i.uuid === openUuid) ?? null)
+        : null,
+    [listQuery.data, openUuid],
   );
 
   return (
@@ -74,7 +86,7 @@ export function IncidentsPage() {
         columns={columns}
         data={listQuery.data?.items ?? []}
         getRowId={(row) => row.uuid ?? ""}
-        onRowClick={setOpen}
+        onRowClick={(row) => setOpenUuid(row.uuid ?? null)}
         isLoading={listQuery.isLoading}
         isError={listQuery.isError}
         errorDescription={t("oncall.incidents.unavailable")}
@@ -101,7 +113,7 @@ export function IncidentsPage() {
 
       <EntityDrawer
         open={Boolean(open)}
-        onOpenChange={(next) => !next && setOpen(null)}
+        onOpenChange={(next) => !next && setOpenUuid(null)}
         title={open?.title ?? ""}
       >
         {open ? <IncidentDetail incident={open} /> : null}

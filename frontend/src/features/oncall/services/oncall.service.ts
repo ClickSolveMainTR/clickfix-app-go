@@ -1,4 +1,4 @@
-import type { components } from "@/generated/api";
+import type { components, operations } from "@/generated/api";
 import { tenantRequest } from "@/lib/api/tenant-request";
 
 type Schemas = components["schemas"];
@@ -18,6 +18,9 @@ export type OncallAlert = Schemas["OncallAlert"];
 export type StatusComponent = Schemas["StatusComponent"];
 export type StatusComponentInput = Schemas["StatusComponentInput"];
 export type StatusIncident = Schemas["StatusIncident"];
+/** One page of `GET /v1/tenant/status/incidents`, as generated from OpenAPI. */
+export type StatusIncidentPage =
+  operations["listStatusIncidents"]["responses"][200]["content"]["application/json"]["data"];
 
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
@@ -136,7 +139,7 @@ export const oncallService = {
    * only, so agents can read it (CF-162).
    */
   incidentsPage: (slug: string, params: { limit: number; offset: number }) =>
-    tenantRequest<Partial<Page<StatusIncident>>>(
+    tenantRequest<StatusIncidentPage>(
       slug,
       "GET",
       "/v1/tenant/status/incidents",

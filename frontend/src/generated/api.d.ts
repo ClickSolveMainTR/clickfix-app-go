@@ -61512,6 +61512,7 @@ export interface operations {
                         success: true;
                         data: {
                             items?: components["schemas"]["StatusIncident"][];
+                            total?: number;
                             limit?: number;
                             offset?: number;
                         };

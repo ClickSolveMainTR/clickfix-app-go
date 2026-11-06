@@ -39431,6 +39431,8 @@ paths:
                         type: "array"
                         items:
                           "$ref": "#/components/schemas/StatusIncident"
+                      total:
+                        type: "integer"
                       limit:
                         type: "integer"
                       offset:
