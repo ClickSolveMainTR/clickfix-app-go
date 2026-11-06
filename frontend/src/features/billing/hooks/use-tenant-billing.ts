@@ -26,8 +26,8 @@ export const tenantBillingKeys = {
   entitlements: (slug: string) =>
     [...tenantBillingKeys.all(slug), "entitlements"] as const,
   usage: (slug: string) => [...tenantBillingKeys.all(slug), "usage"] as const,
-  invoices: (slug: string, offset: number) =>
-    [...tenantBillingKeys.all(slug), "invoices", offset] as const,
+  invoices: (slug: string, offset: number, limit: number) =>
+    [...tenantBillingKeys.all(slug), "invoices", offset, limit] as const,
   cards: (slug: string) => [...tenantBillingKeys.all(slug), "cards"] as const,
   bankAccounts: (slug: string) =>
     [...tenantBillingKeys.all(slug), "bank-accounts"] as const,
@@ -36,8 +36,8 @@ export const tenantBillingKeys = {
   profile: (slug: string) =>
     [...tenantBillingKeys.all(slug), "profile"] as const,
   catalog: () => ["public", "pricing"] as const,
-  wallet: (slug: string, offset: number) =>
-    [...tenantBillingKeys.all(slug), "wallet", offset] as const,
+  wallet: (slug: string, offset: number, limit: number) =>
+    [...tenantBillingKeys.all(slug), "wallet", offset, limit] as const,
   creditPackages: (slug: string) =>
     [...tenantBillingKeys.all(slug), "credit-packages"] as const,
   availability: (slug: string) =>
@@ -79,11 +79,11 @@ export function useTenantUsage() {
   });
 }
 
-export function useTenantInvoices(offset: number) {
+export function useTenantInvoices(offset: number, limit = 10) {
   const { slug } = useTenant();
   return useQuery({
-    queryKey: tenantBillingKeys.invoices(slug, offset),
-    queryFn: () => api.invoices(slug, { limit: 10, offset }),
+    queryKey: tenantBillingKeys.invoices(slug, offset, limit),
+    queryFn: () => api.invoices(slug, { limit, offset }),
     placeholderData: (prev) => prev,
   });
 }
@@ -326,11 +326,11 @@ export function useTrialInvoice() {
 }
 
 /** Wallet balances, settings and one ledger page (offset 0 for the cards). */
-export function useTenantWallet(offset = 0) {
+export function useTenantWallet(offset = 0, limit = WALLET_PAGE_SIZE) {
   const { slug } = useTenant();
   return useQuery({
-    queryKey: tenantBillingKeys.wallet(slug, offset),
-    queryFn: () => api.wallet(slug, { limit: WALLET_PAGE_SIZE, offset }),
+    queryKey: tenantBillingKeys.wallet(slug, offset, limit),
+    queryFn: () => api.wallet(slug, { limit, offset }),
     placeholderData: (prev) => prev,
   });
 }

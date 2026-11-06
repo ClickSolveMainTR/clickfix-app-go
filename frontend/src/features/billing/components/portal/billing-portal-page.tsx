@@ -10,12 +10,19 @@ import {
   XCircle,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
-import { EntityPage, EntitySectionCard } from "@/components/entity";
+import {
+  EntityPage,
+  EntitySectionCard,
+  EntityTable,
+  useServerListState,
+} from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,10 +39,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
-import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
 import { BillingStatus } from "@/features/billing/components/billing-status";
 import { PaymentProviderLabel } from "@/features/billing/components/payment-provider-label";
 import { BillingProfileForm } from "@/features/billing/components/portal/billing-profile-form";
@@ -456,124 +459,153 @@ function InvoicesCard({
 }) {
   const { t, locale } = useLocale();
   const { slug } = useTenant();
-  const [offset, setOffset] = useState(0);
-  const invoices = useTenantInvoices(offset);
+  const listState = useServerListState({ initialPageSize: 10 });
+  const { limit, offset } = listState.params;
+  const invoices = useTenantInvoices(offset, limit);
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const download = async (inv: BillingInvoiceSummary) => {
-    setDownloading(inv.uuid);
-    try {
-      const { blob, filename } = await tenantBillingService.downloadInvoice(
-        slug,
-        inv.uuid,
-        "pdf",
-      );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename ?? `${inv.number ?? inv.payment_reference}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setDownloading(null);
-    }
-  };
+  const download = useCallback(
+    async (inv: BillingInvoiceSummary) => {
+      setDownloading(inv.uuid);
+      try {
+        const { blob, filename } = await tenantBillingService.downloadInvoice(
+          slug,
+          inv.uuid,
+          "pdf",
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename ?? `${inv.number ?? inv.payment_reference}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [slug],
+  );
 
-  const columns: BillingColumn<BillingInvoiceSummary>[] = [
-    {
-      key: "number",
-      header: t("billing.portal.invoices.number"),
-      cell: (inv) => (
-        <span className="flex flex-col">
-          <code className="text-xs font-medium">
-            {inv.number ?? inv.payment_reference}
-          </code>
-          <span className="text-muted-foreground text-xs tabular-nums">
-            {date(inv.period_start, undefined, locale)} –{" "}
-            {date(inv.period_end, undefined, locale)}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: t("billing.portal.invoices.status"),
-      cell: (inv) => <BillingStatus kind="invoice" status={inv.status} />,
-    },
-    {
-      key: "due",
-      header: t("billing.portal.invoices.due"),
-      cell: (inv) => (
-        <span className="tabular-nums">
-          {date(inv.due_at, undefined, locale)}
-        </span>
-      ),
-    },
-    {
-      key: "total",
-      header: t("billing.portal.invoices.total"),
-      align: "end",
-      cell: (inv) => (
-        <span className="font-medium">
-          {formatMinor(inv.total_minor, inv.currency, locale)}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">{t("billing.common.actions")}</span>,
-      align: "end",
-      cell: (inv) => (
-        <span className="inline-flex gap-1">
-          {inv.status === "open" && canWrite ? (
-            <Button
-              type="button"
-              size="sm"
-              className="h-8"
-              onClick={() => onPay(inv)}
-            >
-              {t("billing.portal.invoices.pay")}
-            </Button>
-          ) : null}
-          {inv.pdf_url ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8"
-              disabled={downloading === inv.uuid}
-              onClick={() => void download(inv)}
-            >
-              <FileDown className="size-3.5" />
-              PDF
-            </Button>
-          ) : null}
-        </span>
-      ),
-    },
-  ];
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<BillingInvoiceSummary>({
+          id: "number",
+          accessorFn: (inv) => inv.number ?? inv.payment_reference,
+          labelKey: "billing.portal.invoices.number",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => {
+            const inv = row.original;
+            return (
+              <span className="flex flex-col">
+                <code className="text-xs font-medium">
+                  {inv.number ?? inv.payment_reference}
+                </code>
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {date(inv.period_start, undefined, locale)} –{" "}
+                  {date(inv.period_end, undefined, locale)}
+                </span>
+              </span>
+            );
+          },
+        }),
+        createColumn<BillingInvoiceSummary>({
+          accessorKey: "status",
+          labelKey: "billing.portal.invoices.status",
+          cell: ({ row }) => (
+            <BillingStatus kind="invoice" status={row.original.status} />
+          ),
+        }),
+        createColumn<BillingInvoiceSummary>({
+          accessorKey: "due_at",
+          labelKey: "billing.portal.invoices.due",
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {date(row.original.due_at, undefined, locale)}
+            </span>
+          ),
+        }),
+        createColumn<BillingInvoiceSummary>({
+          accessorKey: "total_minor",
+          labelKey: "billing.portal.invoices.total",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => (
+            <span className="font-medium">
+              {formatMinor(
+                row.original.total_minor,
+                row.original.currency,
+                locale,
+              )}
+            </span>
+          ),
+        }),
+        createColumn<BillingInvoiceSummary>({
+          id: "actions",
+          labelKey: "billing.common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-end" },
+          cell: ({ row }) => {
+            const inv = row.original;
+            return (
+              <span className="flex justify-end gap-1">
+                {inv.status === "open" && canWrite ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => onPay(inv)}
+                  >
+                    {t("billing.portal.invoices.pay")}
+                  </Button>
+                ) : null}
+                {inv.pdf_url ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8"
+                    disabled={downloading === inv.uuid}
+                    onClick={() => void download(inv)}
+                  >
+                    <FileDown className="size-3.5" />
+                    PDF
+                  </Button>
+                ) : null}
+              </span>
+            );
+          },
+        }),
+      ] as ColumnDef<BillingInvoiceSummary, unknown>[],
+    [canWrite, download, downloading, locale, onPay, t],
+  );
 
   return (
     <EntitySectionCard title={t("billing.portal.invoices.title")}>
-      <BillingTable
-        caption={t("billing.portal.invoices.title")}
+      <EntityTable
         columns={columns}
-        rows={invoices.data?.items}
+        data={invoices.data?.items ?? []}
         getRowId={(inv) => inv.uuid}
         isLoading={invoices.isLoading}
         isError={invoices.isError}
         onRetry={() => void invoices.refetch()}
         emptyTitle={t("billing.portal.invoices.empty")}
-        page={
-          invoices.data
-            ? {
-                total: invoices.data.total,
-                limit: 10,
-                offset,
-                onOffsetChange: setOffset,
-              }
-            : undefined
-        }
+        emptyDescription=""
+        total={invoices.data?.total ?? 0}
+        state={listState.tableState}
+        pageSizeOptions={[10, 20, 50]}
+        features={{
+          // The endpoint takes `limit` and `offset` only; the card is small.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
       />
     </EntitySectionCard>
   );
