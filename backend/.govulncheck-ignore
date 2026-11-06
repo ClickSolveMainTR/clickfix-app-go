@@ -1,0 +1,4 @@
+# Reachable vulnerabilities accepted for a limited time.
+# Format: <ID> <review-by YYYY-MM-DD> <reason>
+# The check fails after the review date and when an entry is no longer reachable.
+GO-2026-6909 2026-12-15 crewjam/saml has no fixed release; both cases are rejected before parsing in internal/modules/sso/usecase/saml_guard.go
