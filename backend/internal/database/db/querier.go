@@ -535,6 +535,7 @@ type Querier interface {
 	CleanupMCPOAuthTokens(ctx context.Context) (int64, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
 	ClearDefaultBusinessHours(ctx context.Context, organizationID int64) error
+	ClearWidgetIdentityRejection(ctx context.Context, arg ClearWidgetIdentityRejectionParams) error
 	CoachingComplete(ctx context.Context, arg CoachingCompleteParams) (int64, error)
 	CoachingCount(ctx context.Context, arg CoachingCountParams) (int64, error)
 	CoachingCreate(ctx context.Context, arg CoachingCreateParams) (CoachingCreateRow, error)
@@ -1058,6 +1059,7 @@ type Querier interface {
 	GetWidgetConversation(ctx context.Context, arg GetWidgetConversationParams) (Conversation, error)
 	// CF-150: editor drafts, published versions and install detection.
 	GetWidgetDraft(ctx context.Context, arg GetWidgetDraftParams) (WidgetDraft, error)
+	GetWidgetIdentityRejection(ctx context.Context, arg GetWidgetIdentityRejectionParams) (GetWidgetIdentityRejectionRow, error)
 	GetWidgetMessageID(ctx context.Context, arg GetWidgetMessageIDParams) (int64, error)
 	GetWidgetReplayChunk(ctx context.Context, arg GetWidgetReplayChunkParams) (WidgetReplayChunk, error)
 	GetWidgetSession(ctx context.Context, arg GetWidgetSessionParams) (WidgetSession, error)
@@ -1947,6 +1949,11 @@ type Querier interface {
 	TouchMCPOAuthToken(ctx context.Context, id int64) error
 	TouchMacro(ctx context.Context, arg TouchMacroParams) error
 	TouchSideConversation(ctx context.Context, arg TouchSideConversationParams) (SideConversation, error)
+	// A rejected identify call (CF-176). The request is not authenticated as a
+	// user, so only a fixed code and the time are stored, and the row is
+	// rewritten at most once a minute unless the code changed (which only
+	// happens when the widget's identity secret was added or removed).
+	TouchWidgetIdentityRejection(ctx context.Context, arg TouchWidgetIdentityRejectionParams) error
 	// Bootstrap records where the widget runs; a row is rewritten at most every
 	// five minutes so busy sites do not turn every page view into a write.
 	TouchWidgetInstall(ctx context.Context, arg TouchWidgetInstallParams) error

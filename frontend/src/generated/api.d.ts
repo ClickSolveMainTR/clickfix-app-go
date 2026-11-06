@@ -9360,7 +9360,12 @@ export interface paths {
         };
         /**
          * Where the widget was seen running
-         * @description One row per page origin, refreshed by visitor bootstraps (at most every five minutes). Requires `tenant.channels.read`.
+         * @description One row per page origin, refreshed by visitor bootstraps (at most every
+         *     five minutes). `identity_rejection` is the widget's last rejected
+         *     `identify` call (CF-176): the error code and the time only, never
+         *     `user_id`, `user_hash` or the identity secret. It is `null` when no
+         *     call was rejected or a user was verified since. Requires
+         *     `tenant.channels.read`.
          */
         get: operations["listTenantWidgetInstalls"];
         put?: never;
@@ -9440,6 +9445,11 @@ export interface paths {
          * @description `user_hash` is `hex(HMAC-SHA256(identity_secret, user_id))`, computed by
          *     the customer's backend. The anonymous visitor's conversations move to
          *     the user's contact (no second contact is created).
+         *
+         *     Rejections: `403 WIDGET_IDENTITY_DISABLED` when the widget has no
+         *     identity secret, `401 WIDGET_IDENTITY_INVALID` when `user_hash` does
+         *     not match `user_id`. The last rejection (code and time only) is shown
+         *     in the editor's install check until a user is verified.
          */
         post: operations["widgetIdentify"];
         delete?: never;
@@ -17052,6 +17062,16 @@ export interface components {
             /** Format: date-time */
             last_seen_at: string;
         };
+        /** @description The last rejected identify call of a widget. Cleared by the next verified identify. */
+        WidgetIdentityRejection: {
+            /**
+             * @description `WIDGET_IDENTITY_DISABLED`: the widget has no identity secret. `WIDGET_IDENTITY_INVALID`: `user_hash` did not match `user_id`.
+             * @enum {string}
+             */
+            code: "WIDGET_IDENTITY_DISABLED" | "WIDGET_IDENTITY_INVALID";
+            /** Format: date-time */
+            rejected_at: string;
+        };
         WidgetReplyEstimate: {
             /** @enum {string} */
             value: "minutes" | "hour" | "hours" | "day" | "";
@@ -17123,6 +17143,7 @@ export interface components {
             success: true;
             data: {
                 items: components["schemas"]["WidgetInstall"][];
+                identity_rejection: components["schemas"]["WidgetIdentityRejection"] | null;
             };
             meta: components["schemas"]["ResponseMeta"];
         };

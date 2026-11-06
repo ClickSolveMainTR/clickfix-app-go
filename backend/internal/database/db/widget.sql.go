@@ -12,6 +12,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearWidgetIdentityRejection = `-- name: ClearWidgetIdentityRejection :exec
+DELETE FROM widget_identity_rejections
+WHERE organization_id = $1 AND channel_instance_id = $2
+`
+
+type ClearWidgetIdentityRejectionParams struct {
+	OrganizationID    int64 `json:"organization_id"`
+	ChannelInstanceID int64 `json:"channel_instance_id"`
+}
+
+func (q *Queries) ClearWidgetIdentityRejection(ctx context.Context, arg ClearWidgetIdentityRejectionParams) error {
+	_, err := q.db.Exec(ctx, clearWidgetIdentityRejection, arg.OrganizationID, arg.ChannelInstanceID)
+	return err
+}
+
 const deleteWidgetDraft = `-- name: DeleteWidgetDraft :exec
 DELETE FROM widget_drafts
 WHERE organization_id = $1 AND channel_instance_id = $2
@@ -182,6 +197,28 @@ func (q *Queries) GetWidgetDraft(ctx context.Context, arg GetWidgetDraftParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getWidgetIdentityRejection = `-- name: GetWidgetIdentityRejection :one
+SELECT code, rejected_at FROM widget_identity_rejections
+WHERE organization_id = $1 AND channel_instance_id = $2
+`
+
+type GetWidgetIdentityRejectionParams struct {
+	OrganizationID    int64 `json:"organization_id"`
+	ChannelInstanceID int64 `json:"channel_instance_id"`
+}
+
+type GetWidgetIdentityRejectionRow struct {
+	Code       string             `json:"code"`
+	RejectedAt pgtype.Timestamptz `json:"rejected_at"`
+}
+
+func (q *Queries) GetWidgetIdentityRejection(ctx context.Context, arg GetWidgetIdentityRejectionParams) (GetWidgetIdentityRejectionRow, error) {
+	row := q.db.QueryRow(ctx, getWidgetIdentityRejection, arg.OrganizationID, arg.ChannelInstanceID)
+	var i GetWidgetIdentityRejectionRow
+	err := row.Scan(&i.Code, &i.RejectedAt)
 	return i, err
 }
 
@@ -798,6 +835,30 @@ func (q *Queries) SetWidgetInstanceSettings(ctx context.Context, arg SetWidgetIn
 		&i.BrandID,
 	)
 	return i, err
+}
+
+const touchWidgetIdentityRejection = `-- name: TouchWidgetIdentityRejection :exec
+INSERT INTO widget_identity_rejections (organization_id, channel_instance_id, code)
+VALUES ($1, $2, $3)
+ON CONFLICT (channel_instance_id) DO UPDATE SET code = excluded.code, rejected_at = now()
+WHERE widget_identity_rejections.organization_id = excluded.organization_id
+  AND (widget_identity_rejections.code <> excluded.code
+       OR widget_identity_rejections.rejected_at < now() - interval '1 minute')
+`
+
+type TouchWidgetIdentityRejectionParams struct {
+	OrganizationID    int64  `json:"organization_id"`
+	ChannelInstanceID int64  `json:"channel_instance_id"`
+	Code              string `json:"code"`
+}
+
+// A rejected identify call (CF-176). The request is not authenticated as a
+// user, so only a fixed code and the time are stored, and the row is
+// rewritten at most once a minute unless the code changed (which only
+// happens when the widget's identity secret was added or removed).
+func (q *Queries) TouchWidgetIdentityRejection(ctx context.Context, arg TouchWidgetIdentityRejectionParams) error {
+	_, err := q.db.Exec(ctx, touchWidgetIdentityRejection, arg.OrganizationID, arg.ChannelInstanceID, arg.Code)
+	return err
 }
 
 const touchWidgetInstall = `-- name: TouchWidgetInstall :exec

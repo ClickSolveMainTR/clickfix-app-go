@@ -284,6 +284,8 @@ widget_replay_chunks
 widget_drafts
 widget_versions
 widget_installs
+# CF-176
+widget_identity_rejections
 # CF-122
 recording_transcripts
 

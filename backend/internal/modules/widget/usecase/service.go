@@ -545,9 +545,11 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 	}
 	secret := w.Instance.Credentials[widget.IdentitySecretField]
 	if secret == "" {
+		s.noteIdentityRejection(ctx, w, RejectionIdentityDisabled)
 		return Visitor{}, ErrIdentityDisabled
 	}
 	if !widget.VerifyUserHash(secret, in.UserID, in.UserHash) {
+		s.noteIdentityRejection(ctx, w, RejectionIdentityInvalid)
 		return Visitor{}, ErrIdentityInvalid
 	}
 	email, phone := cleanEmail(in.Email), clip(strings.TrimSpace(in.Phone), 40)
@@ -597,7 +599,33 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 	if err != nil {
 		return Visitor{}, err
 	}
+	// A verified user proves the integration works: drop the editor warning.
+	if err := s.q.ClearWidgetIdentityRejection(ctx, db.ClearWidgetIdentityRejectionParams{
+		OrganizationID: org, ChannelInstanceID: inst,
+	}); err != nil {
+		s.log.Warn("widget_identity_rejection_clear_failed", "instance", w.Instance.UUID, "error", err)
+	}
 	return s.visitor(ctx, w, next)
+}
+
+// Error codes of a rejected identify call, as the visitor API returns them
+// and as the editor reads them back (CF-176).
+const (
+	RejectionIdentityDisabled = "WIDGET_IDENTITY_DISABLED"
+	RejectionIdentityInvalid  = "WIDGET_IDENTITY_INVALID"
+)
+
+// noteIdentityRejection remembers why the widget's last identify call was
+// rejected so the editor can show it to the integrator. The caller is not a
+// verified user, so nothing of the request is stored (no user_id, user_hash
+// or secret): only the fixed code and the time, rewritten at most once a
+// minute by the query.
+func (s *Service) noteIdentityRejection(ctx context.Context, w Widget, code string) {
+	if err := s.q.TouchWidgetIdentityRejection(ctx, db.TouchWidgetIdentityRejectionParams{
+		OrganizationID: w.Instance.OrganizationID, ChannelInstanceID: w.Instance.ID, Code: code,
+	}); err != nil {
+		s.log.Warn("widget_identity_rejection_touch_failed", "instance", w.Instance.UUID, "error", err)
+	}
 }
 
 func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, contactID int64, c Company) error {

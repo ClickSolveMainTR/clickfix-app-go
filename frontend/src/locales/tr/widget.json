@@ -493,5 +493,12 @@
   "theme.label": "Tema",
   "fields.greeting_title": "Karşılama başlığı",
   "fields.greeting_text": "Karşılama metni",
-  "fields.offline_message": "Çevrimdışı mesajı"
+  "fields.offline_message": "Çevrimdışı mesajı",
+  "identity_warning.disabled_title": "Kimlik doğrulama denemesi reddedildi",
+  "identity_warning.disabled_body": "Siteniz identify çağrısı gönderdi ama bu widget için kimlik anahtarı üretilmemiş (403 WIDGET_IDENTITY_DISABLED). Giriş yapmış kullanıcılarınız anonim kalıyor. Güvenlik bölümünde anahtarı üretin ve user_hash değerini sunucunuzda bu anahtarla hesaplayın.",
+  "identity_warning.invalid_title": "Kimlik doğrulama imzası uyuşmadı",
+  "identity_warning.invalid_body": "Son identify çağrısındaki user_hash, user_id ile eşleşmedi (401 WIDGET_IDENTITY_INVALID). Sunucunuzdaki anahtarın bu widget'ın güncel anahtarı olduğunu ve imzanın user_id üzerinden hesaplandığını kontrol edin. Anahtarı yenilediyseniz sunucunuzda da güncelleyin.",
+  "identity_warning.last_attempt": "Son reddedilen deneme: {{time}}",
+  "identity_warning.clears": "Geçerli bir user_hash ile ilk doğrulamada bu uyarı kalkar.",
+  "identity_warning.go_security": "Güvenlik bölümüne git"
 }
