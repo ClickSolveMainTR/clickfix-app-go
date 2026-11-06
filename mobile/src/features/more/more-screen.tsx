@@ -82,6 +82,7 @@ export function MoreScreen() {
       items: [
         { key: 'channels', icon: 'channel', to: '/more/channels', show: can(P.channelsRead) },
         { key: 'members', icon: 'staff', to: '/more/members', show: can(P.membersRead) },
+        { key: 'teams', icon: 'customers', to: '/more/teams', show: can(P.teamsRead) },
         { key: 'ai', icon: 'sparkles', to: '/more/ai', show: can(P.settingsRead) },
         { key: 'billing', icon: 'wallet', to: '/more/billing', show: can(P.billingRead) },
       ],

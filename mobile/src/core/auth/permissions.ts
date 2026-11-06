@@ -19,6 +19,8 @@ export const P = {
   /** Shared (organization) canned responses; personal ones only need `macrosRead` (`macros/routes.go`). */
   macrosWrite: 'tenant.macros.write',
   teamsRead: 'tenant.teams.read',
+  /** Create, edit and delete teams, add and remove their members (`teams/routes.go`). */
+  teamsWrite: 'tenant.teams.write',
   appointmentsRead: 'tenant.appointments.read',
   appointmentsWrite: 'tenant.appointments.write',
   videoUse: 'tenant.video.use',

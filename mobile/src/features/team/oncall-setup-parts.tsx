@@ -5,7 +5,7 @@ import { useTeams } from '@/features/inbox/api';
 import { EmptyState } from '@/ui/empty-state';
 import { Screen } from '@/ui/screen';
 
-import { type EscalationStep, type UptimeMonitor, useRotas } from './api';
+import { type EscalationStep, type UptimeMonitor, useOncallScope, useRotas } from './api';
 import { useMemberNames } from './names';
 import { channelKey, intervalParts, monitorState, readable, stepTarget } from './oncall-core';
 
@@ -24,8 +24,10 @@ export function NoAccess({ title, body }: { title: string; body: string }) {
 /** "Rota: Hafta içi", "Ekip: Destek", "Temsilci: Ada Yılmaz"; a deleted or unreadable target shows "—". */
 export function useStepTargetLabel(): (step: EscalationStep) => string {
   const { t } = useTranslation('team');
-  const rotas = useRotas();
-  const teams = useTeams(true);
+  // Names are read only by a member who may open the policies; rotas need organization-wide access too.
+  const { canSetup } = useOncallScope();
+  const rotas = useRotas(canSetup);
+  const teams = useTeams(canSetup);
   const memberName = useMemberNames();
   return (step) => {
     const target = stepTarget(step);

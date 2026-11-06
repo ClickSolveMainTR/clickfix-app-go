@@ -22,8 +22,7 @@ import {
 import { resultsSummary } from './oncall-core';
 import { NoAccess, useSetupLabels } from './oncall-setup-parts';
 
-/** How many recent checks the detail lists; the summary covers the same 30 the panel's sparkline does. */
-const SUMMARY_CHECKS = 30;
+/** The results endpoint returns its default page, the 20 newest checks; the summary covers them, the list the first 10. */
 const LISTED_CHECKS = 10;
 
 /**
@@ -121,10 +120,10 @@ function MonitorDetail({ monitor: m }: { monitor: UptimeMonitor }) {
   // Names of the linked component and policy; each list is read only by a member who may read it.
   const components = useStatusComponents();
   const policies = useEscalationPolicies();
-  const results = useUptimeResults(m.uuid, m.last_checked_at);
+  const results = useUptimeResults(m.uuid);
   const component = components.data?.items?.find((c) => c.uuid === m.component_uuid)?.name;
   const policy = m.policy_uuid ? policies.data?.items.find((p) => p.uuid === m.policy_uuid)?.name : null;
-  const recent = (results.data?.items ?? []).slice(0, SUMMARY_CHECKS);
+  const recent = results.data?.items ?? [];
   const summary = resultsSummary(recent);
   return (
     <View className="gap-4">
