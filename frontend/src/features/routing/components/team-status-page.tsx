@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Activity, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Loading } from "@/components/common/loading";
 import { EntityTable } from "@/components/entity";
@@ -130,10 +130,17 @@ function LiveTab({
   const qc = useQueryClient();
   const onError = useOnError();
   const key = ["tenant", orgSlug, "capacity"] as const;
+  // Rows being edited: the 15 s refresh waits so a half-typed limit is not
+  // lost when the refreshed list re-sorts or re-pages the row.
+  const [editingRows, setEditingRows] = useState(0);
+  const trackEditing = useCallback(
+    (open: boolean) => setEditingRows((n) => Math.max(0, n + (open ? 1 : -1))),
+    [],
+  );
   const { data, isLoading } = useQuery({
     queryKey: key,
     queryFn: routingService.capacity,
-    refetchInterval: 15_000,
+    refetchInterval: editingRows > 0 ? false : 15_000,
   });
   const save = useMutation({
     mutationFn: (p: { user: string | null; max: string }) =>
@@ -218,6 +225,7 @@ function LiveTab({
             <LimitCell
               agent={row.original}
               canWrite={canWrite}
+              onEditingChange={trackEditing}
               onSave={(max, done) =>
                 saveLimit(
                   { user: row.original.user_uuid, max },
@@ -228,7 +236,7 @@ function LiveTab({
           ),
         }),
       ] as ColumnDef<AgentLoad, unknown>[],
-    [canWrite, saveLimit, t],
+    [canWrite, saveLimit, t, trackEditing],
   );
 
   if (isLoading || !data) return <Loading label={t("common.loading")} />;
@@ -310,16 +318,25 @@ function OpenLoad({ agent: a }: { agent: AgentLoad }) {
 function LimitCell({
   agent: a,
   canWrite,
+  onEditingChange,
   onSave,
 }: {
   agent: AgentLoad;
   canWrite: boolean;
+  onEditingChange: (open: boolean) => void;
   onSave: (max: string, done: () => void) => void;
 }) {
   const { t } = useLocale();
   const [editing, setEditing] = useState(false);
   const [limit, setLimit] = useState("");
   const max = a.limits["*"];
+  // Hold the live refresh while open; released on close and on unmount
+  // (the row may leave the page while being edited).
+  useEffect(() => {
+    if (!editing) return;
+    onEditingChange(true);
+    return () => onEditingChange(false);
+  }, [editing, onEditingChange]);
   if (editing) {
     return (
       <div className="flex items-center gap-1">
