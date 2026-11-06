@@ -7,6 +7,7 @@ import { isApiError } from '@/core/api/errors';
 import { useSession } from '@/core/auth/session';
 import { formatShort } from '@/core/format';
 import { errorMessage } from '@/core/i18n';
+import { ConversationApps } from '@/features/apps/apps-screen';
 import { Card } from '@/ui/card';
 import { cn } from '@/ui/cn';
 import { Icon } from '@/ui/icon';
@@ -66,6 +67,7 @@ export function ConversationDetailsScreen() {
               <SideConversationsCard conversation={c} />
               <LinksCard conversation={c} />
               <EngineeringCard conversation={c} />
+              <ConversationApps />
               <Facts conversation={c} />
             </>
           )}

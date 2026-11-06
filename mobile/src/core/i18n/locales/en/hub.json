@@ -62,6 +62,8 @@
   "more.incidents": "Incidents",
   "more.incidents_hint": "Status page incidents and updates",
   "more.knowledge": "Knowledge base",
+  "more.objects": "Custom objects",
+  "more.apps": "Apps",
   "more.knowledge_hint": "Browse and search articles",
   "more.channels": "Channels",
   "more.channels_hint": "Connection health and errors",
