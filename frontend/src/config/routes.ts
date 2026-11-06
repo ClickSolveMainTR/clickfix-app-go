@@ -92,6 +92,8 @@ export const routes = {
      */
     /** Teams of the active organization (CF-5). */
     teamStatus: "/team-status",
+    /** Team chat: direct, group and swarm threads (CF-161); thread in `?thread=`. */
+    teamChat: "/team-chat",
     /** Agent scorecards, custom and scheduled reports (CF-112). */
     reports: "/reports",
     /** Read-only service incidents for agents (CF-162). */

@@ -26,6 +26,7 @@ const APP_PATHS = [
   "/reports",
   "/rules",
   "/settings",
+  "/team-chat",
   "/team-status",
   "/teams",
   "/video",

@@ -371,6 +371,9 @@ export const permissions = {
       use: Permission.TenantVideoUse,
       manage: Permission.TenantVideoManage,
     },
+    teamChat: {
+      use: Permission.TenantTeamChatUse,
+    },
     customFields: {
       read: Permission.TenantCustomFieldsRead,
       manage: Permission.TenantCustomFieldsManage,
