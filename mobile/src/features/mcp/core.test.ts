@@ -15,6 +15,16 @@ test('every client configuration points at the reported endpoint', () => {
   assert.equal(configs[1].value, `claude mcp add --transport http clickfix ${URL_}`);
 });
 
+test('clients whose return address may be a custom scheme are marked untested', () => {
+  assert.deepEqual(Object.fromEntries(mcpClientConfigs(URL_).map((c) => [c.id, c.tested])), {
+    claude: true,
+    claude_code: true,
+    cursor: false,
+    vscode: false,
+    other: true,
+  });
+});
+
 test('the JSON configurations parse and carry no credential', () => {
   const configs = mcpClientConfigs(URL_);
   assert.deepEqual(JSON.parse(configs[2].value), { mcpServers: { clickfix: { url: URL_ } } });

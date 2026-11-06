@@ -84,7 +84,9 @@ export function McpScreen() {
                         subtitle={
                           <View className="gap-1">
                             <Text variant="footnote" tone="muted">
-                              {[t(`mcp.client_steps.${c.id}`), c.file].filter(Boolean).join(' · ')}
+                              {[t(`mcp.client_steps.${c.id}`), c.file, c.tested ? '' : t('mcp.client_untested')]
+                                .filter(Boolean)
+                                .join(' · ')}
                             </Text>
                             <Text variant="caption" tone="muted" selectable style={{ fontFamily: MONO }}>
                               {c.value}

@@ -30,6 +30,19 @@ test("every client configuration points at the reported endpoint", () => {
   );
 });
 
+test("clients whose return address may be a custom scheme are marked untested", () => {
+  const byId = Object.fromEntries(
+    mcpClientConfigs(URL_).map((c) => [c.id, c.tested]),
+  );
+  assert.deepEqual(byId, {
+    claude: true,
+    claude_code: true,
+    cursor: false,
+    vscode: false,
+    other: true,
+  });
+});
+
 test("the JSON configurations parse and carry no credential", () => {
   for (const c of mcpClientConfigs(URL_).filter((c) => c.kind === "json")) {
     const parsed = JSON.parse(c.value);

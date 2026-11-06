@@ -69,5 +69,6 @@
   "tools.read": "Reads",
   "tools.write": "Changes",
   "tools.write_note": "\"Changes\" tools only work when you allowed changing data on the approval screen.",
-  "tools.read_only_note": "\"Changes\" tools need the permission to edit organization settings."
+  "tools.read_only_note": "\"Changes\" tools need the permission to edit organization settings.",
+  "clients.untested": "This client was not tried with ClickFix. If the client's OAuth return address uses a custom scheme (e.g. cursor://, vscode://), registration is refused; only https and loopback http addresses are accepted."
 }

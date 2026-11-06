@@ -69,5 +69,6 @@
   "tools.read": "Okur",
   "tools.write": "Değiştirir",
   "tools.write_note": "\"Değiştirir\" araçları yalnızca onay ekranında veri değiştirmeye izin verdiyseniz çalışır.",
-  "tools.read_only_note": "\"Değiştirir\" araçları için organizasyon ayarlarını düzenleme yetkisi gerekir."
+  "tools.read_only_note": "\"Değiştirir\" araçları için organizasyon ayarlarını düzenleme yetkisi gerekir.",
+  "clients.untested": "Bu istemci ClickFix ile denenmedi. İstemcinin OAuth dönüş adresi özel bir şema (ör. cursor://, vscode://) kullanıyorsa kayıt kabul edilmez; yalnız https ve bu bilgisayardaki http adresleri kabul edilir."
 }

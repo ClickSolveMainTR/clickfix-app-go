@@ -136,6 +136,11 @@ function ClientTabs({ url }: { url: string }) {
       {clients.map((c) => (
         <TabsContent key={c.id} value={c.id} className="mt-4 space-y-3">
           <p className="text-sm">{t(`mcp.clients.${c.id}.steps`)}</p>
+          {c.tested ? null : (
+            <p className="text-muted-foreground text-xs">
+              {t("mcp.clients.untested")}
+            </p>
+          )}
           {c.file ? (
             <p className="text-muted-foreground text-xs">
               {t("mcp.clients.file")}{" "}

@@ -414,5 +414,6 @@
   "mcp.tool_write": "Değiştirir",
   "mcp.tools_write_note": "\"Değiştirir\" araçları yalnızca onay ekranında veri değiştirmeye izin verdiyseniz çalışır.",
   "mcp.tools_read_only_note": "\"Değiştirir\" araçları için organizasyon ayarlarını düzenleme yetkisi gerekir.",
-  "mcp.apps_on_panel": "Bağlı uygulamaları görmek ve erişimi kaldırmak için web panelinde Ayarlar → MCP ile bağlan sayfasını açın."
+  "mcp.apps_on_panel": "Bağlı uygulamaları görmek ve erişimi kaldırmak için web panelinde Ayarlar → MCP ile bağlan sayfasını açın.",
+  "mcp.client_untested": "ClickFix ile denenmedi; özel şemalı (cursor://, vscode://) dönüş adresi kabul edilmez"
 }

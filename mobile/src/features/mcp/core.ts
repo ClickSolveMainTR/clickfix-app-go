@@ -15,6 +15,8 @@ export type McpClientConfig = {
   /** Where the JSON goes (file path), when there is one. */
   file?: string;
   value: string;
+  /** Run against ClickFix with this client (or the HTTP steps it makes); see the panel's `clients.ts`. */
+  tested: boolean;
 };
 
 /** Name the server is saved under in the client. */
@@ -24,26 +26,30 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 export function mcpClientConfigs(resourceUrl: string): McpClientConfig[] {
   return [
-    { id: 'claude', name: 'Claude', value: resourceUrl },
+    { id: 'claude', tested: true, name: 'Claude', value: resourceUrl },
     {
       id: 'claude_code',
+      tested: true,
       name: 'Claude Code',
       value: `claude mcp add --transport http ${MCP_SERVER_NAME} ${resourceUrl}`,
     },
     {
       id: 'cursor',
+      tested: false,
       name: 'Cursor',
       file: '~/.cursor/mcp.json',
       value: json({ mcpServers: { [MCP_SERVER_NAME]: { url: resourceUrl } } }),
     },
     {
       id: 'vscode',
+      tested: false,
       name: 'VS Code',
       file: '.vscode/mcp.json',
       value: json({ servers: { [MCP_SERVER_NAME]: { type: 'http', url: resourceUrl } } }),
     },
     {
       id: 'other',
+      tested: true,
       name: 'mcp-remote',
       value: json({ mcpServers: { [MCP_SERVER_NAME]: { command: 'npx', args: ['-y', 'mcp-remote', resourceUrl] } } }),
     },

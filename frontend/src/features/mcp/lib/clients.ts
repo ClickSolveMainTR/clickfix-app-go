@@ -17,6 +17,14 @@ export type McpClientConfig = {
   /** Where the JSON goes (file path), when `kind` is "json". */
   file?: string;
   value: string;
+  /**
+   * The flow was run against ClickFix with this client (or with the HTTP
+   * steps it makes). Untested clients are listed with a note: a client whose
+   * OAuth return address is a custom scheme (`cursor://`, `vscode://`) cannot
+   * register, since only https and loopback http return addresses are
+   * accepted.
+   */
+  tested: boolean;
 };
 
 /** Name the server is saved under in the client. */
@@ -27,15 +35,23 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 export function mcpClientConfigs(resourceUrl: string): McpClientConfig[] {
   return [
     // Claude (web and desktop): Settings → Connectors → Add custom connector.
-    { id: "claude", name: "Claude", kind: "url", value: resourceUrl },
+    {
+      id: "claude",
+      tested: true,
+      name: "Claude",
+      kind: "url",
+      value: resourceUrl,
+    },
     {
       id: "claude_code",
+      tested: true,
       name: "Claude Code",
       kind: "command",
       value: `claude mcp add --transport http ${MCP_SERVER_NAME} ${resourceUrl}`,
     },
     {
       id: "cursor",
+      tested: false,
       name: "Cursor",
       kind: "json",
       file: "~/.cursor/mcp.json",
@@ -43,6 +59,7 @@ export function mcpClientConfigs(resourceUrl: string): McpClientConfig[] {
     },
     {
       id: "vscode",
+      tested: false,
       name: "VS Code",
       kind: "json",
       file: ".vscode/mcp.json",
@@ -53,6 +70,7 @@ export function mcpClientConfigs(resourceUrl: string): McpClientConfig[] {
     // Clients that only start local (stdio) servers reach a remote one through mcp-remote.
     {
       id: "other",
+      tested: true,
       name: "mcp-remote",
       kind: "json",
       value: json({
