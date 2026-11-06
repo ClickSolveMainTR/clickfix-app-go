@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
@@ -102,9 +103,10 @@ func TestForumIsolationModerationNotificationsAndPublicProjection(t *testing.T) 
 	if ai.calls != 1 {
 		t.Fatal("AI not called through credit-controlled interface")
 	}
-	for range 2 {
-		_, err = s.Moderate(ctx, org, actor, reply.Uuid, "published")
-		must(err)
+	_, err = s.Moderate(ctx, org, actor, reply.Uuid, "published")
+	must(err)
+	if _, err = s.Moderate(ctx, org, actor, reply.Uuid, "published"); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("decided post moderated again", err)
 	}
 	notifications, err := q.ForumNotifications(ctx, db.ForumNotificationsParams{OrganizationID: org, ContactID: subscriber, Limit: 20})
 	must(err)
@@ -192,8 +194,11 @@ func TestForumIsolationModerationNotificationsAndPublicProjection(t *testing.T) 
 	if status != 200 || strings.Contains(body, "contact_id") || strings.Contains(body, "flag_reason") || !strings.Contains(body, "Here is the answer") {
 		t.Fatal("public projection invalid", status, body)
 	}
-	_, err = s.Moderate(ctx, org, actor, reply.Uuid, "rejected")
-	must(err)
+	// The moderation endpoint decides pending posts only; hide the reply directly.
+	if _, err = s.Moderate(ctx, org, actor, reply.Uuid, "rejected"); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("published post rejected through the moderation queue", err)
+	}
+	mustExec("UPDATE forum_posts SET status='rejected' WHERE organization_id=$1 AND id=$2", org, reply.ID)
 	_, body = read("/v1/public/help/" + suffix + "/forum/topics/" + topic.Slug)
 	if strings.Contains(body, "Here is the answer") {
 		t.Fatal("hidden accepted reply leaked", body)
@@ -209,6 +214,114 @@ func TestForumIsolationModerationNotificationsAndPublicProjection(t *testing.T) 
 	}
 	var result map[string]any
 	must(json.Unmarshal(w.Body.Bytes(), &result))
+}
+
+// Two moderators deciding the same pending post: the first decision stands,
+// the other gets a conflict, and a rejected post cannot be published later
+// from a stale queue (CF-180).
+func TestForumModerationDecidesAPendingPostOnce(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL required")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	q := db.New(pool)
+	suffix := uuid.NewString()
+	var org, actor, author int64
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(pool.QueryRow(ctx, "INSERT INTO organizations(name,slug) VALUES('Forum race',$1) RETURNING id", suffix).Scan(&org))
+	must(pool.QueryRow(ctx, "INSERT INTO users(email,password_hash,name,surname,status) VALUES($1,'test','Forum','Agent','active') RETURNING id", suffix+"@example.test").Scan(&actor))
+	must(pool.QueryRow(ctx, "INSERT INTO contacts(organization_id,name) VALUES($1,'Author') RETURNING id", org).Scan(&author))
+	defer func() {
+		_, _ = pool.Exec(ctx, "DELETE FROM forum_subscriptions WHERE organization_id=$1", org)
+		_, _ = pool.Exec(ctx, "DELETE FROM forum_posts WHERE organization_id=$1", org)
+		_, _ = pool.Exec(ctx, "DELETE FROM forum_categories WHERE organization_id=$1", org)
+		_, _ = pool.Exec(ctx, "DELETE FROM contacts WHERE organization_id=$1", org)
+		_, _ = pool.Exec(ctx, "DELETE FROM organizations WHERE id=$1", org)
+		_, _ = pool.Exec(ctx, "DELETE FROM users WHERE id=$1", actor)
+	}()
+	_, err = q.ForumCreateCategory(ctx, db.ForumCreateCategoryParams{OrganizationID: org, Slug: "general", Name: "General"})
+	must(err)
+	s := &usecase.Service{Repo: billrepo.New(pool, q)}
+	status := func(id uuid.UUID) string {
+		t.Helper()
+		var v string
+		must(pool.QueryRow(ctx, "SELECT status FROM forum_posts WHERE organization_id=$1 AND uuid=$2", org, id).Scan(&v))
+		return v
+	}
+
+	decisions := []string{"published", "rejected"}
+	for round := range 10 {
+		post, err := s.Create(ctx, org, author, nil, model.PostInput{Category: "general", Title: "Race", Body: "Two moderators, one post"})
+		must(err)
+		start := make(chan struct{})
+		errs := make([]error, len(decisions))
+		var wg sync.WaitGroup
+		for i, decision := range decisions {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				_, errs[i] = s.Moderate(ctx, org, actor, post.Uuid, decision)
+			}()
+		}
+		close(start)
+		wg.Wait()
+		winner := -1
+		for i, err := range errs {
+			switch {
+			case err == nil && winner == -1:
+				winner = i
+			case err == nil:
+				t.Fatalf("round %d: both decisions were applied", round)
+			case !errors.Is(err, supportops.ErrConflict):
+				t.Fatalf("round %d: loser got %v, want a conflict", round, err)
+			}
+		}
+		if winner == -1 {
+			t.Fatalf("round %d: no decision was applied: %v", round, errs)
+		}
+		if got := status(post.Uuid); got != decisions[winner] {
+			t.Fatalf("round %d: stored %q, the applied decision was %q", round, got, decisions[winner])
+		}
+	}
+
+	spam, err := s.Create(ctx, org, author, nil, model.PostInput{Category: "general", Title: "Spam", Body: "Rejected by the first moderator"})
+	must(err)
+	_, err = s.Moderate(ctx, org, actor, spam.Uuid, "rejected")
+	must(err)
+	if _, err = s.Moderate(ctx, org, actor, spam.Uuid, "published"); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("rejected post published from a stale queue", err)
+	}
+	if got := status(spam.Uuid); got != "rejected" {
+		t.Fatal("rejected post changed status", got)
+	}
+
+	// Over HTTP the loser sees 409 CONFLICT and a missing post 404.
+	mux := http.NewServeMux()
+	mux.Handle("PATCH /posts/{uuid}", supportops.Router{}.Handler(func(r *http.Request) (any, error) {
+		return s.Moderate(r.Context(), org, actor, supportops.ID(r), "published")
+	}, false))
+	for _, tc := range []struct {
+		id   uuid.UUID
+		code int
+	}{{spam.Uuid, http.StatusConflict}, {uuid.New(), http.StatusNotFound}} {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("PATCH", "/posts/"+tc.id.String(), nil))
+		if w.Code != tc.code {
+			t.Fatalf("moderation over HTTP: got %d want %d: %s", w.Code, tc.code, w.Body.String())
+		}
+	}
 }
 func TestSpamFlagging(t *testing.T) {
 	if usecase.Flag("https://a https://b https://c https://d") != "link_spam" {

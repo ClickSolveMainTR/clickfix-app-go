@@ -320,7 +320,7 @@ func (q *Queries) ForumLinkConversation(ctx context.Context, arg ForumLinkConver
 }
 
 const forumModerate = `-- name: ForumModerate :one
-UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at
+UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at
 `
 
 type ForumModerateParams struct {
