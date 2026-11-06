@@ -279,10 +279,6 @@ export function SupportAccessPage() {
   );
 
   const total = query.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
 
   return (
     <EntityPage
@@ -322,9 +318,13 @@ export function SupportAccessPage() {
             onRetry={() => void query.refetch()}
             emptyTitle={t("support_access.empty_title")}
             emptyDescription={t("support_access.empty_description")}
-            pageCount={pageCount}
+            total={total}
             state={listState.tableState}
-            features={{ persistKey: "tenant-support-access-v1" }}
+            features={{
+              persistKey: "tenant-support-access-v1",
+              globalFilter: false,
+              columnFilters: false,
+            }}
           />
         </EntitySectionCard>
       </div>

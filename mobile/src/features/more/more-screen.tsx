@@ -74,6 +74,8 @@ export function MoreScreen() {
         { key: 'incidents', icon: 'megaphone', to: '/more/incidents', show: can(P.conversationsRead) },
         { key: 'knowledge', icon: 'book', to: '/more/knowledge', show: can(P.settingsRead) },
         { key: 'replies', icon: 'note', to: '/more/replies', show: can(P.macrosRead) },
+        { key: 'workflows', icon: 'split', to: '/more/workflows', show: can(P.automationsRead) },
+        { key: 'rules', icon: 'macro', to: '/more/rules', show: can(P.automationsRead) },
       ],
     },
     {

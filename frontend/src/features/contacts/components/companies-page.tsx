@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, Plus, Search, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Building2, Plus, Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { EntityTable, useServerListState } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMinor } from "@/features/billing/lib/money";
 import { useLocale } from "@/providers/locale-provider";
@@ -37,15 +40,113 @@ import type { Company } from "../services/contacts.service";
 /** Companies: B2B accounts the contacts belong to (CF-84). */
 export function CompaniesPage() {
   const { t, locale } = useLocale();
+  const router = useRouter();
   const scope = useContactsScope();
-  const [q, setQ] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const listState = useServerListState({
+    initialPageSize: 50,
+    searchDebounceMs: 250,
+  });
   const [editing, setEditing] = useState<Company | "new" | null>(null);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(q.trim()), 250);
-    return () => clearTimeout(id);
-  }, [q]);
-  const list = useCompanyList({ q: debounced, limit: 100, offset: 0 });
+  const { limit, offset, q } = listState.params;
+  const list = useCompanyList({ q, limit, offset });
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Company>({
+          accessorKey: "name",
+          labelKey: "contacts.companies.fields.name",
+          enableHiding: false,
+          cell: ({ row }) => (
+            <div className="min-w-0">
+              <Link
+                href={`/companies/${row.original.uuid}`}
+                className="block truncate font-medium underline-offset-2 hover:underline"
+              >
+                {row.original.name}
+              </Link>
+              <p className="text-muted-foreground truncate text-xs">
+                {row.original.domain ?? "—"}
+              </p>
+            </div>
+          ),
+        }),
+        createColumn<Company>({
+          id: "health",
+          accessorFn: (row) => row.health?.score ?? null,
+          labelKey: "contacts.health.title",
+          cell: ({ row }) =>
+            row.original.health?.score != null ? (
+              <CompanyHealthBadge health={row.original.health} />
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<Company>({
+          accessorKey: "tier",
+          labelKey: "contacts.companies.fields.tier",
+          cell: ({ row }) =>
+            row.original.tier ? (
+              <CompanyTier tier={row.original.tier} />
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<Company>({
+          accessorKey: "contact_count",
+          labelKey: "contacts.companies.columns.contacts",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+          cell: ({ row }) => (
+            <Link
+              href={`/contacts?company=${row.original.uuid}`}
+              className="underline-offset-2 hover:underline"
+            >
+              {row.original.contact_count}
+            </Link>
+          ),
+        }),
+        createColumn<Company>({
+          accessorKey: "open_conversations",
+          labelKey: "contacts.companies.columns.open",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+        }),
+        createColumn<Company>({
+          id: "mrr",
+          accessorFn: (row) => row.revenue?.mrr_minor ?? 0,
+          labelKey: "contacts.revenue.fields.mrr",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+          cell: ({ row }) => {
+            const revenue = row.original.revenue;
+            return revenue && revenue.mrr_minor > 0 ? (
+              formatMinor(revenue.mrr_minor, revenue.currency, locale, {
+                compact: true,
+              })
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            );
+          },
+        }),
+        createColumn<Company>({
+          id: "account_owner",
+          accessorFn: (row) => row.account_owner?.name ?? "",
+          labelKey: "contacts.companies.fields.account_owner",
+          cell: ({ row }) =>
+            row.original.account_owner?.name ?? (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+      ] as ColumnDef<Company, unknown>[],
+    [locale],
+  );
 
   if (!scope.canRead) {
     return (
@@ -54,7 +155,7 @@ export function CompaniesPage() {
       </p>
     );
   }
-  const items = list.data?.items ?? [];
+  const hasFilters = Boolean(q);
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <PageHeader
@@ -63,10 +164,7 @@ export function CompaniesPage() {
         actions={
           scope.canWrite ? (
             <div className="flex items-center gap-2">
-              <ContactsIOToolbar
-                resource="companies"
-                query={{ q: debounced }}
-              />
+              <ContactsIOToolbar resource="companies" query={{ q: q ?? "" }} />
               <Button size="sm" onClick={() => setEditing("new")}>
                 <Plus className="size-4" />
                 {t("contacts.companies.new")}
@@ -75,84 +173,31 @@ export function CompaniesPage() {
           ) : null
         }
       />
-      <div className="relative max-w-sm">
-        <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("contacts.companies.search")}
-          className="pl-8"
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {list.isLoading &&
-          Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
-          ))}
-        {!list.isLoading && items.length === 0 && (
-          <p className="text-muted-foreground col-span-full py-12 text-center text-sm">
-            {t("contacts.companies.empty")}
-          </p>
-        )}
-        {items.map((c) => (
-          <div
-            key={c.uuid}
-            className="bg-card hover:border-foreground/20 relative flex flex-col gap-3 rounded-xl border p-4 text-left transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="bg-muted flex size-9 items-center justify-center rounded-lg">
-                <Building2 className="size-4" />
-              </span>
-              <div className="min-w-0">
-                {/* Stretched link: the whole card opens the account screen (CF-85). */}
-                <Link
-                  href={`/companies/${c.uuid}`}
-                  className="block truncate font-medium after:absolute after:inset-0 after:rounded-xl"
-                >
-                  {c.name}
-                </Link>
-                <p className="text-muted-foreground truncate text-xs">
-                  {c.domain ?? "—"}
-                </p>
-              </div>
-              <div className="ml-auto flex shrink-0 items-center gap-1">
-                <CompanyHealthBadge health={c.health} />
-                {c.tier && (
-                  <span className="bg-signal-soft text-signal-text rounded-md px-2 py-0.5 text-[11px] font-medium">
-                    {c.tier}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="text-muted-foreground flex items-center gap-4 text-xs">
-              <Link
-                href={`/contacts?company=${c.uuid}`}
-                className="hover:text-foreground relative z-10 underline-offset-2 hover:underline"
-              >
-                {t("contacts.companies.contacts", { count: c.contact_count })}
-              </Link>
-              <span>
-                {t("contacts.companies.open", { count: c.open_conversations })}
-              </span>
-              {c.revenue && c.revenue.mrr_minor > 0 && (
-                <span className="text-foreground font-medium tabular-nums">
-                  {t("contacts.revenue.mrr_short", {
-                    amount: formatMinor(
-                      c.revenue.mrr_minor,
-                      c.revenue.currency,
-                      locale,
-                      { compact: true },
-                    ),
-                  })}
-                </span>
-              )}
-              {c.account_owner && (
-                <span className="ml-auto truncate">{c.account_owner.name}</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        onRowClick={(row) => router.push(`/companies/${row.uuid}`)}
+        renderGridItem={(row) => <CompanyCard company={row} />}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        emptyTitle={hasFilters ? t("table.no_results") : undefined}
+        emptyDescription={
+          hasFilters ? t("table.reset_filters") : t("contacts.companies.empty")
+        }
+        searchPlaceholder={t("contacts.companies.search")}
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        initialState={{ viewMode: "grid" }}
+        features={{
+          persistKey: "tenant-companies-v1",
+          // The endpoint takes `q`, `limit` and `offset` only.
+          sorting: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       {editing && (
         <CompanyDialog
           key={editing === "new" ? "new" : editing.uuid}
@@ -160,6 +205,70 @@ export function CompaniesPage() {
           onClose={() => setEditing(null)}
         />
       )}
+    </div>
+  );
+}
+
+function CompanyTier({ tier }: { tier: string }) {
+  return (
+    <span className="bg-signal-soft text-signal-text rounded-md px-2 py-0.5 text-[11px] font-medium">
+      {tier}
+    </span>
+  );
+}
+
+/** Card of the grid view; the table core draws the border and padding. */
+function CompanyCard({ company: c }: { company: Company }) {
+  const { t, locale } = useLocale();
+  return (
+    <div className="flex flex-col gap-3 text-left">
+      <div className="flex items-center gap-3">
+        <span className="bg-muted flex size-9 items-center justify-center rounded-lg">
+          <Building2 className="size-4" />
+        </span>
+        <div className="min-w-0">
+          {/* Stretched link: the whole card opens the account screen (CF-85). */}
+          <Link
+            href={`/companies/${c.uuid}`}
+            className="block truncate font-medium after:absolute after:inset-0 after:rounded-xl"
+          >
+            {c.name}
+          </Link>
+          <p className="text-muted-foreground truncate text-xs">
+            {c.domain ?? "—"}
+          </p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <CompanyHealthBadge health={c.health} />
+          {c.tier && <CompanyTier tier={c.tier} />}
+        </div>
+      </div>
+      <div className="text-muted-foreground flex items-center gap-4 text-xs">
+        <Link
+          href={`/contacts?company=${c.uuid}`}
+          className="hover:text-foreground relative z-10 underline-offset-2 hover:underline"
+        >
+          {t("contacts.companies.contacts", { count: c.contact_count })}
+        </Link>
+        <span>
+          {t("contacts.companies.open", { count: c.open_conversations })}
+        </span>
+        {c.revenue && c.revenue.mrr_minor > 0 && (
+          <span className="text-foreground font-medium tabular-nums">
+            {t("contacts.revenue.mrr_short", {
+              amount: formatMinor(
+                c.revenue.mrr_minor,
+                c.revenue.currency,
+                locale,
+                { compact: true },
+              ),
+            })}
+          </span>
+        )}
+        {c.account_owner && (
+          <span className="ml-auto truncate">{c.account_owner.name}</span>
+        )}
+      </div>
     </div>
   );
 }

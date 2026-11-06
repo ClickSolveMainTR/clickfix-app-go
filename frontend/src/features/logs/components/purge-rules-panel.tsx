@@ -42,7 +42,10 @@ function intervalLabel(t: (key: string) => string, minutes: number) {
 export function PurgeRulesPanel() {
   const { t, locale } = useLocale();
   const { confirmDelete } = useDialogs();
-  const listState = useServerListState({ initialPageSize: 50 });
+  const listState = useServerListState({
+    initialPageSize: 50,
+    initialSort: "",
+  });
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<PurgeRule | null>(null);
 
@@ -177,14 +180,6 @@ export function PurgeRulesPanel() {
     [handleDelete, locale, openEdit, runRule, t],
   );
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil(
-      (rulesQuery.data?.items.length ?? 0) /
-        (listState.pagination.pageSize || 50),
-    ),
-  );
-
   return (
     <>
       <EntityTable
@@ -196,7 +191,9 @@ export function PurgeRulesPanel() {
         onRetry={() => void rulesQuery.refetch()}
         emptyTitle={t("logs.rules.empty_title")}
         emptyDescription={t("logs.rules.empty_description")}
-        pageCount={pageCount}
+        // The endpoint returns every rule at once: search, sort and paging
+        // run in the browser.
+        manual={{ filtering: false, sorting: false, pagination: false }}
         state={listState.tableState}
         features={{ persistKey: "platform-log-rules-v1", rowSelection: false }}
         toolbarExtra={

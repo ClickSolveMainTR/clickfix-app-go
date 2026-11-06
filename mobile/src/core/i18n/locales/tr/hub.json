@@ -135,6 +135,8 @@
   "roles.agent_description": "Ekiplerinin konuşmalarını ve destek taleplerini yanıtlar.",
   "notifications.empty_title": "Bildirim yok",
   "more.replies": "Hazır yanıtlar",
+  "more.workflows": "İş akışları",
+  "more.rules": "Kurallar",
   "more.dashboard": "Özet pano",
   "dashboard.title": "Özet pano",
   "dashboard.greeting": "Merhaba {{name}}",
