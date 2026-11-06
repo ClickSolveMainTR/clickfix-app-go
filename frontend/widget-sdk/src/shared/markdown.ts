@@ -25,6 +25,17 @@ const isSpace = (c: string | undefined) =>
 const isWord = (c: string | undefined) =>
   c !== undefined && /[\p{L}\p{N}]/u.test(c);
 
+/** Index of the "***" closing bold italic opened at rest[0..3], or -1. */
+function closeBoth(rest: string): number {
+  for (let from = 4; from < rest.length;) {
+    const e = rest.indexOf("***", from);
+    if (e < 0) return -1;
+    if (!isSpace(rest[e - 1])) return e;
+    from = e + 1;
+  }
+  return -1;
+}
+
 /** Index of the "**" closing a strong opened at rest[0..2], or -1. */
 function closeStrong(rest: string): number {
   for (let from = 3; from < rest.length;) {
@@ -76,11 +87,33 @@ export function inline(src: string): Inline[] {
     // A marker opens only at a word boundary and before a non-space, so
     // 2*3*4, snake_case and a lone * stay text (the Go parser of the channel
     // translator applies the same rules; see markdown_cases.json).
-    const opens = !isWord(src[i - 1]);
+    // A marker that follows its own kind is the tail of a run that was
+    // already read as text ("kelime***x***", "****x****").
+    const opens = !isWord(src[i - 1]) && src[i - 1] !== rest[0];
+    // ***text*** is bold italic (common in AI answers).
+    if (
+      opens &&
+      rest.startsWith("***") &&
+      rest.length > 3 &&
+      rest[3] !== "*" &&
+      !isSpace(rest[3])
+    ) {
+      const end = closeBoth(rest);
+      if (end > 0) {
+        flush();
+        out.push({
+          t: "strong",
+          c: [{ t: "em", c: inline(rest.slice(3, end)) }],
+        });
+        i += end + 3;
+        continue;
+      }
+    }
     if (
       opens &&
       rest.startsWith("**") &&
       rest.length > 2 &&
+      rest[2] !== "*" &&
       !isSpace(rest[2])
     ) {
       const end = closeStrong(rest);

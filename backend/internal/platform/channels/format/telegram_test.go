@@ -89,6 +89,17 @@ func TestTelegramSplitKeepsFormatting(t *testing.T) {
 	}
 }
 
+// A message that is only a code fence must not become an empty text.
+func TestTelegramOnlyFence(t *testing.T) {
+	if r := Telegram("```"); r.Text != "```" || len(r.Entities) != 0 {
+		t.Fatalf("%+v", r)
+	}
+	r := Telegram("***ikisi***")
+	if r.Text != "ikisi" || len(r.Entities) != 2 || r.Entities[0].Length != 5 || r.Entities[1].Length != 5 {
+		t.Fatalf("bold italic: %+v", r)
+	}
+}
+
 func TestTelegramSplitShortAndBlank(t *testing.T) {
 	if parts := Telegram("**kısa**").Split(4096); len(parts) != 1 || parts[0].Text != "kısa" || len(parts[0].Entities) != 1 {
 		t.Fatalf("%+v", parts)

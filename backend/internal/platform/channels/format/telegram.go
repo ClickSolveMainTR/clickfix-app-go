@@ -120,7 +120,12 @@ func Telegram(src string) Rich {
 			b.span("pre", "", func() { b.write(blk.V) })
 		}
 	}
-	return Rich{Text: string(utf16.Decode(b.units)), Entities: b.ents}
+	text := string(utf16.Decode(b.units))
+	if strings.TrimSpace(text) == "" && strings.TrimSpace(src) != "" {
+		// Only a code fence: send the source rather than nothing.
+		return Rich{Text: src}
+	}
+	return Rich{Text: text, Entities: b.ents}
 }
 
 func spaceUnit(u uint16) bool { return u == ' ' || u == '\n' || u == '\t' || u == '\r' }

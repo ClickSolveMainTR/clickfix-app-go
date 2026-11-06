@@ -17,7 +17,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/i18n"
 )
 
@@ -219,9 +218,8 @@ var (
 
 // Preview turns message content (plain text, Markdown-ish or HTML) into a
 // one-line excerpt of at most n characters: tags and entities removed,
-// formatting marks dropped, whitespace collapsed, cut on a word with "…".
+// whitespace collapsed, cut on a word with "…".
 func Preview(s string, n int) string {
-	s = format.Strip(s) // "**bold**" reads as "bold" in a notification (CF-177)
 	s = tagRE.ReplaceAllString(s, " ")
 	s = html.UnescapeString(s)
 	s = spaceRE.ReplaceAllString(s, " ")

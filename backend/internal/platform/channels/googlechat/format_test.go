@@ -17,7 +17,7 @@ import (
 func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 	t.Parallel()
 	var bodies []map[string]any
-	reject := false
+	reject, rejectStatus := false, http.StatusBadRequest
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /token", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "ya29.test", "token_type": "Bearer", "expires_in": 3599})
@@ -27,7 +27,7 @@ func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&b)
 		bodies = append(bodies, b)
 		if reject && b["markupSyntax"] != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(rejectStatus)
 			_, _ = w.Write([]byte(`{"error":{"status":"INVALID_ARGUMENT"}}`))
 			return
 		}
@@ -52,5 +52,11 @@ func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 	}
 	if len(bodies) != 2 || bodies[1]["markupSyntax"] != nil || bodies[1]["text"] != "Çözüldü şimdi: kayıt (https://ex.com/a_b)\n* bir" {
 		t.Fatalf("bodies = %+v", bodies)
+	}
+
+	// 404 is not a format problem: no second request.
+	rejectStatus, bodies = http.StatusNotFound, nil
+	if _, err := a.Send(context.Background(), inst, msg); !channels.IsPermanent(err) || len(bodies) != 1 {
+		t.Fatalf("404: %v, %d requests", err, len(bodies))
 	}
 }

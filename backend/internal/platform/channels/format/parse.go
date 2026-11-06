@@ -60,9 +60,13 @@ type Block struct {
 	gap bool
 }
 
+// ws is what JavaScript's \s matches. Go's \s is ASCII only, and an address
+// must end at a no-break space here exactly as it does in the widget.
+const ws = `\s\x0b\x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
+
 var (
-	linkRE = regexp.MustCompile(`^\[([^\]\n]{1,300})\]\((https?://[^\s)]+|mailto:[^\s)]+)\)`)
-	autoRE = regexp.MustCompile(`^https?://[^\s<>"']+[^\s<>"'.,;:!?)]`)
+	linkRE = regexp.MustCompile(`^\[([^\]\n]{1,300})\]\((https?://[^` + ws + `)]+|mailto:[^` + ws + `)]+)\)`)
+	autoRE = regexp.MustCompile(`^https?://[^` + ws + `<>"']+[^` + ws + `<>"'.,;:!?)]`)
 	itemRE = regexp.MustCompile(`^[ \t]*(?:([-*•])|(\d{1,3})([.)]))[ \t]+(.*)$`)
 )
 
@@ -91,6 +95,22 @@ func at(s string, i int) rune {
 	}
 	r, _ := utf8.DecodeRuneInString(s[i:])
 	return r
+}
+
+// closeBoth finds the "***" that closes bold italic opened at rest[0:3].
+func closeBoth(rest string) int {
+	for from := 4; from < len(rest); {
+		e := strings.Index(rest[from:], "***")
+		if e < 0 {
+			return -1
+		}
+		e += from
+		if !isSpace(before(rest, e)) {
+			return e
+		}
+		from = e + 1
+	}
+	return -1
 }
 
 // closeStrong finds the "**" that closes a strong opened at rest[0:2]: the
@@ -153,8 +173,19 @@ func ParseInline(src string) []Inline {
 		}
 		// A marker opens only at a word boundary and before a non-space,
 		// so 2*3*4, snake_case and a lone * stay text.
-		opens := !isWord(before(src, i))
-		if opens && strings.HasPrefix(rest, "**") && len(rest) > 2 && !isSpace(at(rest, 2)) {
+		// A marker that follows its own kind is the tail of a run that was
+		// already read as text ("kelime***x***", "****x****").
+		opens := !isWord(before(src, i)) && (i == 0 || src[i-1] != rest[0])
+		// ***text*** is bold italic (common in AI answers).
+		if opens && strings.HasPrefix(rest, "***") && len(rest) > 3 && rest[3] != '*' && !isSpace(at(rest, 3)) {
+			if end := closeBoth(rest); end > 0 {
+				flush()
+				out = append(out, Inline{T: Strong, C: []Inline{{T: Em, C: ParseInline(rest[3:end])}}})
+				i += end + 3
+				continue
+			}
+		}
+		if opens && strings.HasPrefix(rest, "**") && len(rest) > 2 && rest[2] != '*' && !isSpace(at(rest, 2)) {
 			if end := closeStrong(rest); end > 0 {
 				flush()
 				out = append(out, Inline{T: Strong, C: ParseInline(rest[2:end])})

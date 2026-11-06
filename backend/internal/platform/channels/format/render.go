@@ -2,6 +2,7 @@ package format
 
 import (
 	"html"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -169,6 +170,34 @@ func (st *style) render(src string) string {
 	return b.String()
 }
 
+// orSource guards against a translation that leaves nothing to send (a
+// message that is only a code fence): the channel would refuse an empty
+// text, so the source goes out as typed (through esc when the channel
+// needs its control characters escaped).
+func orSource(out, src string, esc func(string) string) string {
+	if strings.TrimSpace(out) != "" || strings.TrimSpace(src) == "" {
+		return out
+	}
+	if esc != nil {
+		return esc(src)
+	}
+	return src
+}
+
+// tildeRE matches text a channel would strike through: "~x~".
+var tildeRE = regexp.MustCompile(`~([^\s~](?:[^~\n]*[^\s~])?)~`)
+
+// noStrike keeps "~x~" from being struck through on WhatsApp and Slack,
+// which have no escape character: the source format has no strikethrough,
+// so the tildes are text. They are written as U+223C (∼), which looks the
+// same and is not a formatting mark.
+func noStrike(s string) string {
+	if !strings.Contains(s, "~") {
+		return s
+	}
+	return tildeRE.ReplaceAllString(s, "∼${1}∼")
+}
+
 func backticks(v string) string { return "`" + v + "`" }
 func fence(v string) string     { return "```\n" + v + "\n```" }
 
@@ -177,7 +206,7 @@ func fence(v string) string     { return "```\n" + v + "\n```" }
 // "label (address)", lists and line breaks stay.
 func Plain(src string) string {
 	st := style{link: plainLink, br: "\n"}
-	return st.render(src)
+	return orSource(st.render(src), src, nil)
 }
 
 // Strip is Plain for excerpts: a named link keeps only its label.
@@ -206,14 +235,14 @@ func Speech(src string) string {
 	if out := strings.TrimSpace(st.render(src)); out != "" {
 		return out
 	}
-	return Plain(src)
+	return strings.TrimSpace(Plain(src))
 }
 
 // WhatsApp writes WhatsApp's own marks: *bold*, _italic_, `code`,
 // ```block```, "- " and "1. " lists. WhatsApp has no named links.
 func WhatsApp(src string) string {
-	st := style{strong: "*", em: "_", boundary: true, code: backticks, pre: fence, link: plainLink, bullet: "-", renumber: true, br: "\n"}
-	return st.render(src)
+	st := style{strong: "*", em: "_", boundary: true, escape: noStrike, code: backticks, pre: fence, link: plainLink, bullet: "-", renumber: true, br: "\n"}
+	return orSource(st.render(src), src, nil)
 }
 
 var (
@@ -225,9 +254,10 @@ var (
 // characters & < > escaped everywhere (Slack decodes exactly these three).
 func Slack(src string) string {
 	st := style{
-		strong: "*", em: "_", boundary: true, escape: slackText.Replace, bullet: "•", renumber: true, br: "\n",
-		code: func(v string) string { return backticks(slackText.Replace(v)) },
-		pre:  func(v string) string { return fence(slackText.Replace(v)) },
+		strong: "*", em: "_", boundary: true, bullet: "•", renumber: true, br: "\n",
+		escape: func(v string) string { return noStrike(slackText.Replace(v)) },
+		code:   func(v string) string { return backticks(slackText.Replace(v)) },
+		pre:    func(v string) string { return fence(slackText.Replace(v)) },
 		link: func(href, label string, bare bool) string {
 			if bare {
 				return "<" + slackHref.Replace(href) + ">"
@@ -235,7 +265,7 @@ func Slack(src string) string {
 			return "<" + slackHref.Replace(href) + "|" + label + ">"
 		},
 	}
-	return st.render(src)
+	return orSource(st.render(src), src, slackText.Replace)
 }
 
 func markdownLink(href, label string, bare bool) string {
@@ -251,18 +281,19 @@ func markdownLink(href, label string, bare bool) string {
 // Chat documents no escape character.
 func GoogleChat(src string) string {
 	st := style{strong: "**", em: "*", code: backticks, pre: fence, link: markdownLink, bullet: "-", renumber: true, br: "\n"}
-	return st.render(src)
+	return orSource(st.render(src), src, nil)
 }
 
 // commonMarkText escapes what CommonMark would read as markup in literal
-// text: "*" and "_" that touch a word, backticks, "[", "\\" and the HTML
+// text: "*" and "_" that touch a word, backticks, "[", "\\", "~"
+// (strikethrough), "$" (inline math in extended mode) and the HTML
 // characters. "5 * 3" and snake_case are left as typed.
 func commonMarkText(s string) string {
 	var b strings.Builder
 	for i, r := range s {
 		prev, next := before(s, i), at(s, i+utf8.RuneLen(r))
 		switch r {
-		case '\\', '`', '[':
+		case '\\', '`', '[', '~', '$':
 			b.WriteByte('\\')
 			b.WriteRune(r)
 		case '*':
@@ -288,6 +319,20 @@ func commonMarkText(s string) string {
 	return b.String()
 }
 
+// ruleRE matches a line CommonMark reads as a rule or as the underline of a
+// setext heading ("Saygılar\n--\nAli" would turn "Saygılar" into a title).
+var ruleRE = regexp.MustCompile(`^[ \t]*(-+|=+)[ \t]*$`)
+
+// commonMarkLine escapes what is markup only at the start of a line: a
+// heading, a quote, a "+" bullet, a rule and a setext underline.
+func commonMarkLine(l string) string {
+	t := strings.TrimLeft(l, " \t")
+	if strings.HasPrefix(t, "#") || strings.HasPrefix(t, ">") || strings.HasPrefix(t, "+ ") || ruleRE.MatchString(l) {
+		return l[:len(l)-len(t)] + `\` + t
+	}
+	return l
+}
+
 // Teams writes CommonMark for textFormat "extendedmarkdown": blocks are
 // separated by a blank line, a line break inside a paragraph is a hard
 // break (two spaces before the newline) and literal markup is escaped.
@@ -295,20 +340,23 @@ func Teams(src string) string {
 	st := style{
 		strong: "**", em: "*", escape: commonMarkText, code: backticks, pre: fence, link: markdownLink,
 		bullet: "-", renumber: true, br: "  \n", blockSep: "\n\n",
-		lineStart: func(l string) string {
-			if strings.HasPrefix(l, "#") || strings.HasPrefix(l, ">") {
-				return `\` + l
-			}
-			return l
-		},
+		lineStart: commonMarkLine,
 	}
-	return st.render(src)
+	return orSource(st.render(src), src, commonMarkText)
 }
 
 // HTML renders the message as e-mail body markup: <p>, <br>, <strong>,
 // <em>, <code>, <pre>, <ul>/<ol> and <a>. All text is escaped; only http,
 // https and mailto addresses become links (the parser accepts no others).
 func HTML(src string) string {
+	out := renderHTML(src)
+	if out == "" && strings.TrimSpace(src) != "" {
+		return "<p>" + html.EscapeString(strings.TrimSpace(src)) + "</p>"
+	}
+	return out
+}
+
+func renderHTML(src string) string {
 	var b strings.Builder
 	for i, blk := range Parse(src) {
 		if i > 0 {
@@ -318,6 +366,9 @@ func HTML(src string) string {
 		case Paragraph:
 			b.WriteString("<p>" + htmlInline(blk.C) + "</p>")
 		case Pre:
+			if strings.TrimSpace(blk.V) == "" {
+				continue
+			}
 			b.WriteString(`<pre style="white-space:pre-wrap"><code>` + html.EscapeString(blk.V) + "</code></pre>")
 		case List:
 			tag := "<ul>"

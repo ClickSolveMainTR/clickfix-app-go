@@ -399,7 +399,7 @@ func (s *Service) sideInbox(ctx context.Context, q *db.Queries, orgID int64, wan
 func (s *Service) sideEvent(ctx context.Context, tx *repository.Tx, orgID, convID int64, actor Actor, event string, sc db.SideConversation, who, body string) (db.Message, error) {
 	attrs, err := json.Marshal(map[string]any{
 		"event": event, "to": who, "side_conversation_uuid": sc.Uuid.String(), "subject": sc.Subject,
-		"preview": model.Preview(body), "actor_uuid": actor.UUID, "actor_name": actor.Name,
+		"preview": model.PreviewOutbound(body), "actor_uuid": actor.UUID, "actor_name": actor.Name,
 	})
 	if err != nil {
 		return db.Message{}, err

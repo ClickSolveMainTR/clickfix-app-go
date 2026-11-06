@@ -18,7 +18,7 @@ import (
 func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 	t.Parallel()
 	var activities []map[string]any
-	reject := false
+	reject, rejectStatus := false, 400
 	client := clientFunc(func(r *http.Request) (*http.Response, error) {
 		status, body := 200, `{"access_token":"access","token_type":"Bearer"}`
 		if !strings.HasSuffix(r.URL.Path, "/oauth2/v2.0/token") {
@@ -27,7 +27,7 @@ func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 			activities = append(activities, a)
 			body = `{"id":"reply"}`
 			if reject && a["textFormat"] != "plain" {
-				status, body = 400, `{"error":{"code":"BadSyntax"}}`
+				status, body = rejectStatus, `{"error":{"code":"BadSyntax"}}`
 			}
 		}
 		return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
@@ -50,5 +50,11 @@ func TestSendTranslatesFormatAndFallsBack(t *testing.T) {
 	}
 	if len(activities) != 2 || activities[1]["textFormat"] != "plain" || activities[1]["text"] != "Çözüldü\n2*3*4 ve kayıt (https://ex.com/a_b)" {
 		t.Fatalf("activities = %+v", activities)
+	}
+
+	// 403 is not a format problem: no second request.
+	rejectStatus, activities = 403, nil
+	if _, err := a.Send(context.Background(), inst, msg); !channels.IsPermanent(err) || len(activities) != 1 {
+		t.Fatalf("403: %v, %d requests", err, len(activities))
 	}
 }

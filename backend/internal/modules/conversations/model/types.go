@@ -96,10 +96,14 @@ func Valid(v string, allowed []string) bool {
 	return slices.Contains(allowed, v)
 }
 
-// Preview shortens a message text for the inbox list (rune safe, single
-// line). Formatting marks of the source format are dropped (CF-177).
+// PreviewOutbound is Preview for a message an agent or the AI wrote: the
+// formatting marks of the source format are dropped (CF-177). A contact's
+// text is never in the source format, so inbound messages and notes use
+// Preview and keep "_abc_" as typed.
+func PreviewOutbound(text string) string { return Preview(format.Strip(text)) }
+
+// Preview shortens a message text for the inbox list (rune safe, single line).
 func Preview(text string) string {
-	text = format.Strip(text)
 	out := make([]rune, 0, PreviewLength)
 	space := false
 	for _, r := range text {

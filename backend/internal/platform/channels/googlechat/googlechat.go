@@ -539,8 +539,8 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 		Name string `json:"name"`
 	}
 	exists, err := a.api(ctx, inst, http.MethodPost, "/v1/"+spaceName+"/messages?"+q.Encode(), payload, &out)
-	if channelhttp.Rejected(err) {
-		// The formatted message was refused: the message must still arrive,
+	if channelhttp.BadRequest(err) {
+		// The formatted message was refused (400): the message must still arrive,
 		// so send it once more as plain text in the app's default syntax.
 		if plain := format.Plain(msg.Text); plain != "" {
 			delete(payload, "markupSyntax")

@@ -42,6 +42,9 @@ func Do(c Client, r *http.Request, out any) error {
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		e := fmt.Errorf("provider HTTP %d", res.StatusCode)
+		if res.StatusCode == http.StatusBadRequest {
+			e = errBadRequest
+		}
 		if res.StatusCode >= 400 && res.StatusCode < 500 && res.StatusCode != 429 && res.StatusCode != 408 {
 			return channels.Permanent("provider_rejected", e)
 		}
@@ -56,13 +59,14 @@ func Do(c Client, r *http.Request, out any) error {
 	return nil
 }
 
-// Rejected reports whether err is a provider's 4xx answer (Do's
-// "provider_rejected"): the request itself was refused, so a formatted
-// message may be worth one more try as plain text.
-func Rejected(err error) bool {
-	var se *channels.SendError
-	return errors.As(err, &se) && se.Code == "provider_rejected"
-}
+// errBadRequest is Do's error for HTTP 400.
+var errBadRequest = errors.New("provider HTTP 400")
+
+// BadRequest reports whether err is a provider's 400 answer: the request
+// content was refused, so a formatted message is worth one more try as
+// plain text. 401, 403 and 404 are not content problems and are not
+// retried.
+func BadRequest(err error) bool { return errors.Is(err, errBadRequest) }
 
 // Sign signs a timestamp and the exact body. Used by the custom channel in both directions.
 func Sign(secret, timestamp string, body []byte) string {

@@ -328,8 +328,8 @@ func (a *Adapter) Send(ctx context.Context,
 		return channelhttp.Do(a.cfg.Client, req, &out)
 	}
 	err = post(text, "extendedmarkdown")
-	if channelhttp.Rejected(err) {
-		// The formatted activity was refused: the message must still arrive,
+	if channelhttp.BadRequest(err) {
+		// The formatted activity was refused (400): the message must still arrive,
 		// so send it once more as plain text.
 		if plain := format.Plain(m.Text); plain != "" {
 			err = post(plain, "plain")

@@ -941,5 +941,314 @@
         ]
       }
     ]
+  },
+  {
+    "name": "bare link ends at nbsp",
+    "src": "https://ex.com devam",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " devam"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link ends at line separator",
+    "src": "https://ex.com devam ve https://ex.org　son",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " devam ve "
+          },
+          {
+            "t": "link",
+            "href": "https://ex.org",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.org"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "　son"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "named link with nbsp in address is text",
+    "src": "[a](https://ex.com/x y)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "[a]("
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com/x",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com/x"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " y)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "mailto with nbsp is text",
+    "src": "[a](mailto:a@b.co x)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "[a](mailto:a@b.co x)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link after nbsp",
+    "src": "bak: https://ex.com",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "bak: "
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic",
+    "src": "***kalın italik*** metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "kalın italik"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic with inner code",
+    "src": "***a `b` c***",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "a "
+                  },
+                  {
+                    "t": "code",
+                    "v": "b"
+                  },
+                  {
+                    "t": "text",
+                    "v": " c"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic then suffix",
+    "src": "***önemli***dir",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "önemli"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "dir"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unclosed bold italic",
+    "src": "***kapanmayan",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "***kapanmayan"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "four stars",
+    "src": "****x****",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "****x****"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic after a word is text",
+    "src": "kelime***x***",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "kelime***x***"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "parenthesis in address cuts the link",
+    "src": "[x](https://ex.com/a(b)c)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com/a(b",
+            "c": [
+              {
+                "t": "text",
+                "v": "x"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "c)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "tilde text",
+    "src": "~x~ ve ~~y~~",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "~x~ ve ~~y~~"
+          }
+        ]
+      }
+    ]
   }
 ]
