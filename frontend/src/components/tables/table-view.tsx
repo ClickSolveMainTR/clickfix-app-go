@@ -31,7 +31,11 @@ import {
   type CellEditPayload,
 } from "@/components/tables/editable-cell";
 import { RowDragProvider } from "@/components/tables/reorder-column";
-import { ROW_FOCUS_CLASS, rowClickProps } from "@/components/tables/row-click";
+import {
+  ROW_CELL_FOCUS_CLASS,
+  ROW_FOCUS_CLASS,
+  rowClickProps,
+} from "@/components/tables/row-click";
 import type {
   DataTableColumnMeta,
   TableDensity,
@@ -345,6 +349,7 @@ function StaticTableRow<TData>({
           onEditingCellChange={onEditingCellChange}
           onCellEdit={onCellEdit}
           row={row}
+          rowFocusRing={Boolean(onRowClick)}
         />
       ))}
     </tr>
@@ -406,6 +411,7 @@ function TableCell<TData>({
   onEditingCellChange,
   onCellEdit,
   row,
+  rowFocusRing,
 }: {
   cell: Cell<TData, unknown>;
   table: Table<TData>;
@@ -415,6 +421,8 @@ function TableCell<TData>({
   onEditingCellChange?: (cell: EditingCell) => void;
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   row: Row<TData>;
+  /** The row opens on click / Enter: draw its focus ring on the cells too. */
+  rowFocusRing?: boolean;
 }) {
   const meta = cell.column.columnDef.meta as DataTableColumnMeta | undefined;
   const pinned = cell.column.getIsPinned();
@@ -428,6 +436,7 @@ function TableCell<TData>({
         cellPad,
         meta?.cellClassName,
         cell.column.id === "actions" && "whitespace-nowrap",
+        rowFocusRing && ROW_CELL_FOCUS_CLASS,
         pinned === "left" && "bg-background sticky start-0 z-10",
         pinned === "right" && "bg-background sticky end-0 z-10",
       )}

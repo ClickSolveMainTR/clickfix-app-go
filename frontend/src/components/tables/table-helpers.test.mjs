@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createRequire } from "node:module";
 import { transform } from "esbuild";
+import { compile } from "tailwindcss";
 
 async function load(name) {
   const { code } = await transform(
@@ -16,7 +18,33 @@ const { normalizeSearchText, searchTextIncludes } =
   await load("./search-text.ts");
 const { toPersistedState, fromPersistedState } =
   await load("./persist-state.ts");
-const { isRowKeyActivation } = await load("./row-click.ts");
+const { isRowKeyActivation, ROW_FOCUS_CLASS, ROW_CELL_FOCUS_CLASS } =
+  await load("./row-click.ts");
+
+/** CSS Tailwind 4 generates for a class list (with a ring colour defined). */
+async function tailwindCss(classes) {
+  const require = createRequire(import.meta.url);
+  const base = require.resolve("tailwindcss/index.css");
+  const compiler = await compile(
+    '@import "tailwindcss"; @theme { --color-ring: #0e9f22; }',
+    {
+      loadStylesheet: async (_id, from) => ({
+        path: base,
+        base: from,
+        content: await readFile(base, "utf8"),
+      }),
+    },
+  );
+  return compiler.build(classes.split(/\s+/).filter(Boolean));
+}
+
+/** Declarations of the `.focus-visible\:<name>:focus-visible` rule. */
+function focusRule(css, name) {
+  const selector = `.focus-visible\\:${name}:focus-visible`;
+  const start = css.indexOf(selector);
+  if (start < 0) return "";
+  return css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
+}
 
 test("search: Turkish dotted and dotless i match in both directions", () => {
   assert.ok(searchTextIncludes("İade talebi", "iade"));
@@ -92,4 +120,33 @@ test("row keyboard: Enter and Space open the row only from the row itself", () =
   assert.ok(!isRowKeyActivation(key("Enter", inner)));
   assert.ok(!isRowKeyActivation(key(" ", inner)));
   assert.ok(!isRowKeyActivation(key("Enter", row, { defaultPrevented: true })));
+});
+
+test("focus ring: the compiled CSS draws a visible outline on keyboard focus", async () => {
+  const css = await tailwindCss(ROW_FOCUS_CLASS);
+  // The regression: `outline-none` sets --tw-outline-style to none, which
+  // `outline-2` reads, so the focused row had no outline at all.
+  assert.ok(!ROW_FOCUS_CLASS.split(" ").includes("outline-none"));
+  assert.ok(
+    !/outline-style:\s*none/.test(css),
+    "nothing turns the outline off",
+  );
+  assert.match(focusRule(css, "outline-solid"), /outline-style:\s*solid/);
+  assert.match(focusRule(css, "outline-2"), /outline-width:\s*2px/);
+  assert.match(focusRule(css, "outline-ring"), /outline-color:/);
+  assert.match(focusRule(css, "-outline-offset-2"), /outline-offset:/);
+});
+
+test("focus ring: the old class list really was invisible", async () => {
+  const css = await tailwindCss("outline-none focus-visible:outline-2");
+  assert.match(css, /--tw-outline-style:\s*none/);
+  assert.match(focusRule(css, "outline-2"), /var\(--tw-outline-style\)/);
+});
+
+test("focus ring: cells of a focused row get ring-coloured lines", async () => {
+  const css = await tailwindCss(ROW_CELL_FOCUS_CLASS);
+  assert.match(css, /tr:focus-visible > \./, "bound to the row's focus");
+  assert.match(css, /inset 0 2px 0 0 var\(--tw-shadow-color, var\(--ring\)\)/);
+  assert.match(css, /inset 0 -2px 0 0 var\(--tw-shadow-color, var\(--ring\)\)/);
+  assert.match(css, /box-shadow:[^;]*var\(--tw-shadow\)/);
 });

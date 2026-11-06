@@ -17,7 +17,9 @@ async function loadComponents() {
   const { outputFiles } = await build({
     stdin: {
       contents: `
-        export { createElement } from "react";
+        export { createElement, useState } from "react";
+        export { useDataTable } from "@/components/tables/use-data-table";
+        export { tableEmptyPageFallback } from "@/components/tables/empty-page";
         export { renderToStaticMarkup } from "react-dom/server";
         export { EntityTable } from "@/components/entity/entity-table";
         export { DataTable } from "@/components/tables/data-table";
@@ -67,8 +69,15 @@ async function loadComponents() {
   }
 }
 
-const { createElement, renderToStaticMarkup, EntityTable, DataTable } =
-  await loadComponents();
+const {
+  createElement,
+  useState,
+  useDataTable,
+  tableEmptyPageFallback,
+  renderToStaticMarkup,
+  EntityTable,
+  DataTable,
+} = await loadComponents();
 
 const columns = [{ accessorKey: "id", header: "id" }];
 const page = Array.from({ length: 20 }, (_, i) => ({ id: String(i + 21) }));
@@ -218,4 +227,114 @@ test("client search is Turkish-aware", () => {
   );
   assert.ok(html.includes("İade"));
   assert.ok(!html.includes("Ödeme"));
+});
+
+/**
+ * Drives the real `useDataTable` hook through a list of steps, one per
+ * render (server rendering re-renders a component that sets its own state
+ * while rendering), and records the pagination after each step.
+ */
+function runTableSteps({ rowsCount = 25, pageSize = 10, steps }) {
+  const seen = [];
+  const make = (n) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: String(i),
+      name: `Kayıt ${String(i).padStart(2, "0")}`,
+    }));
+  function Harness() {
+    const [data, setData] = useState(() => make(rowsCount));
+    const [step, setStep] = useState(0);
+    const { table } = useDataTable({
+      columns: nameColumns,
+      data,
+      getRowId: (row) => row.id,
+      initialState: { pagination: { pageIndex: 0, pageSize } },
+    });
+    const state = table.getState();
+    seen[step] = {
+      pageIndex: state.pagination.pageIndex,
+      pageSize: state.pagination.pageSize,
+      autoReset: table.options.autoResetPageIndex,
+    };
+    if (step < steps.length) {
+      steps[step]({ table, setData, make });
+      setStep(step + 1);
+    }
+    return null;
+  }
+  renderToStaticMarkup(createElement(Harness));
+  return seen;
+}
+
+test("client mode: search, column filter and sorting go back to page 1", () => {
+  for (const change of [
+    ({ table }) => table.setGlobalFilter("kayıt"),
+    ({ table }) => table.setColumnFilters([{ id: "name", value: "1" }]),
+    ({ table }) => table.setSorting([{ id: "name", desc: true }]),
+  ]) {
+    const seen = runTableSteps({
+      steps: [({ table }) => table.setPageIndex(2), change],
+    });
+    assert.equal(seen[1].pageIndex, 2, "moved to page 3 first");
+    assert.equal(seen[2].pageIndex, 0, "the change resets the page");
+    assert.equal(seen[2].pageSize, 10, "and keeps the page size");
+  }
+});
+
+test("client mode: a data refresh keeps the page", () => {
+  const seen = runTableSteps({
+    steps: [
+      ({ table }) => table.setPageIndex(2),
+      // An edit or a toggle refetches the list: same rows, new array.
+      ({ setData, make }) => setData(make(25)),
+    ],
+  });
+  assert.equal(seen[2].pageIndex, 2);
+  // TanStack resets the page in a microtask after data changes unless this
+  // is off; the microtask cannot be observed here, the option can.
+  assert.equal(seen[2].autoReset, false);
+});
+
+test("client mode: an emptied last page is pulled back to the last page with rows", () => {
+  // `tableEmptyPageFallback` is what DataTable applies after every render.
+  const fallback = {};
+  const at =
+    (key) =>
+    ({ table }) => {
+      fallback[key] = tableEmptyPageFallback(table, {
+        busy: false,
+        serverRows: 0,
+      });
+    };
+  runTableSteps({
+    steps: [
+      ({ table }) => table.setPageIndex(2),
+      at("full"),
+      // Page 3 of 25 rows (10 per page) holds 5; the list shrinks to 20.
+      ({ setData, make }) => setData(make(20)),
+      at("shrunk"),
+      // A search that leaves 2 rows while the user is still on page 3
+      // (cannot happen through the toolbar, which resets the page).
+      ({ setData, make }) => setData(make(2)),
+      at("almostEmpty"),
+    ],
+  });
+  assert.deepEqual(fallback, { full: null, shrunk: 1, almostEmpty: 0 });
+});
+
+test("empty-page fallback waits while the list is loading", () => {
+  const fallback = {};
+  runTableSteps({
+    steps: [
+      ({ table }) => table.setPageIndex(2),
+      ({ setData, make }) => setData(make(0)),
+      ({ table }) => {
+        fallback.busy = tableEmptyPageFallback(table, {
+          busy: true,
+          serverRows: 0,
+        });
+      },
+    ],
+  });
+  assert.equal(fallback.busy, null);
 });

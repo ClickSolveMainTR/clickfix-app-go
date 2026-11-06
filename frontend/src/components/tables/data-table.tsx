@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { DataTablePagination } from "@/components/tables/data-table-pagination";
 import { DataTableToolbar } from "@/components/tables/data-table-toolbar";
 import { GridView } from "@/components/tables/grid-view";
-import { pageIndexAfterEmptyPage } from "@/components/tables/pagination-summary";
+import { tableEmptyPageFallback } from "@/components/tables/empty-page";
 import { createReorderColumnDef } from "@/components/tables/reorder-column";
 import { reorderRowsById } from "@/components/tables/reorder-rows";
 import { TableView } from "@/components/tables/table-view";
@@ -95,17 +95,11 @@ export function DataTable<TData>({
   // refresh) has no rows and so no pagination; step back to the last page
   // that has rows. Server mode counts what the server sent, client mode what
   // is left after filtering.
-  const serverPaged = Boolean(manual?.pagination);
-  const { pageIndex, pageSize } = table.getState().pagination;
   const fallbackPageIndex = resolvedFeatures.pagination
-    ? pageIndexAfterEmptyPage({
-        isLoading: Boolean(isLoading) || Boolean(errorState),
-        pageIndex,
-        pageSize,
-        pageRows: serverPaged ? data.length : table.getRowModel().rows.length,
-        rowCount: serverPaged
-          ? rowCount
-          : table.getFilteredRowModel().rows.length,
+    ? tableEmptyPageFallback(table, {
+        busy: Boolean(isLoading) || Boolean(errorState),
+        serverRows: data.length,
+        serverRowCount: rowCount,
       })
     : null;
   useEffect(() => {
