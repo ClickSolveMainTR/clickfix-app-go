@@ -26,20 +26,37 @@ export type Pending = { key: PendingKey; count: number };
 
 /**
  * What still waits for the member, most pressing first: ongoing incidents,
- * unread notifications, open setup steps. A source the member cannot see (or
- * that has not answered) is passed as null and leaves no row.
+ * unread notifications, open steps of the organization's set-up checklist
+ * (only while it is active, like the panel's home card). A source the member
+ * cannot see (or that has not answered) is passed as null and leaves no row.
  */
 export function pendingItems(input: {
   incidents: number | null;
   unread: number | null;
-  setup: { completed: number; total: number } | null;
+  setup: { active: boolean; completed: number; total: number } | null;
 }): Pending[] {
   const out: Pending[] = [];
   if (input.incidents && input.incidents > 0) out.push({ key: 'incidents', count: input.incidents });
   if (input.unread && input.unread > 0) out.push({ key: 'notifications', count: input.unread });
-  const left = input.setup ? input.setup.total - input.setup.completed : 0;
+  const left = input.setup?.active ? input.setup.total - input.setup.completed : 0;
   if (left > 0) out.push({ key: 'setup', count: left });
   return out;
+}
+
+export type SourceState = { enabled: boolean; loaded: boolean; failed: boolean };
+
+/**
+ * What the pending card shows: rows as soon as one source has something;
+ * otherwise it waits for the sources still loading, and says "nothing" only
+ * when every source the member may read has answered. A failed source is
+ * reported instead of being read as "nothing waits".
+ */
+export function pendingView(rows: number, sources: SourceState[]): 'list' | 'loading' | 'error' | 'empty' {
+  const on = sources.filter((s) => s.enabled);
+  if (rows > 0) return 'list';
+  if (on.some((s) => !s.loaded && !s.failed)) return 'loading';
+  if (on.some((s) => s.failed && !s.loaded)) return 'error';
+  return 'empty';
 }
 
 /** "Merhaba Ayşe" needs a first name; without one the screen uses the plain title. */

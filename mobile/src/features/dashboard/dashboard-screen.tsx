@@ -1,6 +1,7 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { type Href, router, Stack } from 'expo-router';
-import type { ReactNode } from 'react';
+import { type Href, router, Stack, useFocusEffect } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, RefreshControl, View } from 'react-native';
 
@@ -10,10 +11,9 @@ import { useSession } from '@/core/auth/session';
 import { formatNumber, formatRelative, formatTime } from '@/core/format';
 import { errorMessage } from '@/core/i18n';
 import { useUpcomingAppointments } from '@/features/appointments/api';
-import { useSetupGuides } from '@/features/guides/api';
-import { useInboxCounts } from '@/features/inbox/api';
+import { WEB_URL } from '@/core/config';
+import { useInboxCounts, useInboxLive } from '@/features/inbox/api';
 import { useIncidents } from '@/features/incidents/api';
-import { useUnreadNotifications } from '@/features/notifications/api';
 import { type ApiAppointment, todayAppointments } from '@/features/widgets/snapshot-core';
 import { cn } from '@/ui/cn';
 import type { IconName } from '@/ui/icons';
@@ -24,13 +24,14 @@ import { StatusPill } from '@/ui/status-pill';
 import { Text } from '@/ui/text';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 
-import { useSlaAtRisk } from './api';
-import { countTiles, firstName, type PendingKey, pendingItems } from './core';
+import { useOnboardingState, useSlaAtRisk, useUnreadCount } from './api';
+import { countTiles, firstName, type PendingKey, pendingItems, pendingView } from './core';
 
-const PENDING: Record<PendingKey, { icon: IconName; to: Href }> = {
-  incidents: { icon: 'megaphone', to: '/more/incidents' },
-  notifications: { icon: 'bell', to: '/notifications' },
-  setup: { icon: 'checklist', to: '/setup-guide' },
+/** Where a pending row leads; the set-up checklist lives on the panel's home. */
+const PENDING: Record<PendingKey, { icon: IconName; open: () => void }> = {
+  incidents: { icon: 'megaphone', open: () => router.push('/more/incidents' as Href) },
+  notifications: { icon: 'bell', open: () => router.push('/notifications' as Href) },
+  setup: { icon: 'checklist', open: () => void WebBrowser.openBrowserAsync(`${WEB_URL}/dashboard`) },
 };
 
 /**
@@ -53,23 +54,42 @@ export function DashboardScreen() {
   const sla = useSlaAtRisk();
   const appointments = useUpcomingAppointments('mine');
   const incidents = useIncidents();
-  const setup = useSetupGuides();
-  const unread = useUnreadNotifications();
+  const setup = useOnboardingState();
+  const unread = useUnreadCount();
 
-  const queries = [counts, sla, appointments, incidents, setup];
+  // Messages and status changes reach the summary while it is open...
+  useInboxLive();
+  // ...and coming back from a conversation re-reads the SLA rows and the numbers.
+  const refetchSla = sla.refetch;
+  const refetchCounts = counts.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      if (!canInbox) return;
+      void refetchSla();
+      void refetchCounts();
+    }, [canInbox, refetchSla, refetchCounts]),
+  );
+
+  const queries = [counts, sla, appointments, incidents, setup, unread];
+  // Only what this member may read was ever started; the rest stays off.
+  const started = (q: { fetchStatus: string; isFetched: boolean }) => q.fetchStatus !== 'idle' || q.isFetched;
   const refresh = useManualRefresh({
     isRefetching: queries.some((q) => q.isRefetching),
-    // Only what this member may read was ever started; the rest stays off.
-    refetch: () => Promise.all(queries.filter((q) => q.fetchStatus !== 'idle' || q.isFetched).map((q) => q.refetch())),
+    refetch: () => Promise.all(queries.filter(started).map((q) => q.refetch())),
   });
 
   const name = firstName(me?.user?.name);
   const today = todayAppointments((appointments.data?.items ?? []) as ApiAppointment[], new Date());
+  const pendingSources = [incidents, setup, unread];
   const pending = pendingItems({
     incidents: canInbox && incidents.data ? (incidents.data.items ?? []).filter((i) => !i.resolved_at).length : null,
-    unread,
-    setup: setup.data ? { completed: setup.data.completed, total: setup.data.total } : null,
+    unread: unread.data ? Number(unread.data.count ?? 0) : null,
+    setup: setup.data ?? null,
   });
+  const pendingState = pendingView(
+    pending.length,
+    pendingSources.map((q) => ({ enabled: started(q), loaded: q.data !== undefined, failed: q.isError })),
+  );
 
   return (
     <>
@@ -180,17 +200,29 @@ export function DashboardScreen() {
 
         <View>
           <SectionHeader title={t('dashboard.pending')} className="pt-1" />
-          {pending.length ? (
+          {pendingState === 'list' ? (
             <List>
               {pending.map((p, i) => (
                 <ListRow
                   key={p.key}
                   icon={PENDING[p.key].icon}
                   title={t(`dashboard.pending_${p.key}`, { count: p.count })}
-                  onPress={() => router.push(PENDING[p.key].to)}
+                  onPress={PENDING[p.key].open}
                   last={i === pending.length - 1}
                 />
               ))}
+            </List>
+          ) : pendingState === 'loading' ? (
+            <Skeleton className="h-14" />
+          ) : pendingState === 'error' ? (
+            <List>
+              <ListRow icon="error" tone="danger" title={t('dashboard.load_failed')} titleLines={2} />
+              <ListRow
+                icon="refresh"
+                title={t('common:retry')}
+                onPress={() => pendingSources.filter((q) => q.isError).forEach((q) => void q.refetch())}
+                last
+              />
             </List>
           ) : (
             <Note icon="accept" text={t('dashboard.pending_empty')} />
