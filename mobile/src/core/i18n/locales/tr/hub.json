@@ -133,5 +133,6 @@
   "roles.member_description": "Organizasyona katılır ve kendisine verilen yetkilerle çalışır.",
   "roles.supervisor_description": "Destek ekibini, tüm konuşmaları, atamaları, raporları, ekipleri ve bilgi bankasını yönetir.",
   "roles.agent_description": "Ekiplerinin konuşmalarını ve destek taleplerini yanıtlar.",
-  "notifications.empty_title": "Bildirim yok"
+  "notifications.empty_title": "Bildirim yok",
+  "more.replies": "Hazır yanıtlar"
 }
