@@ -56,6 +56,7 @@
   "more.oncall": "Nöbet",
   "more.oncall_hint": "Kim nöbette, açık uyarılar",
   "more.workforce": "İş gücü planlama",
+  "more.coaching": "Koçluk ve oyunlaştırma",
   "more.reports": "Raporlar",
   "more.reports_hint": "Hacim, ilk yanıt, çözüm, CSAT, SLA",
   "more.engineering": "Ürün talepleri",
@@ -165,5 +166,6 @@
   "dashboard.pending_setup_other": "Kurulumda {{count}} adım kaldı",
   "dashboard.pending_incidents_one": "Süren {{count}} olay",
   "dashboard.pending_incidents_other": "Süren {{count}} olay",
-  "dashboard.load_failed": "Bu bölüm yüklenemedi"
+  "dashboard.load_failed": "Bu bölüm yüklenemedi",
+  "more.forum": "Topluluk forumu"
 }

@@ -37,7 +37,7 @@ SELECT * FROM forum_posts WHERE organization_id=$1 AND status='pending' ORDER BY
 -- name: ForumModerationCount :one
 SELECT count(*) FROM forum_posts WHERE organization_id=$1 AND status='pending';
 -- name: ForumModerate :one
-UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 RETURNING *;
+UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING *;
 -- name: ForumFlag :exec
 UPDATE forum_posts SET flag_reason=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending';
 -- name: ForumAccept :exec
