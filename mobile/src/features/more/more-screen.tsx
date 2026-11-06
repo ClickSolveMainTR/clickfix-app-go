@@ -52,6 +52,7 @@ export function MoreScreen() {
     {
       title: t('more.group_find'),
       items: [
+        { key: 'dashboard', icon: 'home', to: '/more/dashboard', show: true },
         { key: 'search', icon: 'search', to: '/search', show: true },
         { key: 'agenda', icon: 'calendar', to: '/agenda', show: can(P.appointmentsRead) },
         { key: 'video', icon: 'video', to: '/more/video', show: can(P.videoUse) },
