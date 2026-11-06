@@ -127,6 +127,7 @@ function CannedList() {
         createColumn<Canned>({
           accessorKey: "scope",
           labelKey: "macros.columns.scope",
+          searchable: false,
           cell: ({ row }) => <ScopeBadge scope={row.original.scope} />,
         }),
         createColumn<Canned>({
@@ -142,6 +143,7 @@ function CannedList() {
         createColumn<Canned>({
           accessorKey: "usage_count",
           labelKey: "macros.columns.usage",
+          searchable: false,
           meta: {
             headerClassName: "text-right",
             cellClassName: "text-right tabular-nums",
@@ -413,6 +415,7 @@ function MacroList() {
         createColumn<Macro>({
           accessorKey: "scope",
           labelKey: "macros.columns.scope",
+          searchable: false,
           cell: ({ row }) => <ScopeBadge scope={row.original.scope} />,
         }),
         createColumn<Macro>({
@@ -420,11 +423,14 @@ function MacroList() {
           accessorFn: (row) => row.actions.map((a) => a.type).join(" "),
           labelKey: "macros.fields.actions",
           enableSorting: false,
+          // The raw action types ("reply status") are not what the user sees.
+          searchable: false,
           cell: ({ row }) => <MacroActions actions={row.original.actions} />,
         }),
         createColumn<Macro>({
           accessorKey: "usage_count",
           labelKey: "macros.columns.usage",
+          searchable: false,
           meta: {
             headerClassName: "text-right",
             cellClassName: "text-right tabular-nums",
