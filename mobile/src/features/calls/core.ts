@@ -68,13 +68,6 @@ export function findCall<C extends { uuid: string }>(pages: { items: C[] }[] | u
   return undefined;
 }
 
-/** A call from another year than `now` shows its year too ("3 Ara 2025 14:30"). */
-export function needsYear(iso: string | null | undefined, now = new Date()) {
-  if (!iso) return false;
-  const at = new Date(iso);
-  return !Number.isNaN(at.getTime()) && at.getFullYear() !== now.getFullYear();
-}
-
 /** Why the transcript of a recorded call cannot be shown; only a plain failure is worth another try. */
 export function transcriptProblem(status: number | null | undefined): 'gone' | 'forbidden' | 'failed' {
   if (status === 404) return 'gone';
