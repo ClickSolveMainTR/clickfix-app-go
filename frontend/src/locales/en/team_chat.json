@@ -25,6 +25,7 @@
   "placeholder": "Message the team…",
   "send": "Send",
   "ask_ai": "Ask AI (what you typed is sent as the question)",
+  "mention": "Mention a teammate",
   "ai": "AI",
   "back": "Back to chats",
   "failed": "Something went wrong. Try again.",

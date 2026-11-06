@@ -33,7 +33,7 @@ export const teamChatService = {
     );
   },
 
-  /** The newest 100 messages, in the order the API returns them. */
+  /** The newest 100 messages, newest first (the API orders by id DESC). */
   async messages(uuid: string) {
     return unwrap<ThreadMessage[]>(
       await apiClient.GET("/v1/tenant/team-chat/{uuid}/messages", {
@@ -42,11 +42,16 @@ export const teamChatService = {
     );
   },
 
-  async send(uuid: string, body: string) {
+  /** Mentioned members (thread members only) are notified by the backend. */
+  async send(uuid: string, body: string, mentions: string[] = []) {
     return unwrap<ThreadMessage>(
       await apiClient.POST("/v1/tenant/team-chat/{uuid}/messages", {
         params: { header: header(), path: { uuid } },
-        body: { body, client_id: crypto.randomUUID() },
+        body: {
+          body,
+          client_id: crypto.randomUUID(),
+          ...(mentions.length ? { mentions } : {}),
+        },
       }),
     );
   },

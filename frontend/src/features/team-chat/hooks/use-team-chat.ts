@@ -1,12 +1,18 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 
 import { Permission } from "@/config/permissions";
 import { useActiveOrganization } from "@/features/organizations";
-import { useConnectionState, useRealtimeEvent } from "@/hooks/use-realtime";
+import { useConnectionState } from "@/hooks/use-realtime";
 import { useAppMutation } from "@/lib/query/mutation";
+import { realtimeManager } from "@/lib/realtime";
+import { useAuth } from "@/providers/auth-provider";
 
 import {
   teamChatService,
@@ -57,7 +63,10 @@ export function useTeamChatUnread() {
   return (threads.data?.items ?? []).reduce((n, th) => n + (th.unread ?? 0), 0);
 }
 
-/** Messages of a thread, oldest first (the API returns the newest page). */
+/**
+ * Messages of a thread, oldest first. The cache keeps the API order (newest
+ * first, by id), so a sent message is prepended and the view reverses it.
+ */
 export function useThreadMessages(uuid: string | null) {
   const { org, canUse } = useTeamChatScope();
   const live = useLive();
@@ -68,15 +77,19 @@ export function useThreadMessages(uuid: string | null) {
     staleTime: 5_000,
     refetchInterval: live ? false : MESSAGES_POLL_MS,
   });
-  const items = useMemo(
-    () =>
-      [...(query.data ?? [])].sort((a, b) =>
-        a.created_at.localeCompare(b.created_at),
-      ),
-    [query.data],
-  );
+  const items = useMemo(() => [...(query.data ?? [])].reverse(), [query.data]);
   return { ...query, items };
 }
+
+// One dispatcher listener however many components ask for live updates (the
+// sidebar badge and the page are mounted together), so an event invalidates
+// each query once.
+const shared = {
+  users: 0,
+  off: null as (() => void) | null,
+  org: "",
+  qc: null as QueryClient | null,
+};
 
 /**
  * Live team chat: the backend publishes `teamchat.changed` with the thread
@@ -87,39 +100,54 @@ export function useThreadMessages(uuid: string | null) {
 export function useTeamChatLive() {
   const { org, canUse } = useTeamChatScope();
   const qc = useQueryClient();
-  const onEvent = useCallback(
-    (message: { data: Record<string, unknown> }) => {
-      void qc.invalidateQueries({ queryKey: teamChatKeys.threads(org) });
+  const enabled = Boolean(org) && canUse;
+  useEffect(() => {
+    if (!enabled) return;
+    shared.org = org;
+    shared.qc = qc;
+    shared.users += 1;
+    shared.off ??= realtimeManager.onEvent("teamchat.changed", (message) => {
+      if (!shared.qc) return;
+      void shared.qc.invalidateQueries({
+        queryKey: teamChatKeys.threads(shared.org),
+      });
       const thread = message.data.thread_uuid;
       if (typeof thread === "string") {
-        void qc.invalidateQueries({
-          queryKey: teamChatKeys.messages(org, thread),
+        void shared.qc.invalidateQueries({
+          queryKey: teamChatKeys.messages(shared.org, thread),
         });
       }
-    },
-    [org, qc],
-  );
-  useRealtimeEvent("teamchat.changed", onEvent, {
-    enabled: Boolean(org) && canUse,
-  });
-}
-
-function appendMessage(cur: ThreadMessage[] | undefined, m: ThreadMessage) {
-  return cur && !cur.some((x) => x.uuid === m.uuid) ? [...cur, m] : cur;
+    });
+    return () => {
+      shared.users -= 1;
+      if (shared.users === 0) {
+        shared.off?.();
+        shared.off = null;
+      }
+    };
+  }, [enabled, org, qc]);
 }
 
 export function useSendThreadMessage(uuid: string) {
   const { org } = useTeamChatScope();
+  const { user } = useAuth();
   const qc = useQueryClient();
+  const key = teamChatKeys.messages(org, uuid);
   return useAppMutation({
-    mutationFn: (body: string) => teamChatService.send(uuid, body),
+    mutationFn: (v: { body: string; mentions: string[] }) =>
+      teamChatService.send(uuid, v.body, v.mentions),
+    // The POST answer has no `sender_uuid` (the list does), so the sender is
+    // filled in here; otherwise the bubble would show as someone else's.
     onSuccess: (m) =>
-      qc.setQueryData<ThreadMessage[]>(
-        teamChatKeys.messages(org, uuid),
-        (cur) => appendMessage(cur, m),
+      qc.setQueryData<ThreadMessage[]>(key, (cur) =>
+        cur && !cur.some((x) => x.uuid === m.uuid)
+          ? [{ ...m, sender_uuid: m.sender_uuid ?? user?.uuid }, ...cur]
+          : cur,
       ),
-    onSettled: () =>
-      void qc.invalidateQueries({ queryKey: teamChatKeys.threads(org) }),
+    // The thread list is refreshed by useMarkThreadRead once the new message
+    // is marked read: refreshing it here could land before that and leave the
+    // sender's own message counted as unread.
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
   });
 }
 
@@ -137,20 +165,22 @@ export function useAskAi(uuid: string) {
 
 /**
  * Marks the thread read whenever its newest message changes while it is
- * open, and clears its unread count in the cached list right away.
+ * open. Once the server has it, the unread count is cleared in the cached
+ * list and the list is refetched: a list request that started earlier is
+ * cancelled, so the count read after the mark always wins. This also runs
+ * when the user has moved on to another thread in the meantime.
  */
 export function useMarkThreadRead(uuid: string, newest: string | undefined) {
   const { org } = useTeamChatScope();
   const qc = useQueryClient();
   useEffect(() => {
     if (!org || !uuid || !newest) return;
-    let cancelled = false;
+    const key = teamChatKeys.threads(org);
     teamChatService
       .markRead(uuid)
       .then(() => {
-        if (cancelled) return;
         qc.setQueryData<{ items: Thread[]; total: number }>(
-          teamChatKeys.threads(org),
+          key,
           (cur) =>
             cur && {
               ...cur,
@@ -159,12 +189,10 @@ export function useMarkThreadRead(uuid: string, newest: string | undefined) {
               ),
             },
         );
+        return qc.invalidateQueries({ queryKey: key });
       })
       // Best effort: the next message or reload marks it read again.
       .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
   }, [org, uuid, newest, qc]);
 }
 

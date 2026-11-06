@@ -36,6 +36,7 @@ export function TeamChatPage() {
   const scope = useTeamChatScope();
   const threads = useThreads();
   const [creating, setCreating] = useState(false);
+  // Shares one listener with the sidebar badge (see useTeamChatLive).
   useTeamChatLive();
 
   const activeUuid = params.get("thread");

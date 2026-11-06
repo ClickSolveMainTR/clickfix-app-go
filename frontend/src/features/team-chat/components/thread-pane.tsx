@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Loading } from "@/components/common/loading";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { shortUntil } from "@/features/inbox/lib/format";
+import { initials, shortUntil } from "@/features/inbox/lib/format";
 import { useTeamPresence } from "@/features/presence/hooks/use-presence";
 import { isApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,12 @@ import {
   useSendThreadMessage,
   useThreadMessages,
 } from "../hooks/use-team-chat";
+import {
+  insertMention,
+  mentionQueryAt,
+  serializeMentions,
+  type Mention,
+} from "../lib/mentions";
 
 /**
  * One team chat thread: messages (live over the user's realtime channel),
@@ -159,25 +165,136 @@ export function ThreadPane({
 }
 
 function ThreadComposer({ uuid }: { uuid: string }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const { user } = useAuth();
+  const presence = useTeamPresence();
   const send = useSendThreadMessage(uuid);
   const ask = useAskAi(uuid);
+  const area = useRef<HTMLTextAreaElement>(null);
+  // Caret to restore once a mention pick has rewritten the text.
+  const pendingCaret = useRef<number | null>(null);
   const [text, setText] = useState("");
+  const [mentions, setMentions] = useState<Mention[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const busy = send.isPending || ask.isPending;
   const ok = Boolean(text.trim()) && !busy;
+
+  // Same source as mobile's picker in spirit: teammates of the organization.
+  // The backend only accepts members of the thread, so mentioning someone
+  // outside it fails with the API's message.
+  const candidates = useMemo(() => {
+    if (mentionQuery == null) return [];
+    const q = mentionQuery.toLocaleLowerCase(locale);
+    return (presence.data ?? [])
+      .filter(
+        (m) =>
+          m.user_uuid !== user?.uuid &&
+          m.name.toLocaleLowerCase(locale).includes(q),
+      )
+      .slice(0, 6);
+  }, [presence.data, mentionQuery, locale, user?.uuid]);
+
+  useEffect(() => {
+    const el = area.current;
+    const caret = pendingCaret.current;
+    if (!el || caret == null) return;
+    pendingCaret.current = null;
+    if (document.activeElement !== el) el.focus();
+    el.setSelectionRange(caret, caret);
+  }, [text]);
+
   const fail = (e: unknown) =>
     appToast.error(isApiError(e) ? e.message : t("team_chat.failed"));
-  const clear = () => setText("");
+  const clear = () => {
+    setText("");
+    setMentions([]);
+    setMentionQuery(null);
+  };
   const submit = () => {
-    if (ok) send.mutate(text.trim(), { onSuccess: clear, onError: fail });
+    if (!ok) return;
+    send.mutate(
+      { body: text.trim(), mentions: serializeMentions(text, mentions) },
+      { onSuccess: clear, onError: fail },
+    );
   };
   // Same as mobile: what is typed goes to the AI as the question; the answer
   // lands in the thread as an AI message every member sees.
   const askAi = () => {
     if (ok) ask.mutate(text.trim(), { onSuccess: clear, onError: fail });
   };
+  const pick = (m: { user_uuid: string; name: string }) => {
+    const el = area.current;
+    if (!el) return;
+    const next = insertMention(text, el.selectionStart, m.name);
+    setText(next.text);
+    setMentions((cur) =>
+      cur.some((x) => x.uuid === m.user_uuid)
+        ? cur
+        : [...cur, { uuid: m.user_uuid, name: m.name }],
+    );
+    setMentionQuery(null);
+    pendingCaret.current = next.caret;
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery != null && candidates.length > 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        setMentionIndex(
+          (i) => (i + step + candidates.length) % candidates.length,
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const member = candidates[mentionIndex];
+        if (member) pick(member);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
   return (
-    <div className="flex items-end gap-2 border-t p-3">
+    <div className="relative flex items-end gap-2 border-t p-3">
+      {mentionQuery != null && candidates.length > 0 && (
+        <div
+          role="listbox"
+          aria-label={t("team_chat.mention")}
+          className="bg-popover absolute bottom-full left-14 z-20 mb-1 w-64 overflow-hidden rounded-lg border p-1 shadow-lg"
+        >
+          {candidates.map((m, i) => (
+            <button
+              type="button"
+              key={m.user_uuid}
+              role="option"
+              aria-selected={i === mentionIndex}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pick(m);
+              }}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+                i === mentionIndex ? "bg-accent" : "hover:bg-muted",
+              )}
+            >
+              <span className="bg-muted flex size-6 items-center justify-center rounded-full text-[10px] font-semibold">
+                {initials(m.name)}
+              </span>
+              <span className="truncate">{m.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <Button
         type="button"
         variant="secondary"
@@ -195,14 +312,16 @@ function ThreadComposer({ uuid }: { uuid: string }) {
         )}
       </Button>
       <Textarea
+        ref={area}
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            submit();
-          }
+        onChange={(e) => {
+          setText(e.target.value);
+          setMentionQuery(
+            mentionQueryAt(e.target.value, e.target.selectionStart),
+          );
+          setMentionIndex(0);
         }}
+        onKeyDown={onKeyDown}
         rows={1}
         maxLength={4000}
         placeholder={t("team_chat.placeholder")}
