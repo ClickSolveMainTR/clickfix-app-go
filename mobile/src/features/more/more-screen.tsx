@@ -75,6 +75,13 @@ export function MoreScreen() {
         { key: 'engineering', icon: 'bug', to: '/more/engineering', show: can(P.ticketsRead) },
         { key: 'incidents', icon: 'megaphone', to: '/more/incidents', show: can(P.conversationsRead) },
         { key: 'knowledge', icon: 'book', to: '/more/knowledge', show: can(P.settingsRead) },
+        {
+          key: 'objects',
+          icon: 'grid',
+          to: '/more/objects',
+          show: can(P.customFieldsRead) && can(P.customObjectsRead),
+        },
+        { key: 'apps', icon: 'grid', to: '/more/apps', show: can(P.conversationsRead) },
         { key: 'replies', icon: 'note', to: '/more/replies', show: can(P.macrosRead) },
         { key: 'workflows', icon: 'split', to: '/more/workflows', show: can(P.automationsRead) },
         { key: 'rules', icon: 'macro', to: '/more/rules', show: can(P.automationsRead) },

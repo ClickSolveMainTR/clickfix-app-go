@@ -43,6 +43,9 @@ export const P = {
   membersRead: 'tenant.members.read',
   membersWrite: 'tenant.members.write',
   billingRead: 'tenant.billing.read',
+  /** Custom object types and field definitions; records need the objects slug (`customfields/routes.go`). */
+  customFieldsRead: 'tenant.custom_fields.read',
+  customObjectsRead: 'tenant.custom_objects.read',
   /** Community forum moderation uses the feedback slug (backend `forum/routes.go`). */
   feedbackManage: 'tenant.feedback.manage',
   /** Workflows and automation rules; the on/off switch needs the write slug (`automation/routes.go`). */
