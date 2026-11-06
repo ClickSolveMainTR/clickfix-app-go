@@ -53,10 +53,7 @@ export function IncidentsPage() {
     refetchInterval: 2 * 60_000,
   });
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil((listQuery.data?.total ?? 0) / (limit || 20)),
-  );
+  const total = listQuery.data?.total ?? 0;
 
   const open = useMemo(
     () =>
@@ -93,7 +90,7 @@ export function IncidentsPage() {
         onRetry={() => void listQuery.refetch()}
         emptyTitle={t("oncall.incidents.empty_title")}
         emptyDescription={t("oncall.incidents.empty_description")}
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{
           persistKey: "tenant-incidents-v1",

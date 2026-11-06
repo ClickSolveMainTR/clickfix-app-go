@@ -175,6 +175,12 @@ export type DataTableProps<TData> = {
   state?: DataTableControlledState;
   initialState?: Partial<DataTableState>;
 
+  /**
+   * Server mode (`manual.pagination`): total rows across all pages. Drives the
+   * pagination counter and the page count. Prefer this over `pageCount`.
+   */
+  rowCount?: number;
+  /** Server mode: explicit page count. Not needed when `rowCount` is set. */
   pageCount?: number;
   pageSizeOptions?: number[];
 
@@ -231,4 +237,5 @@ export type UseDataTableOptions<TData> = Pick<
   | "state"
   | "initialState"
   | "pageCount"
+  | "rowCount"
 >;

@@ -98,6 +98,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     state: controlled,
     initialState,
     pageCount,
+    rowCount,
   } = options;
 
   const features = { ...DEFAULT_FEATURES, ...featuresProp };
@@ -215,6 +216,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     data,
     columns,
     pageCount,
+    rowCount,
     getRowId,
     state: {
       sorting: controlled?.sorting ?? sorting,

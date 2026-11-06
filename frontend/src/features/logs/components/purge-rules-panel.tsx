@@ -177,13 +177,7 @@ export function PurgeRulesPanel() {
     [handleDelete, locale, openEdit, runRule, t],
   );
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil(
-      (rulesQuery.data?.items.length ?? 0) /
-        (listState.pagination.pageSize || 50),
-    ),
-  );
+  const total = rulesQuery.data?.items.length ?? 0;
 
   return (
     <>
@@ -196,7 +190,7 @@ export function PurgeRulesPanel() {
         onRetry={() => void rulesQuery.refetch()}
         emptyTitle={t("logs.rules.empty_title")}
         emptyDescription={t("logs.rules.empty_description")}
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "platform-log-rules-v1", rowSelection: false }}
         toolbarExtra={

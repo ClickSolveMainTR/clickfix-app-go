@@ -16,7 +16,6 @@ import { useExportsColumns } from "@/features/io/components/exports-columns";
 import { ioKeys } from "@/features/io/hooks/query-keys";
 import { exportsService } from "@/features/io/services/exports.service";
 import { useLocale } from "@/providers/locale-provider";
-import { useMemo } from "react";
 
 export function ExportsPage() {
   const { t } = useLocale();
@@ -33,11 +32,7 @@ export function ExportsPage() {
       }),
   });
 
-  const pageCount = useMemo(() => {
-    const total = listQuery.data?.total ?? 0;
-    const size = listState.pagination.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [listQuery.data?.total, listState.pagination.pageSize]);
+  const total = listQuery.data?.total ?? 0;
 
   return (
     <EntityPage
@@ -67,7 +62,7 @@ export function ExportsPage() {
         onRetry={() => void listQuery.refetch()}
         emptyTitle={t("exports.empty_title")}
         emptyDescription={t("exports.empty_description")}
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{
           persistKey: "platform-exports-v1",

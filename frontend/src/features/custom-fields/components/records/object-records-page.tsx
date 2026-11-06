@@ -204,12 +204,7 @@ export function ObjectRecordsPage({ typeUuid }: { typeUuid: string }) {
     return cols;
   }, [canWrite, definitions, handleDelete, locale, sortableTypes, t]);
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil(
-      (records.data?.total ?? 0) / (listState.pagination.pageSize || 20),
-    ),
-  );
+  const total = records.data?.total ?? 0;
 
   const objectType = typeQuery.data;
   const title = objectType?.plural_label ?? t("custom_fields.records.title");
@@ -278,7 +273,7 @@ export function ObjectRecordsPage({ typeUuid }: { typeUuid: string }) {
         onRetry={() => void records.refetch()}
         emptyTitle={t("custom_fields.records.empty_title")}
         emptyDescription={t("custom_fields.records.empty_description")}
-        pageCount={pageCount}
+        total={total}
         manual={{ pagination: true, sorting: true, filtering: true }}
         state={listState.tableState}
         features={{

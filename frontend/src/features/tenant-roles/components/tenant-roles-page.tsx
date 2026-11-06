@@ -76,10 +76,6 @@ export function TenantRolesPage() {
   const columns = useTenantRolesColumns(handlers);
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = useMemo(() => {
-    const size = listState.pagination.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [listState.pagination.pageSize, total]);
   const hasFilters = Boolean(listParams.q) || Boolean(listParams.is_template);
 
   return (
@@ -128,7 +124,7 @@ export function TenantRolesPage() {
             ? t("tenant_roles.empty_filtered_description")
             : t("tenant_roles.empty_description")
         }
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "tenant-roles-v1", viewMode: true }}
         toolbarExtra={

@@ -80,10 +80,6 @@ export function TeamsPage() {
   const columns = useTeamsColumns(handlers, skillOptions);
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   const hasFilters = Boolean(listParams.q) || Boolean(listParams.skill);
 
   return (
@@ -126,7 +122,7 @@ export function TeamsPage() {
             ? t("teams.empty_filtered_description")
             : t("teams.empty_description")
         }
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "tenant-teams-v1", viewMode: true }}
         toolbarExtra={

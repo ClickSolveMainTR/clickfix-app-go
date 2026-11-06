@@ -28,6 +28,7 @@ export function DataTable<TData>({
   state,
   initialState,
   pageCount,
+  rowCount,
   pageSizeOptions,
   toolbar,
   bulkActions,
@@ -83,6 +84,7 @@ export function DataTable<TData>({
     state,
     initialState,
     pageCount,
+    rowCount,
   });
 
   const forceMobileCards =
