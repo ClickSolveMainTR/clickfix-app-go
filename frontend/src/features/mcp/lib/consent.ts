@@ -154,3 +154,24 @@ export function lifetime(
     ? { unit: "days", count: Math.round(hours / 24) }
     : { unit: "hours", count: Math.max(1, hours) };
 }
+
+/**
+ * One decision per request. The buttons are disabled while a decision is on
+ * its way, but two clicks can land in the same frame before React re-renders;
+ * the gate refuses the second. A refused decision (API error) opens the gate
+ * again so the member can try once more.
+ */
+export function decisionGate() {
+  let sent = false;
+  return {
+    /** True for the first call; false until `reset`. */
+    take(): boolean {
+      if (sent) return false;
+      sent = true;
+      return true;
+    },
+    reset() {
+      sent = false;
+    },
+  };
+}

@@ -18,6 +18,7 @@ import {
   consentView,
   decideBody,
   decideErrorKey,
+  decisionGate,
   safeClientRedirect,
   selectedOrganization,
 } from "../lib/consent";
@@ -79,7 +80,7 @@ export function McpConsentPage() {
   }, [requestId, router, view]);
 
   // One decision per request, also for two clicks inside the same frame.
-  const sent = useRef(false);
+  const gate = useRef(decisionGate());
   const [unsafeRedirect, setUnsafeRedirect] = useState(false);
   const decide = useMutation({
     mutationFn: async (decision: "approve" | "deny") => {
@@ -99,14 +100,10 @@ export function McpConsentPage() {
       if (to) window.location.assign(to);
       else setUnsafeRedirect(true);
     },
-    onError: () => {
-      sent.current = false;
-    },
+    onError: () => gate.current.reset(),
   });
   const onDecide = (decision: "approve" | "deny") => {
-    if (sent.current) return;
-    sent.current = true;
-    decide.mutate(decision);
+    if (gate.current.take()) decide.mutate(decision);
   };
   const busy = decide.isPending || decide.isSuccess;
   const errorKey = unsafeRedirect
