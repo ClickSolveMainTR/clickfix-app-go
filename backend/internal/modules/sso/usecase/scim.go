@@ -45,11 +45,7 @@ func (s *Service) Provision(ctx context.Context, org int64, in SCIMUser) (SCIMUs
 	e = s.Repo.Transaction(ctx, func(q *db.Queries) error {
 		id, e := q.SCIMFindUser(ctx, strings.ToLower(in.UserName))
 		if errors.Is(e, pgx.ErrNoRows) {
-			secret, e := Random()
-			if e != nil {
-				return e
-			}
-			hash, e := password.Hash(secret)
+			hash, e := password.HashUnusable()
 			if e != nil {
 				return e
 			}

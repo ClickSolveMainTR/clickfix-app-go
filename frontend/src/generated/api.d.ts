@@ -11641,7 +11641,7 @@ export interface paths {
         head?: never;
         /**
          * moderate Forum Post
-         * @description Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).
+         * @description Organization-scoped. Requires tenant.feedback.manage. Decides a pending post once: only a post whose status is `pending` can be published or rejected. A post that was already decided (for example by another moderator working from the same queue) is left unchanged and answers 409 CONFLICT; clients should tell the moderator the post was already handled and reload the queue. Publishing a reply whose topic is not published also answers 409. An unknown post answers 404.
          */
         patch: operations["moderateForumPost"];
         trace?: never;
@@ -52745,6 +52745,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             /** @description Rate limited (or AI credit/budget limit) */
             429: {
                 headers: {

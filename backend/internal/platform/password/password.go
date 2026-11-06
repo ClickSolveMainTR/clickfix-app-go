@@ -51,11 +51,28 @@ func Hash(value string) (string, error) {
 	if err := ValidatePassword(value); err != nil {
 		return "", err
 	}
+	return encode([]byte(value))
+}
+
+// HashUnusable returns a hash no password verifies against, for accounts
+// that have no password (OAuth and email-code sign-ups, SCIM users). It
+// hashes a fresh 256-bit random secret and discards it. The password policy
+// describes passwords people choose and is not applied: checking random
+// bytes against it rejected about one sign-up in 1500.
+func HashUnusable() (string, error) {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return "", fmt.Errorf("password: generate secret: %w", err)
+	}
+	return encode(secret)
+}
+
+func encode(secret []byte) (string, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("password: generate salt: %w", err)
 	}
-	hash := argon2.IDKey([]byte(value), salt, iterations, memory, parallelism, keyLength)
+	hash := argon2.IDKey(secret, salt, iterations, memory, parallelism, keyLength)
 	return fmt.Sprintf(
 		"$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
 		memory,

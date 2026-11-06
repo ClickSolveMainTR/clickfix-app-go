@@ -65,6 +65,8 @@
   "toast.approved": "Gönderi yayınlandı.",
   "toast.rejected": "Gönderi reddedildi.",
   "toast.spam": "Gönderi spam olarak reddedildi.",
+  "toast.already_moderated": "Bu gönderi zaten işlendi. Kuyruk yenilendi.",
+  "toast.reply_conflict": "Yanıt yayınlanamadı: zaten işlenmiş ya da konusu henüz yayınlanmamış. Kuyruk yenilendi.",
   "toast.ai_flagged": "AI uyarısı: {{reason}}",
   "toast.ai_clean": "AI bir sorun bulmadı.",
   "toast.ai_limited": "AI kredisi bitti veya günlük sınıra ulaşıldı.",

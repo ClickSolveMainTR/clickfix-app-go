@@ -33,6 +33,8 @@ export const P = {
   schedulesRead: 'tenant.schedules.read',
   /** Agent timesheets (`workforce/routes.go`). */
   schedulesManage: 'tenant.schedules.manage',
+  /** Calibration sessions and coaching items (`coaching/routes.go`). */
+  qualityManage: 'tenant.quality.manage',
   /** Engineering issues (`engineering/routes.go`). */
   ticketsRead: 'tenant.tickets.read',
   ticketsWrite: 'tenant.tickets.write',
@@ -41,6 +43,8 @@ export const P = {
   membersRead: 'tenant.members.read',
   membersWrite: 'tenant.members.write',
   billingRead: 'tenant.billing.read',
+  /** Community forum moderation uses the feedback slug (backend `forum/routes.go`). */
+  feedbackManage: 'tenant.feedback.manage',
   /** Workflows and automation rules; the on/off switch needs the write slug (`automation/routes.go`). */
   automationsRead: 'tenant.automations.read',
   automationsWrite: 'tenant.automations.write',

@@ -46,10 +46,10 @@ type Page<T> = { items: T[]; total: number; limit: number; offset: number };
  * tenant.channels.manage.
  */
 export const automationIntegrationsService = {
-  keys: (slug: string) =>
+  keys: (slug: string, limit: number, offset: number) =>
     tenantRequest<Page<IntegrationKey>>(slug, "GET", "/v1/tenant/api-keys", {
-      query: { limit: 100, offset: 0 },
-    }).then((p) => p.items),
+      query: { limit, offset },
+    }),
   createKey: (slug: string, body: IntegrationKeyInput) =>
     tenantRequest<IssuedIntegrationKey>(slug, "POST", "/v1/tenant/api-keys", {
       body,
@@ -65,6 +65,10 @@ export const automationIntegrationsService = {
     tenantRequest<Page<HookSubscription>>(slug, "GET", "/v1/tenant/webhooks", {
       query: { limit: 100, offset: 0 },
     }).then((p) => p.items),
+  hooksPage: (slug: string, limit: number, offset: number) =>
+    tenantRequest<Page<HookSubscription>>(slug, "GET", "/v1/tenant/webhooks", {
+      query: { limit, offset },
+    }),
   removeHook: (slug: string, uuid: string) =>
     tenantRequest<{ deleted: boolean }>(
       slug,
