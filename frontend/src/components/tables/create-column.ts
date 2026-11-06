@@ -22,6 +22,12 @@ type CreateColumnOptions<TData extends RowData, TValue = unknown> = ColumnDef<
   gridPrimary?: boolean;
   gridSecondary?: boolean;
   defaultHidden?: boolean;
+  /**
+   * Include the column's value in the toolbar search (client mode). Set to
+   * `false` for counts, flags, enums and other values the user does not see
+   * as text. Default: TanStack's rule (string and number values).
+   */
+  searchable?: boolean;
 };
 
 /**
@@ -41,6 +47,7 @@ export function createColumn<TData extends RowData, TValue = unknown>(
     gridPrimary,
     gridSecondary,
     defaultHidden,
+    searchable,
     meta,
     enableHiding,
     header,
@@ -62,6 +69,7 @@ export function createColumn<TData extends RowData, TValue = unknown>(
     ...rest,
     filterFn,
     enableHiding: enableHiding ?? true,
+    ...(searchable === undefined ? {} : { enableGlobalFilter: searchable }),
     // Only columns with an explicit filterVariant are filterable.
     // TanStack defaults `undefined` → true, which shows dead inputs on
     // server-driven lists (`manual.filtering`) that never map those filters.

@@ -31,6 +31,8 @@ export const P = {
   settingsWrite: 'tenant.settings.write',
   teamChat: 'tenant.team_chat.use',
   schedulesRead: 'tenant.schedules.read',
+  /** Agent timesheets (`workforce/routes.go`). */
+  schedulesManage: 'tenant.schedules.manage',
   /** Engineering issues (`engineering/routes.go`). */
   ticketsRead: 'tenant.tickets.read',
   ticketsWrite: 'tenant.tickets.write',

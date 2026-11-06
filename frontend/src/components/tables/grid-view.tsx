@@ -9,7 +9,7 @@ import {
 import type { ReactNode } from "react";
 
 import type { DataTableColumnMeta } from "@/components/tables/types";
-import { isRowClickIgnored } from "@/components/tables/row-click";
+import { ROW_FOCUS_CLASS, rowClickProps } from "@/components/tables/row-click";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLocale } from "@/providers/locale-provider";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ type GridViewProps<TData> = {
   /** Tighter single-column cards for phone layouts */
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
+  rowHintId?: string;
 };
 
 function isUtilityColumn(id: string) {
@@ -32,15 +33,17 @@ function CardShell({
   children,
   onToggleSelect,
   selectable,
-  onClick,
+  clickProps,
 }: {
   selected: boolean;
   mobile?: boolean;
   children: ReactNode;
   selectable?: boolean;
   onToggleSelect?: (checked: boolean) => void;
-  onClick?: (event: React.MouseEvent<HTMLElement>) => void;
+  /** From `rowClickProps`: click, keyboard and focus wiring of the card. */
+  clickProps?: React.HTMLAttributes<HTMLElement>;
 }) {
+  const clickable = Boolean(clickProps?.onClick);
   return (
     <article
       className={cn(
@@ -48,9 +51,9 @@ function CardShell({
         "hover:border-primary/25",
         selected && "border-primary/50 bg-primary/5 shadow-md",
         mobile ? "p-4" : "p-4",
-        onClick && "cursor-pointer",
+        clickable && ROW_FOCUS_CLASS,
       )}
-      onClick={onClick}
+      {...clickProps}
     >
       {selectable ? (
         <div className="absolute end-3 top-3 z-10">
@@ -72,11 +75,13 @@ function DefaultCard<TData>({
   table,
   mobile,
   onRowClick,
+  rowHintId,
 }: {
   row: Row<TData>;
   table: Table<TData>;
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
+  rowHintId?: string;
 }) {
   const { t } = useLocale();
   const cells = row
@@ -105,14 +110,11 @@ function DefaultCard<TData>({
       mobile={mobile}
       selectable={Boolean(table.options.enableRowSelection)}
       onToggleSelect={(checked) => row.toggleSelected(checked)}
-      onClick={
-        onRowClick
-          ? (event) => {
-              if (isRowClickIgnored(event)) return;
-              onRowClick(row.original);
-            }
-          : undefined
-      }
+      clickProps={rowClickProps<TData, HTMLElement>(
+        row.original,
+        onRowClick,
+        rowHintId,
+      )}
     >
       <div
         className={cn("space-y-3", table.options.enableRowSelection && "pe-8")}
@@ -180,6 +182,7 @@ export function GridView<TData>({
   renderGridItem,
   mobile,
   onRowClick,
+  rowHintId,
 }: GridViewProps<TData>) {
   const rows = table.getRowModel().rows;
 
@@ -199,14 +202,11 @@ export function GridView<TData>({
               mobile={mobile}
               selectable={Boolean(table.options.enableRowSelection)}
               onToggleSelect={(checked) => row.toggleSelected(checked)}
-              onClick={
-                onRowClick
-                  ? (event) => {
-                      if (isRowClickIgnored(event)) return;
-                      onRowClick(row.original);
-                    }
-                  : undefined
-              }
+              clickProps={rowClickProps<TData, HTMLElement>(
+                row.original,
+                onRowClick,
+                rowHintId,
+              )}
             >
               <div className={cn(table.options.enableRowSelection && "pe-8")}>
                 {renderGridItem(row.original, table)}
@@ -222,6 +222,7 @@ export function GridView<TData>({
             table={table}
             mobile={mobile}
             onRowClick={onRowClick}
+            rowHintId={rowHintId}
           />
         );
       })}

@@ -16,7 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { paginationSummary } from "@/components/tables/pagination-summary";
+import {
+  pageSizeChoices,
+  paginationSummary,
+} from "@/components/tables/pagination-summary";
 import { useLocale } from "@/providers/locale-provider";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +77,7 @@ export function DataTablePagination<TData>({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {pageSizeOptions.map((size) => (
+              {pageSizeChoices(pageSizeOptions, pageSize).map((size) => (
                 <SelectItem key={size} value={String(size)}>
                   {size}
                 </SelectItem>

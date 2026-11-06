@@ -55,6 +55,7 @@
   "more.team_chat_hint": "Internal messages and swarm rooms",
   "more.oncall": "On-call",
   "more.oncall_hint": "Who is on call, open alerts",
+  "more.workforce": "Workforce planning",
   "more.reports": "Reports",
   "more.reports_hint": "Volume, first response, resolution, CSAT, SLA",
   "more.engineering": "Product requests",
