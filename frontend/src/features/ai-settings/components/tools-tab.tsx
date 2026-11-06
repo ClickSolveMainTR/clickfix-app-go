@@ -1,18 +1,13 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  ChevronLeft,
-  ChevronRight,
-  KeyRound,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Wrench,
-} from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { KeyRound, Pencil, Plus, ShieldCheck, Wrench } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,8 +34,6 @@ const CALL_VARIANT: Record<AIAgentToolCall["status"], BadgeProps["variant"]> = {
   dry_run: "outline",
 };
 
-const CALLS_PAGE = 20;
-
 function host(url: string) {
   try {
     return new URL(url).host;
@@ -56,16 +49,60 @@ export function ToolsTab({ slug, canWrite }: AISettingsTabProps) {
     queryKey: toolsKey(slug),
     queryFn: () => aiSettingsService.tools(slug),
   });
-  const [offset, setOffset] = useState(0);
+  const callsState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset } = callsState.params;
   const calls = useQuery({
-    queryKey: ["tenant", slug, "ai", "tool-calls", offset],
-    queryFn: () => aiSettingsService.toolCalls(slug, offset, CALLS_PAGE),
+    queryKey: ["tenant", slug, "ai", "tool-calls", limit, offset],
+    queryFn: () => aiSettingsService.toolCalls(slug, offset, limit),
     placeholderData: keepPreviousData,
   });
+  const callColumns = useMemo(
+    () =>
+      [
+        createColumn<AIAgentToolCall>({
+          accessorKey: "created_at",
+          labelKey: "ai_settings.runs.created",
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="whitespace-nowrap">
+              {datetime(row.original.created_at, "dd.MM.yyyy HH:mm:ss", locale)}
+            </span>
+          ),
+        }),
+        createColumn<AIAgentToolCall>({
+          accessorKey: "tool_name",
+          labelKey: "ai_settings.tools.name",
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <code className="text-xs">{row.original.tool_name}</code>
+          ),
+        }),
+        createColumn<AIAgentToolCall>({
+          accessorKey: "status",
+          labelKey: "ai_settings.runs.status_label",
+          cell: ({ row }) => (
+            <Badge variant={CALL_VARIANT[row.original.status] ?? "outline"}>
+              {t(`ai_settings.tools.call_status.${row.original.status}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<AIAgentToolCall>({
+          accessorKey: "error_code",
+          labelKey: "ai_settings.tools.error_code",
+          cell: ({ row }) =>
+            row.original.error_code ? (
+              <code className="text-muted-foreground text-xs">
+                {row.original.error_code}
+              </code>
+            ) : (
+              <span className="text-muted-foreground">-</span>
+            ),
+        }),
+      ] as ColumnDef<AIAgentToolCall, unknown>[],
+    [locale, t],
+  );
   const [editing, setEditing] = useState<AIToolView | "new" | null>(null);
   const items = tools.data?.items ?? [];
-  const callItems = calls.data?.items ?? [];
-  const callTotal = calls.data?.total ?? 0;
 
   return (
     <div className="space-y-6">
@@ -197,101 +234,26 @@ export function ToolsTab({ slug, canWrite }: AISettingsTabProps) {
             {t("ai_settings.tools.calls_hint")}
           </p>
         </div>
-        {!calls.data && (
-          <QueryState
-            loading={calls.isLoading}
-            error={calls.isError}
-            onRetry={() => void calls.refetch()}
-          />
-        )}
-        {calls.data && callItems.length === 0 && (
-          <p className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-            {t("ai_settings.tools.calls_empty")}
-          </p>
-        )}
-        {callItems.length > 0 && (
-          <Card className="py-0">
-            <CardContent className="overflow-x-auto p-0">
-              <table className="w-full min-w-[36rem] text-sm">
-                <thead className="text-muted-foreground border-b text-xs">
-                  <tr>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.created")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.tools.name")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.status_label")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.tools.error_code")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {callItems.map((call) => (
-                    <tr key={call.uuid} className="border-b last:border-0">
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {datetime(
-                          call.created_at,
-                          "dd.MM.yyyy HH:mm:ss",
-                          locale,
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <code className="text-xs">{call.tool_name}</code>
-                      </td>
-                      <td className="px-3 py-2">
-                        <Badge variant={CALL_VARIANT[call.status] ?? "outline"}>
-                          {t(`ai_settings.tools.call_status.${call.status}`)}
-                        </Badge>
-                      </td>
-                      <td className="text-muted-foreground px-3 py-2">
-                        {call.error_code ? (
-                          <code className="text-xs">{call.error_code}</code>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        )}
-        {callTotal > CALLS_PAGE && (
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-muted-foreground">
-              {t("ai_settings.pager", {
-                from: offset + 1,
-                to: Math.min(offset + CALLS_PAGE, callTotal),
-                total: callTotal,
-              })}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset((o) => Math.max(0, o - CALLS_PAGE))}
-              >
-                <ChevronLeft className="size-4" />
-                {t("ai_settings.prev")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset + CALLS_PAGE >= callTotal}
-                onClick={() => setOffset((o) => o + CALLS_PAGE)}
-              >
-                {t("ai_settings.next")}
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <EntityTable
+          columns={callColumns}
+          data={calls.data?.items ?? []}
+          getRowId={(row) => row.uuid}
+          isLoading={calls.isLoading}
+          isError={calls.isError}
+          onRetry={() => void calls.refetch()}
+          emptyDescription={t("ai_settings.tools.calls_empty")}
+          total={calls.data?.total ?? 0}
+          state={callsState.tableState}
+          features={{
+            // The endpoint takes `limit` and `offset` only.
+            toolbar: false,
+            sorting: false,
+            globalFilter: false,
+            columnFilters: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
       </section>
 
       {editing !== null && (

@@ -1,11 +1,16 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  ListOrdered,
   Pencil,
   Plus,
   RotateCcw,
@@ -14,13 +19,13 @@ import {
   Upload,
   Undo2,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +56,7 @@ import {
   type AIProcedureInput,
   type AIProcedureRecord,
 } from "../services/ai-settings.service";
-import { QueryState, SettingRow } from "./parts";
+import { SettingRow } from "./parts";
 import type { AISettingsTabProps } from "./tab-registry";
 import { toolsKey } from "./tools-tab";
 
@@ -59,6 +64,8 @@ const MAX_STEPS = 20;
 const MAX_STEP_CHARS = 1000;
 const MAX_TOTAL_CHARS = 3000;
 const MAX_TOOLS = 20;
+/** Page size used to find one procedure again after a conflict. */
+const RELOAD_PAGE = 100;
 
 export const proceduresKey = (slug: string) =>
   ["tenant", slug, "ai", "procedures"] as const;
@@ -137,14 +144,81 @@ function ProcedureStatus({ record }: { record: AIProcedureRecord }) {
 /** "Prosedürler" tab (CF-68): intent-specific step lists with draft/publish. */
 export function ProceduresTab({ slug, canWrite }: AISettingsTabProps) {
   const { t } = useLocale();
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
   const query = useQuery({
-    queryKey: proceduresKey(slug),
-    queryFn: () => aiSettingsService.procedures(slug),
+    queryKey: [...proceduresKey(slug), limit, offset],
+    queryFn: () => aiSettingsService.procedures(slug, limit, offset),
+    placeholderData: keepPreviousData,
   });
   const [editing, setEditing] = useState<AIProcedureRecord | "new" | null>(
     null,
   );
-  const items = query.data?.items ?? [];
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<AIProcedureRecord>({
+          accessorKey: "title",
+          labelKey: "ai_settings.procedures.title_label",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="font-medium">{row.original.title}</span>
+          ),
+        }),
+        createColumn<AIProcedureRecord>({
+          id: "status",
+          accessorFn: (row) => row.published,
+          labelKey: "ai_settings.runs.status_label",
+          cell: ({ row }) => <ProcedureStatus record={row.original} />,
+        }),
+        createColumn<AIProcedureRecord>({
+          accessorKey: "intent",
+          labelKey: "ai_settings.procedures.intent",
+          cell: ({ row }) => (
+            <code className="text-muted-foreground text-xs">
+              {row.original.intent}
+            </code>
+          ),
+        }),
+        createColumn<AIProcedureRecord>({
+          accessorKey: "locale",
+          labelKey: "ai_settings.procedures.locale",
+          cell: ({ row }) => t(`ai_settings.locale.${row.original.locale}`),
+        }),
+        createColumn<AIProcedureRecord>({
+          id: "steps",
+          accessorFn: (row) => row.draft.steps.length,
+          labelKey: "ai_settings.procedures.columns.steps",
+          cell: ({ row }) =>
+            t("ai_settings.procedures.step_count", {
+              count: row.original.draft.steps.length,
+            }),
+        }),
+        createColumn<AIProcedureRecord>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-right" },
+          cell: ({ row }) => (
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditing(row.original)}
+              >
+                <Pencil className="size-4" />
+                {canWrite
+                  ? t("ai_settings.procedures.edit")
+                  : t("ai_settings.procedures.view")}
+              </Button>
+            </div>
+          ),
+        }),
+      ] as ColumnDef<AIProcedureRecord, unknown>[],
+    [canWrite, t],
+  );
 
   return (
     <div className="space-y-4">
@@ -159,59 +233,27 @@ export function ProceduresTab({ slug, canWrite }: AISettingsTabProps) {
           </Button>
         )}
       </div>
-      {!query.data && (
-        <QueryState
-          loading={query.isLoading}
-          error={query.isError}
-          onRetry={() => void query.refetch()}
-        />
-      )}
-      {query.data && items.length === 0 && (
-        <EmptyState
-          className="py-8"
-          icon={<ListOrdered className="size-6" />}
-          title={t("ai_settings.procedures.empty_title")}
-          description={t("ai_settings.procedures.empty")}
-        />
-      )}
-      <ul className="space-y-3">
-        {items.map((record) => (
-          <li key={record.uuid}>
-            <Card className="py-0">
-              <CardContent className="flex flex-wrap items-start gap-3 py-4">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{record.title}</span>
-                    <ProcedureStatus record={record} />
-                  </div>
-                  <p className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
-                    <span>
-                      {t("ai_settings.procedures.intent")}:{" "}
-                      <code>{record.intent}</code>
-                    </span>
-                    <span>{t(`ai_settings.locale.${record.locale}`)}</span>
-                    <span>
-                      {t("ai_settings.procedures.step_count", {
-                        count: record.draft.steps.length,
-                      })}
-                    </span>
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditing(record)}
-                >
-                  <Pencil className="size-4" />
-                  {canWrite
-                    ? t("ai_settings.procedures.edit")
-                    : t("ai_settings.procedures.view")}
-                </Button>
-              </CardContent>
-            </Card>
-          </li>
-        ))}
-      </ul>
+      <EntityTable
+        columns={columns}
+        data={query.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        onRowClick={setEditing}
+        isLoading={query.isLoading}
+        isError={query.isError}
+        onRetry={() => void query.refetch()}
+        emptyTitle={t("ai_settings.procedures.empty_title")}
+        emptyDescription={t("ai_settings.procedures.empty")}
+        total={query.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          persistKey: "tenant-ai-procedures-v1",
+          // The endpoint takes `limit` and `offset` only.
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       <Sheet
         open={editing !== null}
         onOpenChange={(open) => {
@@ -316,13 +358,34 @@ function ProcedureEditor({
     },
     onError,
   });
+  // There is no single-procedure endpoint: page through the list until the
+  // record turns up (it may sit past the first page).
   const reload = async () => {
-    const page = await qc.fetchQuery({
-      queryKey: proceduresKey(slug),
-      queryFn: () => aiSettingsService.procedures(slug),
-    });
-    const fresh = page.items.find((r) => r.uuid === record?.uuid);
-    if (fresh) accept(fresh);
+    const uuid = record?.uuid;
+    if (!uuid) return;
+    try {
+      for (let offset = 0; ; offset += RELOAD_PAGE) {
+        const page = await aiSettingsService.procedures(
+          slug,
+          RELOAD_PAGE,
+          offset,
+        );
+        const fresh = page.items.find((r) => r.uuid === uuid);
+        if (fresh) {
+          accept(fresh);
+          return;
+        }
+        if (
+          page.items.length === 0 ||
+          offset + page.items.length >= page.total
+        ) {
+          break;
+        }
+      }
+      appToast.error(t("ai_settings.conflict.not_found"));
+    } catch (error) {
+      appToast.error(aiErrorMessage(error, t));
+    }
   };
 
   const setStep = (index: number, text: string) =>

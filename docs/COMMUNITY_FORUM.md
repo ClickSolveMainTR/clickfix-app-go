@@ -24,23 +24,30 @@ the existing widget API, then call the same-origin `/api/v1/...` BFF.
 
 Every submission enters `pending`. Deterministic link-spam/instruction checks add
 flags but never publish. Agents with existing `tenant.feedback.manage` manage
-categories, review `GET /v1/tenant/forum/moderation`, and change a post to
-`published` or `rejected` using `PATCH /posts/{uuid}`. Explicit
+categories, review `GET /v1/tenant/forum/moderation`, and decide a post as
+`published` or `rejected` using `PATCH /posts/{uuid}`. A post is decided once
+(CF-180): only a `pending` post can be published or rejected. A post that was
+already decided, for example by another moderator working from the same queue,
+is left unchanged and answers `409 CONFLICT`; an unknown post answers `404`.
+Publishing a reply whose topic is not published also answers `409`. Explicit
 `POST /posts/{uuid}/assist` sends bounded content through the existing AI core:
 organization enablement, credits, daily limits, concurrency and budget reservation
 remain enforced. It saves a suggestion only; provider failures or exhausted credits
 leave the pending post untouched. No public action spends AI credits.
 
 `POST /topics/{uuid}/accept` accepts only a published reply to that same published
-topic. Rejecting an accepted reply hides it from public reads immediately (subject
-to the 30-second cache). Votes have a composite unique key and are idempotent;
+topic. The moderation endpoint cannot reject a published post, so there is no API
+to take a published topic or an accepted reply down yet (CF-182); public reads
+already skip an accepted reply that is not `published`. Votes have a composite
+unique key and are idempotent;
 pass `remove:true` to unvote. To vote for a reply pass `reply_uuid`; omission votes
 for the topic.
 
 `POST /topics/{topic_slug}/subscribe` subscribes/unsubscribes (`remove:true`) the
 signed contact; topic authors subscribe automatically. Publishing a reply inserts
-one durable notification per other subscriber in the same transaction. Unique
-post/contact keys prevent duplicate notifications after repeated moderation.
+one durable notification per other subscriber in the same transaction. A reply
+is published at most once, and unique post/contact keys keep one notification
+per subscriber.
 `GET /notifications` returns that visitor's notification inbox;
 `POST /notifications/{uuid}/read` marks their own notification read. Hidden replies
 and topics never appear in the inbox. Delivery here is a durable in-product inbox,
