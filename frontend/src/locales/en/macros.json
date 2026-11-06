@@ -11,6 +11,8 @@
   "empty_canned": "No canned replies yet. Start by adding a reply you send often.",
   "empty_macros": "No macros yet. Combine the actions you repeat into one macro.",
   "used": "Used {{count}} times",
+  "columns.scope": "Scope",
+  "columns.usage": "Uses",
   "scope.personal": "Personal",
   "scope.team": "Team",
   "scope.organization": "Organization",
