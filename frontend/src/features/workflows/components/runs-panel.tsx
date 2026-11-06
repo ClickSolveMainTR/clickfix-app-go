@@ -91,7 +91,8 @@ export function RunsPanel({
         data={runs.data?.items ?? []}
         getRowId={(row) => row.uuid}
         onRowClick={(row) => setOpen(row.uuid)}
-        isLoading={runs.isLoading}
+        // Disabled until the organization is known: loading, not empty.
+        isLoading={runs.isLoading || !org}
         isError={runs.isError}
         errorTitle={t("workflows.runs.error")}
         onRetry={() => void runs.refetch()}

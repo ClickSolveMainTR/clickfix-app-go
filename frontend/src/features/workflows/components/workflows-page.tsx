@@ -189,7 +189,9 @@ export function WorkflowsPage() {
           columns={columns}
           data={list.data?.items ?? []}
           getRowId={(row) => row.uuid}
-          isLoading={list.isLoading}
+          // The query is disabled until the organization is known; that is
+          // still loading, not an empty list.
+          isLoading={list.isLoading || !org}
           isError={list.isError}
           errorTitle={t("workflows.error.title")}
           errorDescription={t("workflows.error.description")}
