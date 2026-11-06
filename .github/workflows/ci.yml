@@ -27,6 +27,13 @@ concurrency:
 permissions:
   contents: read
 
+# Runner: every job runs on the org's self-hosted runners (labels
+# self-hosted + clickfix) by default. To go back to GitHub-hosted runners
+# without a code change, set the repository variable CI_RUNNER to the JSON
+# string "ubuntu-24.04" (quotes included); delete the variable to return to
+# self-hosted. The self-hosted machine is persistent and runs several jobs
+# at once, so jobs must not rely on fixed host ports, fixed container names
+# or shared /tmp paths.
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
   SQLC_VERSION: "1.31.1"
@@ -46,7 +53,7 @@ jobs:
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
   #   Makefile, scripts/, other   -> backend, frontend, contracts
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
@@ -110,7 +117,7 @@ jobs:
   backend:
     needs: [changes]
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     defaults:
       run:
         working-directory: backend
@@ -121,8 +128,9 @@ jobs:
           POSTGRES_USER: app
           POSTGRES_PASSWORD: app
           POSTGRES_DB: app_test
+        # Host port is picked by Docker so parallel runs on one machine do not collide.
         ports:
-          - 5432:5432
+          - 5432
         options: >-
           --health-cmd "pg_isready -U app -d app_test"
           --health-interval 5s
@@ -131,23 +139,34 @@ jobs:
       redis:
         image: redis:8-alpine
         ports:
-          - 6379:6379
+          - 6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      # Integration tests skip when these are unset; here they always run
-      # against the migrated service database.
-      TEST_DATABASE_URL: postgres://app:app@localhost:5432/app_test?sslmode=disable
-      TEST_REDIS_URL: redis://localhost:6379/0
     steps:
+      # Integration tests skip when these are unset; here they always run
+      # against the migrated service database, on the ports Docker assigned.
+      - name: Service addresses
+        working-directory: .
+        env:
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+          REDIS_PORT: ${{ job.services.redis.ports['6379'] }}
+        run: |
+          {
+            echo "PG_PORT=$PG_PORT"
+            echo "REDIS_PORT=$REDIS_PORT"
+            echo "TEST_DATABASE_URL=postgres://app:app@localhost:$PG_PORT/app_test?sslmode=disable"
+            echo "TEST_REDIS_URL=redis://localhost:$REDIS_PORT/0"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+          # The self-hosted machine keeps its module cache; restoring over it fails on read-only files.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: frontend/.nvmrc
@@ -182,25 +201,34 @@ jobs:
       - name: Server boot smoke test
         run: |
           # Startup pings object storage; run the same SeaweedFS image as compose.
-          docker run -d --name seaweedfs -p 9000:8333 \
+          # Container name, ports and temp files are unique to this run.
+          s3="seaweedfs-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run -d --name "$s3" -p 127.0.0.1::8333 \
             -e AWS_ACCESS_KEY_ID=s3admin -e AWS_SECRET_ACCESS_KEY=s3admin-secret \
             chrislusf/seaweedfs:4.47 mini -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 -bucket=app \
             -s3.port=8333 -s3.port.iceberg=0 -s3.port.lance=0 -webdav=false -admin.ui=false -master.telemetry=false
-          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:9000/healthz >/dev/null 2>&1 && break; sleep 1; done
+          s3_port=$(docker port "$s3" 8333/tcp | head -1 | sed 's/.*://')
+          for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$s3_port/healthz" >/dev/null 2>&1 && break; sleep 1; done
+          api_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
           set -a; . ../.env.example 2>/dev/null || true; set +a
           export BILLING_SELLER_JSON="$(grep '^BILLING_SELLER_JSON=' ../.env.example | cut -d= -f2-)"
-          export DB_HOST=localhost DB_PORT=5432 DB_USER=app DB_PASSWORD=app DB_NAME=app_test
-          export REDIS_ADDR=localhost:6379 APP_HTTP_ADDR=:18080
-          go build -o /tmp/api ./cmd/server
-          /tmp/api > /tmp/api.log 2>&1 &
+          export DB_HOST=localhost DB_PORT="$PG_PORT" DB_USER=app DB_PASSWORD=app DB_NAME=app_test
+          export REDIS_ADDR="localhost:$REDIS_PORT" APP_HTTP_ADDR="127.0.0.1:$api_port"
+          export S3_ENDPOINT="http://127.0.0.1:$s3_port" S3_PORT="$s3_port"
+          go build -o "$RUNNER_TEMP/api" ./cmd/server
+          "$RUNNER_TEMP/api" > "$RUNNER_TEMP/api.log" 2>&1 &
           pid=$!
           for i in $(seq 1 60); do
-            if ! kill -0 "$pid" 2>/dev/null; then echo "server exited during startup"; cat /tmp/api.log; exit 1; fi
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/ || true)
+            if ! kill -0 "$pid" 2>/dev/null; then echo "server exited during startup"; cat "$RUNNER_TEMP/api.log"; exit 1; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$api_port/" || true)
             if [ "$code" != "000" ]; then echo "server answered HTTP $code"; kill "$pid"; exit 0; fi
             sleep 1
           done
-          echo "server did not answer within 60s"; cat /tmp/api.log; kill "$pid"; exit 1
+          echo "server did not answer within 60s"; cat "$RUNNER_TEMP/api.log"; kill "$pid"; exit 1
+      # A hosted runner is thrown away; a self-hosted one keeps the container.
+      - name: Remove smoke test storage
+        if: always()
+        run: docker rm -f "seaweedfs-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >/dev/null 2>&1 || true
       - name: OpenAPI lint
         run: npx --yes @redocly/cli@1 lint docs/openapi.yaml docs/public-api.yaml
       - name: compose.prod.yml passes every backend env var
@@ -212,13 +240,15 @@ jobs:
   security:
     needs: [changes]
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
+          # The self-hosted machine keeps its module cache; restoring over it fails on read-only files.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - name: Reachable Go vulnerabilities (all severities)
         run: python3 scripts/govulncheck.py backend backend/.govulncheck-ignore
       - name: Go security analysis (high severity)
@@ -248,7 +278,7 @@ jobs:
   sdks:
     needs: [changes]
     if: needs.changes.outputs.contracts == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     env:
       GOMAXPROCS: '2'
     steps:
@@ -257,6 +287,8 @@ jobs:
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: sdks/go/go.sum
+          # The self-hosted machine keeps its module cache; restoring over it fails on read-only files.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.22.0
@@ -283,7 +315,7 @@ jobs:
   frontend:
     needs: [changes]
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     defaults:
       run:
         working-directory: frontend
@@ -322,7 +354,7 @@ jobs:
   mobile:
     needs: [changes]
     if: needs.changes.outputs.mobile == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     defaults:
       run:
         working-directory: .
@@ -365,7 +397,7 @@ jobs:
   contracts:
     needs: [changes]
     if: needs.changes.outputs.contracts == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - uses: actions/checkout@v7
       - name: Check frontend public API docs copy
@@ -396,7 +428,7 @@ jobs:
   image-build:
     needs: [changes]
     if: needs.changes.outputs.infra == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -419,7 +451,7 @@ jobs:
     name: ci
     if: always()
     needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
         env:
@@ -443,7 +475,7 @@ jobs:
   mobile-release:
     needs: [ci]
     if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     defaults:
       run:
         working-directory: .
@@ -547,7 +579,7 @@ jobs:
   publish-images:
     needs: [ci]
     if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     permissions:
       contents: read
       packages: write
@@ -582,7 +614,7 @@ jobs:
   release-tag:
     needs: [ci, publish-images]
     if: ${{ !failure() && needs.ci.result == 'success' && needs.publish-images.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     permissions:
       contents: write
     steps:
