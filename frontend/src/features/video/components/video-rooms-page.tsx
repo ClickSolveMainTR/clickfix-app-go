@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Copy, Lock, Plus, Users, Video } from "lucide-react";
 import Link from "next/link";
@@ -80,7 +75,10 @@ export function VideoRoomsPage() {
         offset,
       }),
     enabled: Boolean(slug && canUse),
-    placeholderData: keepPreviousData,
+    // Keep the previous page while paging; a tab change must not show the
+    // other tab's rooms while the new list loads.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[3] === status ? previous : undefined,
     refetchInterval: 10_000,
   });
 
