@@ -13608,7 +13608,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a public MCP OAuth client */
+        /**
+         * Register a public MCP OAuth client
+         * @description Anonymous. redirect_uris must be https (or http on a loopback host) with an ASCII host (punycode for internationalized names), without userinfo or fragment. client_name is the client's own claim: control and format characters are removed and it is cut to 80 characters. Limited per address and across all addresses; refused (429) when the limiter is unavailable. A registration that is never approved is deleted after 24 hours.
+         */
         post: operations["postOauthRegister"];
         delete?: never;
         options?: never;
@@ -13659,7 +13662,7 @@ export interface paths {
         };
         /**
          * Validate MCP authorization request and redirect to consent
-         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. Redirects to the staff consent screen /oauth/consent?request=UUID; the frontend consent screen is a separate integration dependency.
+         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. A valid request redirects to the staff consent screen /oauth/consent?request=UUID. Every error is shown as an error page and never redirected to redirect_uri (registration is anonymous, so that would be an open redirect); the browser goes to the client only after a decision on the consent screen.
          */
         get: operations["getOauthAuthorize"];
         put?: never;
@@ -58420,7 +58423,7 @@ export interface operations {
                     "application/json": components["schemas"]["IntegrationEnvelope"];
                 };
             };
-            /** @description Redirect to consent or validated client redirect URI */
+            /** @description Redirect to the consent screen of this origin. Never to the client: an invalid request is answered with an error page (400), not a redirect. */
             302: {
                 headers: {
                     [name: string]: unknown;

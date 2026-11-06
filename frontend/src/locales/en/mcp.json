@@ -13,7 +13,6 @@
   "apps.revoked": "Access removed.",
   "apps.failed": "The access could not be removed. Try again.",
   "consent.title": "Request to connect to ClickFix",
-  "consent.asks": "{{client}} wants to connect to your ClickFix account.",
   "consent.invalid": "This link is not valid. Start the connection again from your client.",
   "consent.expired": "This request expired or was already answered. Start the connection again from your client.",
   "consent.failed": "The request could not be processed. Try again.",
@@ -31,5 +30,15 @@
   "title": "MCP connections",
   "description": "Connections of AI clients such as Claude or Cursor to ClickFix. The client sees and does only what your permissions in the organization allow.",
   "forbidden": "You do not have permission to connect with MCP. Ask your organization admin for the permission to view settings.",
-  "consent.forbidden": "You are not allowed to approve this request. Connecting with MCP needs the permission to view settings in the organization."
+  "consent.forbidden": "You are not allowed to approve this request. Connecting with MCP needs the permission to view settings in the organization.",
+  "consent.asks_generic": "An application wants to connect to your ClickFix account.",
+  "consent.app": "Application",
+  "consent.unverified": "This is how the application names itself; ClickFix has not verified it.",
+  "consent.returns_local": "Returns to a program running on this computer.",
+  "consent.returns_remote": "If you allow, the access code is sent to this web address. Deny if you do not recognize it.",
+  "consent.account": "Your account",
+  "consent.duration": "Access lasts {{access}}; the application can renew it for {{renewal}} without asking you again. You can remove the access at any time under Settings → MCP connections.",
+  "consent.hours": "{{count}} hour(s)",
+  "consent.days": "{{count}} days",
+  "consent.unsafe_redirect": "The decision was saved, but the application's return address is not safe; the browser was not sent there."
 }

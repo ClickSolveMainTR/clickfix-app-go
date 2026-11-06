@@ -19,6 +19,8 @@ const {
   consentView,
   decideBody,
   decideErrorKey,
+  lifetime,
+  safeClientRedirect,
   selectedOrganization,
   writeOffered,
 } = await load("./consent.ts");
@@ -156,4 +158,42 @@ test("a refused decision explains itself", () => {
   assert.equal(decideErrorKey(403), "mcp.consent.forbidden");
   assert.equal(decideErrorKey(500), "mcp.consent.failed");
   assert.equal(decideErrorKey(null), "mcp.consent.failed");
+});
+
+test("only https and loopback http are followed after a decision", () => {
+  assert.equal(
+    safeClientRedirect(
+      "https://claude.ai/api/mcp/auth_callback?code=c&state=s",
+    ),
+    "https://claude.ai/api/mcp/auth_callback?code=c&state=s",
+  );
+  assert.equal(
+    safeClientRedirect("http://127.0.0.1:7777/cb?code=c"),
+    "http://127.0.0.1:7777/cb?code=c",
+  );
+  assert.ok(safeClientRedirect("http://localhost:53682/cb"));
+  assert.ok(safeClientRedirect("http://[::1]:9000/cb"));
+  for (const bad of [
+    "javascript:alert(1)",
+    "data:text/html,<script>1</script>",
+    "http://evil.example/cb",
+    "http://127.0.0.1.evil.example/cb",
+    "//evil.example/cb",
+    "/relative",
+    "https://user:pass@evil.example/",
+    "ftp://example.com/",
+    "",
+    null,
+    undefined,
+  ]) {
+    assert.equal(safeClientRedirect(bad), null, String(bad));
+  }
+});
+
+test("lifetimes read as hours or days", () => {
+  assert.deepEqual(lifetime(3600), { unit: "hours", count: 1 });
+  assert.deepEqual(lifetime(30 * 24 * 3600), { unit: "days", count: 30 });
+  assert.deepEqual(lifetime(1800), { unit: "hours", count: 1 });
+  assert.equal(lifetime(0), null);
+  assert.equal(lifetime(undefined), null);
 });

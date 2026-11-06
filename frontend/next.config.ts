@@ -3,32 +3,7 @@ import legacyRedirects from "./legacy-redirects.json";
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
-/**
- * Baseline security headers for every route. A full script CSP is not set
- * here (Next inline bootstrap scripts would need nonces); `frame-ancestors`
- * and `base-uri` restrictions are safe to enforce globally.
- */
-const securityHeaders = [
-  {
-    key: "Content-Security-Policy",
-    value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'",
-  },
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  {
-    key: "Permissions-Policy",
-    value: "camera=(self), microphone=(self), geolocation=(), payment=()",
-  },
-  ...(process.env.NODE_ENV === "production"
-    ? [
-        {
-          key: "Strict-Transport-Security",
-          value: "max-age=31536000; includeSubDomains",
-        },
-      ]
-    : []),
-];
+import { headerRules } from "./src/config/security-headers";
 
 /**
  * Platform admin pages moved under the System Settings shell
@@ -108,24 +83,7 @@ const nextConfig: NextConfig = {
     "/sitemap.xml": ["./content/docs/**/*", "./content/api/public-api.yaml"],
   },
   async headers() {
-    return [
-      { source: "/:path*", headers: securityHeaders },
-      // OAuth consent screen of the MCP server (CF-173): never framed (not
-      // even by this origin), never cached, and its `?request=` id is not
-      // sent on as a referrer.
-      {
-        source: "/oauth/consent",
-        headers: [
-          {
-            key: "Content-Security-Policy",
-            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
-          },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Cache-Control", value: "no-store" },
-          { key: "Referrer-Policy", value: "no-referrer" },
-        ],
-      },
-    ];
+    return headerRules(process.env.NODE_ENV === "production");
   },
   async redirects() {
     return [

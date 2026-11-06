@@ -13,7 +13,6 @@
   "apps.revoked": "Erişim kaldırıldı.",
   "apps.failed": "Erişim kaldırılamadı. Tekrar deneyin.",
   "consent.title": "ClickFix'e bağlanma isteği",
-  "consent.asks": "{{client}}, ClickFix hesabınıza bağlanmak istiyor.",
   "consent.invalid": "Bu bağlantı geçersiz. İstemcinizden bağlantıyı yeniden başlatın.",
   "consent.expired": "Bu isteğin süresi dolmuş ya da daha önce yanıtlanmış. İstemcinizden bağlantıyı yeniden başlatın.",
   "consent.failed": "İstek işlenemedi. Tekrar deneyin.",
@@ -31,5 +30,15 @@
   "title": "MCP bağlantıları",
   "description": "Claude, Cursor gibi yapay zekâ istemcilerinin ClickFix'e bağlantıları. İstemci, organizasyondaki yetkileriniz kadarını görür ve yapar.",
   "forbidden": "MCP ile bağlanma yetkiniz yok. Organizasyon yöneticinizden ayarları görüntüleme yetkisi isteyin.",
-  "consent.forbidden": "Bu isteğe izin verme yetkiniz yok. MCP ile bağlanmak için organizasyonda ayarları görüntüleme yetkisi gerekir."
+  "consent.forbidden": "Bu isteğe izin verme yetkiniz yok. MCP ile bağlanmak için organizasyonda ayarları görüntüleme yetkisi gerekir.",
+  "consent.asks_generic": "Bir uygulama ClickFix hesabınıza bağlanmak istiyor.",
+  "consent.app": "Uygulama",
+  "consent.unverified": "Uygulama kendini böyle tanıtıyor; ClickFix bu adı doğrulamadı.",
+  "consent.returns_local": "Bu bilgisayarda çalışan bir programa döner.",
+  "consent.returns_remote": "İzin verirseniz erişim kodu bu web adresine gönderilir. Adresi tanımıyorsanız reddedin.",
+  "consent.account": "Hesabınız",
+  "consent.duration": "Erişim {{access}} geçerlidir; uygulama {{renewal}} boyunca size yeniden sormadan yenileyebilir. Erişimi dilediğiniz zaman Ayarlar → MCP bağlantıları sayfasından kaldırabilirsiniz.",
+  "consent.hours": "{{count}} saat",
+  "consent.days": "{{count}} gün",
+  "consent.unsafe_redirect": "Karar kaydedildi, ancak uygulamanın dönüş adresi güvenli değil; tarayıcı oraya yönlendirilmedi."
 }

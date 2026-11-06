@@ -15,6 +15,10 @@ export type McpConsent = {
   client_id: string;
   client_name: string;
   redirect_host: string;
+  /** The answer goes to a program on the member's own computer. */
+  redirect_loopback: boolean;
+  access_ttl_seconds: number;
+  refresh_ttl_seconds: number;
   resource: string;
   resource_url: string;
   layer: string;

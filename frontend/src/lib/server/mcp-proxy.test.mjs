@@ -17,6 +17,7 @@ async function load(name) {
 const {
   apiOrigin,
   forwardMcp,
+  mcpClientIp,
   mcpUpstreamPath,
   MCP_MAX_BODY_BYTES,
   MCP_PUBLIC_PATHS,
@@ -131,11 +132,11 @@ test("forwards the body and the client's Authorization, never the session cookie
           Cookie: "session=panel-session",
           "Content-Type": "application/json",
           "X-Organization": "acme",
-          "X-Forwarded-For": "6.6.6.6",
+          "X-Forwarded-For": "6.6.6.6, 203.0.113.9",
         },
         body,
       }),
-      { origin: api.origin, clientIp: "203.0.113.9" },
+      { origin: api.origin },
     );
     assert.equal(res.status, 200);
     assert.equal(await res.text(), '{"jsonrpc":"2.0","id":1,"result":{}}');
@@ -146,7 +147,7 @@ test("forwards the body and the client's Authorization, never the session cookie
     assert.equal(call.headers.authorization, "Bearer client-token");
     assert.equal(call.headers.cookie, undefined);
     assert.equal(call.headers["x-organization"], undefined);
-    // The client address comes from the edge, not from the client's own header.
+    // One address goes on: the hop our own edge appended, not the client's claim.
     assert.equal(call.headers["x-forwarded-for"], "203.0.113.9");
     // Nothing of the API leaks back beyond the listed headers.
     assert.equal(res.headers.get("set-cookie"), null);
@@ -248,4 +249,201 @@ test("apiOrigin strips the /v1 suffix of the upstream base", () => {
     apiOrigin("https://api.example.test"),
     "https://api.example.test",
   );
+});
+
+test("a prototype member name is not an OAuth endpoint", async () => {
+  for (const name of [
+    "constructor",
+    "toString",
+    "hasOwnProperty",
+    "__proto__",
+    "valueOf",
+  ]) {
+    for (const method of ["GET", "POST", "OPTIONS"]) {
+      assert.equal(
+        mcpUpstreamPath(`/oauth/${name}`, method),
+        null,
+        `${method} ${name}`,
+      );
+    }
+    const res = await forwardMcp(
+      new Request(`${WEB}/oauth/${name}`, { method: "POST", body: "x" }),
+      {
+        origin: "http://127.0.0.1:1",
+      },
+    );
+    assert.equal(res.status, 404, name);
+  }
+});
+
+test("the client address is the edge's X-Real-IP, else the right-most forwarded hop", async () => {
+  assert.equal(
+    mcpClientIp(
+      new Headers({
+        "X-Real-IP": "198.51.100.7",
+        "X-Forwarded-For": "6.6.6.6",
+      }),
+    ),
+    "198.51.100.7",
+  );
+  assert.equal(
+    mcpClientIp(
+      new Headers({ "X-Forwarded-For": "6.6.6.6, 10.0.0.1 , 203.0.113.9" }),
+    ),
+    "203.0.113.9",
+  );
+  assert.equal(mcpClientIp(new Headers()), null);
+
+  const api = await fakeApi((_c, res) => res.end("{}"));
+  try {
+    await forwardMcp(
+      new Request(`${WEB}/oauth/token`, {
+        method: "POST",
+        headers: { "X-Real-IP": "198.51.100.7", "X-Forwarded-For": "6.6.6.6" },
+        body: "x",
+      }),
+      { origin: api.origin },
+    );
+    assert.equal(api.seen[0].headers["x-forwarded-for"], "198.51.100.7");
+    assert.equal(api.seen[0].headers["x-real-ip"], undefined);
+  } finally {
+    await api.close();
+  }
+});
+
+test("an event-stream answer is passed through as a stream", async () => {
+  const api = await fakeApi((_c, res) => {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Mcp-Session-Id": "abc",
+    });
+    res.write('event: message\ndata: {"id":1}\n\n');
+    setTimeout(() => res.end('event: message\ndata: {"id":2}\n\n'), 30);
+  });
+  try {
+    const res = await forwardMcp(
+      new Request(`${WEB}/mcp/business`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          "Mcp-Protocol-Version": "2025-06-18",
+        },
+        body: "{}",
+      }),
+      { origin: api.origin },
+    );
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "text/event-stream");
+    assert.equal(res.headers.get("mcp-session-id"), "abc");
+    const reader = res.body.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    assert.match(first, /"id":1/);
+    let rest = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      rest += new TextDecoder().decode(value);
+    }
+    assert.match(first + rest, /"id":2/);
+    assert.equal(api.seen[0].headers["mcp-protocol-version"], "2025-06-18");
+  } finally {
+    await api.close();
+  }
+});
+
+test("a CORS preflight and its answer pass through", async () => {
+  const api = await fakeApi((_c, res) => {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Authorization, Content-Type, MCP-Protocol-Version",
+      "Access-Control-Max-Age": "600",
+    });
+    res.end();
+  });
+  try {
+    const res = await forwardMcp(
+      new Request(`${WEB}/oauth/token`, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://client.example",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type",
+        },
+      }),
+      { origin: api.origin },
+    );
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get("access-control-allow-origin"), "*");
+    assert.equal(
+      res.headers.get("access-control-allow-methods"),
+      "POST, OPTIONS",
+    );
+    assert.equal(res.headers.get("access-control-max-age"), "600");
+    assert.equal(api.seen[0].method, "OPTIONS");
+    assert.equal(api.seen[0].headers.origin, "https://client.example");
+    assert.equal(api.seen[0].headers["access-control-request-method"], "POST");
+  } finally {
+    await api.close();
+  }
+});
+
+test("a client that goes away mid-body gets no forwarding and no exception", async () => {
+  const api = await fakeApi((_c, res) => res.end("{}"));
+  try {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":'));
+        controller.error(new Error("client disconnected"));
+      },
+    });
+    const res = await forwardMcp(
+      new Request(`${WEB}/mcp/business`, {
+        method: "POST",
+        body,
+        duplex: "half",
+      }),
+      { origin: api.origin },
+    );
+    assert.equal(res.status, 499);
+    assert.equal(api.seen.length, 0);
+  } finally {
+    await api.close();
+  }
+});
+
+test("an API that does not start answering in time is given up with 504", async () => {
+  const api = await fakeApi(() => {
+    /* never answers */
+  });
+  try {
+    const started = Date.now();
+    const res = await forwardMcp(
+      new Request(`${WEB}/oauth/token`, { method: "POST", body: "x" }),
+      { origin: api.origin, timeoutMs: 80 },
+    );
+    assert.equal(res.status, 504);
+    assert.ok(Date.now() - started < 2000);
+  } finally {
+    await api.close();
+  }
+});
+
+test("the timeout covers the start of the answer only, not a long stream", async () => {
+  const api = await fakeApi((_c, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream" });
+    res.write("data: 1\n\n");
+    setTimeout(() => res.end("data: 2\n\n"), 200);
+  });
+  try {
+    const res = await forwardMcp(
+      new Request(`${WEB}/mcp/business`, { method: "POST", body: "{}" }),
+      { origin: api.origin, timeoutMs: 80 },
+    );
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /data: 2/);
+  } finally {
+    await api.close();
+  }
 });

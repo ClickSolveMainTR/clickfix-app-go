@@ -1,21 +1,12 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Cable, ShieldCheck } from "lucide-react";
+import { Cable } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Loading } from "@/components/common/loading";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { routes } from "@/config/routes";
 import { isApiError } from "@/lib/api";
 import { useAuth } from "@/providers/auth-provider";
@@ -27,10 +18,11 @@ import {
   consentView,
   decideBody,
   decideErrorKey,
+  safeClientRedirect,
   selectedOrganization,
-  writeOffered,
 } from "../lib/consent";
 import { mcpKeys, mcpService } from "../services/mcp.service";
+import { ConsentCard } from "./consent-card";
 
 /**
  * OAuth consent screen of the MCP server (CF-173). An MCP client sends the
@@ -41,16 +33,16 @@ import { mcpKeys, mcpService } from "../services/mcp.service";
  *
  * The decision is made by the API (`/v1/mcp/consent/{uuid}/decide`, through
  * the panel BFF and its CSRF check); this page only sends it and follows the
- * redirect the API answers with. Text that comes from the client (its name,
- * its redirect host) is rendered as text only. The request id is never
- * logged or sent anywhere but that API call.
+ * redirect the API answers with, after checking it is an address a client
+ * can have. The request id is never logged or sent anywhere but that API
+ * call.
  */
 export function McpConsentPage() {
   const { t } = useLocale();
   const router = useRouter();
   const params = useSearchParams();
   const requestId = consentRequestId(params.get("request"));
-  const { bootstrapped, isAuthenticated } = useAuth();
+  const { bootstrapped, isAuthenticated, user } = useAuth();
 
   const consent = useQuery({
     queryKey: mcpKeys.consent(requestId ?? ""),
@@ -66,7 +58,6 @@ export function McpConsentPage() {
   const data = consent.data;
   const organizations = data?.organizations ?? [];
   const selected = selectedOrganization(organizations, organization);
-  const canGrantWrite = writeOffered(Boolean(data?.write_requested), selected);
 
   const view = consentView({
     requestId,
@@ -87,6 +78,9 @@ export function McpConsentPage() {
       router.replace(consentLoginPath(routes.guest.login, requestId));
   }, [requestId, router, view]);
 
+  // One decision per request, also for two clicks inside the same frame.
+  const sent = useRef(false);
+  const [unsafeRedirect, setUnsafeRedirect] = useState(false);
   const decide = useMutation({
     mutationFn: async (decision: "approve" | "deny") => {
       const body = decideBody({
@@ -98,145 +92,65 @@ export function McpConsentPage() {
       if (!body || !requestId) throw new Error("consent: nothing to decide");
       return mcpService.decide(requestId, body);
     },
-    // Back to the client: its registered redirect URI, built by the API.
-    onSuccess: (out) => window.location.assign(out.redirect_url),
+    onSuccess: (out) => {
+      // Back to the client: its registered redirect URI, built by the API and
+      // checked here once more (https, or http on this computer).
+      const to = safeClientRedirect(out.redirect_url);
+      if (to) window.location.assign(to);
+      else setUnsafeRedirect(true);
+    },
+    onError: () => {
+      sent.current = false;
+    },
   });
+  const onDecide = (decision: "approve" | "deny") => {
+    if (sent.current) return;
+    sent.current = true;
+    decide.mutate(decision);
+  };
   const busy = decide.isPending || decide.isSuccess;
+  const errorKey = unsafeRedirect
+    ? "mcp.consent.unsafe_redirect"
+    : decide.isError
+      ? decideErrorKey(isApiError(decide.error) ? decide.error.status : null)
+      : null;
 
   return (
     <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cable className="size-5" />
-            {t("mcp.consent.title")}
-          </CardTitle>
-          {view === "ready" && data ? (
-            <CardDescription>
-              {t("mcp.consent.asks", {
-                client: data.client_name || data.client_id,
-              })}
-            </CardDescription>
-          ) : null}
-        </CardHeader>
-        <CardContent className="space-y-5 text-sm">
-          {view === "loading" || view === "sign_in" ? (
-            <Loading label={t("common.loading")} />
-          ) : view !== "ready" || !data ? (
-            <p role="alert" className="text-destructive">
-              {t(`mcp.consent.${view === "ready" ? "failed" : view}`)}
-            </p>
-          ) : (
-            <>
-              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
-                <dt className="text-muted-foreground">
-                  {t("mcp.consent.returns_to")}
-                </dt>
-                <dd className="text-base font-semibold break-all">
-                  {data.redirect_host}
-                </dd>
-                <dt className="text-muted-foreground">
-                  {t("mcp.consent.connects_to")}
-                </dt>
-                <dd className="font-mono text-xs break-all">
-                  {data.resource_url}
-                </dd>
-              </dl>
-              <p className="text-muted-foreground text-xs">
-                {t("mcp.consent.warning")}
+      {view === "ready" && data ? (
+        <ConsentCard
+          consent={data}
+          account={user?.email ?? ""}
+          selected={selected?.uuid}
+          allowWrite={allowWrite}
+          busy={busy}
+          errorKey={errorKey}
+          onSelect={(uuid) => {
+            setOrganization(uuid);
+            setAllowWrite(false);
+          }}
+          onAllowWrite={setAllowWrite}
+          onDecide={onDecide}
+        />
+      ) : (
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cable className="size-5" />
+              {t("mcp.consent.title")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            {view === "loading" || view === "sign_in" ? (
+              <Loading label={t("common.loading")} />
+            ) : (
+              <p role="alert" className="text-destructive">
+                {t(`mcp.consent.${view === "ready" ? "failed" : view}`)}
               </p>
-
-              <fieldset className="space-y-2">
-                <legend className="font-medium">
-                  {t("mcp.consent.organization")}
-                </legend>
-                {organizations.map((o) => (
-                  <label
-                    key={o.uuid}
-                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-md border p-3"
-                  >
-                    <input
-                      type="radio"
-                      name="organization"
-                      value={o.uuid}
-                      checked={selected?.uuid === o.uuid}
-                      disabled={busy}
-                      onChange={() => {
-                        setOrganization(o.uuid);
-                        setAllowWrite(false);
-                      }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium break-words">
-                        {o.name}
-                      </span>
-                      {o.tool_count != null ? (
-                        <span className="text-muted-foreground text-xs">
-                          {t("mcp.consent.tool_count", {
-                            count: o.tool_count,
-                          })}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-
-              <div className="space-y-2">
-                <p className="flex items-center gap-2">
-                  <ShieldCheck className="text-muted-foreground size-4" />
-                  {t("mcp.consent.scope_read")}
-                </p>
-                {canGrantWrite ? (
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="mcp-allow-write"
-                      checked={allowWrite}
-                      disabled={busy}
-                      onCheckedChange={(v) => setAllowWrite(v === true)}
-                    />
-                    <Label htmlFor="mcp-allow-write" className="leading-snug">
-                      {t("mcp.consent.scope_write")}
-                    </Label>
-                  </div>
-                ) : data.write_requested && selected ? (
-                  <p className="text-muted-foreground text-xs">
-                    {t("mcp.consent.write_unavailable")}
-                  </p>
-                ) : null}
-              </div>
-
-              {decide.isError ? (
-                <p role="alert" className="text-destructive">
-                  {t(
-                    decideErrorKey(
-                      isApiError(decide.error) ? decide.error.status : null,
-                    ),
-                  )}
-                </p>
-              ) : null}
-
-              {/* Deny has the focus; allowing takes a deliberate click. */}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  autoFocus
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => decide.mutate("deny")}
-                >
-                  {t("mcp.consent.deny")}
-                </Button>
-                <Button
-                  disabled={busy || !selected}
-                  onClick={() => decide.mutate("approve")}
-                >
-                  {t("mcp.consent.approve")}
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }
