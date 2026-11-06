@@ -57,6 +57,7 @@ import enTenantSettings from "@/locales/en/tenant_settings.json";
 import enSla from "@/locales/en/sla.json";
 import enReports from "@/locales/en/reports.json";
 import enOncall from "@/locales/en/oncall.json";
+import enTeamChat from "@/locales/en/team_chat.json";
 import enWorkforce from "@/locales/en/workforce.json";
 import enCoaching from "@/locales/en/coaching.json";
 import enAutomationIntegrations from "@/locales/en/automation_integrations.json";
@@ -138,6 +139,7 @@ import trTenantSettings from "@/locales/tr/tenant_settings.json";
 import trSla from "@/locales/tr/sla.json";
 import trReports from "@/locales/tr/reports.json";
 import trOncall from "@/locales/tr/oncall.json";
+import trTeamChat from "@/locales/tr/team_chat.json";
 import trWorkforce from "@/locales/tr/workforce.json";
 import trCoaching from "@/locales/tr/coaching.json";
 import trAutomationIntegrations from "@/locales/tr/automation_integrations.json";
@@ -195,6 +197,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     sla: trSla,
     reports: trReports,
     oncall: trOncall,
+    team_chat: trTeamChat,
     workforce: trWorkforce,
     coaching: trCoaching,
     automation_integrations: trAutomationIntegrations,
@@ -273,6 +276,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     sla: enSla,
     reports: enReports,
     oncall: enOncall,
+    team_chat: enTeamChat,
     workforce: enWorkforce,
     coaching: enCoaching,
     automation_integrations: enAutomationIntegrations,

@@ -14950,7 +14950,7 @@ export interface paths {
         };
         /**
          * List incidents and maintenance, including private records
-         * @description Requires tenant.conversations.read_all and tenant.conversations.manage for mutations; reads require tenant.conversations.read.
+         * @description Requires tenant.conversations.read only, so agents without tenant.conversations.read_all can see ongoing incidents. Private records and postmortems are included.
          */
         get: operations["listStatusIncidents"];
         put?: never;
@@ -61533,6 +61533,7 @@ export interface operations {
                         success: true;
                         data: {
                             items?: components["schemas"]["StatusIncident"][];
+                            total?: number;
                             limit?: number;
                             offset?: number;
                         };
