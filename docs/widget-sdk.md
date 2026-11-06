@@ -94,6 +94,32 @@ Her komut iki biçimde çağrılır: `ClickFix("open", "help")` veya `ClickFix.o
 **Güvenlik** bölümünde üretilir ve bir kez gösterilir. Örnekler (Node, Go, PHP, Python) aynı bölümdedir.
 Doğrulanan kullanıcının anonim geçmişi aynı kişiye taşınır.
 
+### identify reddedilirse
+
+`identify` (ve `boot({ user })`) reddedilirse widget çalışmaya devam eder ama kullanıcı **anonim kalır**:
+geçmişi eşleşmez ve doğrulanmış kullanıcıya özel öznitelikler yazılmaz. SDK bunu `debug` kapalıyken de
+tarayıcı konsoluna `[ClickFix] identify was rejected (...)` uyarısıyla yazar ve `error` olayını yayar.
+`ClickFix("identify", ...)` çağrısının döndürdüğü promise ayrıca reddedilir.
+
+| Yanıt | Anlamı | Çözüm |
+|-------|--------|-------|
+| `403 WIDGET_IDENTITY_DISABLED` | Widget için kimlik anahtarı hiç üretilmemiş. | Panelde **Web widget → Güvenlik → Kimlik doğrulama** altında anahtarı üretin, sunucunuza kaydedin ve `user_hash` değerini bu anahtarla hesaplayın. |
+| `401 WIDGET_IDENTITY_INVALID` | `user_hash`, `user_id` ile eşleşmiyor. | Sunucunuzdaki anahtarın bu widget'ın **güncel** anahtarı olduğunu (yenilediyseniz eskisi geçersizdir), imzanın `identify`'a verdiğiniz `user_id` dizesinin aynısı üzerinden hesaplandığını ve çıktının hex (base64 değil) olduğunu kontrol edin. |
+
+```js
+ClickFix("on", "error", (e) => {
+  if (e.code === "WIDGET_IDENTITY_DISABLED" || e.code === "WIDGET_IDENTITY_INVALID") {
+    // e.message nedeni ve panelde bakılacak yeri söyler
+  }
+});
+ClickFix("boot", { widgetId: "<id>", user: { user_id: "42", user_hash: "<sunucuda hesaplanan>" } });
+```
+
+Panel de aynı durumu gösterir: **Kurulum → Kurulum kontrolü** ve **Güvenlik** bölümleri, widget'ın son
+reddedilen denemesini (yalnız hata kodu ve zamanı) uyarı olarak listeler. Geçerli bir `user_hash` ile ilk
+doğrulamada uyarı kalkar. Konsol uyarısında, `error` olayında ve bu kayıtta `user_id`, `user_hash` veya
+anahtar değeri bulunmaz.
+
 ## Öznitelikler
 
 `setAttributes`, `identify({ attributes })`, `update` ve ön sohbet soruları yalnız **öznitelik eşleme**

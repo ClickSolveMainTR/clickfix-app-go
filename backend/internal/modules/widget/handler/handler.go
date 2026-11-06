@@ -33,8 +33,8 @@ const (
 	CodeWidgetNotFound        = "WIDGET_NOT_FOUND"
 	CodeOriginNotAllowed      = "WIDGET_ORIGIN_NOT_ALLOWED"
 	CodeVisitorToken          = "WIDGET_VISITOR_TOKEN_INVALID"
-	CodeIdentityDisabled      = "WIDGET_IDENTITY_DISABLED"
-	CodeIdentityInvalid       = "WIDGET_IDENTITY_INVALID"
+	CodeIdentityDisabled      = usecase.RejectionIdentityDisabled
+	CodeIdentityInvalid       = usecase.RejectionIdentityInvalid
 	CodeIdentityRequired      = "WIDGET_IDENTITY_REQUIRED"
 	CodeConversationClosed    = "WIDGET_CONVERSATION_CLOSED"
 	CodeRatingNotAllowed      = "WIDGET_RATING_NOT_ALLOWED"

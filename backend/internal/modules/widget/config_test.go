@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
+	channelsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels/usecase"
 	convrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"github.com/google/uuid"
@@ -255,4 +258,80 @@ func cloneMap(m map[string]any) map[string]any {
 	out := map[string]any{}
 	_ = json.Unmarshal(raw, &out)
 	return out
+}
+
+// CF-176: a rejected identify call is remembered per widget (fixed code and
+// time only) for the editor, and a verified identify clears it.
+func TestIdentityRejectionIsRecordedAndCleared(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	cfgs := usecase.NewConfigs(e.q, convrepository.New(e.pool, e.q), e.ib.Channels)
+	// A widget whose identity secret was never generated.
+	bare, err := e.ib.Channels.Create(ctx, channelsusecase.CreateInput{
+		OrganizationID: e.org, ActorID: e.agent, Type: channels.TypeWidget, Name: "No secret",
+		Settings: map[string]any{"allowed_domains": []any{"shop.example.com"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.inst = bare
+	if got, err := cfgs.IdentityRejection(ctx, e.org, bare.UUID); err != nil || got != nil {
+		t.Fatalf("fresh widget rejection = %+v %v", got, err)
+	}
+	token := str(e.call(http.MethodPost, "/bootstrap", "", siteOrigin, nil).Data, "visitor", "token")
+	const hash = "5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e"
+	body := map[string]any{"user_id": "user-176", "user_hash": hash}
+
+	// No secret: the request is still rejected, and the reason is recorded.
+	if r := e.call(http.MethodPost, "/identify", token, siteOrigin, body); r.Code != http.StatusForbidden || str(r.Err, "code") != "WIDGET_IDENTITY_DISABLED" {
+		t.Fatalf("identify without secret = %d %v", r.Code, r.Err)
+	}
+	first, err := cfgs.IdentityRejection(ctx, e.org, bare.UUID)
+	if err != nil || first == nil || first.Code != usecase.RejectionIdentityDisabled || first.RejectedAt.IsZero() {
+		t.Fatalf("rejection = %+v %v", first, err)
+	}
+	// Nothing of the request is stored.
+	var row string
+	if err := e.pool.QueryRow(ctx, "SELECT row_to_json(r)::text FROM widget_identity_rejections r WHERE organization_id = $1", e.org).Scan(&row); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(row, hash) || strings.Contains(row, "user-176") {
+		t.Fatalf("rejection row leaks the request: %s", row)
+	}
+	// Repeats inside a minute do not turn into writes.
+	e.call(http.MethodPost, "/identify", token, siteOrigin, body)
+	var rows int
+	if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM widget_identity_rejections WHERE organization_id = $1", e.org).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := cfgs.IdentityRejection(ctx, e.org, bare.UUID)
+	if rows != 1 || again == nil || !again.RejectedAt.Equal(first.RejectedAt) {
+		t.Fatalf("throttle: rows=%d first=%v again=%+v", rows, first.RejectedAt, again)
+	}
+
+	// With a secret, a wrong hash is its own code (and replaces the old one).
+	if _, err := e.ib.Channels.Update(ctx, e.org, bare.UUID, channelsusecase.UpdateInput{
+		Credentials: channels.Credentials{widget.IdentitySecretField: identitySecret},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.call(http.MethodPost, "/identify", token, siteOrigin, body); r.Code != http.StatusUnauthorized || str(r.Err, "code") != "WIDGET_IDENTITY_INVALID" {
+		t.Fatalf("identify with wrong hash = %d %v", r.Code, r.Err)
+	}
+	if got, err := cfgs.IdentityRejection(ctx, e.org, bare.UUID); err != nil || got == nil || got.Code != usecase.RejectionIdentityInvalid {
+		t.Fatalf("invalid rejection = %+v %v", got, err)
+	}
+
+	// A verified user clears the warning.
+	ok := e.call(http.MethodPost, "/identify", token, siteOrigin, map[string]any{"user_id": "user-176", "user_hash": widget.UserHash(identitySecret, "user-176")})
+	if ok.Code != http.StatusOK || ok.Data["verified"] != true {
+		t.Fatalf("verified identify = %d %v", ok.Code, ok.Err)
+	}
+	if got, err := cfgs.IdentityRejection(ctx, e.org, bare.UUID); err != nil || got != nil {
+		t.Fatalf("rejection after verified identify = %+v %v", got, err)
+	}
+	// Another organization cannot read it.
+	if _, err := cfgs.IdentityRejection(ctx, e.org+1_000_000, bare.UUID); !errors.Is(err, usecase.ErrNotFound) {
+		t.Fatalf("cross-organization read = %v", err)
+	}
 }
