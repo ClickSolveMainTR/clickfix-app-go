@@ -64,6 +64,7 @@ export function MoreScreen() {
         { key: 'team_chat', icon: 'chat', to: '/more/team-chat', show: can(P.teamChat), badge: chatUnread },
         { key: 'oncall', icon: 'alert', to: '/more/oncall', show: can(P.schedulesRead) },
         { key: 'workforce', icon: 'calendar', to: '/more/workforce', show: can(P.schedulesRead) },
+        { key: 'coaching', icon: 'chart', to: '/more/coaching', show: can(P.schedulesRead, P.qualityManage) },
       ],
     },
     {

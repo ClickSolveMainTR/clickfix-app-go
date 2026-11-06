@@ -33,6 +33,8 @@ export const P = {
   schedulesRead: 'tenant.schedules.read',
   /** Agent timesheets (`workforce/routes.go`). */
   schedulesManage: 'tenant.schedules.manage',
+  /** Calibration sessions and coaching items (`coaching/routes.go`). */
+  qualityManage: 'tenant.quality.manage',
   /** Engineering issues (`engineering/routes.go`). */
   ticketsRead: 'tenant.tickets.read',
   ticketsWrite: 'tenant.tickets.write',

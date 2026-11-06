@@ -17,5 +17,14 @@
   "workforce.last_days_one": "Last {{count}} day",
   "workforce.last_days_other": "Last {{count}} days",
   "workforce.model": "This view uses the panel's default parameters: answer {{target}}% of conversations within {{wait}} s with a {{handle}} s average handle time. Parameters and the channel and team filters are changed on the panel.",
-  "workforce.no_timesheets": "Timesheets require permission to manage schedules. Ask your organization admin for access."
+  "workforce.no_timesheets": "Timesheets require permission to manage schedules. Ask your organization admin for access.",
+  "coaching.last_days_one": "Last {{count}} day",
+  "coaching.last_days_other": "Last {{count}} days",
+  "coaching.first_of": "Showing the first {{shown}} of {{total}}.",
+  "coaching.read_only": "This screen is read-only; create, score and edit on the panel.",
+  "coaching.opted_out": "You are hidden from the leaderboard",
+  "coaching.opted_out_hint": "Your points are not calculated. You can change this on the panel.",
+  "coaching.rule_off": "Off",
+  "coaching.other": "Other entries",
+  "coaching.calibration_open": "The session is open; reviewer scores stay hidden until it closes. Scoring is done on the panel."
 }

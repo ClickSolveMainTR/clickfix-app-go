@@ -17,5 +17,14 @@
   "workforce.last_days_one": "Son {{count}} gün",
   "workforce.last_days_other": "Son {{count}} gün",
   "workforce.model": "Bu görünüm panelin varsayılan parametreleriyle hesaplanır: konuşmaların %{{target}}'ine {{wait}} sn içinde yanıt, ortalama işlem süresi {{handle}} sn. Parametreler, kanal ve ekip filtresi panelden değiştirilir.",
-  "workforce.no_timesheets": "Çalışma süreleri için vardiyaları yönetme yetkisi gerekir. Organizasyon yöneticinizden yetki isteyin."
+  "workforce.no_timesheets": "Çalışma süreleri için vardiyaları yönetme yetkisi gerekir. Organizasyon yöneticinizden yetki isteyin.",
+  "coaching.last_days_one": "Son {{count}} gün",
+  "coaching.last_days_other": "Son {{count}} gün",
+  "coaching.first_of": "{{total}} kayıttan ilk {{shown}} tanesi gösteriliyor.",
+  "coaching.read_only": "Bu ekran salt okunurdur; oluşturma, puanlama ve düzenleme panelden yapılır.",
+  "coaching.opted_out": "Liderlik tablosunda görünmüyorsunuz",
+  "coaching.opted_out_hint": "Puanlarınız hesaplanmıyor. Tercihinizi panelden değiştirebilirsiniz.",
+  "coaching.rule_off": "Kapalı",
+  "coaching.other": "Diğer kayıtlar",
+  "coaching.calibration_open": "Oturum açık; değerlendirici puanları oturum kapanana kadar gizlidir. Puanlama panelden yapılır."
 }

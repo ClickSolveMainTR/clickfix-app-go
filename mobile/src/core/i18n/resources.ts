@@ -30,6 +30,7 @@ import tr_web from '../../../../frontend/src/locales/tr/common.json';
 import tr_calendar from '../../../../frontend/src/locales/tr/calendar.json';
 import tr_appointments from '../../../../frontend/src/locales/tr/appointments.json';
 import tr_workforce from '../../../../frontend/src/locales/tr/workforce.json';
+import tr_coaching from '../../../../frontend/src/locales/tr/coaching.json';
 import en_common from './locales/en/common.json';
 import en_admin from './locales/en/admin.json';
 import en_auth from './locales/en/auth.json';
@@ -60,10 +61,11 @@ import en_web from '../../../../frontend/src/locales/en/common.json';
 import en_calendar from '../../../../frontend/src/locales/en/calendar.json';
 import en_appointments from '../../../../frontend/src/locales/en/appointments.json';
 import en_workforce from '../../../../frontend/src/locales/en/workforce.json';
+import en_coaching from '../../../../frontend/src/locales/en/coaching.json';
 
-export const NAMESPACES = ['common', 'admin', 'auth', 'conversation', 'copilot', 'help', 'hub', 'nav', 'people', 'presence', 'qr', 'reports', 'security', 'settings', 'team', 'update', 'widgets', 'work', 'errors', 'inbox', 'channels', 'notifications', 'sla', 'video', 'contacts', 'web_auth', 'web', 'calendar', 'appointments', 'workforce'] as const;
+export const NAMESPACES = ['common', 'admin', 'auth', 'conversation', 'copilot', 'help', 'hub', 'nav', 'people', 'presence', 'qr', 'reports', 'security', 'settings', 'team', 'update', 'widgets', 'work', 'errors', 'inbox', 'channels', 'notifications', 'sla', 'video', 'contacts', 'web_auth', 'web', 'calendar', 'appointments', 'workforce', 'coaching'] as const;
 
 export const resources = {
-  tr: { common: tr_common, admin: tr_admin, auth: tr_auth, conversation: tr_conversation, copilot: tr_copilot, help: tr_help, hub: tr_hub, nav: tr_nav, people: tr_people, presence: tr_presence, qr: tr_qr, reports: tr_reports, security: tr_security, settings: tr_settings, team: tr_team, update: tr_update, widgets: tr_widgets, work: tr_work, errors: tr_errors, inbox: tr_inbox, channels: tr_channels, notifications: tr_notifications, sla: tr_sla, video: tr_video, contacts: tr_contacts, web_auth: tr_web_auth, web: tr_web, calendar: tr_calendar, appointments: tr_appointments, workforce: tr_workforce },
-  en: { common: en_common, admin: en_admin, auth: en_auth, conversation: en_conversation, copilot: en_copilot, help: en_help, hub: en_hub, nav: en_nav, people: en_people, presence: en_presence, qr: en_qr, reports: en_reports, security: en_security, settings: en_settings, team: en_team, update: en_update, widgets: en_widgets, work: en_work, errors: en_errors, inbox: en_inbox, channels: en_channels, notifications: en_notifications, sla: en_sla, video: en_video, contacts: en_contacts, web_auth: en_web_auth, web: en_web, calendar: en_calendar, appointments: en_appointments, workforce: en_workforce },
+  tr: { common: tr_common, admin: tr_admin, auth: tr_auth, conversation: tr_conversation, copilot: tr_copilot, help: tr_help, hub: tr_hub, nav: tr_nav, people: tr_people, presence: tr_presence, qr: tr_qr, reports: tr_reports, security: tr_security, settings: tr_settings, team: tr_team, update: tr_update, widgets: tr_widgets, work: tr_work, errors: tr_errors, inbox: tr_inbox, channels: tr_channels, notifications: tr_notifications, sla: tr_sla, video: tr_video, contacts: tr_contacts, web_auth: tr_web_auth, web: tr_web, calendar: tr_calendar, appointments: tr_appointments, workforce: tr_workforce, coaching: tr_coaching },
+  en: { common: en_common, admin: en_admin, auth: en_auth, conversation: en_conversation, copilot: en_copilot, help: en_help, hub: en_hub, nav: en_nav, people: en_people, presence: en_presence, qr: en_qr, reports: en_reports, security: en_security, settings: en_settings, team: en_team, update: en_update, widgets: en_widgets, work: en_work, errors: en_errors, inbox: en_inbox, channels: en_channels, notifications: en_notifications, sla: en_sla, video: en_video, contacts: en_contacts, web_auth: en_web_auth, web: en_web, calendar: en_calendar, appointments: en_appointments, workforce: en_workforce, coaching: en_coaching },
 };
