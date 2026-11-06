@@ -23,6 +23,7 @@ import {
   type StringKey,
 } from "../shared/i18n";
 import { sanitizeCSS } from "../shared/css";
+import { identifyFailure } from "../shared/identify";
 import { plain } from "../shared/markdown";
 import {
   deviceOf,
@@ -214,9 +215,9 @@ export class Widget {
       if (this.pendingIdentify) {
         const input = this.pendingIdentify;
         this.pendingIdentify = null;
-        await this.identify(input).catch((err) =>
-          this.log("identify failed", err),
-        );
+        // identify() already warned and emitted "error"; boot carries on
+        // with the anonymous visitor.
+        await this.identify(input).catch(() => undefined);
       }
       if (Object.keys(this.pendingAttrs).length) void this.flushAttributes();
       this.startRealtime();
@@ -572,7 +573,17 @@ export class Widget {
     }
     if (this.preview) return;
     const { attributes, ...body } = input;
-    const v = await this.api.call<Visitor>("POST", "/identify", body);
+    let v: Visitor;
+    try {
+      v = await this.api.call<Visitor>("POST", "/identify", body);
+    } catch (err) {
+      // Visible without `debug`: otherwise the user silently stays
+      // anonymous. The text never carries user_hash or other input.
+      const failure = identifyFailure(err);
+      console.warn("[ClickFix] " + failure.message);
+      this.emit("error", failure);
+      throw err;
+    }
     this.setVisitor(v);
     this.emit("identify", { verified: v.verified });
     if (attributes) await this.setAttributes(attributes);

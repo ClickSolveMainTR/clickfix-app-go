@@ -42,6 +42,7 @@ export type ConversationSLA = components['schemas']['ConversationSLA'];
 export type Contact = components['schemas']['Contact'];
 export type Attachment = components['schemas']['Attachment'];
 export type Canned = components['schemas']['Canned'];
+export type CannedInput = components['schemas']['CannedInput'];
 
 /** Realtime event on `inbox:{org_uuid}` (backend model.LiveEvent). */
 type InboxLiveEvent = {
@@ -76,6 +77,7 @@ export function useInboxScope() {
     canContacts: can(P.contactsRead),
     canUpload: can(P.attachmentsWrite),
     canCanned: can(P.macrosRead),
+    canCannedWrite: can(P.macrosWrite),
   };
 }
 
@@ -377,6 +379,41 @@ export function useCannedResponses(q: string, enabled: boolean) {
         }),
       ),
   });
+}
+
+/**
+ * Create / edit / delete a canned response (CF-165; the panel's
+ * `useCannedMutations`). Every cached search of the list is refetched, so the
+ * composer's "/" picker shows the change at once.
+ */
+export function useCannedMutations() {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  const done = () => void qc.invalidateQueries({ queryKey: [...inboxKeys.all(org), 'canned'] });
+  return {
+    create: useMutation({
+      mutationFn: (body: CannedInput) =>
+        unwrap(api.POST('/v1/tenant/canned-responses', { params: { header: orgHeader() }, body })),
+      onSuccess: done,
+    }),
+    update: useMutation({
+      mutationFn: (v: { uuid: string; body: CannedInput }) =>
+        unwrap(
+          api.PATCH('/v1/tenant/canned-responses/{uuid}', {
+            params: { header: orgHeader(), path: { uuid: v.uuid } },
+            body: v.body,
+          }),
+        ),
+      onSuccess: done,
+    }),
+    remove: useMutation({
+      mutationFn: (uuid: string) =>
+        unwrap(
+          api.DELETE('/v1/tenant/canned-responses/{uuid}', { params: { header: orgHeader(), path: { uuid } } }),
+        ),
+      onSuccess: done,
+    }),
+  };
 }
 
 /** A canned response with the conversation's variables filled in (also counts the use). */

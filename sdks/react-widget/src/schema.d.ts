@@ -153,6 +153,11 @@ export interface paths {
          * @description `user_hash` is `hex(HMAC-SHA256(identity_secret, user_id))`, computed by
          *     the customer's backend. The anonymous visitor's conversations move to
          *     the user's contact (no second contact is created).
+         *
+         *     Rejections: `403 WIDGET_IDENTITY_DISABLED` when the widget has no
+         *     identity secret, `401 WIDGET_IDENTITY_INVALID` when `user_hash` does
+         *     not match `user_id`. The last rejection (code and time only) is shown
+         *     in the editor's install check until a user is verified.
          */
         post: operations["widgetIdentify"];
         delete?: never;

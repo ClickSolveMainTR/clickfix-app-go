@@ -72,6 +72,7 @@ export function MoreScreen() {
         { key: 'engineering', icon: 'bug', to: '/more/engineering', show: can(P.ticketsRead) },
         { key: 'incidents', icon: 'megaphone', to: '/more/incidents', show: can(P.conversationsRead) },
         { key: 'knowledge', icon: 'book', to: '/more/knowledge', show: can(P.settingsRead) },
+        { key: 'replies', icon: 'note', to: '/more/replies', show: can(P.macrosRead) },
       ],
     },
     {
