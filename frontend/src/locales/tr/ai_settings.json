@@ -15,6 +15,7 @@
   "locale.en": "İngilizce",
   "conflict.title": "Bu kayıt siz düzenlerken değişti",
   "conflict.reload": "Güncel hâli yükle",
+  "conflict.not_found": "Kayıt artık bulunamıyor; silinmiş olabilir. Listeyi yenileyin.",
   "conflict.overwrite": "Yine de benimkini kaydet",
   "errors.generic": "İşlem tamamlanamadı. Tekrar deneyin.",
   "errors.conflict": "Kayıt başka biri tarafından değiştirildi. Güncel hâlini yükleyip tekrar deneyin.",

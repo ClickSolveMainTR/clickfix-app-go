@@ -15,6 +15,7 @@
   "locale.en": "English",
   "conflict.title": "This record changed while you were editing",
   "conflict.reload": "Load the latest version",
+  "conflict.not_found": "The record can no longer be found; it may have been deleted. Refresh the list.",
   "conflict.overwrite": "Save mine anyway",
   "errors.generic": "The action could not be completed. Try again.",
   "errors.conflict": "Someone else changed this record. Load the latest version and try again.",

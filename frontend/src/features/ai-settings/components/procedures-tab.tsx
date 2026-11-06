@@ -64,6 +64,8 @@ const MAX_STEPS = 20;
 const MAX_STEP_CHARS = 1000;
 const MAX_TOTAL_CHARS = 3000;
 const MAX_TOOLS = 20;
+/** Page size used to find one procedure again after a conflict. */
+const RELOAD_PAGE = 100;
 
 export const proceduresKey = (slug: string) =>
   ["tenant", slug, "ai", "procedures"] as const;
@@ -356,13 +358,34 @@ function ProcedureEditor({
     },
     onError,
   });
+  // There is no single-procedure endpoint: page through the list until the
+  // record turns up (it may sit past the first page).
   const reload = async () => {
-    const page = await qc.fetchQuery({
-      queryKey: proceduresKey(slug),
-      queryFn: () => aiSettingsService.procedures(slug),
-    });
-    const fresh = page.items.find((r) => r.uuid === record?.uuid);
-    if (fresh) accept(fresh);
+    const uuid = record?.uuid;
+    if (!uuid) return;
+    try {
+      for (let offset = 0; ; offset += RELOAD_PAGE) {
+        const page = await aiSettingsService.procedures(
+          slug,
+          RELOAD_PAGE,
+          offset,
+        );
+        const fresh = page.items.find((r) => r.uuid === uuid);
+        if (fresh) {
+          accept(fresh);
+          return;
+        }
+        if (
+          page.items.length === 0 ||
+          offset + page.items.length >= page.total
+        ) {
+          break;
+        }
+      }
+      appToast.error(t("ai_settings.conflict.not_found"));
+    } catch (error) {
+      appToast.error(aiErrorMessage(error, t));
+    }
   };
 
   const setStep = (index: number, text: string) =>
