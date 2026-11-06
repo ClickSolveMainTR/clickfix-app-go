@@ -261,5 +261,10 @@ func (h *ConfigHandler) Installs(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+	rejection, err := h.svc.IdentityRejection(r.Context(), scope.ID, id)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items, "identity_rejection": rejection})
 }

@@ -493,5 +493,12 @@
   "theme.label": "Theme",
   "fields.greeting_title": "Greeting title",
   "fields.greeting_text": "Greeting text",
-  "fields.offline_message": "Offline message"
+  "fields.offline_message": "Offline message",
+  "identity_warning.disabled_title": "An identity verification attempt was rejected",
+  "identity_warning.disabled_body": "Your site called identify, but this widget has no identity secret yet (403 WIDGET_IDENTITY_DISABLED). Your signed-in users stay anonymous. Generate the secret in the Security section and compute user_hash with it on your server.",
+  "identity_warning.invalid_title": "The identity signature did not match",
+  "identity_warning.invalid_body": "The user_hash of the last identify call did not match user_id (401 WIDGET_IDENTITY_INVALID). Check that your server uses this widget's current secret and signs the user_id. If you rotated the secret, update it on your server too.",
+  "identity_warning.last_attempt": "Last rejected attempt: {{time}}",
+  "identity_warning.clears": "This warning clears on the first verification with a valid user_hash.",
+  "identity_warning.go_security": "Go to Security"
 }

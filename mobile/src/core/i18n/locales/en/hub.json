@@ -133,5 +133,6 @@
   "roles.member_description": "Works within the organization using assigned permissions.",
   "roles.supervisor_description": "Leads the support team and manages all conversations, assignments, reports, teams and the knowledge base.",
   "roles.agent_description": "Answers conversations and tickets assigned to their teams.",
-  "notifications.empty_title": "No notifications"
+  "notifications.empty_title": "No notifications",
+  "more.replies": "Canned replies"
 }

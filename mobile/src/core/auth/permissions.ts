@@ -16,6 +16,8 @@ export const P = {
   contactsRead: 'tenant.contacts.read',
   attachmentsWrite: 'tenant.attachments.write',
   macrosRead: 'tenant.macros.read',
+  /** Shared (organization) canned responses; personal ones only need `macrosRead` (`macros/routes.go`). */
+  macrosWrite: 'tenant.macros.write',
   teamsRead: 'tenant.teams.read',
   appointmentsRead: 'tenant.appointments.read',
   appointmentsWrite: 'tenant.appointments.write',

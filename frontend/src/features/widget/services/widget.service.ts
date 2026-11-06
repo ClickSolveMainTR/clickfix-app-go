@@ -57,6 +57,8 @@ export type WidgetDraft = components["schemas"]["WidgetDraft"];
 export type WidgetVersion = components["schemas"]["WidgetVersion"];
 export type WidgetVersionDetail = components["schemas"]["WidgetVersionDetail"];
 export type WidgetInstall = components["schemas"]["WidgetInstall"];
+export type WidgetIdentityRejection =
+  components["schemas"]["WidgetIdentityRejection"];
 
 /** Editor API (CF-150): drafts, publishing, versions and installs. */
 export const widgetConfigService = {
@@ -143,12 +145,15 @@ export const widgetConfigService = {
     );
   },
 
+  /** Install check: where the widget ran and its last rejected identify. */
   async installs(uuid: string) {
-    const data = await unwrap<{ items: WidgetInstall[] }>(
+    return unwrap<{
+      items: WidgetInstall[];
+      identity_rejection: WidgetIdentityRejection | null;
+    }>(
       await apiClient.GET("/v1/tenant/widgets/{uuid}/installs", {
         params: { header: orgHeader(), path: { uuid } },
       }),
     );
-    return data.items;
   },
 };
