@@ -104,5 +104,6 @@
   "nav_platform_assistant": "ClickFix Asistan",
   "nav_platform_guides": "Modül rehberleri",
   "nav_platform_product_feedback": "Ürün geri bildirimleri",
-  "nav_engineering": "Ürün talepleri"
+  "nav_engineering": "Ürün talepleri",
+  "nav_tenant_settings_mcp": "MCP bağlantıları"
 }

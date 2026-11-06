@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,7 +45,11 @@ const (
 	TokenRequestsPerMinute = 60
 	// BusinessRequestsPerHour caps every connection of one business.
 	BusinessRequestsPerHour = 1000
-	maxBodyBytes            = 1 << 20
+	// AddressRequestsPerMinute caps one client address before anything is
+	// authenticated: a caller without a valid token otherwise costs a body
+	// read and a token lookup per request, without limit.
+	AddressRequestsPerMinute = 300
+	maxBodyBytes             = 1 << 20
 )
 
 // JSON-RPC error codes of the HTTP gate (implementation-defined server
@@ -166,6 +171,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	if s.cfg.Limiter != nil {
+		if ok, retry := s.cfg.Limiter.Allow(ctx, "mcp_ip", clientIP(r), AddressRequestsPerMinute, time.Minute); !ok {
+			s.tooMany(w, retry)
+			return
+		}
+	}
 	raw := bearer(r.Header.Get("Authorization"))
 	if raw == "" {
 		s.unauthorized(w, r, resource, "")
@@ -215,6 +226,31 @@ func (s *Server) limited(ctx context.Context, tok model.AccessToken) (time.Durat
 		}
 	}
 	return 0, false
+}
+
+// clientIP is the client address the frontend proxy forwards (first
+// X-Forwarded-For hop, same as the OAuth endpoints' limits), else the peer.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if ip := strings.TrimSpace(strings.Split(xff, ",")[0]); ip != "" {
+			return ip
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+// tooMany answers the address limit without reading the request body.
+func (s *Server) tooMany(w http.ResponseWriter, retry time.Duration) {
+	if retry > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int((retry+time.Second-1)/time.Second)))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":null,"error":{"code":` + strconv.Itoa(CodeRateLimited) + `,"message":"too many requests from this address; retry later"}}`))
 }
 
 func cors(w http.ResponseWriter) {

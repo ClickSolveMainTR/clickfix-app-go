@@ -71,3 +71,36 @@ func TestGenericAllow(t *testing.T) {
 		t.Fatal("window must reset")
 	}
 }
+
+// AllowStrict refuses when the limiter cannot count: an anonymous endpoint
+// must not become unlimited because Redis is away.
+func TestAllowStrictFailsClosed(t *testing.T) {
+	t.Parallel()
+	var none *ratelimit.Limiter
+	if ok, retry := none.AllowStrict(context.Background(), "a", "s", 5, time.Hour); ok || retry != time.Hour {
+		t.Fatalf("nil limiter allowed (ok=%v retry=%s)", ok, retry)
+	}
+	// The lenient form keeps failing open, as the other limits expect.
+	if ok, _ := none.Allow(context.Background(), "a", "s", 5, time.Hour); !ok {
+		t.Fatal("Allow changed its behaviour")
+	}
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	l := ratelimit.New(rdb, "test")
+	for i := 0; i < 2; i++ {
+		if ok, _ := l.AllowStrict(context.Background(), "a", "s", 2, time.Hour); !ok {
+			t.Fatalf("hit %d refused under the limit", i+1)
+		}
+	}
+	if ok, _ := l.AllowStrict(context.Background(), "a", "s", 2, time.Hour); ok {
+		t.Fatal("third hit allowed over a limit of two")
+	}
+	mr.Close()
+	if ok, _ := l.AllowStrict(context.Background(), "a", "other", 2, time.Hour); ok {
+		t.Fatal("allowed while Redis is down")
+	}
+	if ok, _ := l.Allow(context.Background(), "a", "other", 2, time.Hour); !ok {
+		t.Fatal("Allow no longer fails open while Redis is down")
+	}
+}
