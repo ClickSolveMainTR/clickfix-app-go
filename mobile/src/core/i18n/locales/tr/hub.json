@@ -167,5 +167,6 @@
   "dashboard.pending_incidents_one": "Süren {{count}} olay",
   "dashboard.pending_incidents_other": "Süren {{count}} olay",
   "dashboard.load_failed": "Bu bölüm yüklenemedi",
-  "more.forum": "Topluluk forumu"
+  "more.forum": "Topluluk forumu",
+  "more.mcp": "MCP ile bağlan"
 }

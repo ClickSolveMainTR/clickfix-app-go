@@ -95,6 +95,7 @@ export function MoreScreen() {
         { key: 'teams', icon: 'customers', to: '/more/teams', show: can(P.teamsRead) },
         { key: 'forum', icon: 'chat', to: '/more/forum', show: can(P.feedbackManage) },
         { key: 'ai', icon: 'sparkles', to: '/more/ai', show: can(P.settingsRead) },
+        { key: 'mcp', icon: 'link', to: '/more/mcp', show: can(P.settingsRead) },
         { key: 'billing', icon: 'wallet', to: '/more/billing', show: can(P.billingRead) },
       ],
     },

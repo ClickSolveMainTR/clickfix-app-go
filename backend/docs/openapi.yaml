@@ -37619,6 +37619,72 @@ paths:
       ]
     }
   }
+  "/v1/tenant/mcp/guide": {
+    "get": {
+      "tags": [
+        "Developer platform"
+      ],
+      "operationId": "getV1TenantMcpGuide",
+      "summary": "Read the MCP connection guide of the member",
+      "description": "Requires tenant.settings.read (the MCP connect permission). Returns the MCP endpoint and authorization server a client is pointed at and every tool of the organization layer with whether the member gets it in this organization. Write tools are available only with tenant.settings.write and additionally need the mcp:write scope granted on the consent screen. Carries no secret.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "success",
+                  "data"
+                ],
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/MCPGuide"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "properties": {
+                      "request_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "#/components/responses/BadRequest"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
   "/mcp/business": {
     "post": {
       "tags": [
@@ -56881,6 +56947,64 @@ components:
         "events",
         "enabled"
       ]
+    }
+    MCPGuide: {
+      "type": "object",
+      "required": [
+        "resource_url",
+        "authorization_server",
+        "scopes",
+        "can_write",
+        "tools"
+      ],
+      "properties": {
+        "resource_url": {
+          "type": "string",
+          "description": "MCP endpoint a client is pointed at."
+        },
+        "authorization_server": {
+          "type": "string",
+          "description": "OAuth issuer the client discovers."
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "can_write": {
+          "type": "boolean",
+          "description": "The member may grant mcp:write in this organization."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "description",
+              "write",
+              "available"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean",
+                "description": "The tool changes data and needs the mcp:write scope."
+              },
+              "available": {
+                "type": "boolean",
+                "description": "The member's permissions in this organization include the tool."
+              }
+            }
+          }
+        }
+      }
     }
     IntegrationEnvelope: {
       "type": "object",

@@ -1,7 +1,7 @@
 "use client";
 
-import { McpAppsPage } from "@/features/mcp/components/mcp-apps-page";
+import { McpGuidePage } from "@/features/mcp/components/mcp-guide-page";
 
-export default function McpSettingsRoute() {
-  return <McpAppsPage />;
+export default function McpGuideRoute() {
+  return <McpGuidePage />;
 }
