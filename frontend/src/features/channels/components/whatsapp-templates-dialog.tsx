@@ -1,8 +1,15 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import {
+  EntityDeleteDialog,
+  EntityRowActions,
+  EntityTable,
+} from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,9 +37,12 @@ import {
 } from "@/features/channels/hooks/use-channels";
 import type {
   ChannelInstance,
+  WhatsAppTemplate,
   WhatsAppTemplateCreate,
 } from "@/features/channels/types";
 import { useLocale } from "@/providers/locale-provider";
+
+const EMPTY_TEMPLATES: WhatsAppTemplate[] = [];
 
 const statusTone: Record<string, "success" | "warning" | "danger"> = {
   APPROVED: "success",
@@ -72,6 +82,69 @@ export function WhatsAppTemplatesDialog({
     example: [],
   };
   const [form, setForm] = useState<WhatsAppTemplateCreate>(empty);
+  const [deleteTarget, setDeleteTarget] = useState<WhatsAppTemplate | null>(
+    null,
+  );
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<WhatsAppTemplate>({
+          accessorKey: "name",
+          labelKey: "channels.templates.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <div className="min-w-0">
+              <p className="truncate font-medium">{row.original.name}</p>
+              {row.original.rejected_reason &&
+              row.original.rejected_reason !== "NONE" ? (
+                <p className="text-destructive text-xs font-normal">
+                  {row.original.rejected_reason}
+                </p>
+              ) : null}
+            </div>
+          ),
+        }),
+        createColumn<WhatsAppTemplate>({
+          accessorKey: "language",
+          labelKey: "channels.templates.language",
+        }),
+        createColumn<WhatsAppTemplate>({
+          accessorKey: "category",
+          labelKey: "channels.templates.category",
+        }),
+        createColumn<WhatsAppTemplate>({
+          accessorKey: "status",
+          labelKey: "channels.calls.status",
+          cell: ({ row }) => (
+            <Badge variant={statusTone[row.original.status] ?? "secondary"}>
+              {row.original.status}
+            </Badge>
+          ),
+        }),
+        createColumn<WhatsAppTemplate>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: { headerClassName: "text-right" },
+          cell: ({ row }) => (
+            <EntityRowActions
+              actions={[
+                {
+                  id: "delete",
+                  label: t("channels.templates.delete"),
+                  icon: Trash2,
+                  variant: "destructive",
+                  onSelect: () => setDeleteTarget(row.original),
+                },
+              ]}
+            />
+          ),
+        }),
+      ] as ColumnDef<WhatsAppTemplate, unknown>[],
+    [t],
+  );
   const vars = placeholders(form.body);
   const examples = Array.from(
     { length: vars },
@@ -80,60 +153,41 @@ export function WhatsAppTemplatesDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="sm:max-w-2xl"
+        // Focus the dialog itself, not its first control: that is the search
+        // box, and focusing it opens the keyboard on phones.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{t("channels.templates.title")}</DialogTitle>
           <DialogDescription>{t("channels.templates.hint")}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          {list.isLoading ? (
-            <p className="text-muted-foreground text-sm">
-              {t("channels.loading")}
-            </p>
-          ) : (list.data ?? []).length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              {t("channels.templates.empty")}
-            </p>
-          ) : (
-            <ul className="divide-y rounded-md border">
-              {(list.data ?? []).map((tpl) => (
-                <li
-                  key={tpl.id}
-                  className="flex items-center justify-between gap-3 p-2 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {tpl.name}{" "}
-                      <span className="text-muted-foreground">
-                        · {tpl.language} · {tpl.category}
-                      </span>
-                    </p>
-                    {tpl.rejected_reason && tpl.rejected_reason !== "NONE" ? (
-                      <p className="text-destructive text-xs">
-                        {tpl.rejected_reason}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={statusTone[tpl.status] ?? "secondary"}>
-                      {tpl.status}
-                    </Badge>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t("channels.templates.delete")}
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate(tpl.name)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <EntityTable
+          columns={columns}
+          data={list.data ?? EMPTY_TEMPLATES}
+          getRowId={(row) => row.id}
+          isLoading={list.isLoading}
+          isError={list.isError}
+          onRetry={() => void list.refetch()}
+          emptyDescription={t("channels.templates.empty")}
+          // The account's templates come in one response: search, sort and
+          // paging run in the browser.
+          manual={{ filtering: false, sorting: false, pagination: false }}
+          initialState={{ pagination: { pageIndex: 0, pageSize: 10 } }}
+          pageSizeOptions={[10, 20, 50]}
+          features={{
+            columnFilters: false,
+            columnVisibility: false,
+            density: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
 
         <form
           className="space-y-3 border-t pt-4"
@@ -234,6 +288,19 @@ export function WhatsAppTemplatesDialog({
             </Button>
           </DialogFooter>
         </form>
+        <EntityDeleteDialog
+          open={Boolean(deleteTarget)}
+          softDelete={false}
+          entityLabel={deleteTarget?.name ?? ""}
+          isPending={remove.isPending}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (!deleteTarget) return;
+            remove.mutate(deleteTarget.name, {
+              onSettled: () => setDeleteTarget(null),
+            });
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

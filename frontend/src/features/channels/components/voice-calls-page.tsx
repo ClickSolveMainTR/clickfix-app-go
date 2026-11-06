@@ -1,21 +1,22 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { PhoneIncoming, PhoneOutgoing } from "lucide-react";
-import { useState } from "react";
+import { useMemo } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { EntityPage } from "@/components/entity";
+import {
+  EntityPage,
+  EntityTable,
+  useServerListState,
+} from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { permissions } from "@/config/permissions";
 import {
   useChannels,
   useVoiceCalls,
-  VOICE_CALLS_PAGE_SIZE,
 } from "@/features/channels/hooks/use-channels";
+import type { VoiceCall } from "@/features/channels/types";
 import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -34,13 +35,94 @@ function duration(seconds: number) {
  */
 export function VoiceCallsPage({ uuid }: { uuid: string }) {
   const { t, locale } = useLocale();
-  const [page, setPage] = useState(0);
+  const listState = useServerListState({ initialPageSize: 25 });
+  const { limit, offset } = listState.params;
   const channels = useChannels();
-  const calls = useVoiceCalls(uuid, page);
+  const calls = useVoiceCalls(uuid, limit, offset);
   const channel = channels.data?.find((c) => c.uuid === uuid);
-  const items = calls.data?.items ?? [];
-  const total = calls.data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / VOICE_CALLS_PAGE_SIZE));
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<VoiceCall>({
+          accessorKey: "created_at",
+          labelKey: "channels.calls.when",
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+              {row.original.direction === "inbound" ? (
+                <PhoneIncoming
+                  className="text-muted-foreground size-3.5"
+                  aria-label={t("channels.calls.inbound")}
+                />
+              ) : (
+                <PhoneOutgoing
+                  className="text-muted-foreground size-3.5"
+                  aria-label={t("channels.calls.outbound")}
+                />
+              )}
+              {datetime(row.original.created_at, undefined, locale)}
+            </span>
+          ),
+        }),
+        createColumn<VoiceCall>({
+          accessorKey: "from_number",
+          labelKey: "channels.calls.from",
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <span className="font-mono text-xs">
+              {row.original.from_number || "—"}
+            </span>
+          ),
+        }),
+        createColumn<VoiceCall>({
+          accessorKey: "to_number",
+          labelKey: "channels.calls.to",
+          cell: ({ row }) => (
+            <span className="font-mono text-xs">
+              {row.original.to_number || "—"}
+              {row.original.internal_number && (
+                <span className="text-muted-foreground block">
+                  {t("channels.calls.extension", {
+                    number: row.original.internal_number,
+                  })}
+                </span>
+              )}
+            </span>
+          ),
+        }),
+        createColumn<VoiceCall>({
+          accessorKey: "status",
+          labelKey: "channels.calls.status",
+          cell: ({ row }) => (
+            <div className="flex flex-wrap gap-1">
+              <Badge
+                variant={
+                  FAILED.has(row.original.status) ? "danger" : "secondary"
+                }
+              >
+                {t(`channels.calls.statuses.${row.original.status}`, {
+                  defaultValue: row.original.status,
+                })}
+              </Badge>
+              {row.original.recording_message_uuid ? (
+                <Badge variant="outline">{t("channels.calls.recorded")}</Badge>
+              ) : null}
+            </div>
+          ),
+        }),
+        createColumn<VoiceCall>({
+          accessorKey: "duration_seconds",
+          labelKey: "channels.calls.duration",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => duration(row.original.duration_seconds),
+        }),
+      ] as ColumnDef<VoiceCall, unknown>[],
+    [locale, t],
+  );
 
   return (
     <EntityPage
@@ -55,127 +137,27 @@ export function VoiceCallsPage({ uuid }: { uuid: string }) {
       {channel?.health.detail.startsWith("Bakiye:") && (
         <p className="text-muted-foreground text-sm">{channel.health.detail}</p>
       )}
-      {calls.isError ? (
-        <ErrorState
-          title={t("channels.error")}
-          onRetry={() => void calls.refetch()}
-        />
-      ) : calls.isLoading ? (
-        <Skeleton className="h-64" />
-      ) : items.length === 0 && page === 0 ? (
-        <EmptyState
-          title={t("channels.calls.empty")}
-          description={t("channels.calls.empty_hint")}
-        />
-      ) : (
-        <div className="space-y-3">
-          <Card className="py-0">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[40rem] text-sm">
-                  <thead className="text-muted-foreground border-b text-xs">
-                    <tr>
-                      <th className="px-3 py-2 text-start font-medium">
-                        {t("channels.calls.when")}
-                      </th>
-                      <th className="px-3 py-2 text-start font-medium">
-                        {t("channels.calls.from")}
-                      </th>
-                      <th className="px-3 py-2 text-start font-medium">
-                        {t("channels.calls.to")}
-                      </th>
-                      <th className="px-3 py-2 text-start font-medium">
-                        {t("channels.calls.status")}
-                      </th>
-                      <th className="px-3 py-2 text-end font-medium">
-                        {t("channels.calls.duration")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {items.map((c) => (
-                      <tr key={c.uuid}>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-2">
-                            {c.direction === "inbound" ? (
-                              <PhoneIncoming
-                                className="text-muted-foreground size-3.5"
-                                aria-label={t("channels.calls.inbound")}
-                              />
-                            ) : (
-                              <PhoneOutgoing
-                                className="text-muted-foreground size-3.5"
-                                aria-label={t("channels.calls.outbound")}
-                              />
-                            )}
-                            {datetime(c.created_at, undefined, locale)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs">
-                          {c.from_number || "—"}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs">
-                          {c.to_number || "—"}
-                          {c.internal_number && (
-                            <span className="text-muted-foreground block">
-                              Dahili {c.internal_number}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex flex-wrap gap-1">
-                            <Badge
-                              variant={
-                                FAILED.has(c.status) ? "danger" : "secondary"
-                              }
-                            >
-                              {t(`channels.calls.statuses.${c.status}`, {
-                                defaultValue: c.status,
-                              })}
-                            </Badge>
-                            {c.recording_message_uuid ? (
-                              <Badge variant="outline">
-                                {t("channels.calls.recorded")}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-end tabular-nums">
-                          {duration(c.duration_seconds)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="text-muted-foreground flex items-center justify-between text-xs">
-            <span>{t("channels.calls.total", { count: total })}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page === 0}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                {t("channels.calls.prev")}
-              </Button>
-              <span className="tabular-nums">
-                {page + 1} / {pages}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page + 1 >= pages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                {t("channels.calls.next")}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EntityTable
+        columns={columns}
+        data={calls.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        isLoading={calls.isLoading}
+        isError={calls.isError}
+        errorTitle={t("channels.error")}
+        onRetry={() => void calls.refetch()}
+        emptyTitle={t("channels.calls.empty")}
+        emptyDescription={t("channels.calls.empty_hint")}
+        total={calls.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          persistKey: "tenant-voice-calls-v1",
+          // The endpoint takes `limit` and `offset` only.
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
     </EntityPage>
   );
 }

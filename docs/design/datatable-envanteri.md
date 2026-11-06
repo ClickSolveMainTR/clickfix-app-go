@@ -144,7 +144,7 @@ T10 kapsamındaki ekranlar (her biri ayrı satır olarak taşınır):
 
 | # | Ekran ve rota | Dosya | Bugünkü yapı | Veri | Eksikler | Karar | Efor | Öncelik | Durum |
 |---|---|---|---|---|---|---|---|---|---|
-| T27 | Sesli aramalar `/channels/[uuid]/calls` | `features/channels/components/voice-calls-page.tsx:75` | `EntityPage` + ham tablo; elle önceki/sonraki | Sunucu: sayfa numarası. Binlerce satır | Yön / durum filtresi, sıralama, sayfa boyutu yok | **Taşı**: `EntityTable` | küçük | P2 | |
+| T27 | Sesli aramalar `/channels/[uuid]/calls` | `features/channels/components/voice-calls-page.tsx:75` | `EntityPage` + ham tablo; elle önceki/sonraki | Sunucu: sayfa numarası. Binlerce satır | Yön / durum filtresi, sıralama, sayfa boyutu yok | **Taşı**: `EntityTable` | küçük | P2 | taşındı (PR #66) |
 | T28 | Platform sağlığı `/platform/health` | `features/platform-health/platform-health-page.tsx:243` | `EntityPage` + kuyruk tablosu (8 sayısal sütun) + kanal ve AI sağlayıcı kartları; otomatik yenileme | Tek sağlık özeti; ~10 sabit kuyruk | — | **Kalsın**: izleme panosu, sabit küçük küme | — | — | |
 
 ## 4. `.map` ile elle çizilen listeler: Taşı ve Bileşen eksik
@@ -158,7 +158,7 @@ T10 kapsamındaki ekranlar (her biri ayrı satır olarak taşınır):
 | M05 | Hazır yanıtlar `/replies` | `features/macros/components/replies-page.tsx:115` | Düğme satırları; tıkla → düzenleme diyaloğu | `useCannedResponses()` hepsini çeker; servis `q` destekliyor ama ekran göndermiyor. Onlarca–yüzlerce | Arama, kapsam / kategori filtresi, kullanım sayısına göre sıralama, hata durumu | **Taşı**: `DataTable` istemci modu | orta | P2 | taşındı (PR #59) |
 | M06 | Makrolar `/replies` → Makrolar | `features/macros/components/replies-page.tsx:334` | 2 sütun kart | `useMacros()` hepsini çeker | Arama, yükleniyor, hata durumu | **Taşı**: M05 ile aynı kalıp, tek PR | küçük | P2 | taşındı (PR #59) |
 | M07 | İş akışı çalıştırmaları `/workflows/[uuid]` → Çalıştırmalar | `features/workflows/components/runs-panel.tsx:57` | Tıklanabilir `<li>`; "daha fazla" düğmesi | `workflowsService.runs(uuid, limit, 0)`: düğme `limit`'i büyütüp **baştan tümünü yeniden çekiyor**; 30 sn'de yenileme | Durum filtresi, gerçek sayfalama | **Taşı**: `EntityTable`. Dar yan panelde durduğu için yerleşim kararı PR'da verilir | orta | P2 | taşındı (PR #62): tek sütunlu, araç çubuksuz tablo |
-| M08 | WhatsApp şablonları `/channels` → kanal kartı → diyalog | `features/channels/components/whatsapp-templates-dialog.tsx:100` | `<ul>`; altta yeni şablon formu | `useWhatsAppTemplates`, sayfalama yok; 5–100+ | Arama, durum / kategori / dil filtresi, hata durumu, **silme onayı** (`:127`) | **Taşı**: `DataTable` istemci modu + `EntityDeleteDialog` | orta | P2 | |
+| M08 | WhatsApp şablonları `/channels` → kanal kartı → diyalog | `features/channels/components/whatsapp-templates-dialog.tsx:100` | `<ul>`; altta yeni şablon formu | `useWhatsAppTemplates`, sayfalama yok; 5–100+ | Arama, durum / kategori / dil filtresi, hata durumu, **silme onayı** (`:127`) | **Taşı**: `DataTable` istemci modu + `EntityDeleteDialog` | orta | P2 | taşındı (PR #66): silme onayı eklendi |
 | M09 | API anahtarları `/settings/integrations` | `features/automation-integrations/components/api-keys-tab.tsx:111` | `<ul className="divide-y">` | Servis sabit `limit 100, offset 0`, `total` atılıyor | Durum filtresi, arama, sıralama | **Taşı**: `DataTable` istemci modu | küçük | P2 | taşındı (PR #78): uç sayfaladığı için sunucu modu |
 | M10 | Webhook abonelikleri `/settings/integrations` | `features/automation-integrations/components/hooks-tab.tsx:79` | `<ul className="divide-y">` | Servis sabit `limit 100, offset 0` | Arama, olay filtresi | **Taşı**: M09 ile tek PR | küçük | P2 | taşındı (PR #78): uç sayfaladığı için sunucu modu |
 | M11 | Takım üyeleri `/teams/[uuid]` → Üyeler | `features/teams/components/team-members-tab.tsx:93` | `<li>`; satır içi lider anahtarı | Takım detayındaki `members` dizisi; 3–50 | Arama, sıralama, yetenek filtresi | **Taşı**: `DataTable` istemci modu | küçük | P2 | taşındı (PR #79) |
@@ -272,8 +272,8 @@ CF-179 kuralı gereği tek ekrana özel çözüm çekirdeğe konmaz; aşağıdak
 
 | İşlem | Dosya |
 |---|---|
-| WhatsApp şablonu sil | `channels/components/whatsapp-templates-dialog.tsx:127` |
-| Video kaydı sil; katılımcı çıkar | `video/components/video-room-page.tsx:506`, `:364` |
+| WhatsApp şablonu sil: **onay eklendi (PR #66)** | `channels/components/whatsapp-templates-dialog.tsx` |
+| Video kaydı sil: **onay eklendi (PR #52)**; katılımcı çıkar (hâlâ onaysız) | `video/components/video-room-page.tsx` |
 | Plan geçersiz kılmasını sil | `video/components/platform-video-page.tsx:175` |
 | Tatil sil | `sla/components/sla-settings-page.tsx:553` |
 | Sözleşmeli firmayı kaldır | `sla/components/contracted-companies.tsx:149` |
