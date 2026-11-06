@@ -142,6 +142,7 @@ func Mount(d Deps) (*Runtime, error) {
 	if !internalRouter && d.Resolver != nil {
 		mcpauth.RegisterPublicRoutes(d.Router, oauth, d.Log)
 		mcpauth.RegisterSessionRoutes(d.Router, oauth, d.Tokens, d.Loader, d.Log)
+		mcp.RegisterGuideRoute(d.Router, catalog, oauth, d.Tokens, d.Loader, d.Resolver)
 		mcp.RegisterRoutes(d.Router, mcp.New(mcp.Config{Tokens: oauth, Principals: resolver, Catalog: catalog, Bridge: &mcp.Bridge{API: bridge}, Limiter: limiter, Activity: d.Activity, Log: d.Log}))
 	}
 	if d.Bus != nil && d.Resolver != nil {

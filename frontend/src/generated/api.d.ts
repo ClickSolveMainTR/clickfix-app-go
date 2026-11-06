@@ -13738,6 +13738,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/mcp/guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the MCP connection guide of the member
+         * @description Requires tenant.settings.read (the MCP connect permission). Returns the MCP endpoint and authorization server a client is pointed at and every tool of the organization layer with whether the member gets it in this organization. Write tools are available only with tenant.settings.write and additionally need the mcp:write scope granted on the consent screen. Carries no secret.
+         */
+        get: operations["getV1TenantMcpGuide"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mcp/business": {
         parameters: {
             query?: never;
@@ -25266,6 +25286,23 @@ export interface components {
             url: string;
             events: string[];
             enabled: boolean;
+        };
+        MCPGuide: {
+            /** @description MCP endpoint a client is pointed at. */
+            resource_url: string;
+            /** @description OAuth issuer the client discovers. */
+            authorization_server: string;
+            scopes: string[];
+            /** @description The member may grant mcp:write in this organization. */
+            can_write: boolean;
+            tools: {
+                name: string;
+                description: string;
+                /** @description The tool changes data and needs the mcp:write scope. */
+                write: boolean;
+                /** @description The member's permissions in this organization include the tool. */
+                available: boolean;
+            }[];
         };
         IntegrationEnvelope: {
             success: boolean;
@@ -58527,6 +58564,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getV1TenantMcpGuide: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["MCPGuide"];
+                        meta?: {
+                            request_id?: string;
+                        };
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
