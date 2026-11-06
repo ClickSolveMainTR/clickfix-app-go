@@ -51,6 +51,7 @@ export function RulesPage() {
         createColumn<Rule>({
           accessorKey: "position",
           labelKey: "rules.columns.position",
+          searchable: false,
           cell: ({ row }) => (
             <span className="text-muted-foreground text-xs tabular-nums">
               {row.original.position}
@@ -86,7 +87,7 @@ export function RulesPage() {
           accessorFn: (row) => row.actions.length,
           labelKey: "rules.columns.logic",
           enableSorting: false,
-          enableGlobalFilter: false,
+          searchable: false,
           cell: ({ row }) => {
             const r = row.original;
             return (
@@ -109,7 +110,7 @@ export function RulesPage() {
         createColumn<Rule>({
           accessorKey: "enabled",
           labelKey: "rules.columns.enabled",
-          enableGlobalFilter: false,
+          searchable: false,
           cell: ({ row }) => (
             <RuleToggle rule={row.original} canWrite={canWrite} />
           ),
@@ -117,7 +118,7 @@ export function RulesPage() {
         createColumn<Rule>({
           accessorKey: "updated_at",
           labelKey: "rules.columns.updated",
-          enableGlobalFilter: false,
+          searchable: false,
           cell: ({ row }) => (
             <span className="text-muted-foreground text-xs">
               {datetime(row.original.updated_at, "dd.MM.yyyy HH:mm", locale)}
@@ -326,6 +327,7 @@ function RunLog({ rules }: { rules: Rule[] }) {
       emptyDescription={t("rules.log.empty")}
       total={log.data?.total ?? 0}
       state={listState.tableState}
+      pageSizeOptions={[25, 50, 100]}
       features={{
         persistKey: "tenant-automation-log-v1",
         // The endpoint takes `limit` and `offset` only.
