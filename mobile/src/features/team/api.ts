@@ -15,6 +15,9 @@ export type Thread = components['schemas']['InternalThread'];
 export type ThreadMessage = components['schemas']['InternalMessage'];
 export type OncallRota = components['schemas']['OncallRota'];
 export type OncallAlert = components['schemas']['OncallAlert'];
+export type Team = components['schemas']['Team'];
+export type TeamMember = components['schemas']['TeamMember'];
+export type TeamRole = TeamMember['role'];
 
 export const teamKeys = {
   all: (org: string) => orgKey(org, 'team'),
@@ -24,6 +27,8 @@ export const teamKeys = {
   rotas: (org: string) => [...teamKeys.all(org), 'rotas'] as const,
   current: (org: string, uuid: string) => [...teamKeys.all(org), 'oncall', uuid] as const,
   alerts: (org: string) => [...teamKeys.all(org), 'alerts'] as const,
+  team: (org: string, uuid: string) => [...teamKeys.all(org), 'teams', uuid] as const,
+  skills: (org: string) => [...teamKeys.all(org), 'skills'] as const,
 };
 
 export function useTeamPresence() {
@@ -174,4 +179,98 @@ export function useAcknowledgeAlert() {
       ),
     onSettled: () => void qc.invalidateQueries({ queryKey: teamKeys.alerts(org) }),
   });
+}
+
+/**
+ * Team management (CF-166), the phone version of the panel's Teams pages
+ * (`frontend/src/features/teams`): `/v1/tenant/teams`. The list itself is
+ * `useTeams` (`features/inbox/api.ts`), the one the pickers already read.
+ */
+export function useTeam(uuid: string) {
+  const org = useOrgSlug();
+  const can = useCan();
+  return useQuery({
+    queryKey: teamKeys.team(org, uuid),
+    enabled: !!org && !!uuid && can(P.teamsRead),
+    staleTime: 30_000,
+    queryFn: () => unwrap(api.GET('/v1/tenant/teams/{uuid}', { params: { header: orgHeader(), path: { uuid } } })),
+  });
+}
+
+/** Skill tags used in the organization (suggestions for the team form). */
+export function useSkillCatalog(enabled: boolean) {
+  const org = useOrgSlug();
+  const can = useCan();
+  return useQuery({
+    queryKey: teamKeys.skills(org),
+    enabled: !!org && enabled && can(P.teamsRead),
+    staleTime: 60_000,
+    queryFn: () => unwrap(api.GET('/v1/tenant/skills', { params: { header: orgHeader() } })),
+  });
+}
+
+/**
+ * Team writes (`tenant.teams.write`). Each one stores the returned team and
+ * refreshes every team list in the app: the management list and the pickers
+ * (`useTeams`), a member's teams and "my shift" all carry `'teams'` or
+ * `'member-teams'` in their key.
+ */
+export function useTeamMutations() {
+  const org = useOrgSlug();
+  const qc = useQueryClient();
+  const header = () => ({ header: orgHeader() });
+  // `skip`: the team whose detail is already fresh (just stored) or gone (deleted, so a refetch would 404).
+  const refresh = (team?: Team, skip = team?.uuid) => {
+    if (team) qc.setQueryData(teamKeys.team(org, team.uuid), team);
+    void qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey.includes(org) &&
+        (q.queryKey.includes('teams') || q.queryKey.includes('member-teams')) &&
+        !(skip && q.queryKey.includes(skip)),
+    });
+    void qc.invalidateQueries({ queryKey: teamKeys.skills(org) });
+  };
+  return {
+    create: useMutation({
+      mutationFn: (body: components['schemas']['TeamInput']) =>
+        unwrap(api.POST('/v1/tenant/teams', { params: header(), body })),
+      onSuccess: (team) => refresh(team),
+    }),
+    update: useMutation({
+      mutationFn: (v: { uuid: string; body: components['schemas']['TeamInput'] }) =>
+        unwrap(api.PATCH('/v1/tenant/teams/{uuid}', { params: { ...header(), path: { uuid: v.uuid } }, body: v.body })),
+      onSuccess: (team) => refresh(team),
+    }),
+    remove: useMutation({
+      mutationFn: (uuid: string) =>
+        unwrap(api.DELETE('/v1/tenant/teams/{uuid}', { params: { ...header(), path: { uuid } } })),
+      onSuccess: (_data, uuid) => refresh(undefined, uuid),
+    }),
+    /** Adds the users in order, or changes one member's role; the last answer is the team. */
+    setMembers: useMutation({
+      mutationFn: async (v: { uuid: string; users: string[]; role: TeamRole }) => {
+        let team: Team | undefined;
+        for (const userUuid of v.users)
+          team = await unwrap(
+            api.PUT('/v1/tenant/teams/{uuid}/members/{userUuid}', {
+              params: { ...header(), path: { uuid: v.uuid, userUuid } },
+              body: { role: v.role },
+            }),
+          );
+        return team;
+      },
+      onSuccess: (team) => refresh(team),
+      // Some of several adds may have gone through: the team, its member count and every list are read again.
+      onError: () => refresh(undefined, ''),
+    }),
+    removeMember: useMutation({
+      mutationFn: (v: { uuid: string; userUuid: string }) =>
+        unwrap(
+          api.DELETE('/v1/tenant/teams/{uuid}/members/{userUuid}', {
+            params: { ...header(), path: { uuid: v.uuid, userUuid: v.userUuid } },
+          }),
+        ),
+      onSuccess: (team) => refresh(team),
+    }),
+  };
 }

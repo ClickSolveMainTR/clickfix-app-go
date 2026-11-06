@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { DataTablePagination } from "@/components/tables/data-table-pagination";
 import { DataTableToolbar } from "@/components/tables/data-table-toolbar";
 import { GridView } from "@/components/tables/grid-view";
-import { pageIndexAfterEmptyPage } from "@/components/tables/pagination-summary";
+import { tableEmptyPageFallback } from "@/components/tables/empty-page";
 import { createReorderColumnDef } from "@/components/tables/reorder-column";
 import { reorderRowsById } from "@/components/tables/reorder-rows";
 import { TableView } from "@/components/tables/table-view";
@@ -22,6 +22,7 @@ export function DataTable<TData>({
   data,
   getRowId,
   isLoading,
+  errorState,
   emptyTitle,
   emptyDescription,
   features,
@@ -43,6 +44,7 @@ export function DataTable<TData>({
 }: DataTableProps<TData>) {
   const { t } = useLocale();
   const isMobile = useIsMobile();
+  const rowHintId = useId();
   const [reorderModeRequested, setReorderModeRequested] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     rowId: string;
@@ -89,17 +91,17 @@ export function DataTable<TData>({
     rowCount,
   });
 
-  // Server mode: an empty page past the first one (last row deleted, list
-  // shrank on refresh) has no rows and so no pagination; step back.
-  const { pageIndex, pageSize } = table.getState().pagination;
-  const fallbackPageIndex = pageIndexAfterEmptyPage({
-    manual: Boolean(manual?.pagination),
-    isLoading: Boolean(isLoading),
-    pageIndex,
-    pageSize,
-    pageRows: data.length,
-    rowCount,
-  });
+  // An empty page past the first one (last row deleted, list shrank on
+  // refresh) has no rows and so no pagination; step back to the last page
+  // that has rows. Server mode counts what the server sent, client mode what
+  // is left after filtering.
+  const fallbackPageIndex = resolvedFeatures.pagination
+    ? tableEmptyPageFallback(table, {
+        busy: Boolean(isLoading) || Boolean(errorState),
+        serverRows: data.length,
+        serverRowCount: rowCount,
+      })
+    : null;
   useEffect(() => {
     if (fallbackPageIndex !== null) table.setPageIndex(fallbackPageIndex);
   }, [fallbackPageIndex, table]);
@@ -117,27 +119,6 @@ export function DataTable<TData>({
 
   const toolbarNode: ReactNode =
     typeof toolbar === "function" ? toolbar(table) : toolbar;
-
-  if (isLoading) {
-    return (
-      <div className={cn("space-y-3", className)}>
-        <Skeleton className="h-9 w-full max-w-sm" />
-        {forceMobileCards || displayMode === "grid" ? (
-          <div className="grid grid-cols-1 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-36 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   const filteredCount = table.getFilteredRowModel().rows.length;
   const hasRows = table.getRowModel().rows.length > 0;
@@ -199,7 +180,31 @@ export function DataTable<TData>({
         </p>
       ) : null}
 
-      {displayMode === "grid" ? (
+      {onRowClick ? (
+        <span id={rowHintId} className="sr-only">
+          {t("table.row_open_hint")}
+        </span>
+      ) : null}
+
+      {errorState ? (
+        errorState
+      ) : isLoading ? (
+        // The toolbar above stays mounted: the search box and the filters
+        // keep their focus while the rows load.
+        displayMode === "grid" ? (
+          <div className="grid grid-cols-1 gap-3" aria-busy="true">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-36 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2" aria-busy="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        )
+      ) : displayMode === "grid" ? (
         emptyMessage && !hasRows ? (
           <div className="space-y-3">
             <EmptyState
@@ -213,6 +218,7 @@ export function DataTable<TData>({
             renderGridItem={renderGridItem}
             mobile={forceMobileCards}
             onRowClick={reorderMode ? undefined : onRowClick}
+            rowHintId={rowHintId}
           />
         )
       ) : (
@@ -240,10 +246,15 @@ export function DataTable<TData>({
           onEditingCellChange={setEditingCell}
           onCellEdit={onCellEdit}
           onRowClick={reorderMode ? undefined : onRowClick}
+          rowHintId={rowHintId}
         />
       )}
 
-      {resolvedFeatures.pagination && hasRows && !reorderMode ? (
+      {resolvedFeatures.pagination &&
+      hasRows &&
+      !reorderMode &&
+      !isLoading &&
+      !errorState ? (
         <DataTablePagination
           table={table}
           pageSizeOptions={pageSizeOptions}

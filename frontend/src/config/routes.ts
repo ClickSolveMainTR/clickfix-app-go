@@ -149,6 +149,13 @@ export const routes = {
       sla: "/settings/sla",
       /** API keys and REST hooks for Zapier / Make / n8n (CF-97). */
       integrations: "/settings/integrations",
+      /** Jira / Linear / GitHub connections of product requests (CF-160). */
+      engineering: {
+        root: "/settings/engineering",
+        /** OAuth return leg; this path is the provider's redirect URI. */
+        callback: (provider: string) =>
+          `/settings/engineering/callback/${encodeURIComponent(provider)}`,
+      },
       video: "/settings/video",
       customerHealth: "/settings/customer-health",
       roles: {

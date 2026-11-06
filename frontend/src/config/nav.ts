@@ -37,6 +37,7 @@ import {
   LogIn,
   Megaphone,
   MessageCircle,
+  GitPullRequest,
   Palette,
   Plug,
   ScrollText,
@@ -710,6 +711,13 @@ export const cmsNav = defineNav({
             permissions.tenant.settings.write,
             permissions.tenant.channels.read,
           ],
+        },
+        {
+          id: "settings-engineering",
+          titleKey: "layout.nav_tenant_settings_engineering",
+          href: routes.cms.settings.engineering.root,
+          icon: GitPullRequest,
+          permission: permissions.tenant.settings.write,
         },
         {
           id: "settings-video",
