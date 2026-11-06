@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/common/empty-state";
 import { DataTablePagination } from "@/components/tables/data-table-pagination";
 import { DataTableToolbar } from "@/components/tables/data-table-toolbar";
 import { GridView } from "@/components/tables/grid-view";
+import { pageIndexAfterEmptyPage } from "@/components/tables/pagination-summary";
 import { createReorderColumnDef } from "@/components/tables/reorder-column";
 import { reorderRowsById } from "@/components/tables/reorder-rows";
 import { TableView } from "@/components/tables/table-view";
@@ -86,6 +87,21 @@ export function DataTable<TData>({
     pageCount,
     rowCount,
   });
+
+  // Server mode: an empty page past the first one (last row deleted, list
+  // shrank on refresh) has no rows and so no pagination; step back.
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const fallbackPageIndex = pageIndexAfterEmptyPage({
+    manual: Boolean(manual?.pagination),
+    isLoading: Boolean(isLoading),
+    pageIndex,
+    pageSize,
+    pageRows: data.length,
+    rowCount,
+  });
+  useEffect(() => {
+    if (fallbackPageIndex !== null) table.setPageIndex(fallbackPageIndex);
+  }, [fallbackPageIndex, table]);
 
   const forceMobileCards =
     isMobile && resolvedFeatures.mobileAutoCards !== false;
