@@ -1,16 +1,25 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Check, Copy, KeyRound, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
 import { StatusChip } from "@/components/common/status-chip";
 import { AppDialog } from "@/components/dialogs/app-dialog";
 import { DeleteDialog } from "@/components/dialogs/delete-dialog";
+import {
+  EntityRowActions,
+  EntityTable,
+  useServerListState,
+} from "@/components/entity";
 import { FormActions } from "@/components/forms/form-actions";
+import { createColumn } from "@/components/tables";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,9 +57,12 @@ export function ApiKeysTab({ slug }: { slug: string }) {
   const qc = useQueryClient();
   const onError = useIntegrationsError();
   const key = ["tenant", slug, "api-keys"] as const;
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
   const keys = useQuery({
-    queryKey: key,
-    queryFn: () => automationIntegrationsService.keys(slug),
+    queryKey: [...key, limit, offset],
+    queryFn: () => automationIntegrationsService.keys(slug, limit, offset),
+    placeholderData: keepPreviousData,
   });
   const [creating, setCreating] = useState(false);
   const [issued, setIssued] = useState<IssuedIntegrationKey | null>(null);
@@ -78,16 +90,111 @@ export function ApiKeysTab({ slug }: { slug: string }) {
     onError,
   });
 
-  if (keys.isLoading) return <Loading label={t("common.loading")} />;
-  if (keys.isError)
-    return (
-      <ErrorState
-        title={t("automation_integrations.error.title")}
-        description={t("automation_integrations.error.description")}
-        onRetry={() => void keys.refetch()}
-      />
-    );
-  const items = keys.data ?? [];
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<IntegrationKey>({
+          accessorKey: "name",
+          labelKey: "automation_integrations.keys.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{row.original.name}</span>
+              <code className="bg-muted rounded px-1.5 py-0.5 text-xs font-normal">
+                {row.original.key_prefix}…
+              </code>
+            </div>
+          ),
+        }),
+        createColumn<IntegrationKey>({
+          id: "status",
+          accessorFn: (row) => row.revoked_at ?? "",
+          labelKey: "automation_integrations.keys.columns.status",
+          cell: ({ row }) => {
+            const k = row.original;
+            const expired =
+              k.expires_at !== null && Date.parse(k.expires_at) <= now;
+            return k.revoked_at ? (
+              <StatusChip
+                label={t("automation_integrations.keys.status.revoked")}
+                tone="danger"
+              />
+            ) : expired ? (
+              <StatusChip
+                label={t("automation_integrations.keys.status.expired")}
+                tone="warning"
+              />
+            ) : (
+              <StatusChip
+                label={t("automation_integrations.keys.status.active")}
+                tone="success"
+              />
+            );
+          },
+        }),
+        createColumn<IntegrationKey>({
+          id: "scopes",
+          accessorFn: (row) => row.scopes.join(" "),
+          labelKey: "automation_integrations.keys.scopes",
+          cell: ({ row }) => (
+            <div className="flex flex-wrap gap-1">
+              {row.original.scopes.map((s) => (
+                <Badge key={s} variant="outline" className="font-mono">
+                  {s}
+                </Badge>
+              ))}
+            </div>
+          ),
+        }),
+        createColumn<IntegrationKey>({
+          id: "usage",
+          accessorFn: (row) => row.last_used_at ?? "",
+          labelKey: "automation_integrations.keys.columns.usage",
+          cell: ({ row }) => {
+            const k = row.original;
+            return (
+              <span className="text-muted-foreground text-xs">
+                {t("automation_integrations.keys.rate", {
+                  count: k.rate_limit,
+                })}
+                {" · "}
+                {k.last_used_at
+                  ? t("automation_integrations.keys.last_used", {
+                      time: relativeDatetime(k.last_used_at, locale),
+                    })
+                  : t("automation_integrations.keys.never_used")}
+                {k.expires_at &&
+                  ` · ${t("automation_integrations.keys.expires", {
+                    date: datetime(k.expires_at, "dd.MM.yyyy", locale),
+                  })}`}
+              </span>
+            );
+          },
+        }),
+        createColumn<IntegrationKey>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-right" },
+          cell: ({ row }) =>
+            row.original.revoked_at ? null : (
+              <EntityRowActions
+                actions={[
+                  {
+                    id: "revoke",
+                    label: t("automation_integrations.keys.revoke"),
+                    icon: Trash2,
+                    variant: "destructive",
+                    onSelect: () => setRevoking(row.original),
+                  },
+                ]}
+              />
+            ),
+        }),
+      ] as ColumnDef<IntegrationKey, unknown>[],
+    [locale, now, t],
+  );
 
   return (
     <div className="space-y-4">
@@ -100,80 +207,28 @@ export function ApiKeysTab({ slug }: { slug: string }) {
           {t("automation_integrations.keys.new")}
         </Button>
       </div>
-      {items.length === 0 ? (
-        <EmptyState
-          icon={<KeyRound className="size-6" />}
-          title={t("automation_integrations.keys.empty_title")}
-          description={t("automation_integrations.keys.empty_description")}
-        />
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {items.map((k) => {
-            const expired =
-              k.expires_at !== null && Date.parse(k.expires_at) <= now;
-            return (
-              <li key={k.uuid} className="flex flex-wrap items-start gap-3 p-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{k.name}</span>
-                    <code className="bg-muted rounded px-1.5 py-0.5 text-xs">
-                      {k.key_prefix}…
-                    </code>
-                    {k.revoked_at ? (
-                      <StatusChip
-                        label={t("automation_integrations.keys.status.revoked")}
-                        tone="danger"
-                      />
-                    ) : expired ? (
-                      <StatusChip
-                        label={t("automation_integrations.keys.status.expired")}
-                        tone="warning"
-                      />
-                    ) : (
-                      <StatusChip
-                        label={t("automation_integrations.keys.status.active")}
-                        tone="success"
-                      />
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {k.scopes.map((s) => (
-                      <Badge key={s} variant="outline" className="font-mono">
-                        {s}
-                      </Badge>
-                    ))}
-                  </div>
-                  <p className="text-muted-foreground text-xs">
-                    {t("automation_integrations.keys.rate", {
-                      count: k.rate_limit,
-                    })}
-                    {" · "}
-                    {k.last_used_at
-                      ? t("automation_integrations.keys.last_used", {
-                          time: relativeDatetime(k.last_used_at, locale),
-                        })
-                      : t("automation_integrations.keys.never_used")}
-                    {k.expires_at &&
-                      ` · ${t("automation_integrations.keys.expires", {
-                        date: datetime(k.expires_at, "dd.MM.yyyy", locale),
-                      })}`}
-                  </p>
-                </div>
-                {!k.revoked_at && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("automation_integrations.keys.revoke")}
-                    onClick={() => setRevoking(k)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <EntityTable
+        columns={columns}
+        data={keys.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        isLoading={keys.isLoading}
+        isError={keys.isError}
+        errorTitle={t("automation_integrations.error.title")}
+        errorDescription={t("automation_integrations.error.description")}
+        onRetry={() => void keys.refetch()}
+        emptyTitle={t("automation_integrations.keys.empty_title")}
+        emptyDescription={t("automation_integrations.keys.empty_description")}
+        total={keys.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          persistKey: "tenant-api-keys-v1",
+          // The endpoint takes `limit` and `offset` only.
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
 
       {creating && (
         <KeyDialog
