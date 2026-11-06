@@ -11,5 +11,12 @@
   "incidents.banner_one": "There is an ongoing incident",
   "incidents.banner_many_one": "{{count}} ongoing incident",
   "incidents.banner_many_other": "{{count}} ongoing incidents",
-  "incidents.open_hint": "Opens the incident details"
+  "incidents.open_hint": "Opens the incident details",
+  "workforce.days_one": "{{count}} day",
+  "workforce.days_other": "{{count}} days",
+  "workforce.last_days_one": "Last {{count}} day",
+  "workforce.last_days_other": "Last {{count}} days",
+  "workforce.model": "This view uses the panel's default parameters: answer {{target}}% of conversations within {{wait}} s with a {{handle}} s average handle time. Parameters and the channel and team filters are changed on the panel.",
+  "workforce.no_timesheets": "Timesheets require permission to manage schedules. Ask your organization admin for access.",
+  "workforce.agent_not_found": "No record found for this agent in this range."
 }
