@@ -331,7 +331,7 @@ func (s *Service) Complete(ctx context.Context, id uuid.UUID, state, code, proto
 		clone := r.Clone(ctx)
 		u := sp.AcsURL
 		clone.URL = &u
-		assertion, e := sp.ParseResponse(clone, []string{stored.RequestID})
+		assertion, e := parseSAMLResponse(sp, clone, []string{stored.RequestID})
 		if e != nil || assertion.Subject == nil || assertion.Subject.NameID == nil {
 			return Token{}, ErrDenied
 		}
