@@ -30,6 +30,7 @@ const WEB = {
   calendar: 'calendar',
   appointments: 'appointments',
   workforce: 'workforce',
+  coaching: 'coaching',
 };
 const WEB_NS = Object.values(WEB);
 
