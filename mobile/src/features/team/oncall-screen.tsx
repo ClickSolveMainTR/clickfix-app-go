@@ -10,7 +10,7 @@ import { Button } from '@/ui/button';
 import { Card } from '@/ui/card';
 import { EmptyState } from '@/ui/empty-state';
 import { Icon } from '@/ui/icon';
-import { SectionHeader } from '@/ui/list';
+import { List, ListRow, SectionHeader } from '@/ui/list';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 import { QueryState } from '@/ui/query-state';
 import { Screen } from '@/ui/screen';
@@ -24,6 +24,7 @@ import {
   useAcknowledgeAlert,
   useOncallAlerts,
   useOncallNow,
+  useOncallScope,
   useRotas,
 } from './api';
 import { useMemberNames } from './names';
@@ -73,8 +74,43 @@ export function OncallScreen() {
             )
           }
         </QueryState>
+        <SetupLinks />
       </Screen>
     </>
+  );
+}
+
+/**
+ * Read-only views of the on-call setup (CF-168): escalation policies, uptime
+ * monitors and status components. A row is listed only for a member who may
+ * read what it opens.
+ */
+function SetupLinks() {
+  const { t } = useTranslation('team');
+  const { canSetup, canComponents } = useOncallScope();
+  const rows = [
+    { key: 'policies', icon: 'alert', to: '/more/oncall-policies', show: canSetup },
+    { key: 'monitors', icon: 'chart', to: '/more/oncall-monitors', show: canSetup },
+    { key: 'components', icon: 'check', to: '/more/status-components', show: canComponents },
+  ] as const;
+  const shown = rows.filter((r) => r.show);
+  if (!shown.length) return null;
+  return (
+    <View>
+      <SectionHeader title={t('setup.title')} />
+      <List>
+        {shown.map((r, i) => (
+          <ListRow
+            key={r.key}
+            icon={r.icon}
+            title={t(`setup.${r.key}`)}
+            subtitle={t(`setup.${r.key}_hint`)}
+            onPress={() => router.push(r.to)}
+            last={i === shown.length - 1}
+          />
+        ))}
+      </List>
+    </View>
   );
 }
 
