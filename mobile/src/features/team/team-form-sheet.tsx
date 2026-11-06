@@ -11,9 +11,11 @@ import { type Team, useSkillCatalog, useTeamMutations } from './api';
 import {
   addSkills,
   type DayRow,
+  type FormErrorKey,
   formErrors,
   formOf,
   sameForm,
+  serverErrors,
   type TeamForm,
   timeZones,
   toRequest,
@@ -45,8 +47,8 @@ export function TeamFormSheet({
   const [form, setForm] = useState<TeamForm>(() => formOf(team));
   const [draft, setDraft] = useState('');
   const [skillError, setSkillError] = useState<'skill' | 'too_many_skills' | null>(null);
-  // API field errors (`name`, `skills.1`, `working_hours.days.2.end`), shown until the next edit.
-  const [server, setServer] = useState<Record<string, string>>({});
+  // API field errors by code (`serverErrors`), shown translated until the next edit.
+  const [server, setServer] = useState<Record<string, FormErrorKey>>({});
 
   // The form is filled each time the sheet opens (state adjusted while rendering, no effect).
   const opened = visible ? `${team?.uuid ?? 'new'}:${team?.updated_at ?? ''}` : '';
@@ -71,12 +73,16 @@ export function TeamFormSheet({
   const errors = formErrors(form);
   const error = (key: string) => (errors[key] ? t(`manage.validation.${errors[key]}`) : undefined);
   const busy = m.create.isPending || m.update.isPending || m.remove.isPending;
+  const serverError = (key: string) => (server[key] ? t(`manage.validation.${server[key]}`) : undefined);
   const fail = (e: unknown) => {
-    // 409 CONFLICT on `name`: another team of the organization has it.
-    const taken = isApiError(e) && e.status === 409 && !!e.fieldErrors().name;
-    if (taken) setServer({ name: t('manage.name_taken') });
-    else if (isApiError(e)) setServer(e.fieldErrors());
-    toast.error(taken ? t('manage.name_taken') : errorMessage(isApiError(e) ? e.code : undefined));
+    // A taken name comes as a field error (400 `name` / `taken`, or 409 in a race); the code picks the text.
+    const fields = isApiError(e) ? serverErrors(e.details) : {};
+    setServer(fields);
+    toast.error(
+      fields.name === 'name_taken'
+        ? t('manage.validation.name_taken')
+        : errorMessage(isApiError(e) ? e.code : undefined),
+    );
   };
 
   const addSkill = () => {
@@ -137,7 +143,7 @@ export function TeamFormSheet({
             placeholder: '09:00',
             value: d.start,
             onChange: (start) => setDay(i, { start: start.trim() }),
-            error: error(`days.${i}.start`) ?? server[`working_hours.days.${i}.start`],
+            error: error(`days.${i}.start`) ?? serverError(`days.${i}.start`),
           },
           {
             key: `end-${d.day}`,
@@ -146,7 +152,7 @@ export function TeamFormSheet({
             placeholder: '18:00',
             value: d.end,
             onChange: (end) => setDay(i, { end: end.trim() }),
-            error: error(`days.${i}.end`) ?? server[`working_hours.days.${i}.end`],
+            error: error(`days.${i}.end`) ?? serverError(`days.${i}.end`),
           },
         ] satisfies FormField[])
       : []),
@@ -163,7 +169,7 @@ export function TeamFormSheet({
           value: form.name,
           onChange: (name) => set({ name }),
           // An untouched new form does not open with an error under the name.
-          error: (form.name ? error('name') : undefined) ?? server.name,
+          error: (form.name ? error('name') : undefined) ?? serverError('name'),
         },
         {
           key: 'description',
@@ -172,7 +178,7 @@ export function TeamFormSheet({
           value: form.description,
           onChange: (description) => set({ description }),
           multiline: true,
-          error: error('description') ?? server.description,
+          error: error('description') ?? serverError('description'),
         },
         {
           key: 'color',
@@ -181,7 +187,7 @@ export function TeamFormSheet({
           placeholder: '#2563EB',
           value: form.color,
           onChange: (color) => set({ color: color.trim().slice(0, 7) }),
-          error: error('color') ?? server.color,
+          error: error('color') ?? serverError('color'),
         },
       ],
       footer: t('manage.color_hint'),
@@ -201,7 +207,7 @@ export function TeamFormSheet({
                   set({ skills: [...skills].sort((a, b) => a.localeCompare(b)) });
                   setSkillError(null);
                 },
-                error: error('skills') ?? server.skills,
+                error: error('skills') ?? serverError('skills'),
               },
             ]
           : []),
@@ -249,7 +255,7 @@ export function TeamFormSheet({
                   ...timeZones(form.timezone).map((zone) => ({ value: zone, label: zone })),
                 ],
                 onChange: (timezone: string) => set({ timezone }),
-                error: server.timezone,
+                error: serverError('timezone'),
               },
             ]),
       ],

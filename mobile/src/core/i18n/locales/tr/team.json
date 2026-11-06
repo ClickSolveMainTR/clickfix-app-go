@@ -93,7 +93,6 @@
   "manage.validation.too_many_skills": "En fazla 30 beceri eklenebilir.",
   "manage.validation.time": "SS:DD biçiminde bir saat girin.",
   "manage.validation.end_after_start": "Bitiş saati başlangıçtan sonra olmalı.",
-  "manage.name_taken": "Bu adda bir ekip zaten var.",
   "manage.created": "Ekip oluşturuldu.",
   "manage.updated": "Ekip güncellendi.",
   "manage.deleted": "Ekip silindi.",
@@ -120,5 +119,9 @@
   "manage.add_empty": "Eklenebilecek üye yok.",
   "manage.add_no_permission": "Organizasyon üyelerini görme yetkiniz olmadığı için üye ekleyemezsiniz.",
   "manage.members_added_one": "{{count}} üye eklendi.",
-  "manage.members_added_other": "{{count}} üye eklendi."
+  "manage.members_added_other": "{{count}} üye eklendi.",
+  "manage.validation.name_taken": "Bu adda bir ekip zaten var.",
+  "manage.validation.timezone": "Geçerli bir saat dilimi seçin.",
+  "manage.validation.end_invalid": "Bitiş saati SS:DD biçiminde ve başlangıçtan sonra olmalı.",
+  "manage.validation.server": "Bu alan kabul edilmedi. Değeri kontrol edip yeniden deneyin."
 }

@@ -93,7 +93,6 @@
   "manage.validation.too_many_skills": "At most 30 skills can be added.",
   "manage.validation.time": "Enter a time as HH:MM.",
   "manage.validation.end_after_start": "The end time must be after the start time.",
-  "manage.name_taken": "A team with this name already exists.",
   "manage.created": "Team created.",
   "manage.updated": "Team updated.",
   "manage.deleted": "Team deleted.",
@@ -120,5 +119,9 @@
   "manage.add_empty": "No members left to add.",
   "manage.add_no_permission": "You cannot add members because you do not have permission to see the organization's members.",
   "manage.members_added_one": "{{count}} member added.",
-  "manage.members_added_other": "{{count}} members added."
+  "manage.members_added_other": "{{count}} members added.",
+  "manage.validation.name_taken": "A team with this name already exists.",
+  "manage.validation.timezone": "Pick a valid time zone.",
+  "manage.validation.end_invalid": "The end time must be HH:MM and after the start time.",
+  "manage.validation.server": "This field was not accepted. Check the value and try again."
 }

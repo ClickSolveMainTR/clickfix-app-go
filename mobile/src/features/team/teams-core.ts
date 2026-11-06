@@ -71,7 +71,13 @@ export type TeamRequest = {
   working_hours?: { days: DayRow[] };
 };
 
-/** Form → request. `inherit_hours` drops the team's own hours and time zone. */
+/**
+ * Form → request. `inherit_hours` drops the team's own hours and time zone.
+ * Otherwise the time zone is always sent: `''` clears it (the organization's
+ * applies), while leaving it out would keep the old one on a patch. A closed
+ * day's hours are not shown in the form, so a half-typed value there goes
+ * out as the default instead of failing the API's `HH:MM` check.
+ */
 export function toRequest(form: TeamForm): TeamRequest {
   const base = {
     name: form.name.trim(),
@@ -82,18 +88,35 @@ export function toRequest(form: TeamForm): TeamRequest {
   if (form.inherit_hours) return { ...base, inherit_hours: true };
   return {
     ...base,
-    working_hours: { days: form.days },
-    ...(form.timezone ? { timezone: form.timezone } : {}),
+    working_hours: {
+      days: form.days.map((d) =>
+        d.open
+          ? d
+          : { ...d, start: TIME_RE.test(d.start) ? d.start : '09:00', end: TIME_RE.test(d.end) ? d.end : '18:00' },
+      ),
+    },
+    timezone: form.timezone,
   };
 }
 
 export type FormErrorKey =
-  'name_required' | 'name_too_long' | 'description_too_long' | 'color' | 'too_many_skills' | 'time' | 'end_after_start';
+  | 'name_required'
+  | 'name_too_long'
+  | 'name_taken'
+  | 'description_too_long'
+  | 'color'
+  | 'skill'
+  | 'too_many_skills'
+  | 'timezone'
+  | 'time'
+  | 'end_after_start'
+  | 'end_invalid'
+  | 'server';
 
 /**
  * Field → error key; empty when the API would accept the form. Day rows use
  * `days.<index>.start` / `days.<index>.end`. Hours are only checked when the
- * team keeps its own.
+ * team keeps its own, and only for the days it is open.
  */
 export function formErrors(form: TeamForm): Record<string, FormErrorKey> {
   const out: Record<string, FormErrorKey> = {};
@@ -106,11 +129,13 @@ export function formErrors(form: TeamForm): Record<string, FormErrorKey> {
   if (form.skills.length > MAX_SKILLS) out.skills = 'too_many_skills';
   if (!form.inherit_hours)
     form.days.forEach((d, i) => {
+      // A closed day's hours are hidden; `toRequest` sends valid ones for it.
+      if (!d.open) return;
       const start = TIME_RE.test(d.start);
       const end = TIME_RE.test(d.end);
       if (!start) out[`days.${i}.start`] = 'time';
       if (!end) out[`days.${i}.end`] = 'time';
-      else if (d.open && start && d.end <= d.start) out[`days.${i}.end`] = 'end_after_start';
+      else if (start && d.end <= d.start) out[`days.${i}.end`] = 'end_after_start';
     });
   return out;
 }
@@ -119,9 +144,53 @@ export function sameForm(a: TeamForm, b: TeamForm) {
   return JSON.stringify(toRequest(a)) === JSON.stringify(toRequest(b)) && a.inherit_hours === b.inherit_hours;
 }
 
-/** Same normalization as the API: trimmed and lower-cased. */
+type ServerDetail = { field?: string | null; code?: string | null };
+
+/**
+ * API field errors (`service.go`, `validate`) → the form's field and error
+ * key, by the error CODE: the API's message is English and is never shown.
+ * `skills.<n>` lands on `skills`, `working_hours.days.<n>.end` on
+ * `days.<n>.end`. A code the app does not know becomes `server`, a general
+ * "not accepted" message.
+ */
+export function serverErrors(details: ServerDetail[] | null | undefined): Record<string, FormErrorKey> {
+  const out: Record<string, FormErrorKey> = {};
+  for (const d of details ?? []) {
+    const raw = d.field ?? '';
+    if (!raw) continue;
+    const field = raw.startsWith('skills') ? 'skills' : raw.replace(/^working_hours\./, '');
+    const code = d.code ?? '';
+    let key: FormErrorKey = 'server';
+    if (field === 'name') key = code === 'taken' ? 'name_taken' : code === 'required' ? 'name_required' : 'server';
+    else if (field === 'description' && code === 'too_long') key = 'description_too_long';
+    else if (field === 'color' && code === 'invalid') key = 'color';
+    else if (field === 'timezone' && code === 'invalid') key = 'timezone';
+    else if (field === 'skills')
+      key = code === 'too_many' ? 'too_many_skills' : code === 'invalid' ? 'skill' : 'server';
+    else if (/^days\.\d+\.start$/.test(field) && code === 'invalid') key = 'time';
+    else if (/^days\.\d+\.end$/.test(field) && code === 'invalid') key = 'end_invalid';
+    out[field] ??= key;
+  }
+  return out;
+}
+
+/**
+ * Same normalization as the API (`strings.ToLower`): trimmed and lower-cased
+ * without a locale, so "IT" stays "it" (a Turkish lower-casing would send
+ * "ıt", a tag the API then treats as a different skill).
+ */
 export function normalizeSkill(value: string) {
-  return value.trim().toLocaleLowerCase('tr-TR');
+  return value.trim().toLowerCase();
+}
+
+/** True when every word of the search is in the text ("ayşe yılmaz" finds "Ayşe Nur Yılmaz"), Turkish-aware. */
+export function matchesWords(text: string, search: string) {
+  const hay = text.toLocaleLowerCase('tr');
+  return search
+    .toLocaleLowerCase('tr')
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => hay.includes(word));
 }
 
 export type AddSkill = { skills: string[]; error?: 'skill' | 'too_many_skills' };

@@ -1,5 +1,5 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, RefreshControl, View } from 'react-native';
 
@@ -7,7 +7,6 @@ import { isApiError } from '@/core/api/errors';
 import { P, useCan } from '@/core/auth/permissions';
 import { formatCompactDate } from '@/core/format';
 import { errorMessage } from '@/core/i18n';
-import { useDebounced } from '@/core/use-debounced';
 import { useMembers } from '@/features/admin/api';
 import { Avatar } from '@/ui/avatar';
 import { EmptyState } from '@/ui/empty-state';
@@ -22,7 +21,7 @@ import { useManualRefresh } from '@/ui/use-manual-refresh';
 
 import { type Team, type TeamMember, useTeam, useTeamMutations } from './api';
 import { TeamFormSheet } from './team-form-sheet';
-import { hoursSummary, personName, WEEK_DAYS } from './teams-core';
+import { hoursSummary, matchesWords, personName, WEEK_DAYS } from './teams-core';
 import { TeamDot } from './teams-screen';
 
 const fail = (e: unknown) => toast.error(errorMessage(isApiError(e) ? e.code : undefined));
@@ -93,7 +92,15 @@ export function TeamDetailScreen() {
           title: team?.name ?? t('manage.team'),
           headerRight: () =>
             team && canWrite ? (
-              <HeaderButton icon="edit" label={t('manage.edit')} onPress={() => setEditing(true)} />
+              <HeaderButton
+                icon="edit"
+                label={t('manage.edit')}
+                onPress={() => {
+                  // The form starts from the team as it is now, not as it was when the screen opened.
+                  void query.refetch();
+                  setEditing(true);
+                }}
+              />
             ) : null,
         }}
       />
@@ -219,23 +226,32 @@ function Hours({ team }: { team: Team }) {
 }
 
 /**
- * "Add member": organization members who are not in the team yet, searched
- * on the endpoint the panel's picker reads (`GET /v1/tenant/members`, so it
- * needs `tenant.members.read`). Everyone picked joins as a member; the lead
- * role is set on the member's row afterwards.
+ * "Add member": organization members who are not in the team yet, from the
+ * endpoint the panel's picker reads (`GET /v1/tenant/members`, so it needs
+ * `tenant.members.read`). Every page is loaded while the sheet is open and
+ * the search runs here, over name, surname and e-mail word by word: the
+ * API's own `q` does not find a full name. Everyone picked joins as a
+ * member; the lead role is set on the member's row afterwards.
  */
 function AddMembersSheet({ team, visible, onClose }: { team: Team; visible: boolean; onClose: () => void }) {
   const { t } = useTranslation('team');
   const can = useCan();
   const m = useTeamMutations();
   const [search, setSearch] = useState('');
-  const q = useDebounced(search, 300);
-  const org = useMembers(visible ? q : '');
+  const org = useMembers('');
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = org;
+  useEffect(() => {
+    if (visible && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [visible, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const [picked, setPicked] = useState<string[]>([]);
   const inTeam = new Set((team.members ?? []).map((x) => x.user.uuid));
-  const options = (org.data?.pages.flatMap((p) => p.items) ?? [])
-    .filter((x) => !inTeam.has(x.user.uuid))
+  // After a partly failed add the team is read again: who got in leaves the selection.
+  const pending = picked.filter((uuid) => !inTeam.has(uuid));
+  const candidates = (org.data?.pages.flatMap((p) => p.items) ?? []).filter((x) => !inTeam.has(x.user.uuid));
+  const options = candidates
+    .filter((x) => matchesWords(`${x.user.name} ${x.user.surname} ${x.user.email}`, search))
     .map((x) => ({ value: x.user.uuid, label: personName(x.user), description: x.user.email }));
+  const loading = org.isLoading || !!hasNextPage;
   const close = () => {
     setPicked([]);
     setSearch('');
@@ -246,20 +262,20 @@ function AddMembersSheet({ team, visible, onClose }: { team: Team; visible: bool
       visible={visible}
       title={t('manage.add_member')}
       onCancel={close}
-      dirty={picked.length > 0}
+      dirty={pending.length > 0}
       detents={['large']}
       searchable
       onSearch={setSearch}
       primary={{
         label: t('manage.add'),
-        disabled: !picked.length,
+        disabled: !pending.length,
         loading: m.setMembers.isPending,
         onPress: () =>
           m.setMembers.mutate(
-            { uuid: team.uuid, users: picked, role: 'member' },
+            { uuid: team.uuid, users: pending, role: 'member' },
             {
               onSuccess: () => {
-                toast.success(t('manage.members_added', { count: picked.length }));
+                toast.success(t('manage.members_added', { count: pending.length }));
                 close();
               },
               onError: fail,
@@ -274,20 +290,22 @@ function AddMembersSheet({ team, visible, onClose }: { team: Team; visible: bool
               key: 'members',
               kind: 'multi',
               label: t('manage.add_member_title'),
-              values: picked,
+              values: pending,
               onChange: setPicked,
               options,
             },
           ],
           footer: !can(P.membersRead)
             ? t('manage.add_no_permission')
-            : org.isLoading
-              ? t('common:loading')
-              : org.isError
-                ? errorMessage(undefined)
+            : org.isError
+              ? errorMessage(undefined)
+              : loading
+                ? t('common:loading')
                 : options.length
-                  ? t('conversation:bulk.selected', { count: picked.length })
-                  : t('manage.add_empty'),
+                  ? t('conversation:bulk.selected', { count: pending.length })
+                  : candidates.length
+                    ? t('common:no_results')
+                    : t('manage.add_empty'),
         },
       ]}
     />

@@ -7,8 +7,10 @@ import {
   formErrors,
   formOf,
   hoursSummary,
+  matchesWords,
   personName,
   sameForm,
+  serverErrors,
   timeZones,
   toRequest,
 } from './teams-core.ts';
@@ -47,9 +49,54 @@ test('own hours and time zone round-trip', () => {
   assert.equal('inherit_hours' in req, false);
 });
 
-test('an empty time zone is left to the organization', () => {
+test('an empty time zone is sent, so a patch clears the old one', () => {
   const req = toRequest({ ...formOf(team), timezone: '' });
-  assert.equal('timezone' in req, false);
+  assert.equal(req.timezone, '');
+});
+
+test('a closed day never blocks the form and goes out with valid hours', () => {
+  const form = formOf(team);
+  form.days[6] = { day: 'sun', open: false, start: '9', end: '' };
+  assert.deepEqual(formErrors(form), {});
+  assert.deepEqual(toRequest(form).working_hours?.days[6], { day: 'sun', open: false, start: '09:00', end: '18:00' });
+  // Valid hours of a closed day are kept for when it opens again.
+  form.days[6] = { day: 'sun', open: false, start: '10:00', end: '12:00' };
+  assert.deepEqual(toRequest(form).working_hours?.days[6], { day: 'sun', open: false, start: '10:00', end: '12:00' });
+});
+
+test('serverErrors translates by code, never by the API message', () => {
+  assert.deepEqual(
+    serverErrors([
+      { field: 'name', code: 'taken' },
+      { field: 'skills.1', code: 'invalid' },
+      { field: 'skills', code: 'too_many' },
+      { field: 'working_hours.days.2.start', code: 'invalid' },
+      { field: 'working_hours.days.2.end', code: 'invalid' },
+      { field: 'timezone', code: 'invalid' },
+      { field: 'color', code: 'brand_new_code' },
+      { code: 'invalid' },
+    ]),
+    {
+      name: 'name_taken',
+      skills: 'skill',
+      'days.2.start': 'time',
+      'days.2.end': 'end_invalid',
+      timezone: 'timezone',
+      color: 'server',
+    },
+  );
+  assert.deepEqual(serverErrors(undefined), {});
+  assert.deepEqual(serverErrors([{ field: 'name', code: 'required' }]), { name: 'name_required' });
+});
+
+test('matchesWords finds a full name and an e-mail', () => {
+  const text = 'Ayşe Nur Yılmaz ayse@ornek.com';
+  assert.equal(matchesWords(text, 'Ayşe Yılmaz'), true);
+  assert.equal(matchesWords(text, 'yılmaz ayşe'), true);
+  assert.equal(matchesWords(text, 'ayse@ornek'), true);
+  assert.equal(matchesWords(text, 'demir'), false);
+  assert.equal(matchesWords('Işık Demir', 'ışık'), true);
+  assert.equal(matchesWords(text, ''), true);
 });
 
 test('formErrors mirrors the API checks', () => {
@@ -80,9 +127,9 @@ test('sameForm ignores what is not sent', () => {
 });
 
 test('addSkills normalizes, sorts and rejects like the API', () => {
-  assert.deepEqual(addSkills(['iade'], ' Faturalama, İNGİLİZCE ,iade'), {
-    skills: ['faturalama', 'iade', 'ingilizce'],
-  });
+  assert.deepEqual(addSkills(['iade'], ' Faturalama, English ,iade'), { skills: ['english', 'faturalama', 'iade'] });
+  // Lower-cased like the API (no Turkish locale): "IT" is "it", not "ıt".
+  assert.deepEqual(addSkills([], 'IT'), { skills: ['it'] });
   assert.deepEqual(addSkills([], '!hata'), { skills: [], error: 'skill' });
   assert.deepEqual(addSkills([], 'a'.repeat(41)), { skills: [], error: 'skill' });
   const full = Array.from({ length: 30 }, (_, i) => `beceri ${String(i).padStart(2, '0')}`);

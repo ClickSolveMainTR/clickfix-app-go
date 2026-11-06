@@ -260,8 +260,8 @@ export function useTeamMutations() {
         return team;
       },
       onSuccess: (team) => refresh(team),
-      // Some of several adds may have gone through.
-      onError: (_e, v) => void qc.invalidateQueries({ queryKey: teamKeys.team(org, v.uuid) }),
+      // Some of several adds may have gone through: the team, its member count and every list are read again.
+      onError: () => refresh(undefined, ''),
     }),
     removeMember: useMutation({
       mutationFn: (v: { uuid: string; userUuid: string }) =>
