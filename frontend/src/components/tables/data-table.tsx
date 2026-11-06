@@ -30,6 +30,7 @@ export function DataTable<TData>({
   pageCount,
   rowCount,
   pageSizeOptions,
+  searchPlaceholder,
   toolbar,
   bulkActions,
   renderGridItem,
@@ -149,6 +150,7 @@ export function DataTable<TData>({
         setViewMode={setViewMode}
         resetAll={resetAll}
         toolbar={toolbarNode}
+        searchPlaceholder={searchPlaceholder}
         bulkActions={bulkActions}
         forceMobileCards={forceMobileCards}
         reorderMode={reorderMode}

@@ -1,4 +1,4 @@
-import type { components } from "@/generated/api";
+import type { components, operations } from "@/generated/api";
 import { getActiveOrganizationSlug } from "@/features/organizations/lib/active-organization-store";
 import { apiClient, unwrap } from "@/lib/api";
 
@@ -20,7 +20,13 @@ export type ContactListQuery = {
   company?: string;
   limit: number;
   offset: number;
+  /** One field, `-` prefix for descending. Server default: `-created_at`. */
+  sort?: ContactSort;
 };
+
+export type ContactSort = NonNullable<
+  NonNullable<operations["listTenantContacts"]["parameters"]["query"]>["sort"]
+>;
 
 export const contactsService = {
   async list(p: ContactListQuery) {
@@ -33,6 +39,7 @@ export const contactsService = {
             offset: p.offset,
             ...(p.q ? { q: p.q } : {}),
             ...(p.company ? { company: p.company } : {}),
+            ...(p.sort ? { sort: p.sort } : {}),
           },
         },
       }),

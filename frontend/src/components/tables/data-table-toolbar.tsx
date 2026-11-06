@@ -65,6 +65,7 @@ type DataTableToolbarProps<TData> = {
   setViewMode: (m: TableViewMode) => void;
   resetAll: () => void;
   toolbar?: ReactNode;
+  searchPlaceholder?: string;
   bulkActions?:
     | DataTableBulkAction<TData>[]
     | ((
@@ -86,6 +87,7 @@ export function DataTableToolbar<TData>({
   setViewMode,
   resetAll,
   toolbar,
+  searchPlaceholder,
   bulkActions,
   onExport,
   forceMobileCards,
@@ -144,7 +146,7 @@ export function DataTableToolbar<TData>({
               <InputGroupInput
                 value={globalFilter}
                 onChange={(e) => table.setGlobalFilter(e.target.value)}
-                placeholder={t("table.search")}
+                placeholder={searchPlaceholder ?? t("table.search")}
               />
               {globalFilter ? (
                 <InputGroupAddon align="inline-end">
