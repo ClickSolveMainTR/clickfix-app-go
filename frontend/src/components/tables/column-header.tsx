@@ -81,13 +81,13 @@ export function ColumnHeader<TData>({
             className="data-[state=open]:bg-accent -ms-2 h-8"
           >
             <span>{label}</span>
-            {column.getIsSorted() === "desc" ? (
+            {!column.getCanSort() ? null : column.getIsSorted() === "desc" ? (
               <ArrowDown className="size-3.5" />
             ) : column.getIsSorted() === "asc" ? (
               <ArrowUp className="size-3.5" />
-            ) : column.getCanSort() ? (
+            ) : (
               <ArrowUpDown className="size-3.5 opacity-50" />
-            ) : null}
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
