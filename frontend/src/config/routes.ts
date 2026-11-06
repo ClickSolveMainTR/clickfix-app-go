@@ -94,6 +94,8 @@ export const routes = {
     teamStatus: "/team-status",
     /** Agent scorecards, custom and scheduled reports (CF-112). */
     reports: "/reports",
+    /** Read-only service incidents for agents (CF-162). */
+    incidents: "/incidents",
     /** On-call rotas, escalation, uptime monitors and alerts (CF-104). */
     oncall: "/oncall",
     /** Volume forecast, staffing gaps and timesheets (CF-107). */

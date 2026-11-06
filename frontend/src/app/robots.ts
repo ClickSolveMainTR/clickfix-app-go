@@ -19,6 +19,7 @@ const APP_PATHS = [
   "/inbox",
   "/setup",
   "/objects",
+  "/incidents",
   "/oncall",
   "/profile",
   "/replies",
