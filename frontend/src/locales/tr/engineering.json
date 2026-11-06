@@ -62,9 +62,8 @@
   "toast.already_linked": "Konuşma bu ürün talebine zaten bağlı",
   "integrations.title": "Mühendislik entegrasyonları",
   "integrations.description": "Ürün taleplerini Jira, Linear veya GitHub ile iki yönlü eşitleyin.",
-  "integrations.forbidden": "Mühendislik entegrasyonlarını görmek için ayarları görüntüleme yetkisi gerekir.",
+  "integrations.forbidden": "Mühendislik entegrasyonlarını görmek ve yönetmek için ayarları düzenleme yetkisi gerekir.",
   "integrations.load_failed": "Entegrasyonlar yüklenemedi.",
-  "integrations.read_only": "Entegrasyon durumlarını görebilirsiniz. Kurmak, bağlamak veya devre dışı bırakmak için ayarları düzenleme yetkisi gerekir.",
   "integrations.state.not_configured": "Kurulmadı",
   "integrations.state.disabled": "Devre dışı",
   "integrations.state.needs_auth": "Yetkilendirme bekliyor",
@@ -162,5 +161,7 @@
   "integrations.toast.saved": "{{provider}} ayarları kaydedildi",
   "integrations.toast.connected": "{{provider}} bağlandı",
   "integrations.toast.enabled": "{{provider}} entegrasyonu etkinleştirildi",
-  "integrations.toast.disabled": "{{provider}} entegrasyonu devre dışı bırakıldı"
+  "integrations.toast.disabled": "{{provider}} entegrasyonu devre dışı bırakıldı",
+  "integrations.callback.interrupted_title": "Bağlantı tamamlanamadı",
+  "integrations.callback.interrupted": "Organizasyon bilgisi yüklenemediği için yetkilendirme yanıtı işlenmedi ve adres çubuğundan silindi. Sorun giderildikten sonra bağlantıyı ayarlar ekranından yeniden başlatın."
 }

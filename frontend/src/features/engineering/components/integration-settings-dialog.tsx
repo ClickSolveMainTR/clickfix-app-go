@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateSecret } from "@/features/channels/lib/channel-setup";
+import { routes } from "@/config/routes";
 import { useSaveIntegration } from "@/features/engineering/hooks/use-engineering-integrations";
 import {
   draftOf,
@@ -23,12 +24,12 @@ import {
   hasTransitionMapping,
   inputOf,
   integrationErrorKey,
-  MAPPED_STATUSES,
   PROVIDER_FIELDS,
   suggestedRedirectUri,
   validateDraft,
   type IntegrationDraft,
 } from "@/features/engineering/lib/integration-setup";
+import { ISSUE_STATUSES } from "@/features/engineering/lib/issue-display";
 import type {
   EngineeringIntegration,
   EngineeringProvider,
@@ -52,14 +53,20 @@ export function IntegrationSettingsDialog({
 }) {
   const { t } = useLocale();
   const save = useSaveIntegration(provider);
+  // Empty on a plain-HTTP origin: the API takes HTTPS redirect URIs only.
+  const [suggested] = useState(() =>
+    suggestedRedirectUri(
+      window.location.origin,
+      routes.cms.settings.engineering.callback(provider),
+    ),
+  );
   const [draft, setDraft] = useState<IntegrationDraft>(() =>
-    draftOf(provider, integration),
+    draftOf(integration, suggested),
   );
   const [problems, setProblems] = useState<string[]>([]);
   const [errorKey, setErrorKey] = useState("");
   const name = t(`engineering.source.${provider}`);
   const k = (key: string) => `engineering.integrations.${key}`;
-  const suggested = suggestedRedirectUri(provider);
 
   const setConfig = (key: keyof IntegrationDraft["config"], value: string) =>
     setDraft((prev) => ({ ...prev, config: { ...prev.config, [key]: value } }));
@@ -100,7 +107,7 @@ export function IntegrationSettingsDialog({
         {t(k(`${kind}.hint.${provider}`))}
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        {MAPPED_STATUSES.map((status) => (
+        {ISSUE_STATUSES.map((status) => (
           <div key={status} className="space-y-1">
             <Label htmlFor={`eng-${kind}-${status}`}>
               {t(`engineering.status.${status}`)}

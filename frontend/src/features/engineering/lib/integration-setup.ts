@@ -1,13 +1,11 @@
-import { routes } from "@/config/routes";
-import { ISSUE_STATUSES } from "@/features/engineering/lib/issue-display";
+// Pure rules of the integration settings screen. Type-only imports keep
+// this module loadable on its own (see integration-setup.test.mjs).
 import type {
   EngineeringIntegration,
   EngineeringIntegrationConfig,
   EngineeringIntegrationInput,
   EngineeringProvider,
-  IssueStatus,
 } from "@/features/engineering/services/engineering.service";
-import { isApiError } from "@/lib/api/client";
 
 /** Order of the cards on the settings screen. */
 export const ENGINEERING_PROVIDERS: EngineeringProvider[] = [
@@ -83,8 +81,6 @@ export function hasTransitionMapping(provider: EngineeringProvider) {
   return provider === "jira";
 }
 
-export const MAPPED_STATUSES: IssueStatus[] = ISSUE_STATUSES;
-
 /** Same shapes the API validates (`repository`, HTTPS URLs, 16+ byte secret). */
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 export const WEBHOOK_SECRET_MIN = 16;
@@ -98,10 +94,17 @@ export function isHttpsUrl(raw: string): boolean {
   }
 }
 
-/** Redirect URI to register in the provider's OAuth app for this origin. */
-export function suggestedRedirectUri(provider: EngineeringProvider): string {
-  if (typeof window === "undefined") return "";
-  return `${window.location.origin}${routes.cms.settings.engineering.callback(provider)}`;
+/**
+ * Redirect URI to register in the provider's OAuth app: this panel's
+ * callback page. The API accepts HTTPS only, so a plain-HTTP origin (local
+ * development) has no suggestion and the field starts empty.
+ */
+export function suggestedRedirectUri(
+  origin: string,
+  callbackPath: string,
+): string {
+  const uri = `${origin}${callbackPath}`;
+  return isHttpsUrl(uri) ? uri : "";
 }
 
 /** Webhook path of a saved integration; the API host is the customer's own. */
@@ -119,8 +122,8 @@ export type IntegrationDraft = {
 };
 
 export function draftOf(
-  provider: EngineeringProvider,
   integration: EngineeringIntegration | undefined,
+  suggestedRedirect: string,
 ): IntegrationDraft {
   const config = integration?.config ?? {};
   return {
@@ -131,7 +134,7 @@ export function draftOf(
       repository: config.repository ?? "",
       site_url: config.site_url ?? "",
       issue_type: config.issue_type ?? "",
-      redirect_uri: config.redirect_uri || suggestedRedirectUri(provider),
+      redirect_uri: config.redirect_uri || suggestedRedirect,
     },
     states: { ...(config.states ?? {}) },
     transitions: { ...(config.transitions ?? {}) },
@@ -241,21 +244,44 @@ const API_MESSAGES: [string, string][] = [
   ["invalid OAuth state or code", "state_invalid"],
 ];
 
+/** The fields of the panel's `ApiError` this module reads. */
+type ApiFailure = {
+  status: number;
+  code: string;
+  message?: string;
+  details?: { message?: string }[];
+};
+
+function isApiFailure(error: unknown): error is ApiFailure {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as ApiFailure).status === "number" &&
+    typeof (error as ApiFailure).code === "string"
+  );
+}
+
 /**
  * `engineering.integrations.errors.*` key of a failed call. The API answers
  * with generic English text and never with provider bodies or tokens; the
- * screen shows its own wording.
+ * screen shows its own wording. Only `INTEGRATION_UNAVAILABLE` and the HTTP
+ * status are stable: validation failures all carry the code `invalid`, so
+ * the specific keys match the message text and fall back to `invalid` when
+ * the API rewords it.
  */
 export function integrationErrorKey(error: unknown): string {
-  if (!isApiError(error)) return "unknown";
+  if (!isApiFailure(error)) return "unknown";
   if (error.code === "INTEGRATION_UNAVAILABLE") return "unavailable";
-  if (error.isForbidden) return "forbidden";
-  if (error.isNotFound) return "not_configured";
-  const text = [error.message, ...error.details.map((d) => d.message ?? "")]
+  if (error.status === 403) return "forbidden";
+  if (error.status === 404) return "not_configured";
+  const text = [
+    error.message ?? "",
+    ...(error.details ?? []).map((d) => d.message ?? ""),
+  ]
     .join(" ")
     .toLowerCase();
   for (const [needle, key] of API_MESSAGES) {
     if (text.includes(needle.toLowerCase())) return key;
   }
-  return error.isValidation ? "invalid" : "unknown";
+  return error.status === 400 || error.status === 422 ? "invalid" : "unknown";
 }

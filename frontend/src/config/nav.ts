@@ -717,7 +717,7 @@ export const cmsNav = defineNav({
           titleKey: "layout.nav_tenant_settings_engineering",
           href: routes.cms.settings.engineering.root,
           icon: GitPullRequest,
-          permission: permissions.tenant.settings.read,
+          permission: permissions.tenant.settings.write,
         },
         {
           id: "settings-video",

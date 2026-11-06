@@ -16,7 +16,6 @@ import { routes } from "@/config/routes";
 import { CopyField } from "@/features/channels/components/setup-fields";
 import { IntegrationSettingsDialog } from "@/features/engineering/components/integration-settings-dialog";
 import {
-  useIntegrationScope,
   useIntegrations,
   useSaveIntegration,
   useStartOAuth,
@@ -40,14 +39,12 @@ const k = (key: string) => `engineering.integrations.${key}`;
 
 /**
  * Jira, Linear and GitHub connections of product requests
- * (`/v1/tenant/engineering/integrations`). Settings readers see each
- * provider's status; setup, OAuth and switching off need
- * `tenant.settings.write`. Secrets are write-only: the API reports only
- * whether one is stored.
+ * (`/v1/tenant/engineering/integrations`). The whole screen needs
+ * `tenant.settings.write`, like the API. Secrets are write-only: the API
+ * reports only whether one is stored.
  */
 export function EngineeringIntegrationsPage() {
   const { t } = useLocale();
-  const { canWrite } = useIntegrationScope();
   const query = useIntegrations();
   const items = query.data?.items ?? [];
 
@@ -55,7 +52,7 @@ export function EngineeringIntegrationsPage() {
     <EntityPage
       title={t(k("title"))}
       description={t(k("description"))}
-      permission={permissions.tenant.settings.read}
+      permission={permissions.tenant.settings.write}
       forbiddenFallback={
         <ErrorState
           title={t("common.error_forbidden")}
@@ -81,22 +78,14 @@ export function EngineeringIntegrationsPage() {
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
-          {canWrite ? null : (
-            <Alert>
-              <AlertDescription>{t(k("read_only"))}</AlertDescription>
-            </Alert>
-          )}
-          <div className="grid items-start gap-4 xl:grid-cols-3">
-            {ENGINEERING_PROVIDERS.map((provider) => (
-              <ProviderCard
-                key={provider}
-                provider={provider}
-                integration={items.find((i) => i.provider === provider)}
-                canWrite={canWrite}
-              />
-            ))}
-          </div>
+        <div className="grid items-start gap-4 xl:grid-cols-3">
+          {ENGINEERING_PROVIDERS.map((provider) => (
+            <ProviderCard
+              key={provider}
+              provider={provider}
+              integration={items.find((i) => i.provider === provider)}
+            />
+          ))}
         </div>
       )}
     </EntityPage>
@@ -106,11 +95,9 @@ export function EngineeringIntegrationsPage() {
 function ProviderCard({
   provider,
   integration,
-  canWrite,
 }: {
   provider: EngineeringProvider;
   integration: EngineeringIntegration | undefined;
-  canWrite: boolean;
 }) {
   const { t } = useLocale();
   const [editing, setEditing] = useState(false);
@@ -217,7 +204,7 @@ function ProviderCard({
           </dl>
         ) : null}
 
-        {integration && canWrite ? (
+        {integration ? (
           <CopyField
             id={`eng-webhook-${provider}`}
             label={t(k("webhook.path"))}
@@ -232,59 +219,56 @@ function ProviderCard({
           </Alert>
         ) : null}
 
-        {canWrite ? (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {state === "needs_auth" || state === "connected" ? (
-                <Button
-                  size="sm"
-                  variant={state === "connected" ? "outline" : "default"}
-                  disabled={busy || !oauthReady}
-                  onClick={startOAuth}
-                >
-                  {t(k(state === "connected" ? "reconnect" : "connect"), {
-                    provider: name,
-                  })}
-                </Button>
-              ) : null}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {state === "needs_auth" || state === "connected" ? (
               <Button
                 size="sm"
-                variant={state === "not_configured" ? "default" : "outline"}
-                disabled={busy}
-                onClick={() => setEditing(true)}
+                variant={state === "connected" ? "outline" : "default"}
+                disabled={busy || !oauthReady}
+                onClick={startOAuth}
               >
-                {t(k(state === "not_configured" ? "setup" : "edit"))}
+                {t(k(state === "connected" ? "reconnect" : "connect"), {
+                  provider: name,
+                })}
               </Button>
-              {state === "disabled" ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setEnabled(true)}
-                >
-                  {t(k("enable"))}
-                </Button>
-              ) : null}
-              {state === "needs_auth" || state === "connected" ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={busy}
-                  onClick={() => setConfirming(true)}
-                >
-                  {t(k("disconnect"))}
-                </Button>
-              ) : null}
-            </div>
-            {(state === "needs_auth" || state === "connected") &&
-            !oauthReady ? (
-              <p className="text-muted-foreground text-xs">
-                {t(k("oauth.not_ready"))}
-              </p>
+            ) : null}
+            <Button
+              size="sm"
+              variant={state === "not_configured" ? "default" : "outline"}
+              disabled={busy}
+              onClick={() => setEditing(true)}
+            >
+              {t(k(state === "not_configured" ? "setup" : "edit"))}
+            </Button>
+            {state === "disabled" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setEnabled(true)}
+              >
+                {t(k("enable"))}
+              </Button>
+            ) : null}
+            {state === "needs_auth" || state === "connected" ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                disabled={busy}
+                onClick={() => setConfirming(true)}
+              >
+                {t(k("disconnect"))}
+              </Button>
             ) : null}
           </div>
-        ) : null}
+          {(state === "needs_auth" || state === "connected") && !oauthReady ? (
+            <p className="text-muted-foreground text-xs">
+              {t(k("oauth.not_ready"))}
+            </p>
+          ) : null}
+        </div>
       </CardContent>
 
       {editing ? (

@@ -18,26 +18,22 @@ export const integrationKeys = {
     [...engineeringKeys.all(slug), "integrations"] as const,
 };
 
-/**
- * Settings readers see the masked status; configuring, OAuth and switching
- * off need `tenant.settings.write`.
- */
+/** Every integration endpoint, the list included, needs `tenant.settings.write`. */
 export function useIntegrationScope() {
   const { slug } = useTenant();
   const { can } = usePermission();
   return {
     slug,
-    canRead: can(permissions.tenant.settings.read),
     canWrite: can(permissions.tenant.settings.write),
   };
 }
 
 export function useIntegrations() {
-  const { slug, canRead } = useIntegrationScope();
+  const { slug, canWrite } = useIntegrationScope();
   return useQuery({
     queryKey: integrationKeys.list(slug),
     queryFn: () => engineeringService.integrations(slug),
-    enabled: Boolean(slug) && canRead,
+    enabled: Boolean(slug) && canWrite,
     staleTime: 30_000,
   });
 }

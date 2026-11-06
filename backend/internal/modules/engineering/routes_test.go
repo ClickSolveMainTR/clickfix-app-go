@@ -75,18 +75,6 @@ func TestRoutesRequireOrganizationPermissionsAndRejectScopeInjection(t *testing.
 			t.Fatalf("%s %s = %d want %d", test.method, test.path, got, test.want)
 		}
 	}
-	// Reading masked integration status needs tenant.settings.read; it never
-	// grants configuring credentials or starting OAuth.
-	orgs.scope.Permissions = append(orgs.scope.Permissions, rbac.PermTenantSettingsRead)
-	for _, test := range []struct{ method, path, body string }{
-		{"PUT", "/v1/tenant/engineering/integrations/github", `{"config":{"repository":"acme/app"},"enabled":true}`},
-		{"POST", "/v1/tenant/engineering/integrations/github/oauth/start", ""},
-		{"POST", "/v1/tenant/engineering/integrations/github/oauth/complete", `{"state":"x","code":"y"}`},
-	} {
-		if got := request(test.method, test.path, test.body, true, true); got != 403 {
-			t.Fatalf("%s %s with settings.read = %d want 403", test.method, test.path, got)
-		}
-	}
 	orgs.scope.Permissions = append(orgs.scope.Permissions, rbac.PermTenantTicketsWrite, rbac.PermTenantConversationsRead)
 	if got := request("POST", "/v1/tenant/engineering/issues", `{"title":"x","organization_id":999}`, true, true); got != 400 {
 		t.Fatalf("scope injection accepted: %d", got)

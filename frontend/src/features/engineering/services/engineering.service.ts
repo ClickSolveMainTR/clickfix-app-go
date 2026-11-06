@@ -120,7 +120,7 @@ export const engineeringService = {
   },
 
   /**
-   * Masked provider settings (`tenant.settings.read`). Secrets are never
+   * Masked provider settings (`tenant.settings.write`, like every call below). Secrets are never
    * returned, only whether each one is stored. Errors are rendered by the
    * caller, so every integration call is silent.
    */
@@ -134,7 +134,7 @@ export const engineeringService = {
   },
 
   /**
-   * Replaces the provider configuration (`tenant.settings.write`). Empty or
+   * Replaces the provider configuration. Empty or
    * omitted secrets keep the stored ones; `enabled: false` stops syncing.
    */
   saveIntegration(

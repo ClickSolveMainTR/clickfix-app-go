@@ -44,8 +44,7 @@ pretends delivery succeeded.
 PUT `/integrations/{linear|jira|github}` with `config`, `enabled` and optional
 `credentials`. Access/refresh tokens, OAuth client secrets and webhook secrets are
 encrypted using the existing AES-256-GCM SecretBox. Reads return configuration and
-configured booleans only, so the list needs only `tenant.settings.read`; every
-mutation and OAuth step needs `tenant.settings.write`. Omitted/empty secret fields preserve stored values.
+configured booleans only. Omitted/empty secret fields preserve stored values.
 Disable an integration with `enabled=false`.
 
 - Linear: configure `team_id`, optional `project_id`, and `states` mapping each local

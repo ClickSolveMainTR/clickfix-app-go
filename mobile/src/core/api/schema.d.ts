@@ -5845,7 +5845,7 @@ export interface paths {
         };
         /**
          * List masked integration configuration
-         * @description Requires tenant.settings.read. Secrets are never returned; configuring and OAuth need tenant.settings.write.
+         * @description Requires tenant.settings.write. Secrets are never returned.
          */
         get: operations["engineeringGetIntegrations"];
         put?: never;

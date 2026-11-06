@@ -62,9 +62,8 @@
   "toast.already_linked": "The conversation is already linked to this product request",
   "integrations.title": "Engineering integrations",
   "integrations.description": "Sync product requests both ways with Jira, Linear or GitHub.",
-  "integrations.forbidden": "Viewing engineering integrations needs permission to view settings.",
+  "integrations.forbidden": "Viewing and managing engineering integrations needs permission to edit settings.",
   "integrations.load_failed": "Integrations could not be loaded.",
-  "integrations.read_only": "You can see the status of each integration. Setting up, connecting or disabling one needs permission to edit settings.",
   "integrations.state.not_configured": "Not set up",
   "integrations.state.disabled": "Disabled",
   "integrations.state.needs_auth": "Awaiting authorization",
@@ -162,5 +161,7 @@
   "integrations.toast.saved": "{{provider}} settings saved",
   "integrations.toast.connected": "{{provider}} connected",
   "integrations.toast.enabled": "{{provider}} integration enabled",
-  "integrations.toast.disabled": "{{provider}} integration disabled"
+  "integrations.toast.disabled": "{{provider}} integration disabled",
+  "integrations.callback.interrupted_title": "The connection could not be completed",
+  "integrations.callback.interrupted": "The authorization response was not processed because the organization could not be loaded, and it was removed from the address bar. Once that is resolved, start the connection again from the settings screen."
 }

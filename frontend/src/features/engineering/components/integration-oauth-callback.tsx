@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
 import { EntityPage } from "@/components/entity";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
@@ -19,6 +20,8 @@ import {
   engineeringService,
   type EngineeringProvider,
 } from "@/features/engineering/services/engineering.service";
+import { ActiveOrganizationGate } from "@/features/tenant/components/active-organization-gate";
+import { useTenant } from "@/features/tenant/components/tenant-provider";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
@@ -27,12 +30,16 @@ const k = (key: string) => `engineering.integrations.${key}`;
 /** `callback.*` key of the outcome; "" while the code is being exchanged. */
 type Outcome = "" | "cancelled" | "provider_error" | "missing" | "failed";
 
+type Returned = { code: string; state: string; error: string | null };
+
 /**
  * Return leg of the provider consent
- * (`/settings/engineering/callback/{provider}?code=&state=`). The code and
- * state go to the API once, in the session that started the flow, and are
- * dropped from the address bar; they are never shown or logged. A cancelled
- * or failed consent explains itself and leads back to the settings screen.
+ * (`/settings/engineering/callback/{provider}?code=&state=`). The query is
+ * read once and dropped from the address bar before anything else, also
+ * when the organization cannot be loaded and nothing is exchanged; it is
+ * never shown or logged. The code and state go to the API once, in the
+ * session that started the flow. A cancelled or failed consent explains
+ * itself and leads back to the settings screen.
  */
 export function IntegrationOAuthCallback({
   provider,
@@ -40,16 +47,48 @@ export function IntegrationOAuthCallback({
   provider: EngineeringProvider;
 }) {
   const { t } = useLocale();
-  const { slug } = useIntegrationScope();
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const tenant = useTenant();
   const params = useSearchParams();
-  // Read once: the query is removed from the URL right after.
-  const [returned] = useState(() => ({
+  const [returned] = useState<Returned>(() => ({
     code: params.get("code") ?? "",
     state: params.get("state") ?? "",
     error: params.get("error"),
   }));
+
+  useEffect(() => {
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  // The gate below shows why the organization is unavailable; the exchange
+  // is not mounted then, so say what happened to the consent.
+  const interrupted = !tenant.slug || tenant.failed;
+
+  return (
+    <div className="space-y-4">
+      {interrupted ? (
+        <Alert variant="destructive">
+          <AlertTitle>{t(k("callback.interrupted_title"))}</AlertTitle>
+          <AlertDescription>{t(k("callback.interrupted"))}</AlertDescription>
+        </Alert>
+      ) : null}
+      <ActiveOrganizationGate>
+        <OAuthExchange provider={provider} returned={returned} />
+      </ActiveOrganizationGate>
+    </div>
+  );
+}
+
+function OAuthExchange({
+  provider,
+  returned,
+}: {
+  provider: EngineeringProvider;
+  returned: Returned;
+}) {
+  const { t } = useLocale();
+  const { slug, canWrite } = useIntegrationScope();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const started = useRef(false);
   const [outcome, setOutcome] = useState<Outcome>(() => {
     // Providers send ?error=access_denied when the user declines.
@@ -63,10 +102,8 @@ export function IntegrationOAuthCallback({
   const back = routes.cms.settings.engineering.root;
 
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || outcome !== "" || !canWrite) return;
     started.current = true;
-    window.history.replaceState(null, "", window.location.pathname);
-    if (outcome !== "" || !slug) return;
     engineeringService
       .completeOAuth(slug, provider, {
         state: returned.state,
