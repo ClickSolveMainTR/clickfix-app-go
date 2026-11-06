@@ -55,11 +55,12 @@ export const engineeringService = {
     });
   },
 
-  conversations(slug: string, uuid: string) {
+  conversations(slug: string, uuid: string, silent = false) {
     return tenantRequest<{ items: IssueConversationLink[] }>(
       slug,
       "GET",
       `${BASE}/issues/${uuid}/conversations`,
+      { silent },
     );
   },
 

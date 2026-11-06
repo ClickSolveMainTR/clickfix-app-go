@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Bug, Link2, Plus, TriangleAlert } from "lucide-react";
+import { Bug, Check, Link2, Plus, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +33,11 @@ import {
   useIssues,
   useLinkIssue,
 } from "@/features/engineering/hooks/use-engineering";
-import { ISSUE_PRIORITIES } from "@/features/engineering/lib/issue-display";
+import {
+  humanLabel,
+  ISSUE_PRIORITIES,
+  tierLabelKey,
+} from "@/features/engineering/lib/issue-display";
 import type { IssuePriority } from "@/features/engineering/services/engineering.service";
 import { useDebounce } from "@/hooks/use-debounce";
 import { datetime } from "@/lib/utils/format";
@@ -51,7 +55,7 @@ export function ConversationIssuesPanel({
 }) {
   const { t, locale } = useLocale();
   const { canWrite } = useEngineeringScope();
-  const { enabled, suggestions, escalations } =
+  const { enabled, suggestions, escalations, linked, unknown } =
     useConversationEngineering(conversationUuid);
   const link = useLinkIssue();
   const [creating, setCreating] = useState(false);
@@ -66,7 +70,13 @@ export function ConversationIssuesPanel({
     });
   const suggested = suggestions.data?.items ?? [];
   const escalated = escalations.data?.items ?? [];
-  if (!canWrite && suggested.length === 0 && escalated.length === 0) {
+  const loading = suggestions.isLoading || escalations.isLoading;
+  if (
+    !canWrite &&
+    !loading &&
+    suggested.length === 0 &&
+    escalated.length === 0
+  ) {
     return null;
   }
 
@@ -112,7 +122,9 @@ export function ConversationIssuesPanel({
               <TriangleAlert className="text-destructive mt-0.5 size-3.5 shrink-0" />
               <span className="min-w-0 break-words">
                 {t("engineering.panel.escalation", {
-                  tier: e.tier,
+                  tier: tierLabelKey(e.tier)
+                    ? t(tierLabelKey(e.tier)!)
+                    : humanLabel(e.tier, locale),
                   due: datetime(e.due_at, "dd.MM HH:mm", locale),
                 })}
                 {e.reason ? ` · ${e.reason}` : ""}
@@ -143,7 +155,12 @@ export function ConversationIssuesPanel({
                     {t(`inbox.priority.${issue.priority}`)}
                   </span>
                 </Link>
-                {canWrite && (
+                {linked.has(issue.uuid) ? (
+                  <span className="text-muted-foreground flex shrink-0 items-center gap-1 px-1 text-xs">
+                    <Check className="size-3.5" />
+                    {t("engineering.panel.linked")}
+                  </span>
+                ) : canWrite && !unknown.has(issue.uuid) ? (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -155,11 +172,15 @@ export function ConversationIssuesPanel({
                   >
                     <Link2 className="size-3.5" />
                   </Button>
-                )}
+                ) : null}
               </li>
             ))}
           </ul>
         </>
+      ) : loading ? (
+        <p className="text-muted-foreground text-xs" aria-busy>
+          {t("common.loading")}
+        </p>
       ) : (
         escalated.length === 0 && (
           <p className="text-muted-foreground text-xs">
@@ -212,7 +233,10 @@ function CreateIssueDialog({
         ai_summary: ai,
         priority,
         ...(title.trim() ? { title: title.trim() } : {}),
-        ...(description.trim() ? { description: description.trim() } : {}),
+        // With the AI summary on, the API writes the description itself.
+        ...(!ai && description.trim()
+          ? { description: description.trim() }
+          : {}),
       },
       {
         onSuccess: (issue) => {
@@ -259,9 +283,10 @@ function CreateIssueDialog({
             <Input
               id="issue-title"
               value={title}
+              maxLength={240}
               onChange={(event) => setTitle(event.target.value)}
               placeholder={
-                ai ? t("engineering.create.ai_placeholder") : undefined
+                ai ? t("engineering.create.title_placeholder") : undefined
               }
             />
           </div>
@@ -272,7 +297,11 @@ function CreateIssueDialog({
             <Textarea
               id="issue-description"
               rows={4}
-              value={description}
+              value={ai ? "" : description}
+              disabled={ai}
+              placeholder={
+                ai ? t("engineering.create.description_ai") : undefined
+              }
               onChange={(event) => setDescription(event.target.value)}
             />
           </div>

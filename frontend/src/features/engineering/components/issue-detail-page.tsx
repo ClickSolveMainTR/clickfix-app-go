@@ -36,6 +36,7 @@ import {
   ISSUE_STATUSES,
   issuePriorityTone,
   issueStatusTone,
+  sourceLabelKey,
 } from "@/features/engineering/lib/issue-display";
 import type {
   IssuePriority,
@@ -119,7 +120,9 @@ export function IssueDetailPage({ uuid }: { uuid: string }) {
                         </p>
                         <p className="text-muted-foreground mt-0.5 text-xs">
                           {[
-                            c.source,
+                            sourceLabelKey(c.source)
+                              ? t(sourceLabelKey(c.source)!)
+                              : humanLabel(c.source, locale),
                             datetime(c.created_at, "dd.MM.yyyy HH:mm", locale),
                           ]
                             .filter(Boolean)

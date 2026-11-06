@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { permissions } from "@/config/permissions";
 import {
@@ -103,13 +108,33 @@ export function useLinkIssue() {
   const { t } = useLocale();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (v: {
+    // Linking is an upsert that also rewrites `notify_customer`, so an
+    // existing link (made with the request, notifying the customer) is kept.
+    mutationFn: async (v: {
       issue: string;
       conversation: string;
       notifyCustomer: boolean;
-    }) =>
-      engineeringService.link(slug, v.issue, v.conversation, v.notifyCustomer),
-    onSuccess: () => appToast.success(t("engineering.toast.linked")),
+    }) => {
+      const links = await queryClient.fetchQuery({
+        queryKey: engineeringKeys.links(slug, v.issue),
+        queryFn: () => engineeringService.conversations(slug, v.issue),
+        staleTime: 0,
+      });
+      if (links.items.some((l) => l.conversation_uuid === v.conversation)) {
+        return { alreadyLinked: true };
+      }
+      await engineeringService.link(
+        slug,
+        v.issue,
+        v.conversation,
+        v.notifyCustomer,
+      );
+      return { alreadyLinked: false };
+    },
+    onSuccess: (result) =>
+      result.alreadyLinked
+        ? appToast.info(t("engineering.toast.already_linked"))
+        : appToast.success(t("engineering.toast.linked")),
     onSettled: () =>
       void queryClient.invalidateQueries({
         queryKey: engineeringKeys.all(slug),
@@ -171,5 +196,25 @@ export function useConversationEngineering(conversation: string) {
     staleTime: 60_000,
     retry: false,
   });
-  return { enabled, suggestions, escalations };
+  // Which suggestions this conversation is already linked to.
+  const suggested = suggestions.data?.items ?? [];
+  const links = useQueries({
+    queries: suggested.map((issue) => ({
+      queryKey: engineeringKeys.links(slug, issue.uuid),
+      queryFn: () => engineeringService.conversations(slug, issue.uuid, true),
+      enabled,
+      staleTime: 30_000,
+      retry: false,
+    })),
+  });
+  const linked = new Set<string>();
+  /** Suggestions whose links are not known yet; they cannot be linked. */
+  const unknown = new Set<string>();
+  suggested.forEach((issue, index) => {
+    const items = links[index]?.data?.items;
+    if (!items) unknown.add(issue.uuid);
+    else if (items.some((l) => l.conversation_uuid === conversation))
+      linked.add(issue.uuid);
+  });
+  return { enabled, suggestions, escalations, linked, unknown };
 }

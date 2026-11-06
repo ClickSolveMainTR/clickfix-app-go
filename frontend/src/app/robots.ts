@@ -8,6 +8,7 @@ import { brand } from "@/config/brand";
  */
 const APP_PATHS = [
   "/dashboard",
+  "/engineering",
   "/apps",
   "/billing",
   "/calendar",

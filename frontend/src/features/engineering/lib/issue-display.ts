@@ -35,3 +35,16 @@ export function humanLabel(value: string, locale: string) {
   const label = value.replace(/[-_]+/g, " ").trim();
   return label ? label[0].toLocaleUpperCase(locale) + label.slice(1) : label;
 }
+
+const TIERS = ["l2", "engineering"];
+const SOURCES = ["native", "jira", "linear", "github"];
+
+/** i18n key of an escalation tier, or `null` for one this client does not know. */
+export function tierLabelKey(tier: string) {
+  return TIERS.includes(tier) ? `engineering.tier.${tier}` : null;
+}
+
+/** i18n key of a comment source (ClickFix or the external tracker). */
+export function sourceLabelKey(source: string) {
+  return SOURCES.includes(source) ? `engineering.source.${source}` : null;
+}

@@ -8,8 +8,6 @@ import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import {
   humanLabel,
-  ISSUE_PRIORITIES,
-  ISSUE_STATUSES,
   issuePriorityTone,
   issueStatusTone,
 } from "@/features/engineering/lib/issue-display";
@@ -18,8 +16,8 @@ import { relativeDatetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 /**
- * `status` and `priority` are server-side filters; the API sorts by latest
- * change only, so no column sorts.
+ * Status and priority are filtered from the toolbar (one value each, as the
+ * API takes); the API sorts by latest change only, so no column sorts.
  */
 export function useIssuesColumns() {
   const { t, locale } = useLocale();
@@ -40,12 +38,6 @@ export function useIssuesColumns() {
           accessorKey: "status",
           labelKey: "engineering.columns.status",
           enableSorting: false,
-          filterVariant: "faceted",
-          filterOptions: ISSUE_STATUSES.map((value) => ({
-            value,
-            labelKey: `engineering.status.${value}`,
-            label: value,
-          })),
           gridSecondary: true,
           cell: ({ row }) => (
             <StatusChip
@@ -58,12 +50,6 @@ export function useIssuesColumns() {
           accessorKey: "priority",
           labelKey: "engineering.columns.priority",
           enableSorting: false,
-          filterVariant: "faceted",
-          filterOptions: ISSUE_PRIORITIES.map((value) => ({
-            value,
-            labelKey: `inbox.priority.${value}`,
-            label: value,
-          })),
           cell: ({ row }) => (
             <StatusChip
               label={t(`inbox.priority.${row.original.priority}`)}
