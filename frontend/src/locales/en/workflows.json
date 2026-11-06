@@ -264,7 +264,7 @@
   "versions.restored": "Version loaded into the draft; save and publish it.",
   "runs.empty": "No runs yet.",
   "runs.error": "Runs could not be loaded.",
-  "runs.more": "Load more",
+  "runs.column": "Run",
   "runs.never": "Never ran",
   "runs.detail": "Run detail",
   "runs.detail_description": "Step log pinned to v{{version}}",

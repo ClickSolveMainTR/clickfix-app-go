@@ -11,6 +11,8 @@
   "empty_canned": "Henüz hazır yanıt yok. Sık gönderdiğiniz bir yanıtı ekleyerek başlayın.",
   "empty_macros": "Henüz makro yok. Sık tekrarladığınız eylemleri tek bir makroda birleştirin.",
   "used": "{{count}} kez kullanıldı",
+  "columns.scope": "Kapsam",
+  "columns.usage": "Kullanım",
   "scope.personal": "Kişisel",
   "scope.team": "Ekip",
   "scope.organization": "Organizasyon",
