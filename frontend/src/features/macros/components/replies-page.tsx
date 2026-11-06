@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { MessageSquareText, Plus, Trash2, Zap } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { EntityTable } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocale } from "@/providers/locale-provider";
@@ -29,6 +31,9 @@ import {
   useMacrosScope,
 } from "../hooks/use-macros";
 import type { Canned, Macro, MacroAction } from "../services/macros.service";
+
+const EMPTY_CANNED: Canned[] = [];
+const EMPTY_MACROS: Macro[] = [];
 
 const VARIABLES = [
   "{{contact.first_name}}",
@@ -88,12 +93,64 @@ function ScopeBadge({ scope }: { scope: string }) {
   );
 }
 
+/** The lists come whole from the API: search, sort and paging run here. */
+const CLIENT_MODE = { filtering: false, sorting: false, pagination: false };
+
 function CannedList() {
   const { t } = useLocale();
   const scope = useMacrosScope();
   const list = useCannedResponses();
   const [editing, setEditing] = useState<Canned | "new" | null>(null);
-  const editable = (c: Canned) => c.mine || scope.canWrite;
+  const canWrite = scope.canWrite;
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Canned>({
+          accessorKey: "shortcut",
+          labelKey: "macros.fields.shortcut",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground font-mono text-xs">
+              /{row.original.shortcut}
+            </span>
+          ),
+        }),
+        createColumn<Canned>({
+          accessorKey: "title",
+          labelKey: "macros.fields.title",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="font-medium">{row.original.title}</span>
+          ),
+        }),
+        createColumn<Canned>({
+          accessorKey: "scope",
+          labelKey: "macros.columns.scope",
+          cell: ({ row }) => <ScopeBadge scope={row.original.scope} />,
+        }),
+        createColumn<Canned>({
+          accessorKey: "content",
+          labelKey: "macros.fields.content",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <span className="text-muted-foreground line-clamp-2 max-w-md text-sm">
+              {row.original.content}
+            </span>
+          ),
+        }),
+        createColumn<Canned>({
+          accessorKey: "usage_count",
+          labelKey: "macros.columns.usage",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+        }),
+      ] as ColumnDef<Canned, unknown>[],
+    [],
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -105,38 +162,26 @@ function CannedList() {
           {t("macros.new_canned")}
         </Button>
       </div>
-      {list.isLoading && <Skeleton className="h-24 rounded-xl" />}
-      {!list.isLoading && (list.data ?? []).length === 0 && (
-        <p className="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
-          {t("macros.empty_canned")}
-        </p>
-      )}
-      <ul className="divide-y rounded-xl border">
-        {(list.data ?? []).map((c) => (
-          <li key={c.uuid}>
-            <button
-              type="button"
-              disabled={!editable(c)}
-              onClick={() => setEditing(c)}
-              className="hover:bg-muted/40 flex w-full flex-col gap-1 px-4 py-3 text-left disabled:cursor-default"
-            >
-              <span className="flex items-center gap-2">
-                <span className="text-muted-foreground font-mono text-xs">
-                  /{c.shortcut}
-                </span>
-                <span className="font-medium">{c.title}</span>
-                <ScopeBadge scope={c.scope} />
-                <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-                  {t("macros.used", { count: c.usage_count })}
-                </span>
-              </span>
-              <span className="text-muted-foreground line-clamp-2 text-sm">
-                {c.content}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <EntityTable
+        columns={columns}
+        data={list.data ?? EMPTY_CANNED}
+        getRowId={(row) => row.uuid}
+        // Only the owner, or someone who can manage shared ones, may edit.
+        onRowClick={(row) => {
+          if (row.mine || canWrite) setEditing(row);
+        }}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        emptyDescription={t("macros.empty_canned")}
+        manual={CLIENT_MODE}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+        features={{
+          persistKey: "tenant-canned-responses-v1",
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       {editing && (
         <CannedDialog
           key={editing === "new" ? "new" : editing.uuid}
@@ -309,11 +354,86 @@ const ACTION_TYPES = [
 const STATUS_VALUES = ["open", "pending", "resolved", "closed"];
 const PRIORITY_VALUES = ["low", "normal", "high", "urgent"];
 
+function MacroActions({ actions }: { actions: MacroAction[] }) {
+  const { t } = useLocale();
+  return (
+    <span className="flex flex-wrap gap-1">
+      {actions.map((a, i) => (
+        <span key={i} className="bg-muted rounded px-1.5 py-0.5 text-[11px]">
+          {t(`macros.actions.${a.type}`)}
+          {a.type !== "reply" && a.type !== "note" && a.value
+            ? `: ${a.value}`
+            : ""}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Card of the grid view; the table core draws the border and padding. */
+function MacroCard({ macro: m }: { macro: Macro }) {
+  const { t } = useLocale();
+  return (
+    <div className="flex flex-col gap-2 text-left">
+      <span className="flex items-center gap-2">
+        <Zap className="size-4 text-amber-500" />
+        <span className="font-medium">{m.name}</span>
+        <ScopeBadge scope={m.scope} />
+      </span>
+      <MacroActions actions={m.actions} />
+      <span className="text-muted-foreground text-xs">
+        {t("macros.used", { count: m.usage_count })}
+      </span>
+    </div>
+  );
+}
+
 function MacroList() {
   const { t } = useLocale();
   const scope = useMacrosScope();
   const list = useMacros();
   const [editing, setEditing] = useState<Macro | "new" | null>(null);
+  const canWrite = scope.canWrite;
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Macro>({
+          accessorKey: "name",
+          labelKey: "macros.fields.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="flex items-center gap-2 font-medium">
+              <Zap className="size-4 shrink-0 text-amber-500" />
+              {row.original.name}
+            </span>
+          ),
+        }),
+        createColumn<Macro>({
+          accessorKey: "scope",
+          labelKey: "macros.columns.scope",
+          cell: ({ row }) => <ScopeBadge scope={row.original.scope} />,
+        }),
+        createColumn<Macro>({
+          id: "actions_summary",
+          accessorFn: (row) => row.actions.map((a) => a.type).join(" "),
+          labelKey: "macros.fields.actions",
+          enableSorting: false,
+          cell: ({ row }) => <MacroActions actions={row.original.actions} />,
+        }),
+        createColumn<Macro>({
+          accessorKey: "usage_count",
+          labelKey: "macros.columns.usage",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+        }),
+      ] as ColumnDef<Macro, unknown>[],
+    [],
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -325,44 +445,30 @@ function MacroList() {
           {t("macros.new_macro")}
         </Button>
       </div>
-      {!list.isLoading && (list.data ?? []).length === 0 && (
-        <p className="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
-          {t("macros.empty_macros")}
-        </p>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {(list.data ?? []).map((m) => (
-          <button
-            type="button"
-            key={m.uuid}
-            disabled={!(m.mine || scope.canWrite)}
-            onClick={() => setEditing(m)}
-            className="bg-card hover:border-foreground/20 flex flex-col gap-2 rounded-xl border p-4 text-left disabled:cursor-default"
-          >
-            <span className="flex items-center gap-2">
-              <Zap className="size-4 text-amber-500" />
-              <span className="font-medium">{m.name}</span>
-              <ScopeBadge scope={m.scope} />
-            </span>
-            <span className="flex flex-wrap gap-1">
-              {m.actions.map((a, i) => (
-                <span
-                  key={i}
-                  className="bg-muted rounded px-1.5 py-0.5 text-[11px]"
-                >
-                  {t(`macros.actions.${a.type}`)}
-                  {a.type !== "reply" && a.type !== "note" && a.value
-                    ? `: ${a.value}`
-                    : ""}
-                </span>
-              ))}
-            </span>
-            <span className="text-muted-foreground text-xs">
-              {t("macros.used", { count: m.usage_count })}
-            </span>
-          </button>
-        ))}
-      </div>
+      <EntityTable
+        columns={columns}
+        data={list.data ?? EMPTY_MACROS}
+        getRowId={(row) => row.uuid}
+        // Only the owner, or someone who can manage shared ones, may edit.
+        onRowClick={(row) => {
+          if (row.mine || canWrite) setEditing(row);
+        }}
+        renderGridItem={(row) => <MacroCard macro={row} />}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        emptyDescription={t("macros.empty_macros")}
+        manual={CLIENT_MODE}
+        initialState={{
+          viewMode: "grid",
+          pagination: { pageIndex: 0, pageSize: 20 },
+        }}
+        features={{
+          persistKey: "tenant-macros-v1",
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       {editing && (
         <MacroDialog
           key={editing === "new" ? "new" : editing.uuid}
