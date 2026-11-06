@@ -27,6 +27,8 @@ export const inboxKeys = {
   lists: (org: string) => [...inboxKeys.all(org), 'list'] as const,
   list: (org: string, f: InboxFilters) => [...inboxKeys.lists(org), f] as const,
   counts: (org: string) => [...inboxKeys.all(org), 'counts'] as const,
+  /** The home summary's SLA rows (`features/dashboard`): refreshed wherever the lists are. */
+  dashboardSla: (org: string) => [...inboxKeys.all(org), 'dashboard-sla'] as const,
   agents: (org: string) => [...inboxKeys.all(org), 'agents'] as const,
   detail: (org: string, uuid: string) => [...inboxKeys.all(org), 'detail', uuid] as const,
   sla: (org: string, uuid: string) => [...inboxKeys.all(org), 'sla', uuid] as const,
