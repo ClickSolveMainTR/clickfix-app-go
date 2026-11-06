@@ -19,6 +19,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/twilioutil"
 )
 
@@ -249,6 +250,7 @@ func (a *Adapter) Send(ctx context.Context,
 		to = m.To.ExternalID
 	}
 	to = twilioutil.E164(to)
+	m.Text = format.Speech(m.Text) // read aloud: no marks, no code blocks (CF-177)
 	if to == "" || m.Text == "" || len([]rune(m.Text)) > 1000 || len(m.Attachments) > 0 || a.cfg.PublicBaseURL == "" {
 		return channels.SendResult{},
 			channels.Permanent("content",

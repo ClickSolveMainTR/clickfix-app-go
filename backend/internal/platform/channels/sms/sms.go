@@ -16,6 +16,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/sms/netgsm"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/twilioutil"
 )
@@ -200,6 +201,7 @@ func (a *Adapter) Send(ctx context.Context,
 		phone = m.To.ExternalID
 	}
 	phone = twilioutil.E164(phone)
+	m.Text = format.Plain(m.Text) // SMS is plain text (CF-177)
 	if phone == "" || m.Text == "" || len([]rune(m.Text)) > 1000 || len(m.Attachments) > 0 {
 		return channels.SendResult{},
 			channels.Permanent("content",

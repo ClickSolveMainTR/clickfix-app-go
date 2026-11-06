@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/microcosm-cc/bluemonday"
 )
 
@@ -148,20 +149,11 @@ func HTMLToText(in string) string {
 	return strings.TrimSpace(blankRunsRE.ReplaceAllString(strings.Join(lines, "\n"), "\n\n"))
 }
 
-// TextToHTML renders an agent's plain text reply as simple HTML.
+// TextToHTML renders an agent's reply (the source format: bold, italic,
+// code, lists, links; CF-177) as simple HTML. All text is escaped.
 func TextToHTML(text string) string {
-	var b strings.Builder
-	b.WriteString(`<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5">`)
-	for i, para := range strings.Split(strings.TrimSpace(normalizeNewlines(text)), "\n\n") {
-		if i > 0 {
-			b.WriteString("\n")
-		}
-		b.WriteString("<p>")
-		b.WriteString(strings.ReplaceAll(html.EscapeString(para), "\n", "<br>"))
-		b.WriteString("</p>")
-	}
-	b.WriteString("</div>")
-	return b.String()
+	return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5">` +
+		format.HTML(text) + "</div>"
 }
 
 // AutoReason reports why a message must not open or continue a

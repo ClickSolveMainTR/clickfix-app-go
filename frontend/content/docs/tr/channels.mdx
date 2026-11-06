@@ -55,3 +55,5 @@ X-ClickFix-Signature = sha256=hex(HMAC-SHA256(anahtar, timestamp + "." + gövde)
 ```
 
 Mesaj gövdesinin şeması [API başvurusunda](/docs/api) yer alır.
+
+Temsilci yanıtının `text` alanı ClickFix'in yazım biçimindedir: `**kalın**`, `*italik*`, `` `kod` ``, `[ad](https://adres)` ve `- ` ile başlayan listeler içerebilir. Diğer kanallarda bu biçim kanalın kendi biçimine çevrilir; API kanalında çevrilmez, metni nasıl göstereceğinize siz karar verirsiniz.

@@ -1,0 +1,1254 @@
+[
+  {
+    "name": "bold",
+    "src": "**kalın** metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "kalın"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "italic star",
+    "src": "*italik* metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "em",
+            "c": [
+              {
+                "t": "text",
+                "v": "italik"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "italic underscore",
+    "src": "_italik_ metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "em",
+            "c": [
+              {
+                "t": "text",
+                "v": "italik"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold with inner italic",
+    "src": "**çok *önemli* not**",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "çok "
+              },
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "önemli"
+                  }
+                ]
+              },
+              {
+                "t": "text",
+                "v": " not"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "italic with inner bold",
+    "src": "*bir **iki** üç*",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "em",
+            "c": [
+              {
+                "t": "text",
+                "v": "bir "
+              },
+              {
+                "t": "strong",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "iki"
+                  }
+                ]
+              },
+              {
+                "t": "text",
+                "v": " üç"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "inline code",
+    "src": "`a*b*c` ve `x_y_z`",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "code",
+            "v": "a*b*c"
+          },
+          {
+            "t": "text",
+            "v": " ve "
+          },
+          {
+            "t": "code",
+            "v": "x_y_z"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "code keeps marks",
+    "src": "**a `b**` c**",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "a `b"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "` c**"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "named link",
+    "src": "[yardım](https://ex.com/a_b?x=1&y=2)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com/a_b?x=1&y=2",
+            "c": [
+              {
+                "t": "text",
+                "v": "yardım"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "mailto link",
+    "src": "[posta](mailto:a@b.co)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "mailto:a@b.co",
+            "c": [
+              {
+                "t": "text",
+                "v": "posta"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "javascript link stays text",
+    "src": "[tıkla](javascript:alert(1))",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "[tıkla](javascript:alert(1))"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link",
+    "src": "bak: https://ex.com/yol_alt_cizgi/dosya_adi.pdf?a_b=c_d.",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "bak: "
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com/yol_alt_cizgi/dosya_adi.pdf?a_b=c_d",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com/yol_alt_cizgi/dosya_adi.pdf?a_b=c_d"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link in parentheses",
+    "src": "(https://ex.com/a_b)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "("
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com/a_b",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com/a_b"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": ")"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "link glued to a word is text",
+    "src": "xhttps://ex.com",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "xhttps://ex.com"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "multiplication",
+    "src": "2*3*4 = 24",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "2*3*4 = 24"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "spaced multiplication",
+    "src": "5 * 3 * 2",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "5 * 3 * 2"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "snake case",
+    "src": "dosya_adi.pdf ve snake_case_name",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "dosya_adi.pdf ve snake_case_name"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "leading underscore name",
+    "src": "_private_var ve __init__",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "_private_var ve __init__"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "lone marks",
+    "src": "tek * yıldız, tek _ çizgi, tek ` işaret",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "tek * yıldız, tek _ çizgi, tek ` işaret"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unclosed bold",
+    "src": "**kapanmayan metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "**kapanmayan metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unclosed italic",
+    "src": "*kapanmayan metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "*kapanmayan metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "footnote stars",
+    "src": "Fiyat* (*KDV dahil)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "Fiyat* (*KDV dahil)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold then suffix",
+    "src": "**Ayarlar**dan girin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "Ayarlar"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "dan girin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "italic star then suffix",
+    "src": "*önemli*dir",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "em",
+            "c": [
+              {
+                "t": "text",
+                "v": "önemli"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "dir"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "italic underscore then suffix is text",
+    "src": "_önemli_dir",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "_önemli_dir"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "marker after a word is text",
+    "src": "kelime*italik* ve kelime**kalın**",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "kelime*italik* ve kelime**kalın**"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "space after opener is text",
+    "src": "** kalın** ve * italik*",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "** kalın** ve * italik*"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "space before closer is skipped",
+    "src": "**a ** b**",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "a ** b"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "turkish and emoji",
+    "src": "**İŞLEM** tamam 🎉 *şöyle*",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "İŞLEM"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " tamam 🎉 "
+          },
+          {
+            "t": "em",
+            "c": [
+              {
+                "t": "text",
+                "v": "şöyle"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unordered list",
+    "src": "- bir\n- **iki**\n* üç\n• dört",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "bir"
+            }
+          ],
+          [
+            {
+              "t": "strong",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "iki"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "üç"
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "dört"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ordered list",
+    "src": "1. bir\n2) iki\n10. on",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": true,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "bir"
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "iki"
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "on"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "mixed lists",
+    "src": "- a\n1. b\n- c",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "a"
+            }
+          ]
+        ]
+      },
+      {
+        "t": "list",
+        "ordered": true,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "b"
+            }
+          ]
+        ]
+      },
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "c"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "list after paragraph",
+    "src": "Adımlar:\n- bir\n- iki\nSon",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "Adımlar:"
+          }
+        ]
+      },
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "bir"
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "iki"
+            }
+          ]
+        ]
+      },
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "Son"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "list across blank line",
+    "src": "- bir\n\n- iki",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "bir"
+            }
+          ],
+          [
+            {
+              "t": "text",
+              "v": "iki"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "number sentence",
+    "src": "24. madde gereği",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": true,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "madde gereği"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "indented item",
+    "src": "  - girintili",
+    "blocks": [
+      {
+        "t": "list",
+        "ordered": false,
+        "items": [
+          [
+            {
+              "t": "text",
+              "v": "girintili"
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold at line start is not a list",
+    "src": "**kalın** satır",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "text",
+                "v": "kalın"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " satır"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "code block",
+    "src": "önce\n```go\nx := a*b\n_y_\n```\nsonra",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "önce"
+          }
+        ]
+      },
+      {
+        "t": "pre",
+        "v": "x := a*b\n_y_"
+      },
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "sonra"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unclosed code block",
+    "src": "```\nkod\n**kalın**",
+    "blocks": [
+      {
+        "t": "pre",
+        "v": "kod\n**kalın**"
+      }
+    ]
+  },
+  {
+    "name": "paragraphs and breaks",
+    "src": "bir\niki\n\nüç\r\ndört\rbeş",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "bir"
+          },
+          {
+            "t": "br"
+          },
+          {
+            "t": "text",
+            "v": "iki"
+          }
+        ]
+      },
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "üç"
+          },
+          {
+            "t": "br"
+          },
+          {
+            "t": "text",
+            "v": "dört"
+          },
+          {
+            "t": "br"
+          },
+          {
+            "t": "text",
+            "v": "beş"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "blank lines only",
+    "src": "\n\n",
+    "blocks": []
+  },
+  {
+    "name": "empty",
+    "src": "",
+    "blocks": []
+  },
+  {
+    "name": "html is text",
+    "src": "<b>kalın</b> & <script>",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "<b>kalın</b> & <script>"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "nbsp after opener",
+    "src": "* x*",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "* x*"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link ends at nbsp",
+    "src": "https://ex.com devam",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " devam"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link ends at line separator",
+    "src": "https://ex.com devam ve https://ex.org　son",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " devam ve "
+          },
+          {
+            "t": "link",
+            "href": "https://ex.org",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.org"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "　son"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "named link with nbsp in address is text",
+    "src": "[a](https://ex.com/x y)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "[a]("
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com/x",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com/x"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " y)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "mailto with nbsp is text",
+    "src": "[a](mailto:a@b.co x)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "[a](mailto:a@b.co x)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bare link after nbsp",
+    "src": "bak: https://ex.com",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "bak: "
+          },
+          {
+            "t": "link",
+            "href": "https://ex.com",
+            "c": [
+              {
+                "t": "text",
+                "v": "https://ex.com"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic",
+    "src": "***kalın italik*** metin",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "kalın italik"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": " metin"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic with inner code",
+    "src": "***a `b` c***",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "a "
+                  },
+                  {
+                    "t": "code",
+                    "v": "b"
+                  },
+                  {
+                    "t": "text",
+                    "v": " c"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic then suffix",
+    "src": "***önemli***dir",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "strong",
+            "c": [
+              {
+                "t": "em",
+                "c": [
+                  {
+                    "t": "text",
+                    "v": "önemli"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "dir"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "unclosed bold italic",
+    "src": "***kapanmayan",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "***kapanmayan"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "four stars",
+    "src": "****x****",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "****x****"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "bold italic after a word is text",
+    "src": "kelime***x***",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "kelime***x***"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "parenthesis in address cuts the link",
+    "src": "[x](https://ex.com/a(b)c)",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "link",
+            "href": "https://ex.com/a(b",
+            "c": [
+              {
+                "t": "text",
+                "v": "x"
+              }
+            ]
+          },
+          {
+            "t": "text",
+            "v": "c)"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "tilde text",
+    "src": "~x~ ve ~~y~~",
+    "blocks": [
+      {
+        "t": "p",
+        "c": [
+          {
+            "t": "text",
+            "v": "~x~ ve ~~y~~"
+          }
+        ]
+      }
+    ]
+  }
+]

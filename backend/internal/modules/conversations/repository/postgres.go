@@ -436,6 +436,9 @@ func (t *Tx) AppendMessage(ctx context.Context, in NewMessage) (Appended, error)
 	}
 	out := Appended{Message: msg}
 	preview := model.Preview(in.Content)
+	if in.Direction == model.DirectionOut {
+		preview = model.PreviewOutbound(in.Content)
+	}
 	if preview == "" && in.Kind == model.KindMedia {
 		preview = "📎"
 	}

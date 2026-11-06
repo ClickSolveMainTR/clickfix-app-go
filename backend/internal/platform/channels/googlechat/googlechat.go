@@ -33,6 +33,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -519,13 +520,17 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	if thread != "" && !allowed(inst, spaceName) {
 		return channels.SendResult{}, channels.Permanent("thread", errors.New("google chat space is not selected"))
 	}
-	if len(msg.Attachments) > 0 || msg.Text == "" || len([]rune(msg.Text)) > MaxText {
+	// Markdown, named explicitly in the request: without markupSyntax Chat
+	// uses the app's configured syntax, which differs between old and new
+	// apps (CF-177). The limit applies to the text that is sent.
+	text := format.GoogleChat(msg.Text)
+	if len(msg.Attachments) > 0 || text == "" || len([]rune(text)) > MaxText {
 		return channels.SendResult{}, channels.Permanent("content",
 			fmt.Errorf("google chat adapter accepts up to %d text characters", MaxText))
 	}
 	messageID := "client-" + msg.MessageUUID.String()
 	q := url.Values{"messageId": {messageID}}
-	payload := map[string]any{"text": msg.Text}
+	payload := map[string]any{"text": text, "markupSyntax": "MARKUP_SYNTAX_MARKDOWN"}
 	if thread != "" {
 		q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
 		payload["thread"] = map[string]string{"name": thread}
@@ -534,6 +539,15 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 		Name string `json:"name"`
 	}
 	exists, err := a.api(ctx, inst, http.MethodPost, "/v1/"+spaceName+"/messages?"+q.Encode(), payload, &out)
+	if channelhttp.BadRequest(err) {
+		// The formatted message was refused (400): the message must still arrive,
+		// so send it once more as plain text in the app's default syntax.
+		if plain := format.Plain(msg.Text); plain != "" {
+			delete(payload, "markupSyntax")
+			payload["text"] = plain
+			exists, err = a.api(ctx, inst, http.MethodPost, "/v1/"+spaceName+"/messages?"+q.Encode(), payload, &out)
+		}
+	}
 	if err != nil {
 		return channels.SendResult{}, err
 	}
