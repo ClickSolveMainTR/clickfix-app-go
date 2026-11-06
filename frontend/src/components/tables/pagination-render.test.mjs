@@ -126,3 +126,96 @@ test("client mode counts the rows it holds", () => {
   );
   assert.ok(html.includes('table.showing{"from":11,"to":20,"total":25}'));
 });
+
+const rows = [
+  { id: "1", name: "İade" },
+  { id: "2", name: "Ödeme" },
+];
+const nameColumns = [{ accessorKey: "name", header: "name" }];
+
+test("rows with onRowClick are focusable and announce how to open", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(DataTable, {
+        columns: nameColumns,
+        data: rows,
+        onRowClick() {},
+      }),
+    ),
+  );
+  const bodyRows = html.match(/<tr[^>]*tabindex="0"[^>]*>/g) ?? [];
+  assert.equal(bodyRows.length, 2, "both data rows are tab stops");
+  assert.ok(bodyRows.every((row) => row.includes("aria-describedby=")));
+  assert.ok(html.includes("table.row_open_hint"));
+});
+
+test("rows without onRowClick are not tab stops", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(DataTable, { columns: nameColumns, data: rows }),
+    ),
+  );
+  assert.equal((html.match(/<tr[^>]*tabindex=/g) ?? []).length, 0);
+  assert.ok(!html.includes("table.row_open_hint"));
+});
+
+test("cards with onRowClick are focusable too", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(DataTable, {
+        columns: nameColumns,
+        data: rows,
+        onRowClick() {},
+        initialState: { viewMode: "grid" },
+      }),
+    ),
+  );
+  assert.equal((html.match(/<article[^>]*tabindex="0"/g) ?? []).length, 2);
+});
+
+test("loading keeps the toolbar mounted and hides the pagination", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(EntityTable, {
+        columns: nameColumns,
+        data: [],
+        isLoading: true,
+        searchPlaceholder: "ara",
+      }),
+    ),
+  );
+  assert.ok(html.includes('placeholder="ara"'), "search box is rendered");
+  assert.ok(html.includes('aria-busy="true"'), "rows are a skeleton");
+  assert.ok(!html.includes("table.showing"));
+});
+
+test("an error keeps the toolbar above the error state", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(EntityTable, {
+        columns: nameColumns,
+        data: [],
+        isError: true,
+        errorTitle: "yüklenemedi",
+        searchPlaceholder: "ara",
+      }),
+    ),
+  );
+  assert.ok(html.includes('placeholder="ara"'));
+  assert.ok(html.includes('role="alert"'));
+  assert.ok(html.indexOf('placeholder="ara"') < html.indexOf('role="alert"'));
+});
+
+test("client search is Turkish-aware", () => {
+  const html = text(
+    renderToStaticMarkup(
+      createElement(DataTable, {
+        columns: nameColumns,
+        data: rows,
+        initialState: { globalFilter: "iade" },
+      }),
+    ),
+  );
+  assert.ok(html.includes("İade"));
+  assert.ok(!html.includes("Ödeme"));
+});

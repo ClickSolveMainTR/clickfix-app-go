@@ -42,6 +42,7 @@
   "all": "All",
   "showing": "{{from}}–{{to}} of {{total}}",
   "showing_range": "{{from}}–{{to}}",
+  "row_open_hint": "Press Enter to open",
   "mobile_cards": "Mobile view: card list",
   "view_cards": "Cards",
   "reorder": "Order",

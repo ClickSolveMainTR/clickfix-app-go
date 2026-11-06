@@ -31,7 +31,7 @@ import {
   type CellEditPayload,
 } from "@/components/tables/editable-cell";
 import { RowDragProvider } from "@/components/tables/reorder-column";
-import { isRowClickIgnored } from "@/components/tables/row-click";
+import { ROW_FOCUS_CLASS, rowClickProps } from "@/components/tables/row-click";
 import type {
   DataTableColumnMeta,
   TableDensity,
@@ -64,6 +64,7 @@ type TableViewProps<TData> = {
   onEditingCellChange?: (cell: EditingCell) => void;
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   onRowClick?: (row: TData) => void;
+  rowHintId?: string;
 };
 
 export function TableView<TData>({
@@ -79,6 +80,7 @@ export function TableView<TData>({
   onEditingCellChange,
   onCellEdit,
   onRowClick,
+  rowHintId,
 }: TableViewProps<TData>) {
   const cellPad = densityCell[density];
   const leafColumns = table.getVisibleLeafColumns();
@@ -264,6 +266,7 @@ export function TableView<TData>({
                   onEditingCellChange={onEditingCellChange}
                   onCellEdit={onCellEdit}
                   onRowClick={onRowClick}
+                  rowHintId={rowHintId}
                 />
               ),
             )
@@ -303,6 +306,8 @@ type RowProps<TData> = {
   onEditingCellChange?: (cell: EditingCell) => void;
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   onRowClick?: (row: TData) => void;
+  /** Id of the hidden "press Enter to open" hint. */
+  rowHintId?: string;
 };
 
 function StaticTableRow<TData>({
@@ -314,22 +319,20 @@ function StaticTableRow<TData>({
   onEditingCellChange,
   onCellEdit,
   onRowClick,
+  rowHintId,
 }: RowProps<TData>) {
   return (
     <tr
       className={cn(
         "border-border hover:bg-muted/30 data-[state=selected]:bg-muted/50 border-b last:border-0",
-        onRowClick && "cursor-pointer",
+        onRowClick && ROW_FOCUS_CLASS,
       )}
       data-state={row.getIsSelected() ? "selected" : undefined}
-      onClick={
-        onRowClick
-          ? (event) => {
-              if (isRowClickIgnored(event)) return;
-              onRowClick(row.original);
-            }
-          : undefined
-      }
+      {...rowClickProps<TData, HTMLTableRowElement>(
+        row.original,
+        onRowClick,
+        rowHintId,
+      )}
     >
       {row.getVisibleCells().map((cell) => (
         <TableCell

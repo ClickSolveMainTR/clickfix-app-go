@@ -173,6 +173,11 @@ export type DataTableProps<TData> = {
   getRowId?: (originalRow: TData, index: number) => string;
 
   isLoading?: boolean;
+  /**
+   * Shown in place of the rows when the list failed to load. The toolbar
+   * (search, filters) stays above it.
+   */
+  errorState?: ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
 

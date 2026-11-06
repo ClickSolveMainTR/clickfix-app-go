@@ -12,7 +12,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 type EntityTableProps<TData> = Omit<
   DataTableProps<TData>,
-  "isLoading" | "emptyTitle" | "emptyDescription" | "rowCount"
+  "isLoading" | "errorState" | "emptyTitle" | "emptyDescription" | "rowCount"
 > & {
   /**
    * Total rows across all pages, as returned by the list endpoint (`total`).
@@ -55,16 +55,14 @@ export function EntityTable<TData>({
 }: EntityTableProps<TData>) {
   const { t } = useLocale();
 
-  if (isError) {
-    return (
-      <ErrorState
-        title={errorTitle ?? t("common.error_generic")}
-        description={errorDescription}
-        onRetry={onRetry}
-        retryLabel={t("common.retry")}
-      />
-    );
-  }
+  const errorState = isError ? (
+    <ErrorState
+      title={errorTitle ?? t("common.error_generic")}
+      description={errorDescription}
+      onRetry={onRetry}
+      retryLabel={t("common.retry")}
+    />
+  ) : undefined;
 
   const mergedToolbar =
     toolbar || toolbarExtra ? (
@@ -81,6 +79,7 @@ export function EntityTable<TData>({
       {...props}
       rowCount={total}
       isLoading={isLoading}
+      errorState={errorState}
       emptyTitle={emptyTitle ?? t("common.empty_title")}
       emptyDescription={emptyDescription ?? t("common.empty_description")}
       toolbar={
