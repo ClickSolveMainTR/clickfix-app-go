@@ -1,6 +1,12 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Check,
   Circle,
@@ -9,14 +15,22 @@ import {
   Mail,
   PhoneOff,
   Square,
+  Trash2,
   UserMinus,
   Users,
   Video,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import {
+  EntityDeleteDialog,
+  EntityRowActions,
+  EntityTable,
+  useServerListState,
+} from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +53,7 @@ import {
   videoService,
   type VideoJoinGrant,
   type VideoParticipant,
+  type VideoRecording,
   type VideoRoom,
 } from "../services/video.service";
 import { VideoCall } from "./video-call";
@@ -444,71 +459,149 @@ export function RecordingsList({ room }: { room?: string }) {
   const { t } = useLocale();
   const { slug, canManage } = useVideoScope();
   const qc = useQueryClient();
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
+  const [deleteTarget, setDeleteTarget] = useState<VideoRecording | null>(null);
   const list = useQuery({
-    queryKey: videoKeys.recordings(slug, room),
-    queryFn: () =>
-      videoService.recordings(slug, { room, limit: 50, offset: 0 }),
+    queryKey: [...videoKeys.recordings(slug, room), limit, offset],
+    queryFn: () => videoService.recordings(slug, { room, limit, offset }),
     enabled: Boolean(slug && canManage),
+    placeholderData: keepPreviousData,
   });
   const remove = useMutation({
     mutationFn: (uuid: string) => videoService.deleteRecording(slug, uuid),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: videoKeys.recordings(slug, room) }),
   });
-  if (!canManage) return null;
-  const items = list.data?.items ?? [];
-  if (items.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        {t("video.recording.empty")}
-      </p>
-    );
-  }
-  return (
-    <ul className="divide-y">
-      {items.map((rec) => (
-        <li
-          key={rec.uuid}
-          className="flex flex-wrap items-center gap-2 py-2 text-sm"
-        >
-          <div className="min-w-0 flex-1">
-            <span className="font-medium">{rec.room_name}</span>
-            <span className="text-muted-foreground ml-2 text-xs">
-              {datetime(rec.started_at)}
-            </span>
-          </div>
-          <Badge variant="secondary">
-            {t(`video.recording.status.${rec.status}`)}
-          </Badge>
-          <Badge variant="outline">
-            {t(`video.recording.storage.${rec.storage}`)}
-          </Badge>
-          {rec.expires_at ? (
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<VideoRecording>({
+          accessorKey: "room_name",
+          labelKey: "video.rooms.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="font-medium">{row.original.room_name}</span>
+          ),
+        }),
+        createColumn<VideoRecording>({
+          accessorKey: "started_at",
+          labelKey: "video.recording.columns.started",
+          cell: ({ row }) => (
             <span className="text-muted-foreground text-xs">
-              {t("video.recording.expires", { at: datetime(rec.expires_at) })}
+              {datetime(row.original.started_at)}
             </span>
-          ) : null}
-          {rec.status === "complete" ? (
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={t("video.recording.download")}
-              onClick={() => videoService.downloadRecording(slug, rec.uuid)}
-            >
-              <Download className="size-4" />
-            </Button>
-          ) : null}
-          <Button
-            disabled={remove.isPending}
-            size="icon"
-            variant="ghost"
-            aria-label={t("video.recording.delete")}
-            onClick={() => remove.mutate(rec.uuid)}
-          >
-            <X className="size-4" />
-          </Button>
-        </li>
-      ))}
-    </ul>
+          ),
+        }),
+        createColumn<VideoRecording>({
+          accessorKey: "status",
+          labelKey: "video.recording.columns.status",
+          cell: ({ row }) => (
+            <Badge variant="secondary">
+              {t(`video.recording.status.${row.original.status}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<VideoRecording>({
+          accessorKey: "storage",
+          labelKey: "video.recording.columns.storage",
+          cell: ({ row }) => (
+            <Badge variant="outline">
+              {t(`video.recording.storage.${row.original.storage}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<VideoRecording>({
+          accessorKey: "expires_at",
+          labelKey: "video.recording.columns.expires",
+          cell: ({ row }) =>
+            row.original.expires_at ? (
+              <span className="text-muted-foreground text-xs">
+                {datetime(row.original.expires_at)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<VideoRecording>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-right" },
+          cell: ({ row }) => (
+            <EntityRowActions
+              actions={[
+                ...(row.original.status === "complete"
+                  ? [
+                      {
+                        id: "download",
+                        label: t("video.recording.download"),
+                        icon: Download,
+                        onSelect: () =>
+                          void videoService.downloadRecording(
+                            slug,
+                            row.original.uuid,
+                          ),
+                      },
+                    ]
+                  : []),
+                {
+                  id: "delete",
+                  label: t("video.recording.delete"),
+                  icon: Trash2,
+                  variant: "destructive" as const,
+                  onSelect: () => setDeleteTarget(row.original),
+                },
+              ]}
+            />
+          ),
+        }),
+      ] as ColumnDef<VideoRecording, unknown>[],
+    [slug, t],
+  );
+
+  if (!canManage) return null;
+  return (
+    <>
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        emptyDescription={t("video.recording.empty")}
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `room`, `limit` and `offset` only.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+      />
+      <EntityDeleteDialog
+        open={Boolean(deleteTarget)}
+        softDelete={false}
+        entityLabel={
+          deleteTarget
+            ? `${deleteTarget.room_name} (${datetime(deleteTarget.started_at)})`
+            : ""
+        }
+        isPending={remove.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          remove.mutate(deleteTarget.uuid, {
+            onSettled: () => setDeleteTarget(null),
+          });
+        }}
+      />
+    </>
   );
 }

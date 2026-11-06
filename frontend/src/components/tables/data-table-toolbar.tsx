@@ -114,6 +114,8 @@ export function DataTableToolbar<TData>({
         })
       : [];
 
+  if (!features.toolbar) return null;
+
   const resolvedBulk = resolveBulkActions(bulkActions, selected, table);
   const bulkNode =
     resolvedBulk == null ? null : isValidElement(resolvedBulk) ||

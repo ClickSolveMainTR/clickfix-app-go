@@ -77,11 +77,7 @@ export function VideoSettingsPage() {
             />
           </TabsContent>
           <TabsContent value="recordings" className="mt-4">
-            <Card>
-              <CardContent className="p-4">
-                <RecordingsList />
-              </CardContent>
-            </Card>
+            <RecordingsList />
           </TabsContent>
         </Tabs>
       ) : null}

@@ -151,6 +151,12 @@ export type DataTableFeatures = {
    * Default: true
    */
   facetedFilters?: boolean;
+  /**
+   * Toolbar row above the table (search, filters, view / density / column
+   * menus, reset). Turn off for small tables embedded in a card or dialog.
+   * Default: true
+   */
+  toolbar?: boolean;
   /** Persist table UI state to localStorage under this key */
   persistKey?: string;
 };

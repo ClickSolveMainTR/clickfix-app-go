@@ -47,6 +47,7 @@ const DEFAULT_FEATURES: Required<Omit<DataTableFeatures, "persistKey">> & {
   rowReorder: false,
   inlineEdit: false,
   facetedFilters: true,
+  toolbar: true,
 };
 
 function readPersisted(
