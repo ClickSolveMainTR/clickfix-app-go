@@ -184,6 +184,9 @@ export type DataTableProps<TData> = {
   pageCount?: number;
   pageSizeOptions?: number[];
 
+  /** Placeholder of the toolbar search box; defaults to `table.search`. */
+  searchPlaceholder?: string;
+
   toolbar?: ReactNode | ((table: Table<TData>) => ReactNode);
   /**
    * Bulk actions for selected rows.
