@@ -5,8 +5,9 @@ import { Linking, RefreshControl, View } from 'react-native';
 
 import { isApiError } from '@/core/api/errors';
 import { formatDateTime } from '@/core/date-format';
-import { appLocale, displayTimeZone, formatNumber, formatShort } from '@/core/format';
+import { appLocale, displayTimeZone, formatNumber } from '@/core/format';
 import { useDebounced } from '@/core/use-debounced';
+import { callTime } from '@/features/calls/calls-screen';
 import { useMemberNames } from '@/features/team/names';
 import { EmptyState } from '@/ui/empty-state';
 import { List, ListRow, SectionHeader } from '@/ui/list';
@@ -109,8 +110,8 @@ function useValueText() {
         return (
           formatDateTime(
             appLocale(),
-            { day: 'numeric', month: 'short', year: 'numeric', timeZone: displayTimeZone() },
-            v.iso,
+            { day: 'numeric', month: 'short', year: 'numeric', timeZone: v.timeZone ?? displayTimeZone() },
+            v.at,
           ) || plainText(value)
         );
       case 'user': {
@@ -180,7 +181,9 @@ export function ObjectRecordScreen() {
   const refresh = useManualRefresh(query);
   const valueText = useValueText();
   if (!canRecords) return <Notice title={t('objects.record')} body={t('objects.no_access')} />;
-  const missing = !type || !record || (isApiError(query.error) && query.error.status === 404);
+  // 404: no such record. 400: the id in the link is not a uuid (`record=abc`). Both mean "not found" here.
+  const status = isApiError(query.error) ? query.error.status : 0;
+  const missing = !type || !record || status === 404 || status === 400;
   if (missing) return <Notice title={t('objects.record')} body={t('objects.record_not_found')} />;
   const fields = activeDefinitions(definitions.data?.items ?? []);
   return (
@@ -227,8 +230,8 @@ export function ObjectRecordScreen() {
               </View>
               <Text variant="footnote" tone="muted" className="px-4">
                 {[
-                  t('objects.created', { at: formatShort(r.created_at) }),
-                  t('objects.updated', { at: formatShort(r.updated_at) }),
+                  t('objects.created', { at: callTime(r.created_at) }),
+                  t('objects.updated', { at: callTime(r.updated_at) }),
                   t('objects.read_only'),
                 ].join('\n')}
               </Text>

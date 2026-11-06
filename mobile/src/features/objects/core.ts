@@ -60,6 +60,22 @@ export function safeUrl(value: string): string | null {
   return /^https?:\/\/[^\s]+$/i.test(text) ? text : null;
 }
 
+/**
+ * A stored date as something to format. The API keeps a `date` field
+ * without a time (`2026-11-06`): that is a calendar day, so it is formatted
+ * at noon UTC in UTC and reads "6 Nov" on every phone. Parsing it as an
+ * instant would make it UTC midnight, which is still the 5th west of
+ * Greenwich. A full timestamp keeps the phone's zone (`timeZone: null`).
+ */
+export function calendarDate(value: string): { kind: 'date'; at: string; timeZone: 'UTC' | null } | null {
+  const text = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const at = `${text}T12:00:00Z`;
+    return Number.isNaN(new Date(at).getTime()) ? null : { kind: 'date', at, timeZone: 'UTC' };
+  }
+  return Number.isNaN(new Date(text).getTime()) ? null : { kind: 'date', at: text, timeZone: null };
+}
+
 export type ValueView =
   | { kind: 'empty' }
   | { kind: 'text'; text: string; multiline?: boolean }
@@ -67,7 +83,7 @@ export type ValueView =
   | { kind: 'boolean'; value: boolean }
   | { kind: 'money'; amount: number; currency: string }
   | { kind: 'number'; value: number; precision: number }
-  | { kind: 'date'; iso: string }
+  | { kind: 'date'; at: string; timeZone: 'UTC' | null }
   | { kind: 'link'; text: string; href: string }
   | { kind: 'user'; uuid: string };
 
@@ -99,9 +115,7 @@ export function valueView(definition: Pick<Definition, 'type' | 'options' | 'con
         : { kind: 'text', text };
     }
     case 'date':
-      return Number.isNaN(new Date(String(value)).getTime())
-        ? { kind: 'text', text }
-        : { kind: 'date', iso: String(value) };
+      return calendarDate(String(value)) ?? { kind: 'text', text };
     case 'url': {
       const href = safeUrl(String(value));
       return href ? { kind: 'link', text: href.replace(/^https?:\/\//i, ''), href } : { kind: 'text', text };

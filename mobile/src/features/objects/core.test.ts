@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { activeDefinitions, isEmptyValue, plainText, safeUrl, valueView } from './core.ts';
+import { activeDefinitions, calendarDate, isEmptyValue, plainText, safeUrl, valueView } from './core.ts';
 
 const def = (type: string, extra: object = {}) => ({ type, options: [], config: {}, ...extra });
 
@@ -58,7 +58,7 @@ test('typed values', () => {
     value: 3.14159,
     precision: 2,
   });
-  assert.deepEqual(valueView(def('date'), '2026-11-06'), { kind: 'date', iso: '2026-11-06' });
+  assert.deepEqual(valueView(def('date'), '2026-11-06'), { kind: 'date', at: '2026-11-06T12:00:00Z', timeZone: 'UTC' });
   assert.deepEqual(valueView(def('user'), 'u-1'), { kind: 'user', uuid: 'u-1' });
   assert.deepEqual(valueView(def('textarea'), 'a\nb'), { kind: 'text', text: 'a\nb', multiline: true });
   assert.deepEqual(valueView(def('text'), ''), { kind: 'empty' });
@@ -90,4 +90,28 @@ test('links open only safe schemes', () => {
     href: 'tel:+905551112233',
   });
   assert.deepEqual(valueView(def('phone'), 'ara beni'), { kind: 'text', text: 'ara beni' });
+});
+
+test('a date-only value is the same calendar day west of Greenwich', () => {
+  const before = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try {
+    const view = calendarDate('2026-11-06');
+    assert.deepEqual(view, { kind: 'date', at: '2026-11-06T12:00:00Z', timeZone: 'UTC' });
+    const text = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: view!.timeZone! }).format(
+      new Date(view!.at),
+    );
+    assert.equal(text, '6 Nov');
+    // What the naive parse would have shown on this phone: the day before.
+    assert.equal(new Intl.DateTimeFormat('en-GB', { day: 'numeric' }).format(new Date('2026-11-06')), '5');
+  } finally {
+    if (before === undefined) delete process.env.TZ;
+    else process.env.TZ = before;
+  }
+});
+
+test('calendarDate keeps a timestamp as an instant and rejects non-dates', () => {
+  assert.deepEqual(calendarDate('2026-11-06T09:30:00Z'), { kind: 'date', at: '2026-11-06T09:30:00Z', timeZone: null });
+  assert.equal(calendarDate('2026-13-45'), null);
+  assert.equal(calendarDate('yarın'), null);
 });
