@@ -22,6 +22,8 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	convAll := middleware.RequireTenantPermission(rbac.PermTenantConversationsReadAll)
 	manage := middleware.RequireTenantPermission(rbac.PermTenantConversationsManage)
 	settings := middleware.RequireTenantPermission(rbac.PermTenantSettingsWrite)
+	// The list is masked (no secrets), so settings readers may see status.
+	settingsRead := middleware.RequireTenantPermission(rbac.PermTenantSettingsRead)
 	route := func(pattern string, fn http.HandlerFunc, guards ...func(http.Handler) http.Handler) {
 		chain := append([]func(http.Handler) http.Handler{auth, org}, guards...)
 		chain = append(chain, h.WithViewer)
@@ -52,7 +54,7 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("POST /v1/tenant/engineering/conversations/{conversation}/escalations", h.Escalate, write, convRead, manage)
 	route("GET /v1/tenant/engineering/conversations/{conversation}/errors", h.Errors, read, convRead)
 	route("POST /v1/tenant/engineering/conversations/{conversation}/errors", h.AttachError, write, convRead)
-	route("GET /v1/tenant/engineering/integrations", h.Integrations, settings)
+	route("GET /v1/tenant/engineering/integrations", h.Integrations, settingsRead)
 	route("PUT /v1/tenant/engineering/integrations/{provider}", h.SaveIntegration, settings)
 	route("POST /v1/tenant/engineering/integrations/{provider}/oauth/start", h.StartOAuth, settings)
 	route("POST /v1/tenant/engineering/integrations/{provider}/oauth/complete", h.CompleteOAuth, settings)
