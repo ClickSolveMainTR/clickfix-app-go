@@ -1,13 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Eye, ListTree } from "lucide-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Eye } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Loading } from "@/components/common/loading";
 import { AppDialog } from "@/components/dialogs/app-dialog";
+import { EntityTable, useServerListState } from "@/components/entity";
 import { FormActions } from "@/components/forms/form-actions";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import { useActiveOrganization } from "@/features/organizations";
 import { isApiError } from "@/lib/api";
@@ -15,13 +18,18 @@ import { datetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 
 import { workflowKeys } from "../hooks/use-workflows";
-import { workflowsService } from "../services/workflows.service";
+import {
+  workflowsService,
+  type WorkflowRun,
+} from "../services/workflows.service";
 import { RunStatus } from "./run-status";
 import type { TraceMark } from "./workflow-node";
 
-const PAGE = 20;
-
-/** Run history of the workflow; a row opens the per-step log. */
+/**
+ * Run history of the workflow; a row opens the per-step log. The panel sits
+ * in the editor's narrow side column, so the table has one stacked column and
+ * no toolbar.
+ */
 export function RunsPanel({
   uuid,
   onHighlight,
@@ -31,65 +39,78 @@ export function RunsPanel({
 }) {
   const { t } = useLocale();
   const { active: org } = useActiveOrganization();
-  const [limit, setLimit] = useState(PAGE);
+  const listState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset } = listState.params;
   const [open, setOpen] = useState<string | null>(null);
   const runs = useQuery({
-    queryKey: workflowKeys.runs(org?.slug, uuid, limit),
-    queryFn: () => workflowsService.runs(uuid, limit, 0),
+    queryKey: workflowKeys.runs(org?.slug, uuid, limit, offset),
+    queryFn: () => workflowsService.runs(uuid, limit, offset),
     enabled: Boolean(org),
+    placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
-  if (runs.isLoading) return <Loading label={t("common.loading")} />;
-  if (runs.isError)
-    return (
-      <p className="text-destructive text-sm">{t("workflows.runs.error")}</p>
-    );
-  const items = runs.data?.items ?? [];
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<WorkflowRun>({
+          id: "run",
+          accessorFn: (row) => row.created_at,
+          labelKey: "workflows.runs.column",
+          enableHiding: false,
+          cell: ({ row }) => {
+            const r = row.original;
+            return (
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="flex items-center gap-2">
+                  <RunStatus status={r.status} />
+                  <span className="text-muted-foreground ml-auto text-xs">
+                    {datetime(r.created_at, "dd.MM HH:mm:ss")}
+                  </span>
+                </span>
+                <span className="text-muted-foreground truncate font-mono text-[10px]">
+                  {r.conversation_uuid}
+                </span>
+                {r.error && (
+                  <span className="text-destructive line-clamp-2 text-xs">
+                    {r.error}
+                  </span>
+                )}
+              </div>
+            );
+          },
+        }),
+      ] as ColumnDef<WorkflowRun, unknown>[],
+    [],
+  );
+
   return (
-    <div className="space-y-2">
-      {items.length === 0 && (
-        <div className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-center text-sm">
-          <ListTree className="size-6" />
-          {t("workflows.runs.empty")}
-        </div>
-      )}
-      <ul className="space-y-1.5">
-        {items.map((r) => (
-          <li key={r.uuid}>
-            <button
-              type="button"
-              onClick={() => setOpen(r.uuid)}
-              className="hover:bg-muted flex w-full flex-col gap-1 rounded-md border px-2.5 py-2 text-left"
-            >
-              <span className="flex items-center gap-2">
-                <RunStatus status={r.status} />
-                <span className="text-muted-foreground ml-auto text-xs">
-                  {datetime(r.created_at, "dd.MM HH:mm:ss")}
-                </span>
-              </span>
-              <span className="text-muted-foreground truncate font-mono text-[10px]">
-                {r.conversation_uuid}
-              </span>
-              {r.error && (
-                <span className="text-destructive line-clamp-2 text-xs">
-                  {r.error}
-                </span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {(runs.data?.total ?? 0) > items.length && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={() => setLimit((l) => l + PAGE)}
-        >
-          {t("workflows.runs.more")}
-        </Button>
-      )}
+    <>
+      <EntityTable
+        columns={columns}
+        data={runs.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        onRowClick={(row) => setOpen(row.uuid)}
+        isLoading={runs.isLoading}
+        isError={runs.isError}
+        errorTitle={t("workflows.runs.error")}
+        onRetry={() => void runs.refetch()}
+        emptyDescription={t("workflows.runs.empty")}
+        total={runs.data?.total ?? 0}
+        state={listState.tableState}
+        pageSizeOptions={[10, 20, 50]}
+        features={{
+          // The endpoint takes `limit` and `offset` only.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          columnResizing: false,
+          rowSelection: false,
+          viewMode: false,
+          mobileAutoCards: false,
+        }}
+      />
       {open && (
         <RunDialog
           run={open}
@@ -100,7 +121,7 @@ export function RunsPanel({
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

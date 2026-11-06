@@ -1,19 +1,24 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Import, Plus, Workflow as WorkflowIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
 import { AppDialog } from "@/components/dialogs/app-dialog";
+import { EntityTable, useServerListState } from "@/components/entity";
 import { FormActions } from "@/components/forms/form-actions";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Permission } from "@/config/permissions";
@@ -43,12 +48,111 @@ export function WorkflowsPage() {
   const canWrite = perms.includes(Permission.TenantAutomationsWrite);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
   const list = useQuery({
-    queryKey: workflowKeys.list(org?.slug),
-    queryFn: () => workflowsService.list(100, 0),
+    queryKey: workflowKeys.list(org?.slug, limit, offset),
+    queryFn: () => workflowsService.list(limit, offset),
     enabled: Boolean(org) && canRead,
+    placeholderData: keepPreviousData,
   });
-  const items = list.data?.items ?? [];
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Workflow>({
+          accessorKey: "name",
+          labelKey: "workflows.columns.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => {
+            const w = row.original;
+            const trigger = w.draft.nodes.find(
+              (n) => n.type === "trigger",
+            )?.trigger;
+            return (
+              <div>
+                <Link
+                  href={routes.cms.workflows.detail(w.uuid)}
+                  className="font-medium hover:underline"
+                >
+                  {w.name}
+                </Link>
+                {trigger && (
+                  <p className="text-muted-foreground text-xs font-normal">
+                    {t(`workflows.triggers.${slug(trigger)}`)}
+                  </p>
+                )}
+              </div>
+            );
+          },
+        }),
+        createColumn<Workflow>({
+          id: "status",
+          accessorFn: (row) => row.enabled,
+          labelKey: "workflows.columns.status",
+          cell: ({ row }) => {
+            const w = row.original;
+            return (
+              <div className="flex flex-wrap gap-1">
+                {w.published_version === null ? (
+                  <Badge variant="secondary">
+                    {t("workflows.status.draft")}
+                  </Badge>
+                ) : w.enabled ? (
+                  <Badge variant="success">
+                    {t("workflows.status.enabled")}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">
+                    {t("workflows.status.disabled")}
+                  </Badge>
+                )}
+                {w.published_version !== null &&
+                  w.published_version !== w.revision && (
+                    <Badge variant="warning">
+                      {t("workflows.status.unpublished")}
+                    </Badge>
+                  )}
+              </div>
+            );
+          },
+        }),
+        createColumn<Workflow>({
+          id: "version",
+          accessorFn: (row) => row.published_version ?? 0,
+          labelKey: "workflows.columns.version",
+          cell: ({ row }) => {
+            const w = row.original;
+            return (
+              <span className="text-xs tabular-nums">
+                {w.published_version !== null ? `v${w.published_version}` : "—"}
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {t("workflows.editor.revision", { revision: w.revision })}
+                </span>
+              </span>
+            );
+          },
+        }),
+        createColumn<Workflow>({
+          id: "last_run",
+          accessorFn: (row) => row.uuid,
+          labelKey: "workflows.columns.last_run",
+          cell: ({ row }) => <LastRun workflow={row.original} />,
+        }),
+        createColumn<Workflow>({
+          accessorKey: "updated_at",
+          labelKey: "workflows.columns.updated",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-xs">
+              {datetime(row.original.updated_at, "dd.MM.yyyy HH:mm")}
+            </span>
+          ),
+        }),
+      ] as ColumnDef<Workflow, unknown>[],
+    [t],
+  );
 
   return (
     <div className="space-y-6">
@@ -80,52 +184,28 @@ export function WorkflowsPage() {
           {t("workflows.forbidden")}
         </p>
       )}
-      {list.isLoading && <Loading label={t("common.loading")} />}
-      {list.isError && (
-        <ErrorState
-          title={t("workflows.error.title")}
-          description={t("workflows.error.description")}
+      {canRead && (
+        <EntityTable
+          columns={columns}
+          data={list.data?.items ?? []}
+          getRowId={(row) => row.uuid}
+          isLoading={list.isLoading}
+          isError={list.isError}
+          errorTitle={t("workflows.error.title")}
+          errorDescription={t("workflows.error.description")}
           onRetry={() => void list.refetch()}
+          emptyDescription={t("workflows.empty")}
+          total={list.data?.total ?? 0}
+          state={listState.tableState}
+          features={{
+            persistKey: "tenant-workflows-v1",
+            // The endpoint takes `limit` and `offset` only.
+            sorting: false,
+            globalFilter: false,
+            columnFilters: false,
+            rowSelection: false,
+          }}
         />
-      )}
-      {list.isSuccess && items.length === 0 && (
-        <Card>
-          <CardContent className="text-muted-foreground py-10 text-center text-sm">
-            {t("workflows.empty")}
-          </CardContent>
-        </Card>
-      )}
-      {items.length > 0 && (
-        <Card className="overflow-hidden py-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
-                <tr>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("workflows.columns.name")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("workflows.columns.status")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("workflows.columns.version")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("workflows.columns.last_run")}
-                  </th>
-                  <th className="px-4 py-2.5 font-medium">
-                    {t("workflows.columns.updated")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((w) => (
-                  <WorkflowRow key={w.uuid} workflow={w} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
       )}
       {creating && <CreateDialog onClose={() => setCreating(false)} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
@@ -133,10 +213,10 @@ export function WorkflowsPage() {
   );
 }
 
-function WorkflowRow({ workflow: w }: { workflow: Workflow }) {
+/** Latest run of a published workflow (one small request per row). */
+function LastRun({ workflow: w }: { workflow: Workflow }) {
   const { t } = useLocale();
   const { active: org } = useActiveOrganization();
-  const trigger = w.draft.nodes.find((n) => n.type === "trigger")?.trigger;
   const lastRun = useQuery({
     queryKey: workflowKeys.lastRun(org?.slug, w.uuid),
     queryFn: () => workflowsService.runs(w.uuid, 1, 0),
@@ -144,63 +224,17 @@ function WorkflowRow({ workflow: w }: { workflow: Workflow }) {
     staleTime: 30_000,
   });
   const run = lastRun.data?.items?.[0];
-  return (
-    <tr className="hover:bg-muted/40 border-t">
-      <td className="px-4 py-3">
-        <Link
-          href={routes.cms.workflows.detail(w.uuid)}
-          className="font-medium hover:underline"
-        >
-          {w.name}
-        </Link>
-        {trigger && (
-          <p className="text-muted-foreground text-xs">
-            {t(`workflows.triggers.${slug(trigger)}`)}
-          </p>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap gap-1">
-          {w.published_version === null ? (
-            <Badge variant="secondary">{t("workflows.status.draft")}</Badge>
-          ) : w.enabled ? (
-            <Badge variant="success">{t("workflows.status.enabled")}</Badge>
-          ) : (
-            <Badge variant="outline">{t("workflows.status.disabled")}</Badge>
-          )}
-          {w.published_version !== null &&
-            w.published_version !== w.revision && (
-              <Badge variant="warning">
-                {t("workflows.status.unpublished")}
-              </Badge>
-            )}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-xs tabular-nums">
-        {w.published_version !== null ? `v${w.published_version}` : "—"}
-        <span className="text-muted-foreground">
-          {" "}
-          · {t("workflows.editor.revision", { revision: w.revision })}
-        </span>
-      </td>
-      <td className="px-4 py-3">
-        {run ? (
-          <span className="flex items-center gap-2">
-            <RunStatus status={run.status} />
-            <span className="text-muted-foreground text-xs">
-              {datetime(run.created_at, "dd.MM HH:mm")}
-            </span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground text-xs">
-            {lastRun.isLoading ? "…" : t("workflows.runs.never")}
-          </span>
-        )}
-      </td>
-      <td className="text-muted-foreground px-4 py-3 text-xs">
-        {datetime(w.updated_at, "dd.MM.yyyy HH:mm")}
-      </td>
-    </tr>
+  return run ? (
+    <span className="flex items-center gap-2">
+      <RunStatus status={run.status} />
+      <span className="text-muted-foreground text-xs">
+        {datetime(run.created_at, "dd.MM HH:mm")}
+      </span>
+    </span>
+  ) : (
+    <span className="text-muted-foreground text-xs">
+      {lastRun.isLoading ? "…" : t("workflows.runs.never")}
+    </span>
   );
 }
 
