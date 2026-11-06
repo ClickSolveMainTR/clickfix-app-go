@@ -1,6 +1,6 @@
 import { getCalendars, getLocales } from 'expo-localization';
 
-import { DEFAULT_TIME_ZONE, formatDateTime } from '@/core/date-format';
+import { DEFAULT_TIME_ZONE, formatDateTime, inOtherYear } from '@/core/date-format';
 import { i18n } from '@/core/i18n';
 
 export { DEFAULT_TIME_ZONE };
@@ -91,6 +91,12 @@ export function formatCompactDate(iso: string | null | undefined) {
 /** Compact date and time for history rows ("26 Eki 14:30"). */
 export function formatShort(iso: string | null | undefined, timeZone?: string | null) {
   return format({ day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }, iso, timeZone);
+}
+
+/** `formatShort` for records that can be old (logs, forum posts): another year is written out ("3 Ara 2025 14:30"). */
+export function formatShortWithYear(iso: string | null | undefined, timeZone?: string | null) {
+  if (!inOtherYear(iso)) return formatShort(iso, timeZone);
+  return format({ day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }, iso, timeZone);
 }
 
 /** "5 dk önce", "yarın", "in 2 hours": the nearest whole unit, `now` for under a minute. */
