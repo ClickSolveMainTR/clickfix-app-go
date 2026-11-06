@@ -54,6 +54,8 @@
   "members.remove_description": "The member stays in the organization and only leaves this team.",
   "members.joined": "Joined: {{date}}",
   "members.skills": "Skills",
+  "members.columns.member": "Member",
+  "members.columns.role": "Role",
   "roles.lead": "Lead",
   "roles.member": "Member",
   "actions.create": "Create team",

@@ -1,12 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Activity, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Loading } from "@/components/common/loading";
+import { EntityTable } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn, DataTable } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +35,7 @@ import { appToast } from "@/providers/toast-provider";
 import {
   routingService,
   type AgentLoad,
+  type RoutingEvent,
   type RoutingRule,
   type RoutingSettings,
 } from "../services/routing.service";
@@ -131,8 +135,6 @@ function LiveTab({
     queryFn: routingService.capacity,
     refetchInterval: 15_000,
   });
-  const [editing, setEditing] = useState<string | null>(null);
-  const [limit, setLimit] = useState("");
   const save = useMutation({
     mutationFn: (p: { user: string | null; max: string }) =>
       routingService.setLimits(
@@ -140,12 +142,95 @@ function LiveTab({
         p.max.trim() === "" ? {} : { "*": Math.max(0, Number(p.max)) },
       ),
     onSuccess: async () => {
-      setEditing(null);
       await qc.invalidateQueries({ queryKey: key });
       appToast.success(t("routing.toast.saved"));
     },
     onError,
   });
+  const { mutate: saveLimit } = save;
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<AgentLoad>({
+          id: "agent",
+          accessorFn: (row) => `${row.name} ${row.skills.join(" ")}`,
+          labelKey: "routing.live.agent",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <div>
+              <div className="font-medium">{row.original.name}</div>
+              {row.original.skills.length > 0 && (
+                <div className="text-muted-foreground text-xs font-normal">
+                  {row.original.skills.join(", ")}
+                </div>
+              )}
+            </div>
+          ),
+        }),
+        createColumn<AgentLoad>({
+          accessorKey: "status",
+          labelKey: "routing.live.status",
+          searchable: false,
+          cell: ({ row }) => {
+            const a = row.original;
+            return (
+              <div>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={cn("size-2 rounded-full", STATUS_DOT[a.status])}
+                  />
+                  {t(`routing.status.${a.status}`)}
+                </span>
+                {a.last_seen_at && a.status === "offline" && (
+                  <div className="text-muted-foreground text-xs">
+                    {datetime(a.last_seen_at, "dd.MM HH:mm")}
+                  </div>
+                )}
+              </div>
+            );
+          },
+        }),
+        createColumn<AgentLoad>({
+          id: "teams",
+          accessorFn: (row) => row.teams.map((x) => x.name).join(", "),
+          labelKey: "routing.live.teams",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-xs">
+              {row.original.teams.map((x) => x.name).join(", ") || "—"}
+            </span>
+          ),
+        }),
+        createColumn<AgentLoad>({
+          accessorKey: "open_total",
+          labelKey: "routing.live.open",
+          searchable: false,
+          cell: ({ row }) => <OpenLoad agent={row.original} />,
+        }),
+        createColumn<AgentLoad>({
+          id: "limit",
+          accessorFn: (row) => row.limits["*"] ?? Number.POSITIVE_INFINITY,
+          labelKey: "routing.live.limit",
+          searchable: false,
+          cell: ({ row }) => (
+            <LimitCell
+              agent={row.original}
+              canWrite={canWrite}
+              onSave={(max, done) =>
+                saveLimit(
+                  { user: row.original.user_uuid, max },
+                  { onSuccess: done },
+                )
+              }
+            />
+          ),
+        }),
+      ] as ColumnDef<AgentLoad, unknown>[],
+    [canWrite, saveLimit, t],
+  );
+
   if (isLoading || !data) return <Loading label={t("common.loading")} />;
   return (
     <div className="space-y-4">
@@ -157,41 +242,19 @@ function LiveTab({
           value={data.settings.enabled ? t("routing.on") : t("routing.off")}
         />
       </div>
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="p-3 font-medium">{t("routing.live.agent")}</th>
-                <th className="p-3 font-medium">{t("routing.live.status")}</th>
-                <th className="p-3 font-medium">{t("routing.live.teams")}</th>
-                <th className="p-3 font-medium">{t("routing.live.open")}</th>
-                <th className="p-3 font-medium">{t("routing.live.limit")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.agents.map((a) => (
-                <AgentRow
-                  key={a.user_uuid}
-                  agent={a}
-                  canWrite={canWrite}
-                  editing={editing === a.user_uuid}
-                  limit={limit}
-                  onLimit={setLimit}
-                  onEdit={() => {
-                    setEditing(a.user_uuid);
-                    setLimit(
-                      a.limits["*"] != null ? String(a.limits["*"]) : "",
-                    );
-                  }}
-                  onSave={() => save.mutate({ user: a.user_uuid, max: limit })}
-                  onCancel={() => setEditing(null)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={data.agents}
+        getRowId={(row) => row.user_uuid}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 50 } }}
+        features={{
+          persistKey: "tenant-team-status-live-v1",
+          // The capacity snapshot holds every agent: search, sort and paging
+          // run in the browser.
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       {canWrite && <DefaultLimits orgSlug={orgSlug} />}
     </div>
   );
@@ -208,115 +271,96 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function AgentRow({
+/** Open conversations of an agent, per channel, with the load bar. */
+function OpenLoad({ agent: a }: { agent: AgentLoad }) {
+  const { t } = useLocale();
+  const pct = a.utilization != null ? Math.round(a.utilization * 100) : null;
+  return (
+    <div className="tabular-nums">
+      <span className="font-medium">{a.open_total}</span>
+      {Object.keys(a.open).length > 1 && (
+        <span className="text-muted-foreground ml-1 text-xs">
+          (
+          {Object.entries(a.open)
+            .map(([k, v]) => `${t(`routing.channel.${k}`)} ${v}`)
+            .join(", ")}
+          )
+        </span>
+      )}
+      {pct != null && (
+        <div className="bg-muted mt-1 h-1.5 w-24 overflow-hidden rounded-full">
+          <div
+            className={cn(
+              "h-full",
+              pct >= 100
+                ? "bg-red-500"
+                : pct >= 80
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
+            )}
+            style={{ width: `${Math.min(100, pct)}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Capacity limit of an agent; the pencil opens an inline editor. */
+function LimitCell({
   agent: a,
   canWrite,
-  editing,
-  limit,
-  onLimit,
-  onEdit,
   onSave,
-  onCancel,
 }: {
   agent: AgentLoad;
   canWrite: boolean;
-  editing: boolean;
-  limit: string;
-  onLimit: (v: string) => void;
-  onEdit: () => void;
-  onSave: () => void;
-  onCancel: () => void;
+  onSave: (max: string, done: () => void) => void;
 }) {
   const { t } = useLocale();
+  const [editing, setEditing] = useState(false);
+  const [limit, setLimit] = useState("");
   const max = a.limits["*"];
-  const pct = a.utilization != null ? Math.round(a.utilization * 100) : null;
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          className="h-8 w-20"
+          type="number"
+          min={0}
+          max={1000}
+          value={limit}
+          placeholder="∞"
+          onChange={(e) => setLimit(e.target.value)}
+        />
+        <Button
+          size="sm"
+          onClick={() => onSave(limit, () => setEditing(false))}
+        >
+          {t("common.save")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          {t("common.cancel")}
+        </Button>
+      </div>
+    );
+  }
   return (
-    <tr className="border-b last:border-0">
-      <td className="p-3">
-        <div className="font-medium">{a.name}</div>
-        {a.skills.length > 0 && (
-          <div className="text-muted-foreground text-xs">
-            {a.skills.join(", ")}
-          </div>
-        )}
-      </td>
-      <td className="p-3">
-        <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-2 rounded-full", STATUS_DOT[a.status])} />
-          {t(`routing.status.${a.status}`)}
-        </span>
-        {a.last_seen_at && a.status === "offline" && (
-          <div className="text-muted-foreground text-xs">
-            {datetime(a.last_seen_at, "dd.MM HH:mm")}
-          </div>
-        )}
-      </td>
-      <td className="text-muted-foreground p-3 text-xs">
-        {a.teams.map((x) => x.name).join(", ") || "—"}
-      </td>
-      <td className="p-3 tabular-nums">
-        <span className="font-medium">{a.open_total}</span>
-        {Object.keys(a.open).length > 1 && (
-          <span className="text-muted-foreground ml-1 text-xs">
-            (
-            {Object.entries(a.open)
-              .map(([k, v]) => `${t(`routing.channel.${k}`)} ${v}`)
-              .join(", ")}
-            )
-          </span>
-        )}
-        {pct != null && (
-          <div className="bg-muted mt-1 h-1.5 w-24 overflow-hidden rounded-full">
-            <div
-              className={cn(
-                "h-full",
-                pct >= 100
-                  ? "bg-red-500"
-                  : pct >= 80
-                    ? "bg-amber-500"
-                    : "bg-emerald-500",
-              )}
-              style={{ width: `${Math.min(100, pct)}%` }}
-            />
-          </div>
-        )}
-      </td>
-      <td className="p-3">
-        {editing ? (
-          <div className="flex items-center gap-1">
-            <Input
-              className="h-8 w-20"
-              type="number"
-              min={0}
-              max={1000}
-              value={limit}
-              placeholder="∞"
-              onChange={(e) => onLimit(e.target.value)}
-            />
-            <Button size="sm" onClick={onSave}>
-              {t("common.save")}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onCancel}>
-              {t("common.cancel")}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1">
-            <span className="tabular-nums">{max ?? "∞"}</span>
-            {canWrite && (
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={t("routing.live.edit_limit")}
-                onClick={onEdit}
-              >
-                <Pencil className="size-3.5" />
-              </Button>
-            )}
-          </div>
-        )}
-      </td>
-    </tr>
+    <div className="flex items-center gap-1">
+      <span className="tabular-nums">{max ?? "∞"}</span>
+      {canWrite && (
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={t("routing.live.edit_limit")}
+          onClick={() => {
+            setLimit(max != null ? String(max) : "");
+            setEditing(true);
+          }}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -743,41 +787,95 @@ function RuleEditor({
   );
 }
 
+const EMPTY_EVENTS: RoutingEvent[] = [];
+
 function HistoryTab({ orgSlug }: { orgSlug: string }) {
   const { t } = useLocale();
-  const { data, isLoading } = useQuery({
+  const events = useQuery({
     queryKey: ["tenant", orgSlug, "routing-events"],
     queryFn: routingService.events,
     refetchInterval: 30_000,
   });
-  if (isLoading) return <Loading label={t("common.loading")} />;
-  if (!data?.length)
-    return (
-      <p className="text-muted-foreground text-sm">
-        {t("routing.history.empty")}
-      </p>
-    );
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<RoutingEvent>({
+          accessorKey: "created_at",
+          labelKey: "routing.history.columns.when",
+          searchable: false,
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {datetime(row.original.created_at, "dd.MM HH:mm:ss")}
+            </span>
+          ),
+        }),
+        createColumn<RoutingEvent>({
+          accessorKey: "number",
+          labelKey: "routing.history.columns.conversation",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <Link
+              className="font-medium hover:underline"
+              href={`/inbox?c=${row.original.conversation_uuid}`}
+            >
+              #{row.original.number}
+            </Link>
+          ),
+        }),
+        createColumn<RoutingEvent>({
+          accessorKey: "reason",
+          labelKey: "routing.history.columns.reason",
+          searchable: false,
+          cell: ({ row }) => (
+            <Badge variant="outline">
+              {t(`routing.reason.${row.original.reason}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<RoutingEvent>({
+          id: "route",
+          accessorFn: (row) =>
+            [row.from?.name, row.to?.name, row.team].filter(Boolean).join(" "),
+          labelKey: "routing.history.columns.route",
+          enableSorting: false,
+          cell: ({ row }) => {
+            const e = row.original;
+            return (
+              <span className="text-muted-foreground">
+                {e.from ? `${e.from.name} → ` : ""}
+                {e.to?.name ?? t("routing.history.queue")}
+                {e.team ? ` · ${e.team}` : ""}
+              </span>
+            );
+          },
+        }),
+      ] as ColumnDef<RoutingEvent, unknown>[],
+    [t],
+  );
+
   return (
-    <ul className="divide-y rounded-md border">
-      {data.map((e, i) => (
-        <li key={i} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-          <span className="text-muted-foreground w-28 text-xs tabular-nums">
-            {datetime(e.created_at, "dd.MM HH:mm:ss")}
-          </span>
-          <Link
-            className="font-medium hover:underline"
-            href={`/inbox?c=${e.conversation_uuid}`}
-          >
-            #{e.number}
-          </Link>
-          <Badge variant="outline">{t(`routing.reason.${e.reason}`)}</Badge>
-          <span className="text-muted-foreground">
-            {e.from ? `${e.from.name} → ` : ""}
-            {e.to?.name ?? t("routing.history.queue")}
-            {e.team ? ` · ${e.team}` : ""}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <EntityTable
+      columns={columns}
+      data={events.data ?? EMPTY_EVENTS}
+      // Events carry no id of their own.
+      getRowId={(row, index) =>
+        `${row.created_at}-${row.conversation_uuid}-${index}`
+      }
+      isLoading={events.isLoading}
+      isError={events.isError}
+      onRetry={() => void events.refetch()}
+      emptyDescription={t("routing.history.empty")}
+      // The endpoint returns the recent events in one response: search, sort
+      // and paging run in the browser.
+      manual={{ filtering: false, sorting: false, pagination: false }}
+      initialState={{ pagination: { pageIndex: 0, pageSize: 25 } }}
+      features={{
+        persistKey: "tenant-routing-history-v1",
+        columnFilters: false,
+        rowSelection: false,
+      }}
+    />
   );
 }
