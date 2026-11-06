@@ -286,7 +286,9 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     table.resetColumnPinning();
     table.resetColumnSizing();
     table.resetRowSelection();
-    table.resetPagination();
+    // Back to the first page only: `resetPagination()` would also drop the
+    // page size to TanStack's default (10), whatever the screen started with.
+    table.setPageIndex(0);
     setDensity(initialState?.density ?? "comfortable");
     setViewMode(initialState?.viewMode ?? "table");
     controlled?.onDensityChange?.(initialState?.density ?? "comfortable");

@@ -82,10 +82,6 @@ export function IssuesPage() {
   );
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   const hasFilters =
     Boolean(listParams.q) ||
     (status !== "active" && status !== "all") ||
@@ -126,7 +122,7 @@ export function IssuesPage() {
             ? t("engineering.empty_filtered_description")
             : t("engineering.empty_description")
         }
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "tenant-engineering-issues-v1" }}
         toolbarExtra={
