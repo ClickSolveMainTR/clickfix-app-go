@@ -21,65 +21,86 @@ import { isApiError } from "@/lib/api";
 import { useAuth } from "@/providers/auth-provider";
 import { useLocale } from "@/providers/locale-provider";
 
+import {
+  consentLoginPath,
+  consentRequestId,
+  consentView,
+  decideBody,
+  decideErrorKey,
+  selectedOrganization,
+  writeOffered,
+} from "../lib/consent";
 import { mcpKeys, mcpService } from "../services/mcp.service";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * OAuth consent screen of the MCP server (CF-173). An MCP client sends the
  * member here (`/oauth/authorize` redirects to `/oauth/consent?request=`);
- * the member, signed in to the panel, sees who asks, picks the organization
- * the client may work in and whether it may change data, then approves or
- * denies. The decision is made by the API; this page only sends it and
- * follows the redirect the API answers with.
+ * the member, signed in to the panel, sees who asks and where the answer
+ * goes, picks the organization the client may work in and whether it may
+ * change data, then denies or allows.
+ *
+ * The decision is made by the API (`/v1/mcp/consent/{uuid}/decide`, through
+ * the panel BFF and its CSRF check); this page only sends it and follows the
+ * redirect the API answers with. Text that comes from the client (its name,
+ * its redirect host) is rendered as text only. The request id is never
+ * logged or sent anywhere but that API call.
  */
 export function McpConsentPage() {
   const { t } = useLocale();
   const router = useRouter();
   const params = useSearchParams();
-  const request = params.get("request") ?? "";
-  const valid = UUID.test(request);
+  const requestId = consentRequestId(params.get("request"));
   const { bootstrapped, isAuthenticated } = useAuth();
 
-  // Signed out: sign in first and come back to this request.
-  useEffect(() => {
-    if (!bootstrapped || isAuthenticated || !valid) return;
-    const next = `/oauth/consent?request=${encodeURIComponent(request)}`;
-    router.replace(`${routes.guest.login}?next=${encodeURIComponent(next)}`);
-  }, [bootstrapped, isAuthenticated, request, router, valid]);
-
   const consent = useQuery({
-    queryKey: mcpKeys.consent(request),
-    queryFn: () => mcpService.consent(request),
-    enabled: bootstrapped && isAuthenticated && valid,
+    queryKey: mcpKeys.consent(requestId ?? ""),
+    queryFn: () => mcpService.consent(requestId ?? ""),
+    enabled: bootstrapped && isAuthenticated && requestId !== null,
     retry: false,
     staleTime: Infinity,
+    // Never kept after the screen closes.
     gcTime: 0,
   });
   const [organization, setOrganization] = useState("");
   const [allowWrite, setAllowWrite] = useState(false);
   const data = consent.data;
   const organizations = data?.organizations ?? [];
-  const selected =
-    organizations.find((o) => o.uuid === organization) ??
-    (organizations.length === 1 ? organizations[0] : undefined);
-  // Write is granted only when the client asked for it and the member may give it here.
-  const writeOffered = Boolean(data?.write_requested && selected?.can_write);
+  const selected = selectedOrganization(organizations, organization);
+  const canGrantWrite = writeOffered(Boolean(data?.write_requested), selected);
+
+  const view = consentView({
+    requestId,
+    bootstrapped,
+    authenticated: isAuthenticated,
+    loading: consent.isLoading,
+    errorStatus: consent.isError
+      ? isApiError(consent.error)
+        ? consent.error.status
+        : 0
+      : null,
+    organizations: data ? organizations : null,
+  });
+
+  // Signed out: sign in first and come back to this same request.
+  useEffect(() => {
+    if (view === "sign_in" && requestId)
+      router.replace(consentLoginPath(routes.guest.login, requestId));
+  }, [requestId, router, view]);
+
   const decide = useMutation({
-    mutationFn: (decision: "approve" | "deny") =>
-      mcpService.decide(request, {
+    mutationFn: async (decision: "approve" | "deny") => {
+      const body = decideBody({
         decision,
-        ...(decision === "approve"
-          ? {
-              organization_uuid: selected?.uuid,
-              allow_write: writeOffered && allowWrite,
-            }
-          : {}),
-      }),
+        organization: selected,
+        writeRequested: Boolean(data?.write_requested),
+        allowWrite,
+      });
+      if (!body || !requestId) throw new Error("consent: nothing to decide");
+      return mcpService.decide(requestId, body);
+    },
     // Back to the client: its registered redirect URI, built by the API.
     onSuccess: (out) => window.location.assign(out.redirect_url),
   });
-
   const busy = decide.isPending || decide.isSuccess;
 
   return (
@@ -90,7 +111,7 @@ export function McpConsentPage() {
             <Cable className="size-5" />
             {t("mcp.consent.title")}
           </CardTitle>
-          {data ? (
+          {view === "ready" && data ? (
             <CardDescription>
               {t("mcp.consent.asks", {
                 client: data.client_name || data.client_id,
@@ -99,23 +120,19 @@ export function McpConsentPage() {
           ) : null}
         </CardHeader>
         <CardContent className="space-y-5 text-sm">
-          {!valid ? (
-            <p className="text-destructive">{t("mcp.consent.invalid")}</p>
-          ) : !bootstrapped || !isAuthenticated || consent.isLoading ? (
+          {view === "loading" || view === "sign_in" ? (
             <Loading label={t("common.loading")} />
-          ) : consent.isError || !data ? (
-            <p className="text-destructive">
-              {isApiError(consent.error) && consent.error.status === 404
-                ? t("mcp.consent.expired")
-                : t("mcp.consent.failed")}
+          ) : view !== "ready" || !data ? (
+            <p role="alert" className="text-destructive">
+              {t(`mcp.consent.${view === "ready" ? "failed" : view}`)}
             </p>
           ) : (
             <>
-              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5">
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
                 <dt className="text-muted-foreground">
                   {t("mcp.consent.returns_to")}
                 </dt>
-                <dd className="font-mono text-xs break-all">
+                <dd className="text-base font-semibold break-all">
                   {data.redirect_host}
                 </dd>
                 <dt className="text-muted-foreground">
@@ -129,54 +146,48 @@ export function McpConsentPage() {
                 {t("mcp.consent.warning")}
               </p>
 
-              {organizations.length === 0 ? (
-                <p className="text-destructive">
-                  {t("mcp.consent.no_organization")}
-                </p>
-              ) : (
-                <fieldset className="space-y-2">
-                  <legend className="font-medium">
-                    {t("mcp.consent.organization")}
-                  </legend>
-                  {organizations.map((o) => (
-                    <label
-                      key={o.uuid}
-                      className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-md border p-3"
-                    >
-                      <input
-                        type="radio"
-                        name="organization"
-                        value={o.uuid}
-                        checked={selected?.uuid === o.uuid}
-                        disabled={busy}
-                        onChange={() => {
-                          setOrganization(o.uuid);
-                          setAllowWrite(false);
-                        }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium break-words">
-                          {o.name}
-                        </span>
-                        {o.tool_count != null ? (
-                          <span className="text-muted-foreground text-xs">
-                            {t("mcp.consent.tool_count", {
-                              count: o.tool_count,
-                            })}
-                          </span>
-                        ) : null}
+              <fieldset className="space-y-2">
+                <legend className="font-medium">
+                  {t("mcp.consent.organization")}
+                </legend>
+                {organizations.map((o) => (
+                  <label
+                    key={o.uuid}
+                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-md border p-3"
+                  >
+                    <input
+                      type="radio"
+                      name="organization"
+                      value={o.uuid}
+                      checked={selected?.uuid === o.uuid}
+                      disabled={busy}
+                      onChange={() => {
+                        setOrganization(o.uuid);
+                        setAllowWrite(false);
+                      }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium break-words">
+                        {o.name}
                       </span>
-                    </label>
-                  ))}
-                </fieldset>
-              )}
+                      {o.tool_count != null ? (
+                        <span className="text-muted-foreground text-xs">
+                          {t("mcp.consent.tool_count", {
+                            count: o.tool_count,
+                          })}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
 
               <div className="space-y-2">
                 <p className="flex items-center gap-2">
                   <ShieldCheck className="text-muted-foreground size-4" />
                   {t("mcp.consent.scope_read")}
                 </p>
-                {writeOffered ? (
+                {canGrantWrite ? (
                   <div className="flex items-start gap-2">
                     <Checkbox
                       id="mcp-allow-write"
@@ -196,15 +207,19 @@ export function McpConsentPage() {
               </div>
 
               {decide.isError ? (
-                <p className="text-destructive">
-                  {isApiError(decide.error)
-                    ? decide.error.message
-                    : t("mcp.consent.failed")}
+                <p role="alert" className="text-destructive">
+                  {t(
+                    decideErrorKey(
+                      isApiError(decide.error) ? decide.error.status : null,
+                    ),
+                  )}
                 </p>
               ) : null}
 
+              {/* Deny has the focus; allowing takes a deliberate click. */}
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
+                  autoFocus
                   variant="outline"
                   disabled={busy}
                   onClick={() => decide.mutate("deny")}

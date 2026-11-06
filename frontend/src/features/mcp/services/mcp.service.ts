@@ -2,12 +2,16 @@ import type { components } from "@/generated/api";
 import { apiClient, unwrap } from "@/lib/api";
 import { tenantRequest } from "@/lib/api/tenant-request";
 
+import type { DecideBody } from "../lib/consent";
+
 /**
- * MCP connection (CF-173). The guide is organization-scoped
- * (`tenant.settings.read`, the MCP connect permission); the consent screen
- * and the connected apps belong to the signed-in member. No call here
- * returns or sends a token: MCP clients get theirs from the OAuth endpoints.
+ * MCP connection (CF-173): the consent screen and the connected apps of the
+ * signed-in member (`/v1/mcp/*`, same-origin through the panel BFF with its
+ * CSRF check). No call here returns or sends a token: MCP clients get theirs
+ * from the OAuth endpoints.
  */
+
+/** `GET /v1/tenant/mcp/guide`: addresses and the member's tools in the organization. */
 export type McpGuide = components["schemas"]["MCPGuide"];
 
 /** `GET /v1/mcp/consent/{uuid}` (`mcpauth/model`, `Consent`). */
@@ -49,6 +53,7 @@ export type McpGrant = {
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
 export const mcpService = {
+  /** Organization-scoped; needs `tenant.settings.read` (the MCP connect permission). */
   guide: (slug: string) =>
     tenantRequest<McpGuide>(slug, "GET", "/v1/tenant/mcp/guide", {
       silent: true,
@@ -81,14 +86,7 @@ export const mcpService = {
   },
 
   /** Approve or deny; the answer says where the browser goes next. */
-  async decide(
-    uuid: string,
-    body: {
-      decision: "approve" | "deny";
-      organization_uuid?: string;
-      allow_write?: boolean;
-    },
-  ) {
+  async decide(uuid: string, body: DecideBody) {
     return unwrap<{ redirect_url: string }>(
       await apiClient.POST("/v1/mcp/consent/{uuid}/decide", {
         params: { path: { uuid } },

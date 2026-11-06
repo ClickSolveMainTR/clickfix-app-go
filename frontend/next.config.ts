@@ -108,7 +108,24 @@ const nextConfig: NextConfig = {
     "/sitemap.xml": ["./content/docs/**/*", "./content/api/public-api.yaml"],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // OAuth consent screen of the MCP server (CF-173): never framed (not
+      // even by this origin), never cached, and its `?request=` id is not
+      // sent on as a referrer.
+      {
+        source: "/oauth/consent",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+          },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [

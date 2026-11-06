@@ -137,10 +137,13 @@ membership is checked at consent, refresh and every MCP request.
 
 The JSON consent API is `/v1/mcp/consent/{uuid}` and `/{uuid}/decide`; connected apps
 are `/v1/mcp/grants` and `DELETE /{uuid}`. Authorize redirects to
-`<AUTH_FRONTEND_URL>/oauth/consent?request=UUID`. **The frontend consent screen and
-proxies for `/oauth/*`, `/.well-known/*`, `/mcp/*` are still required before a
-browser-based client can connect in production.** They are outside this backend
-worker's scope.
+`<AUTH_FRONTEND_URL>/oauth/consent?request=UUID`. The frontend provides the other
+half (CF-173): the consent screen at `/oauth/consent` and a session-less
+passthrough for exactly `/mcp/business`, `/oauth/{authorize,register,token,revoke}`,
+`/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource/mcp/business`
+(`frontend/src/lib/server/mcp-proxy-core.ts`). It forwards the client's own
+`Authorization` header and never a cookie.
 
 `mcp:read` is always included. `mcp:write` is opt-in at consent and additionally
 requires organization settings write permission. Tool listing filters by live
