@@ -103,6 +103,13 @@ type Install struct {
 	LastSeenAt  time.Time `json:"last_seen_at"`
 }
 
+// IdentityRejection is the widget's last rejected identify call (CF-176): a
+// fixed error code and when it happened, nothing of the request itself.
+type IdentityRejection struct {
+	Code       string    `json:"code"`
+	RejectedAt time.Time `json:"rejected_at"`
+}
+
 func (c *Configs) instance(ctx context.Context, org int64, id uuid.UUID) (db.ChannelInstance, error) {
 	row, err := c.q.GetChannelInstanceByUUID(ctx, db.GetChannelInstanceByUUIDParams{OrganizationID: org, Uuid: id})
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && (row.ChannelType != channels.TypeWidget || row.DeletedAt.Valid)) {
@@ -361,6 +368,23 @@ func (c *Configs) Installs(ctx context.Context, org int64, id uuid.UUID) ([]Inst
 		})
 	}
 	return out, nil
+}
+
+// IdentityRejection returns the last rejected identify call of the widget,
+// or nil when there is none (never rejected, or a user was verified since).
+func (c *Configs) IdentityRejection(ctx context.Context, org int64, id uuid.UUID) (*IdentityRejection, error) {
+	row, err := c.instance(ctx, org, id)
+	if err != nil {
+		return nil, err
+	}
+	r, err := c.q.GetWidgetIdentityRejection(ctx, db.GetWidgetIdentityRejectionParams{OrganizationID: org, ChannelInstanceID: row.ID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &IdentityRejection{Code: r.Code, RejectedAt: r.RejectedAt.Time.UTC()}, nil
 }
 
 func optID(id int64) pgtype.Int8 {

@@ -166,6 +166,26 @@ WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc
 ORDER BY last_seen_at DESC
 LIMIT 50;
 
+-- name: TouchWidgetIdentityRejection :exec
+-- A rejected identify call (CF-176). The request is not authenticated as a
+-- user, so only a fixed code and the time are stored, and the row is
+-- rewritten at most once a minute unless the code changed (which only
+-- happens when the widget's identity secret was added or removed).
+INSERT INTO widget_identity_rejections (organization_id, channel_instance_id, code)
+VALUES (sqlc.arg(organization_id), sqlc.arg(channel_instance_id), sqlc.arg(code))
+ON CONFLICT (channel_instance_id) DO UPDATE SET code = excluded.code, rejected_at = now()
+WHERE widget_identity_rejections.organization_id = excluded.organization_id
+  AND (widget_identity_rejections.code <> excluded.code
+       OR widget_identity_rejections.rejected_at < now() - interval '1 minute');
+
+-- name: ClearWidgetIdentityRejection :exec
+DELETE FROM widget_identity_rejections
+WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc.arg(channel_instance_id);
+
+-- name: GetWidgetIdentityRejection :one
+SELECT code, rejected_at FROM widget_identity_rejections
+WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc.arg(channel_instance_id);
+
 -- name: WidgetMedianFirstResponse :one
 -- Median first response (seconds) of the widget's conversations of the last
 -- 14 days; -1 without answered conversations.

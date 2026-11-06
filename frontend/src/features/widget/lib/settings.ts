@@ -657,3 +657,19 @@ export function installFreshness(
   if (age < 7 * 24 * 3600 * 1000) return "recent";
   return "stale";
 }
+
+/**
+ * Which identity warning the editor shows for the widget's last rejected
+ * identify call (CF-176). A "no secret" rejection is stale once a secret
+ * exists: nothing failed since, so there is nothing to warn about.
+ */
+export function identityWarning(
+  rejection: { code: string } | null | undefined,
+  hasSecret: boolean,
+): "disabled" | "invalid" | null {
+  if (!rejection) return null;
+  if (rejection.code === "WIDGET_IDENTITY_INVALID") return "invalid";
+  if (rejection.code === "WIDGET_IDENTITY_DISABLED")
+    return hasSecret ? null : "disabled";
+  return null;
+}

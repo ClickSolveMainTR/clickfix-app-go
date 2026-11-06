@@ -1,10 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Copy, KeyRound, Play, RefreshCw } from "lucide-react";
+import { Copy, KeyRound, Play, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { BrandLogo, isBrandSlug } from "@/components/brand-logos";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import {
 import {
   generateSecret,
   hashSnippet,
+  identityWarning,
   installFreshness,
   invalidSelector,
   parseDomains,
@@ -44,6 +46,61 @@ export async function copyText(text: string, done: string) {
   } catch {
     appToast.error(text);
   }
+}
+
+/** The install check of a widget (shared by the sections that show it). */
+function useInstalls(widgetId: string) {
+  return useQuery({
+    queryKey: ["widget-installs", widgetId],
+    queryFn: () => widgetConfigService.installs(widgetId),
+  });
+}
+
+/**
+ * Tells the integrator why signed-in users stay anonymous (CF-176): the
+ * widget's last identify call was rejected. Shows nothing otherwise.
+ */
+function IdentityWarning({
+  widgetId,
+  hasSecret,
+  onOpenSecurity,
+}: {
+  widgetId: string;
+  hasSecret: boolean;
+  onOpenSecurity?: () => void;
+}) {
+  const { t, locale } = useLocale();
+  const rejection = useInstalls(widgetId).data?.identity_rejection;
+  const kind = identityWarning(rejection, hasSecret);
+  if (!kind || !rejection) return null;
+  return (
+    <Alert data-testid={`identity-warning-${kind}`}>
+      <TriangleAlert className="text-amber-600" />
+      <AlertTitle>{t(`widget.identity_warning.${kind}_title`)}</AlertTitle>
+      <AlertDescription>
+        <p>{t(`widget.identity_warning.${kind}_body`)}</p>
+        <p className="text-xs">
+          {t("widget.identity_warning.last_attempt", {
+            time: new Date(rejection.rejected_at).toLocaleString(
+              locale === "tr" ? "tr-TR" : "en-US",
+            ),
+          })}{" "}
+          {t("widget.identity_warning.clears")}
+        </p>
+        {onOpenSecurity ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onOpenSecurity}
+          >
+            <KeyRound className="size-4" />
+            {t("widget.identity_warning.go_security")}
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 export function PrivacySection() {
@@ -96,10 +153,12 @@ export function PrivacySection() {
 }
 
 export function SecuritySection({
+  widgetId,
   secretHint,
   onSaveSecret,
   canManage,
 }: {
+  widgetId: string;
   secretHint?: string;
   onSaveSecret: (secret: string) => Promise<void>;
   canManage: boolean;
@@ -138,6 +197,7 @@ export function SecuritySection({
         title={t("widget.g.identity")}
         description={t("widget.fields.identity_secret_hint")}
       >
+        <IdentityWarning widgetId={widgetId} hasSecret={Boolean(secretHint)} />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label>{t("widget.fields.identity_secret")}</Label>
           <Button
@@ -331,13 +391,19 @@ function tryLive(widgetId: string) {
   document.body.append(script);
 }
 
-export function InstallSection({ widgetId }: { widgetId: string }) {
+export function InstallSection({
+  widgetId,
+  hasSecret,
+  onOpenSecurity,
+}: {
+  widgetId: string;
+  hasSecret: boolean;
+  onOpenSecurity: () => void;
+}) {
   const { t, locale } = useLocale();
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const installs = useQuery({
-    queryKey: ["widget-installs", widgetId],
-    queryFn: () => widgetConfigService.installs(widgetId),
-  });
+  const installs = useInstalls(widgetId);
+  const items = installs.data?.items;
   return (
     <div className="space-y-4">
       <Group
@@ -418,7 +484,12 @@ export function InstallSection({ widgetId }: { widgetId: string }) {
             {t("widget.install.check_now")}
           </Button>
         </div>
-        {installs.data && installs.data.length === 0 ? (
+        <IdentityWarning
+          widgetId={widgetId}
+          hasSecret={hasSecret}
+          onOpenSecurity={onOpenSecurity}
+        />
+        {items && items.length === 0 ? (
           <p
             className="text-muted-foreground text-sm"
             data-testid="installs-empty"
@@ -427,7 +498,7 @@ export function InstallSection({ widgetId }: { widgetId: string }) {
           </p>
         ) : null}
         <ul className="divide-y rounded-lg border">
-          {(installs.data ?? []).map((i) => {
+          {(items ?? []).map((i) => {
             const fresh = installFreshness(i.last_seen_at);
             return (
               <li

@@ -4021,6 +4021,14 @@ type WidgetDraft struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type WidgetIdentityRejection struct {
+	ID                int64              `json:"id"`
+	OrganizationID    int64              `json:"organization_id"`
+	ChannelInstanceID int64              `json:"channel_instance_id"`
+	Code              string             `json:"code"`
+	RejectedAt        pgtype.Timestamptz `json:"rejected_at"`
+}
+
 type WidgetInstall struct {
 	ID                int64              `json:"id"`
 	OrganizationID    int64              `json:"organization_id"`

@@ -117,3 +117,16 @@ test("install freshness and helpers", () => {
   assert.deepEqual(lib.parseDomains("A.com, b.com\nA.com"), ["a.com", "b.com"]);
   assert.match(lib.newId("t"), /^t_[0-9a-f]{8}$/);
 });
+
+test("identity warning follows the last rejected identify (CF-176)", () => {
+  const at = "2026-11-02T10:00:00Z";
+  const disabled = { code: "WIDGET_IDENTITY_DISABLED", rejected_at: at };
+  const invalid = { code: "WIDGET_IDENTITY_INVALID", rejected_at: at };
+  assert.equal(lib.identityWarning(null, false), null);
+  assert.equal(lib.identityWarning(undefined, true), null);
+  assert.equal(lib.identityWarning(disabled, false), "disabled");
+  // The secret was generated after the rejection: nothing failed since.
+  assert.equal(lib.identityWarning(disabled, true), null);
+  assert.equal(lib.identityWarning(invalid, true), "invalid");
+  assert.equal(lib.identityWarning({ code: "OTHER" }, false), null);
+});
