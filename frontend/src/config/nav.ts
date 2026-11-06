@@ -39,6 +39,7 @@ import {
   MessageCircle,
   GitPullRequest,
   Palette,
+  Cable,
   Plug,
   ScrollText,
   Settings2,
@@ -711,6 +712,14 @@ export const cmsNav = defineNav({
             permissions.tenant.settings.write,
             permissions.tenant.channels.read,
           ],
+        },
+        {
+          id: "settings-mcp",
+          titleKey: "layout.nav_tenant_settings_mcp",
+          href: routes.cms.settings.mcp,
+          icon: Cable,
+          // The API's MCP connect permission (`rbac.PermTenantMCPConnect`).
+          permission: permissions.tenant.settings.read,
         },
         {
           id: "settings-engineering",

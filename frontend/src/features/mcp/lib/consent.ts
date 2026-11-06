@@ -1,0 +1,117 @@
+/**
+ * Decisions of the MCP consent screen (CF-173), kept apart from the React
+ * page so they can be tested: what the screen shows in each situation and
+ * what exactly is sent to the API. Free of imports (`node --test`).
+ */
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The `request` query value when it is a UUID; anything else is not a consent request. */
+export function consentRequestId(
+  raw: string | null | undefined,
+): string | null {
+  const value = (raw ?? "").trim();
+  return UUID.test(value) ? value.toLowerCase() : null;
+}
+
+/** Where a signed-out visitor signs in, coming back to the same request. */
+export function consentLoginPath(loginPath: string, requestId: string) {
+  const next = `/oauth/consent?request=${encodeURIComponent(requestId)}`;
+  return `${loginPath}?next=${encodeURIComponent(next)}`;
+}
+
+export type ConsentOrganization = {
+  uuid: string;
+  name: string;
+  tool_count: number | null;
+  can_write: boolean;
+};
+
+export type ConsentView =
+  /** The link carries no valid request id. */
+  | "invalid"
+  /** Session not known yet, or the request is loading. */
+  | "loading"
+  /** Signed out: the page redirects to sign-in. */
+  | "sign_in"
+  /** The request expired, was answered or belongs to someone else (404). */
+  | "expired"
+  /** The member may not give this consent (403). */
+  | "forbidden"
+  | "failed"
+  /** Signed in, but no organization where the member may connect. */
+  | "no_organization"
+  | "ready";
+
+export function consentView(s: {
+  requestId: string | null;
+  bootstrapped: boolean;
+  authenticated: boolean;
+  loading: boolean;
+  /** HTTP status of a failed load; 0 for a network failure; null when it did not fail. */
+  errorStatus: number | null;
+  organizations: ConsentOrganization[] | null;
+}): ConsentView {
+  if (!s.requestId) return "invalid";
+  if (!s.bootstrapped) return "loading";
+  if (!s.authenticated) return "sign_in";
+  if (s.errorStatus !== null) {
+    if (s.errorStatus === 404) return "expired";
+    if (s.errorStatus === 403) return "forbidden";
+    return "failed";
+  }
+  if (s.loading || s.organizations === null) return "loading";
+  return s.organizations.length === 0 ? "no_organization" : "ready";
+}
+
+/** The organization the decision is for: the chosen one, or the only one. */
+export function selectedOrganization(
+  organizations: ConsentOrganization[],
+  chosen: string,
+): ConsentOrganization | undefined {
+  return (
+    organizations.find((o) => o.uuid === chosen) ??
+    (organizations.length === 1 ? organizations[0] : undefined)
+  );
+}
+
+/** Write is offered only when the client asked for it and the member may give it there. */
+export function writeOffered(
+  writeRequested: boolean,
+  organization: ConsentOrganization | undefined,
+) {
+  return Boolean(writeRequested && organization?.can_write);
+}
+
+export type DecideBody =
+  | { decision: "deny" }
+  | { decision: "approve"; organization_uuid: string; allow_write: boolean };
+
+/**
+ * The body of the decision, or null when approving is not possible (no
+ * organization chosen). Write is never granted unless it was offered and the
+ * member ticked it.
+ */
+export function decideBody(input: {
+  decision: "approve" | "deny";
+  organization: ConsentOrganization | undefined;
+  writeRequested: boolean;
+  allowWrite: boolean;
+}): DecideBody | null {
+  if (input.decision === "deny") return { decision: "deny" };
+  if (!input.organization) return null;
+  return {
+    decision: "approve",
+    organization_uuid: input.organization.uuid,
+    allow_write:
+      writeOffered(input.writeRequested, input.organization) &&
+      input.allowWrite,
+  };
+}
+
+/** Message key for a decision the API refused. */
+export function decideErrorKey(status: number | null) {
+  if (status === 404) return "mcp.consent.expired";
+  if (status === 403) return "mcp.consent.forbidden";
+  return "mcp.consent.failed";
+}
