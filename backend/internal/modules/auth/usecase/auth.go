@@ -322,7 +322,7 @@ func (u *AuthUseCase) RegisterOAuthUser(ctx context.Context, email, name, surnam
 }
 
 // createPasswordlessUser is the self-registration path for sign-ups that never
-// set a password (OAuth, native OAuth, email code): random unusable hash
+// set a password (OAuth, native OAuth, email code): unusable hash
 // marked unset, default role, welcome notification. The caller has already
 // checked that registration is enabled.
 func (u *AuthUseCase) createPasswordlessUser(ctx context.Context, email, name, surname string, emailVerified bool) (model.User, error) {
@@ -336,11 +336,7 @@ func (u *AuthUseCase) createPasswordlessUser(ctx context.Context, email, name, s
 		return model.User{}, err
 	}
 
-	random := make([]byte, 32)
-	if _, err := rand.Read(random); err != nil {
-		return model.User{}, err
-	}
-	hash, err := password.Hash(base64.RawURLEncoding.EncodeToString(random))
+	hash, err := password.HashUnusable()
 	if err != nil {
 		return model.User{}, err
 	}
