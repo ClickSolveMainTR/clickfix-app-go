@@ -26,6 +26,7 @@ export type FormSheetProps = {
   dirty?: boolean;
   detents?: ('medium' | 'large')[];
   searchable?: boolean;
+  /** With `onSearch` the caller filters the options itself; without it the sheet filters by label and description. */
   onSearch?: (value: string) => void;
   children?: ReactElement;
 };

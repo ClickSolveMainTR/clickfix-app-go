@@ -86,7 +86,7 @@ export function KnowledgePage() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="articles" className="mt-4">
-            {org && <ArticlesTab canWrite={canWrite} />}
+            {org && <ArticlesTab />}
           </TabsContent>
           <TabsContent value="collections" className="mt-4">
             {org && <CollectionsTab canWrite={canWrite} />}

@@ -483,15 +483,26 @@ export function useTags(enabled = true) {
   });
 }
 
-export function useTeams(enabled = true) {
+/**
+ * Teams of the organization, by name: the pickers' list and, with `q`, the
+ * team management screen's search (CF-166). Team writes refresh every query
+ * whose key carries `'teams'` (`features/team/api.ts`).
+ */
+export function useTeams(enabled = true, q = '') {
   const { org } = useInboxScope();
   const can = useCan();
+  const query = q.trim();
   return useQuery({
-    queryKey: [...inboxKeys.all(org), 'teams'] as const,
+    queryKey: [...inboxKeys.all(org), 'teams', query] as const,
     enabled: !!org && enabled && can(P.teamsRead),
     staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
     queryFn: () =>
-      unwrap(api.GET('/v1/tenant/teams', { params: { header: orgHeader(), query: { limit: 100 } } })),
+      unwrap(
+        api.GET('/v1/tenant/teams', {
+          params: { header: orgHeader(), query: { limit: 100, ...(query ? { q: query } : {}) } },
+        }),
+      ),
   });
 }
 
