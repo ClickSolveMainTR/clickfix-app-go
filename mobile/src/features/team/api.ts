@@ -15,6 +15,11 @@ export type Thread = components['schemas']['InternalThread'];
 export type ThreadMessage = components['schemas']['InternalMessage'];
 export type OncallRota = components['schemas']['OncallRota'];
 export type OncallAlert = components['schemas']['OncallAlert'];
+export type EscalationPolicy = components['schemas']['EscalationPolicy'];
+export type EscalationStep = components['schemas']['EscalationStep'];
+export type UptimeMonitor = components['schemas']['UptimeMonitor'];
+export type UptimeResult = components['schemas']['UptimeResult'];
+export type StatusComponent = components['schemas']['StatusComponent'];
 
 export const teamKeys = {
   all: (org: string) => orgKey(org, 'team'),
@@ -24,6 +29,11 @@ export const teamKeys = {
   rotas: (org: string) => [...teamKeys.all(org), 'rotas'] as const,
   current: (org: string, uuid: string) => [...teamKeys.all(org), 'oncall', uuid] as const,
   alerts: (org: string) => [...teamKeys.all(org), 'alerts'] as const,
+  policies: (org: string) => [...teamKeys.all(org), 'policies'] as const,
+  monitors: (org: string) => [...teamKeys.all(org), 'monitors'] as const,
+  results: (org: string, uuid: string, checkedAt: string | null) =>
+    [...teamKeys.all(org), 'monitors', uuid, 'results', checkedAt] as const,
+  components: (org: string) => [...teamKeys.all(org), 'status-components'] as const,
 };
 
 export function useTeamPresence() {
@@ -173,5 +183,74 @@ export function useAcknowledgeAlert() {
         api.POST('/v1/tenant/oncall/alerts/{uuid}/acknowledge', { params: { header: orgHeader(), path: { uuid } } }),
       ),
     onSettled: () => void qc.invalidateQueries({ queryKey: teamKeys.alerts(org) }),
+  });
+}
+
+/**
+ * What the member may read of the on-call setup (CF-168), the panel's own
+ * checks (`frontend/src/features/oncall/components/oncall-page.tsx`):
+ * escalation policies and uptime monitors need `tenant.schedules.read` and
+ * organization-wide conversation access (`oncall/routes.go`), status
+ * components `tenant.conversations.read` with the same access
+ * (`statuspage/routes.go`). A hook below never calls an endpoint the member
+ * cannot read.
+ */
+export function useOncallScope() {
+  const can = useCan();
+  const all = can(P.conversationsReadAll);
+  return {
+    canSetup: all && can(P.schedulesRead),
+    canComponents: all && can(P.conversationsRead),
+  };
+}
+
+/** Escalation policies: who is notified, in which order (`GET /v1/tenant/oncall/policies`). */
+export function useEscalationPolicies(enabled = true) {
+  const org = useOrgSlug();
+  const { canSetup } = useOncallScope();
+  return useQuery({
+    queryKey: teamKeys.policies(org),
+    enabled: !!org && enabled && canSetup,
+    staleTime: 5 * 60_000,
+    queryFn: () => unwrap(api.GET('/v1/tenant/oncall/policies', { params: { header: orgHeader() } })),
+  });
+}
+
+/** Uptime monitors with their last check (`GET /v1/tenant/uptime-monitors`), refreshed every minute like the panel. */
+export function useUptimeMonitors(enabled = true) {
+  const org = useOrgSlug();
+  const { canSetup } = useOncallScope();
+  return useQuery({
+    queryKey: teamKeys.monitors(org),
+    enabled: !!org && enabled && canSetup,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: () =>
+      unwrap(api.GET('/v1/tenant/uptime-monitors', { params: { header: orgHeader(), query: { limit: 100 } } })),
+  });
+}
+
+/** Recent checks of one monitor, newest first; the key follows the monitor's last check so a new one refetches. */
+export function useUptimeResults(uuid: string, checkedAt: string | null) {
+  const org = useOrgSlug();
+  const { canSetup } = useOncallScope();
+  return useQuery({
+    queryKey: teamKeys.results(org, uuid, checkedAt),
+    enabled: !!org && !!uuid && canSetup,
+    staleTime: 60_000,
+    queryFn: () =>
+      unwrap(api.GET('/v1/tenant/uptime-monitors/{uuid}/results', { params: { header: orgHeader(), path: { uuid } } })),
+  });
+}
+
+/** Status page components and their current status (`GET /v1/tenant/status/components`). */
+export function useStatusComponents(enabled = true) {
+  const org = useOrgSlug();
+  const { canComponents } = useOncallScope();
+  return useQuery({
+    queryKey: teamKeys.components(org),
+    enabled: !!org && enabled && canComponents,
+    staleTime: 60_000,
+    queryFn: () => unwrap(api.GET('/v1/tenant/status/components', { params: { header: orgHeader() } })),
   });
 }
