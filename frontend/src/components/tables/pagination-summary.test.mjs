@@ -18,9 +18,8 @@ async function load(name) {
     `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`
   );
 }
-const { paginationSummary, pageIndexAfterEmptyPage } = await load(
-  "./pagination-summary.ts",
-);
+const { paginationSummary, pageIndexAfterEmptyPage, pageSizeChoices } =
+  await load("./pagination-summary.ts");
 
 /** A server-mode table holding page 2 (20 rows) of a 45-row list. */
 function serverTable(options) {
@@ -174,8 +173,8 @@ test("server mode: an emptied page falls back to the last page with rows", () =>
   );
 });
 
-test("server mode: no fallback while loading, on page 1, or with rows", () => {
-  const base = { manual: true, isLoading: false, pageSize: 50, rowCount: 0 };
+test("no fallback while loading, on page 1, or with rows", () => {
+  const base = { isLoading: false, pageSize: 50, rowCount: 0 };
   assert.equal(
     pageIndexAfterEmptyPage({
       ...base,
@@ -193,15 +192,29 @@ test("server mode: no fallback while loading, on page 1, or with rows", () => {
     pageIndexAfterEmptyPage({ ...base, pageIndex: 1, pageRows: 3 }),
     null,
   );
+});
+
+test("client mode: an edit that empties the page steps back, not to page 1", () => {
+  // 41 filtered rows, 20 per page, user on page 3 deletes its only row.
   assert.equal(
     pageIndexAfterEmptyPage({
-      ...base,
-      pageIndex: 1,
+      isLoading: false,
+      pageIndex: 2,
+      pageSize: 20,
       pageRows: 0,
-      manual: false,
+      rowCount: 40,
     }),
-    null,
+    1,
   );
+});
+
+test("page-size choices always contain the current size, in order", () => {
+  assert.deepEqual(
+    pageSizeChoices([10, 20, 30, 50, 100], 25),
+    [10, 20, 25, 30, 50, 100],
+  );
+  assert.deepEqual(pageSizeChoices([10, 20, 50], 20), [10, 20, 50]);
+  assert.deepEqual(pageSizeChoices([50, 10], 200), [10, 50, 200]);
 });
 
 test("resetPagination() drops the page size to 10; setPageIndex(0) keeps it", () => {
