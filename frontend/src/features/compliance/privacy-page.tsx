@@ -448,10 +448,6 @@ function RequestsTab() {
   );
 
   const total = query.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
 
   return (
     <div className="space-y-6">
@@ -470,9 +466,13 @@ function RequestsTab() {
           onRetry={() => void query.refetch()}
           emptyTitle={t("privacy.requests_empty_title")}
           emptyDescription={t("privacy.requests_empty_description")}
-          pageCount={pageCount}
+          total={total}
           state={listState.tableState}
-          features={{ persistKey: "tenant-privacy-requests-v1" }}
+          features={{
+            persistKey: "tenant-privacy-requests-v1",
+            globalFilter: false,
+            columnFilters: false,
+          }}
         />
       </EntitySectionCard>
     </div>
@@ -805,10 +805,6 @@ function ConsentsTab() {
     [locale, t],
   );
   const total = query.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   return (
     <EntitySectionCard
       title={t("privacy.consents.title")}
@@ -838,9 +834,13 @@ function ConsentsTab() {
             onRetry={() => void query.refetch()}
             emptyTitle={t("privacy.consents.empty_title")}
             emptyDescription={t("privacy.consents.empty_description")}
-            pageCount={pageCount}
+            total={total}
             state={listState.tableState}
-            features={{ persistKey: "tenant-privacy-consents-v1" }}
+            features={{
+              persistKey: "tenant-privacy-consents-v1",
+              globalFilter: false,
+              columnFilters: false,
+            }}
           />
         ) : (
           <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">

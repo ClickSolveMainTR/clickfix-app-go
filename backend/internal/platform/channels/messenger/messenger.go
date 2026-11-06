@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/metagraph"
 )
 
@@ -314,6 +315,8 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 	if !metagraph.ValidID(msg.To.ExternalID) {
 		return channels.SendResult{}, channels.Permanent("invalid_recipient", errors.New("messenger: recipient is not a page-scoped id"))
 	}
+	// Messenger documents no text formatting: send without marks (CF-177).
+	msg.Text = format.Plain(msg.Text)
 	var parts []map[string]any
 	if strings.TrimSpace(msg.Text) != "" {
 		parts = append(parts, map[string]any{"text": metagraph.ClipRunes(msg.Text, MaxText)})

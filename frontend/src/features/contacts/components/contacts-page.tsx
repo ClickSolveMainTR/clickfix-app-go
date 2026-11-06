@@ -2,20 +2,22 @@
 
 import { CallButton } from "@/features/softphone/softphone";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Building2,
   GitMerge,
   Plus,
-  Search,
   ShieldCheck,
   Trash2,
   UserRound,
 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
+import { EntityTable, useServerListState } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -59,11 +61,18 @@ import {
   useContactMutations,
   useContactsScope,
 } from "../hooks/use-contacts";
-import type { Contact } from "../services/contacts.service";
+import type { Contact, ContactSort } from "../services/contacts.service";
 
 import { ContactsIOToolbar } from "./contacts-io-toolbar";
 
-const PAGE = 50;
+const SORTS: readonly ContactSort[] = [
+  "created_at",
+  "-created_at",
+  "name",
+  "-name",
+  "last_seen_at",
+  "-last_seen_at",
+];
 
 /** Contacts: who writes to the organization, on which channels (CF-84). */
 export function ContactsPage() {
@@ -72,28 +81,125 @@ export function ContactsPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   const scope = useContactsScope();
-  const [q, setQ] = useState("");
-  const [debounced, setDebounced] = useState("");
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({
+    initialSort: "-created_at",
+    initialPageSize: 50,
+    searchDebounceMs: 250,
+  });
   const [creating, setCreating] = useState(false);
   const selected = params.get("c");
   const company = params.get("company") ?? undefined;
 
-  useEffect(() => {
-    const id = setTimeout(() => {
-      setDebounced(q.trim());
-      setOffset(0);
-    }, 250);
-    return () => clearTimeout(id);
-  }, [q]);
+  const { limit, offset, q } = listState.params;
+  // The endpoint sorts by one field; anything else falls back to its default.
+  const sort = SORTS.find((item) => item === listState.params.sort);
+  const list = useContactList({ q, company, limit, offset, sort });
+  const select = useCallback(
+    (uuid: string | null) => {
+      const next = new URLSearchParams(params.toString());
+      if (uuid) next.set("c", uuid);
+      else next.delete("c");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [params, pathname, router],
+  );
 
-  const list = useContactList({ q: debounced, company, limit: PAGE, offset });
-  const select = (uuid: string | null) => {
-    const next = new URLSearchParams(params.toString());
-    if (uuid) next.set("c", uuid);
-    else next.delete("c");
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-  };
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Contact>({
+          id: "name",
+          accessorFn: (row) => row.name || row.email || row.phone || "",
+          labelKey: "contacts.columns.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => {
+            const c = row.original;
+            return (
+              <div className="flex items-center gap-2.5">
+                <span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
+                  {initials(c.name || c.email)}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    {c.name || c.email || c.phone || "—"}
+                  </p>
+                  {c.job_title && (
+                    <p className="text-muted-foreground truncate text-xs font-normal">
+                      {c.job_title}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          },
+        }),
+        createColumn<Contact>({
+          id: "contact",
+          accessorFn: (row) => row.email ?? "",
+          labelKey: "contacts.columns.contact",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <div className="text-muted-foreground min-w-0">
+              <p className="truncate">{row.original.email ?? "—"}</p>
+              {row.original.phone && (
+                <p className="truncate text-xs">{row.original.phone}</p>
+              )}
+            </div>
+          ),
+        }),
+        createColumn<Contact>({
+          id: "company",
+          accessorFn: (row) => row.company?.name ?? "",
+          labelKey: "contacts.columns.company",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.company?.name ?? (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<Contact>({
+          id: "channels",
+          accessorFn: (row) => row.channel_types.join(","),
+          labelKey: "contacts.columns.channels",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <div className="flex gap-1">
+              {row.original.channel_types.map((ch) => (
+                <ChannelGlyph
+                  key={ch}
+                  type={ch}
+                  className="size-4"
+                  title={t(`channels.types.${ch}`)}
+                />
+              ))}
+            </div>
+          ),
+        }),
+        createColumn<Contact>({
+          accessorKey: "conversation_count",
+          labelKey: "contacts.columns.conversations",
+          enableSorting: false,
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+        }),
+        createColumn<Contact>({
+          accessorKey: "last_seen_at",
+          labelKey: "contacts.columns.last_seen",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-muted-foreground text-right text-xs",
+          },
+          cell: ({ row }) =>
+            row.original.last_seen_at
+              ? shortAgo(row.original.last_seen_at, locale)
+              : "—",
+        }),
+      ] as ColumnDef<Contact, unknown>[],
+    [locale, t],
+  );
 
   if (!scope.canRead) {
     return (
@@ -102,8 +208,7 @@ export function ContactsPage() {
       </p>
     );
   }
-  const items = list.data?.items ?? [];
-  const total = list.data?.total ?? 0;
+  const hasFilters = Boolean(q);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
@@ -115,7 +220,7 @@ export function ContactsPage() {
             <div className="flex items-center gap-2">
               <ContactsIOToolbar
                 resource="contacts"
-                query={{ q: debounced, company }}
+                query={{ q: q ?? "", company }}
               />
               <Button size="sm" onClick={() => setCreating(true)}>
                 <Plus className="size-4" />
@@ -125,138 +230,29 @@ export function ContactsPage() {
           ) : null
         }
       />
-      <div className="relative max-w-sm">
-        <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("contacts.search")}
-          className="pl-8"
-        />
-      </div>
-      <div className="overflow-hidden rounded-xl border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-muted-foreground text-left text-xs">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">
-                {t("contacts.columns.name")}
-              </th>
-              <th className="hidden px-4 py-2.5 font-medium md:table-cell">
-                {t("contacts.columns.contact")}
-              </th>
-              <th className="hidden px-4 py-2.5 font-medium lg:table-cell">
-                {t("contacts.columns.company")}
-              </th>
-              <th className="px-4 py-2.5 font-medium">
-                {t("contacts.columns.channels")}
-              </th>
-              <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">
-                {t("contacts.columns.conversations")}
-              </th>
-              <th className="hidden px-4 py-2.5 text-right font-medium md:table-cell">
-                {t("contacts.columns.last_seen")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.isLoading &&
-              Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i} className="border-t">
-                  <td className="px-4 py-3" colSpan={6}>
-                    <Skeleton className="h-4 w-1/3" />
-                  </td>
-                </tr>
-              ))}
-            {!list.isLoading && items.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="text-muted-foreground px-4 py-12 text-center"
-                >
-                  {t("contacts.empty")}
-                </td>
-              </tr>
-            )}
-            {items.map((c) => (
-              <tr
-                key={c.uuid}
-                onClick={() => select(c.uuid)}
-                className="hover:bg-muted/40 cursor-pointer border-t transition-colors"
-              >
-                <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <span className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
-                      {initials(c.name || c.email)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {c.name || c.email || c.phone || "—"}
-                      </p>
-                      {c.job_title && (
-                        <p className="text-muted-foreground truncate text-xs">
-                          {c.job_title}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="text-muted-foreground hidden px-4 py-2.5 md:table-cell">
-                  <p className="truncate">{c.email ?? "—"}</p>
-                  {c.phone && <p className="truncate text-xs">{c.phone}</p>}
-                </td>
-                <td className="hidden px-4 py-2.5 lg:table-cell">
-                  {c.company?.name ?? (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5">
-                  <div className="flex gap-1">
-                    {c.channel_types.map((ch) => (
-                      <ChannelGlyph
-                        key={ch}
-                        type={ch}
-                        className="size-4"
-                        title={t(`channels.types.${ch}`)}
-                      />
-                    ))}
-                  </div>
-                </td>
-                <td className="hidden px-4 py-2.5 text-right tabular-nums sm:table-cell">
-                  {c.conversation_count}
-                </td>
-                <td className="text-muted-foreground hidden px-4 py-2.5 text-right text-xs md:table-cell">
-                  {c.last_seen_at ? shortAgo(c.last_seen_at, locale) : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {total > PAGE && (
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground tabular-nums">
-            {offset + 1}–{Math.min(offset + PAGE, total)} / {total}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={offset === 0}
-              onClick={() => setOffset((o) => Math.max(0, o - PAGE))}
-            >
-              {t("contacts.prev")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={offset + PAGE >= total}
-              onClick={() => setOffset((o) => o + PAGE)}
-            >
-              {t("contacts.next")}
-            </Button>
-          </div>
-        </div>
-      )}
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        onRowClick={(row) => select(row.uuid)}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        emptyTitle={hasFilters ? t("table.no_results") : undefined}
+        emptyDescription={
+          hasFilters ? t("table.reset_filters") : t("contacts.empty")
+        }
+        searchPlaceholder={t("contacts.search")}
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          persistKey: "tenant-contacts-v1",
+          // The endpoint takes `q`, `company` and a single `sort` field.
+          multiSort: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       <ContactSheet uuid={selected} onClose={() => select(null)} />
       <CreateContactDialog
         open={creating}

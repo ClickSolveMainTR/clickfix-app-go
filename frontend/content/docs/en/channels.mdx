@@ -55,3 +55,5 @@ X-ClickFix-Signature = sha256=hex(HMAC-SHA256(secret, timestamp + "." + body))
 ```
 
 The message body schema is in the [API reference](/docs/api?lang=en).
+
+The `text` of an agent reply is in ClickFix's writing format: it may contain `**bold**`, `*italic*`, `` `code` ``, `[label](https://address)` and lists that start with `- `. On other channels this format is translated to the channel's own; on the API channel it is not, so you decide how to show it.

@@ -1,11 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Copy, Lock, Plus, Users, Video } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { EntityTable, useServerListState } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,22 +58,108 @@ export function VideoRoomsPage() {
   const { slug, canUse } = useVideoScope();
   const [status, setStatus] = useState("open");
   const [creating, setCreating] = useState(false);
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
+  const { setPagination } = listState;
   const availability = useQuery({
     queryKey: videoKeys.availability(slug),
     queryFn: () => videoService.availability(slug),
     enabled: Boolean(slug && canUse),
   });
   const rooms = useQuery({
-    queryKey: videoKeys.rooms(slug, status),
+    queryKey: [...videoKeys.rooms(slug, status), limit, offset],
     queryFn: () =>
       videoService.rooms(slug, {
         status: status === "all" ? undefined : status,
-        limit: 50,
-        offset: 0,
+        limit,
+        offset,
       }),
     enabled: Boolean(slug && canUse),
+    // Keep the previous page while paging; a tab change must not show the
+    // other tab's rooms while the new list loads.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[3] === status ? previous : undefined,
     refetchInterval: 10_000,
   });
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<VideoRoom>({
+          accessorKey: "name",
+          labelKey: "video.rooms.name",
+          gridPrimary: true,
+          enableHiding: false,
+          cell: ({ row }) => (
+            <Link
+              href={`/video/${row.original.uuid}`}
+              className="font-medium hover:underline"
+            >
+              {row.original.name}
+            </Link>
+          ),
+        }),
+        createColumn<VideoRoom>({
+          accessorKey: "status",
+          labelKey: "video.rooms.columns.status",
+          cell: ({ row }) => (
+            <Badge
+              variant={row.original.status === "live" ? "default" : "secondary"}
+            >
+              {t(`video.status.${row.original.status}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<VideoRoom>({
+          accessorKey: "e2ee",
+          labelKey: "video.rooms.encryption",
+          cell: ({ row }) =>
+            row.original.e2ee ? (
+              <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+                <Lock className="size-3" />
+                {t("video.call.e2ee")}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<VideoRoom>({
+          accessorKey: "scheduled_start_at",
+          labelKey: "video.rooms.columns.start",
+          cell: ({ row }) =>
+            row.original.scheduled_start_at ? (
+              <span className="text-muted-foreground text-xs">
+                {datetime(row.original.scheduled_start_at)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<VideoRoom>({
+          accessorKey: "waiting",
+          labelKey: "video.rooms.columns.waiting",
+          cell: ({ row }) =>
+            row.original.waiting > 0 ? (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+                <Users className="size-3" />
+                {t("video.lobby.waiting_count", {
+                  count: row.original.waiting,
+                })}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<VideoRoom>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-right" },
+          cell: ({ row }) => <RoomActions room={row.original} />,
+        }),
+      ] as ColumnDef<VideoRoom, unknown>[],
+    [t],
+  );
 
   if (!canUse) {
     return (
@@ -99,7 +188,13 @@ export function VideoRoomsPage() {
             : t("video.minutes.balance", { balance: a.balance })}
         </p>
       ) : null}
-      <Tabs value={status} onValueChange={setStatus}>
+      <Tabs
+        value={status}
+        onValueChange={(next) => {
+          setStatus(next);
+          setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+        }}
+      >
         <TabsList>
           <TabsTrigger value="open">{t("video.status.open")}</TabsTrigger>
           <TabsTrigger value="live">{t("video.status.live")}</TabsTrigger>
@@ -107,16 +202,25 @@ export function VideoRoomsPage() {
           <TabsTrigger value="all">{t("video.status.all")}</TabsTrigger>
         </TabsList>
       </Tabs>
-      <div className="grid gap-3">
-        {(rooms.data?.items ?? []).map((room) => (
-          <RoomRow key={room.uuid} room={room} />
-        ))}
-        {rooms.data && rooms.data.items.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {t("video.rooms.empty")}
-          </p>
-        ) : null}
-      </div>
+      <EntityTable
+        columns={columns}
+        data={rooms.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        isLoading={rooms.isLoading}
+        isError={rooms.isError}
+        onRetry={() => void rooms.refetch()}
+        emptyDescription={t("video.rooms.empty")}
+        total={rooms.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          persistKey: "tenant-video-rooms-v1",
+          // The endpoint takes `status`, `limit` and `offset` only.
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       {creating && a ? (
         <CreateRoomDialog availability={a} onClose={() => setCreating(false)} />
       ) : null}
@@ -124,59 +228,29 @@ export function VideoRoomsPage() {
   );
 }
 
-function RoomRow({ room }: { room: VideoRoom }) {
+function RoomActions({ room }: { room: VideoRoom }) {
   const { t } = useLocale();
   return (
-    <Card>
-      <CardContent className="flex flex-wrap items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
-          <Link
-            href={`/video/${room.uuid}`}
-            className="font-medium hover:underline"
-          >
-            {room.name}
-          </Link>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant={room.status === "live" ? "default" : "secondary"}>
-              {t(`video.status.${room.status}`)}
-            </Badge>
-            {room.e2ee ? (
-              <span className="inline-flex items-center gap-1">
-                <Lock className="size-3" />
-                {t("video.call.e2ee")}
-              </span>
-            ) : null}
-            {room.scheduled_start_at ? (
-              <span>{datetime(room.scheduled_start_at)}</span>
-            ) : null}
-            {room.waiting > 0 ? (
-              <span className="inline-flex items-center gap-1 text-amber-600">
-                <Users className="size-3" />
-                {t("video.lobby.waiting_count", { count: room.waiting })}
-              </span>
-            ) : null}
-          </div>
-        </div>
-        {room.guest_link ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              await navigator.clipboard.writeText(room.guest_link);
-              appToast.success(t("video.links.copied"));
-            }}
-          >
-            <Copy className="size-3.5" />
-            {t("video.links.copy_guest")}
-          </Button>
-        ) : null}
-        {room.status !== "ended" ? (
-          <Button asChild size="sm">
-            <Link href={`/video/${room.uuid}`}>{t("video.rooms.open")}</Link>
-          </Button>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {room.guest_link ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await navigator.clipboard.writeText(room.guest_link);
+            appToast.success(t("video.links.copied"));
+          }}
+        >
+          <Copy className="size-3.5" />
+          {t("video.links.copy_guest")}
+        </Button>
+      ) : null}
+      {room.status !== "ended" ? (
+        <Button asChild size="sm">
+          <Link href={`/video/${room.uuid}`}>{t("video.rooms.open")}</Link>
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

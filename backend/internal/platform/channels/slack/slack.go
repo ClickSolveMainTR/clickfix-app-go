@@ -19,6 +19,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 )
 
 type Config struct {
@@ -462,6 +463,8 @@ func (a *Adapter) Send(ctx context.Context,
 	if !ok || ch == "" || root == "" || !allowed(inst, ch) {
 		return channels.SendResult{}, channels.Permanent("thread", errors.New("selected channel and thread required"))
 	}
+	// mrkdwn with & < > escaped (CF-177); the limit applies to the result.
+	msg.Text = format.Slack(msg.Text)
 	if len(msg.Attachments) > 0 || msg.Text == "" || len([]rune(msg.Text)) > 4000 {
 		return channels.SendResult{},
 			channels.Permanent("content",

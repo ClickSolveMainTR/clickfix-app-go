@@ -254,10 +254,6 @@ export function OrganizationMembersTab({
     [organizationUuid],
   );
   const total = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   const removingName = removing
     ? `${removing.user.name} ${removing.user.surname}`.trim() ||
       removing.user.email
@@ -279,7 +275,7 @@ export function OrganizationMembersTab({
           onRetry={() => void listQuery.refetch()}
           emptyTitle={t("organizations.members.empty_title")}
           emptyDescription={t("organizations.members.empty_description")}
-          pageCount={pageCount}
+          total={total}
           state={listState.tableState}
           features={{ persistKey: "platform-organization-members-v1" }}
           toolbarExtra={

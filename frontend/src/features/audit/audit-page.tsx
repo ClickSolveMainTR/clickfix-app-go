@@ -243,10 +243,6 @@ export function AuditPage() {
   );
 
   const total = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 50)),
-  );
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
@@ -285,7 +281,7 @@ export function AuditPage() {
             ? t("audit.empty_filtered_description")
             : t("audit.empty_description")
         }
-        pageCount={pageCount}
+        total={total}
         state={listState.tableState}
         features={{ persistKey: "tenant-audit-v1" }}
         toolbarExtra={

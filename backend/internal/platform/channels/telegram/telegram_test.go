@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/format"
 	"github.com/google/uuid"
 )
 
@@ -415,15 +416,19 @@ func TestSendLongSplit(t *testing.T) {
 	joined := ""
 	for i, c := range calls {
 		s := c.params["text"].(string)
-		if utf16Len(s) > maxText {
-			t.Fatalf("chunk %d too long: %d", i, utf16Len(s))
+		if n := (format.Rich{Text: s}).Len(); n > maxText {
+			t.Fatalf("chunk %d too long: %d", i, n)
+		}
+		if s != strings.TrimSpace(s) {
+			t.Fatalf("chunk %d is not trimmed", i)
 		}
 		if (c.params["reply_parameters"] != nil) != (i == 0) {
 			t.Fatalf("reply only on first chunk")
 		}
 		joined += s
 	}
-	if joined != msg.Text {
+	// Chunks are trimmed at the break, so only the whitespace there is lost.
+	if strip := strings.NewReplacer(" ", "", "\n", ""); strip.Replace(joined) != strip.Replace(msg.Text) {
 		t.Fatal("chunks must reassemble the text")
 	}
 	if !strings.HasSuffix(res.ExternalID, fmt.Sprint(1003)) {
@@ -567,15 +572,72 @@ func TestCheckHealth(t *testing.T) {
 	}
 }
 
-func TestSplitTextAndTruncate(t *testing.T) {
-	if got := splitText("  ", 10); got != nil {
-		t.Fatalf("blank: %q", got)
-	}
-	got := splitText("aaaa bbbb cccc", 10)
-	if len(got) != 2 || got[0] != "aaaa bbbb " || got[1] != "cccc" {
-		t.Fatalf("split: %q", got)
-	}
+func TestTruncate(t *testing.T) {
 	if s := truncateBytes("ğğğ", 5); s != "ğğ" {
 		t.Fatalf("truncate: %q", s)
+	}
+}
+
+// CF-177: the source format goes out as plain text plus entities.
+func TestSendFormatted(t *testing.T) {
+	f := newFakeAPI(t)
+	a := New(Config{BaseURL: f.srv.URL})
+	msg := sendTo("5012345678")
+	msg.Text = "**Kargonuz** yolda: [takip](https://kargo.example/t_1), 2*3*4"
+	if _, err := a.Send(context.Background(), testInstance(), msg); err != nil {
+		t.Fatal(err)
+	}
+	p := f.Calls("sendMessage")[0].params
+	if p["text"] != "Kargonuz yolda: takip, 2*3*4" || p["parse_mode"] != nil {
+		t.Fatalf("params: %+v", p)
+	}
+	ents, _ := json.Marshal(p["entities"])
+	if string(ents) != `[{"length":8,"offset":0,"type":"bold"},{"length":5,"offset":16,"type":"text_link","url":"https://kargo.example/t_1"}]` {
+		t.Fatalf("entities: %s", ents)
+	}
+
+	// The same text as a caption, on a JSON call and on an upload.
+	msg.Attachments = []channels.OutboundAttachment{{Filename: "a.pdf", ContentType: "application/pdf", Size: 1, Open: func(context.Context) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("x")), nil
+	}}}
+	if _, err := a.Send(context.Background(), testInstance(), msg); err != nil {
+		t.Fatal(err)
+	}
+	doc := f.Calls("sendDocument")[0].params
+	if doc["caption"] != "Kargonuz yolda: takip, 2*3*4" ||
+		doc["caption_entities"] != `[{"type":"bold","offset":0,"length":8},{"type":"text_link","offset":16,"length":5,"url":"https://kargo.example/t_1"}]` {
+		t.Fatalf("caption: %+v", doc)
+	}
+}
+
+// CF-177: when Telegram refuses the entities the message still arrives,
+// as plain text.
+func TestSendFormattedFallsBackToPlain(t *testing.T) {
+	f := newFakeAPI(t)
+	f.handlers["sendMessage"] = func(p map[string]any) (int, string) {
+		if p["entities"] != nil {
+			return fail(400, "Bad Request: can't parse entities: ENTITY_BOUNDS_INVALID", nil)
+		}
+		return ok(map[string]any{"message_id": 7, "chat": map[string]any{"id": 5012345678, "type": "private"}})
+	}
+	a := New(Config{BaseURL: f.srv.URL})
+	msg := sendTo("5012345678")
+	msg.Text = "**Kargonuz** yolda"
+	res, err := a.Send(context.Background(), testInstance(), msg)
+	if err != nil || res.ExternalID != "5012345678:7" {
+		t.Fatalf("res %+v err %v", res, err)
+	}
+	calls := f.Calls("sendMessage")
+	if len(calls) != 2 || calls[1].params["entities"] != nil || calls[1].params["text"] != "Kargonuz yolda" {
+		t.Fatalf("calls: %+v", calls)
+	}
+
+	// Another 400 is not retried.
+	f.handlers["sendMessage"] = func(map[string]any) (int, string) { return fail(400, "Bad Request: chat not found", nil) }
+	if _, err := a.Send(context.Background(), testInstance(), msg); !channels.IsPermanent(err) {
+		t.Fatalf("err %v", err)
+	}
+	if n := len(f.Calls("sendMessage")); n != 3 {
+		t.Fatalf("%d calls", n)
 	}
 }

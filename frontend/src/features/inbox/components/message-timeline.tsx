@@ -23,6 +23,7 @@ import { useLocale } from "@/providers/locale-provider";
 import { initials } from "../lib/format";
 import { inboxService } from "../services/inbox.service";
 import type { OptimisticMessage } from "../types";
+import { MessageContent } from "./message-content";
 
 type Props = {
   conversationUuid: string;
@@ -291,7 +292,11 @@ const MessageItem = memo(function MessageItem({
                 {m.attributes.subject as string}
               </div>
             )}
-          {m.content ||
+          {(m.content && mine ? (
+            <MessageContent text={m.content} />
+          ) : (
+            m.content
+          )) ||
             (m.attachments.length === 0 ? (
               <span className="italic opacity-70">
                 {t("inbox.timeline.unsupported")}

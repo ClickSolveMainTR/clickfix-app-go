@@ -144,10 +144,6 @@ export function OrganizationsPage() {
       ),
     [meta?.bulk_actions],
   );
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / (listState.pagination.pageSize || 20)),
-  );
   const hasFilters =
     Boolean(listParams.q) ||
     Boolean(listParams.status) ||
@@ -225,7 +221,7 @@ export function OrganizationsPage() {
               ? t("organizations.empty_filtered_description")
               : t("organizations.empty_description")
           }
-          pageCount={pageCount}
+          total={total}
           state={{
             ...listState.tableState,
             rowSelection: bulkSelection.rowSelection,
