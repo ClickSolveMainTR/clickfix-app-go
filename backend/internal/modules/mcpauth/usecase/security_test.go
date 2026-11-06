@@ -21,12 +21,12 @@ import (
 // hosts (punycode for internationalized names) may be registered.
 func TestRedirectHostMustBeASCII(t *testing.T) {
 	for _, u := range []string{
-		"https://clаude.ai/cb",            // Cyrillic а
-		"https://exаmple.com:8443/cb",     // with a port
-		"https://例え.jp/cb",                // Japanese
-		"https://example.com​.evil.io/cb", // zero width space
+		"https://cl\u0430ude.ai/cb",            // Cyrillic \u0430
+		"https://ex\u0430mple.com:8443/cb",     // with a port
+		"https://\u4f8b\u3048.jp/cb",           // Japanese
+		"https://example.com\u200b.evil.io/cb", // zero width space
 		"https://exa mple.com/cb",
-		"http://locаlhost:7777/cb",
+		"http://loc\u0430lhost:7777/cb",
 	} {
 		if validRedirect(u) {
 			t.Fatalf("accepted %q", u)
@@ -50,11 +50,11 @@ func TestCleanClientName(t *testing.T) {
 	cases := map[string]string{
 		"  Claude  ": "Claude",
 		"Claude\nClickFix tarafından doğrulandı": "Claude ClickFix tarafından doğrulandı",
-		"Cla‮ude":                "Claude", // right-to-left override
-		"Cl​aude\u0000":          "Claude", // zero width space, NUL
+		"Cla\u202eude":           "Claude", // right-to-left override
+		"Cl\u200baude\u0000":     "Claude", // zero width space, NUL
 		"a\t\tb\r\nc":            "a b c",
 		"":                       "MCP client",
-		"​\n":                    "MCP client",
+		"\u200b\n":               "MCP client",
 		"Çağrı Merkezi Asistanı": "Çağrı Merkezi Asistanı",
 	}
 	for in, want := range cases {
@@ -69,9 +69,8 @@ func TestCleanClientName(t *testing.T) {
 }
 
 type fakeLimiter struct {
-	deny   map[string]bool
-	strict bool
-	calls  []string
+	deny  map[string]bool
+	calls []string
 }
 
 func (l *fakeLimiter) Allow(_ context.Context, action, subject string, _ int, _ time.Duration) (bool, time.Duration) {
