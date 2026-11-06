@@ -379,5 +379,9 @@
   "forum.accepted": "Accepted answer",
   "forum.accepted_done": "Accepted answer updated.",
   "forum.accept_replace_title": "Change the accepted answer?",
-  "forum.accept_replace_body": "This topic already has an accepted answer; this reply will be shown instead."
+  "forum.accept_replace_body": "This topic already has an accepted answer; this reply will be shown instead.",
+  "forum.already_handled": "This post was already handled or deleted. The list was refreshed.",
+  "forum.topic_first": "This reply's topic is not published yet. Approve the topic first.",
+  "forum.show_all": "Show all",
+  "forum.show_less": "Show less"
 }

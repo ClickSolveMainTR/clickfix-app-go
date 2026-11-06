@@ -3,13 +3,17 @@ import { test } from 'node:test';
 
 import {
   acceptedReply,
+  AlreadyHandled,
   categoryName,
+  decisionProblem,
   flagLabel,
+  isLongBody,
   isReply,
   isRisky,
   needsConfirm,
   outcomeStatus,
   readModerationItem,
+  stillPending,
   type T,
 } from './core.ts';
 
@@ -80,4 +84,25 @@ test('acceptedReply prefers the loaded topic over the list row', () => {
   assert.equal(acceptedReply({ accepted_answer: null }, { accepted_reply_uuid: 'r-1' }), null);
   assert.equal(acceptedReply(undefined, { accepted_reply_uuid: 'r-1' }), 'r-1');
   assert.equal(acceptedReply(undefined), null);
+});
+
+test('stillPending looks through every loaded page of the queue', () => {
+  const pages = [{ items: [{ uuid: 'a' }] }, { items: [{ uuid: 'b' }] }];
+  assert.equal(stillPending(pages, 'b'), true);
+  assert.equal(stillPending(pages, 'z'), false);
+  assert.equal(stillPending(undefined, 'a'), false);
+});
+
+test('decisionProblem explains a post that is gone and a reply whose topic waits', () => {
+  assert.equal(decisionProblem(new AlreadyHandled(), null), 'forum.already_handled');
+  assert.equal(decisionProblem(new Error('x'), 404), 'forum.already_handled');
+  assert.equal(decisionProblem(new Error('x'), 409), 'forum.topic_first');
+  assert.equal(decisionProblem(new Error('x'), 500), null);
+  assert.equal(decisionProblem(new Error('x'), null), null);
+});
+
+test('isLongBody marks text the queue row would cut', () => {
+  assert.equal(isLongBody('kısa'), false);
+  assert.equal(isLongBody('a'.repeat(321)), true);
+  assert.equal(isLongBody(Array.from({ length: 9 }, () => 'satır').join('\n')), true);
 });

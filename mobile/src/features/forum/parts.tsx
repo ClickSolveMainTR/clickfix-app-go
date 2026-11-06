@@ -2,11 +2,8 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert } from 'react-native';
 
-import { isApiError } from '@/core/api/errors';
-import { errorMessage } from '@/core/i18n';
 import { EmptyState } from '@/ui/empty-state';
 import { Screen } from '@/ui/screen';
-import { toast } from '@/ui/toast';
 
 import type { T } from './core';
 
@@ -14,11 +11,6 @@ import type { T } from './core';
 export function useForumT(): T {
   const { t } = useTranslation('admin');
   return (key, params) => t(key, params ?? {});
-}
-
-/** A refused write, in the API's words. */
-export function forumFailed(t: T, e: unknown) {
-  toast.error(`${t('forum.failed')} ${errorMessage(isApiError(e) ? e.code : undefined)}`);
 }
 
 /** Asks before an action that cannot be taken back from the app. */

@@ -2,8 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { formatDateTime } from '@/core/date-format';
-import { appLocale, displayTimeZone, formatShort } from '@/core/format';
+import { formatShortWithYear } from '@/core/format';
 import { useChannels } from '@/features/admin/api';
 import { EmptyState } from '@/ui/empty-state';
 import { ListRow } from '@/ui/list';
@@ -13,7 +12,7 @@ import { StatusPill } from '@/ui/status-pill';
 import { Text } from '@/ui/text';
 
 import { useCallScope, useVoiceCalls, type VoiceCall } from './api';
-import { callFailed, counterpart, directionLabel, duration, needsYear, statusLabel, type T } from './core';
+import { callFailed, counterpart, directionLabel, duration, statusLabel, type T } from './core';
 
 /** `t` of the `admin` namespace in the shape the label helpers take. */
 export function useCallT(): T {
@@ -22,21 +21,7 @@ export function useCallT(): T {
 }
 
 /** Compact date and time of a call; the log goes back years, so another year is written out. */
-export function callTime(iso: string | null | undefined) {
-  if (!needsYear(iso)) return formatShort(iso);
-  return formatDateTime(
-    appLocale(),
-    {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: displayTimeZone(),
-    },
-    iso,
-  );
-}
+export const callTime = formatShortWithYear;
 
 /** A screen opened without the id it needs (a broken deep link) has nothing to load. */
 export function MissingCall({ title, onOpen }: { title: string; onOpen?: () => void }) {

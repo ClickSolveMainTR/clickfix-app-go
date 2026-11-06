@@ -2,8 +2,7 @@ import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { isApiError } from '@/core/api/errors';
-import { formatShort } from '@/core/format';
+import { formatShortWithYear } from '@/core/format';
 import { useDebounced } from '@/core/use-debounced';
 import { Button } from '@/ui/button';
 import { Chips } from '@/ui/chips';
@@ -12,7 +11,6 @@ import { PagedList } from '@/ui/paged-list';
 import { SearchField } from '@/ui/search-field';
 import { StatusPill } from '@/ui/status-pill';
 import { Text } from '@/ui/text';
-import { toast } from '@/ui/toast';
 
 import {
   type ForumTopicSummary,
@@ -22,8 +20,17 @@ import {
   useForumTopics,
   useModerationQueue,
 } from './api';
-import { categoryName, flagLabel, isReply, isRisky, type ModerationItem, needsConfirm, type Outcome } from './core';
-import { confirmAction, forumFailed, ForumNotice, useForumT, useSingleFlight } from './parts';
+import {
+  categoryName,
+  flagLabel,
+  isLongBody,
+  isReply,
+  isRisky,
+  type ModerationItem,
+  needsConfirm,
+  type Outcome,
+} from './core';
+import { confirmAction, ForumNotice, useForumT, useSingleFlight } from './parts';
 
 type Tab = 'moderation' | 'topics';
 const ALL = '';
@@ -75,19 +82,20 @@ function Moderation({ tabs }: { tabs: React.ReactElement }) {
   // One decision at a time: while a write is on its way every action is off.
   const busy = moderate.isPending || assist.isPending;
   const flight = useSingleFlight();
+  // Rows whose whole text is shown; a moderator reads all of a post before deciding.
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (uuid: string) =>
+    setOpen((cur) => {
+      const next = new Set(cur);
+      if (!next.delete(uuid)) next.add(uuid);
+      return next;
+    });
   const total = queue.data?.pages[0]?.total ?? 0;
 
   const decide = (item: ModerationItem, outcome: Outcome) => {
     const run = () => {
       if (!flight.start()) return;
-      moderate.mutate(
-        { uuid: item.uuid, outcome },
-        {
-          onSuccess: () => toast.success(t(`forum.done_${outcome}`)),
-          onError: (e) => forumFailed(t, e),
-          onSettled: flight.end,
-        },
-      );
+      moderate.mutate({ uuid: item.uuid, outcome }, { onSettled: flight.end });
     };
     if (!needsConfirm(outcome)) return run();
     confirmAction(t, {
@@ -106,12 +114,7 @@ function Moderation({ tabs }: { tabs: React.ReactElement }) {
       action: t('forum.assist_run'),
       run: () => {
         if (!flight.start()) return;
-        assist.mutate(item.uuid, {
-          onSettled: flight.end,
-          onSuccess: (r) =>
-            toast.success(r.flagged ? t('forum.ai_flagged', { reason: r.reason }) : t('forum.ai_clean')),
-          onError: (e) => (isApiError(e) && e.status === 429 ? toast.error(t('forum.ai_limited')) : forumFailed(t, e)),
-        });
+        assist.mutate(item.uuid, { onSettled: flight.end });
       },
     });
 
@@ -150,7 +153,7 @@ function Moderation({ tabs }: { tabs: React.ReactElement }) {
               />
               {flag ? <StatusPill label={flag} tone={isRisky(p.flag_reason) ? 'problem' : 'neutral'} /> : null}
               <Text variant="footnote" tone="muted" className="ml-auto">
-                {formatShort(p.created_at)}
+                {formatShortWithYear(p.created_at)}
               </Text>
             </View>
             {p.title ? (
@@ -159,9 +162,17 @@ function Moderation({ tabs }: { tabs: React.ReactElement }) {
               </Text>
             ) : null}
             {/* Visitor text is shown as plain text, never rendered as markup. */}
-            <Text variant="callout" tone="muted" numberOfLines={8} selectable>
+            <Text variant="callout" tone="muted" numberOfLines={open.has(p.uuid) ? undefined : 8} selectable>
               {p.body}
             </Text>
+            {isLongBody(p.body) ? (
+              <Button
+                title={t(open.has(p.uuid) ? 'forum.show_less' : 'forum.show_all')}
+                variant="ghost"
+                onPress={() => toggle(p.uuid)}
+                className="self-start px-0"
+              />
+            ) : null}
             <View className="flex-row flex-wrap gap-2 pt-1">
               <Button
                 title={t('forum.approve')}
@@ -227,7 +238,7 @@ function Topics({ tabs }: { tabs: React.ReactElement }) {
           titleLines={2}
           subtitle={[
             categoryName(categories.data, topic.category_slug),
-            formatShort(topic.created_at),
+            formatShortWithYear(topic.created_at),
             t('forum.votes', { count: topic.votes }),
           ].join(' · ')}
           trailing={topic.accepted_reply_uuid ? <StatusPill label={t('forum.answered')} tone="done" /> : undefined}

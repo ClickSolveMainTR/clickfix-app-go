@@ -379,5 +379,9 @@
   "forum.accepted": "Kabul edilen yanıt",
   "forum.accepted_done": "Kabul edilen yanıt güncellendi.",
   "forum.accept_replace_title": "Kabul edilen yanıt değişsin mi?",
-  "forum.accept_replace_body": "Bu konunun kabul edilmiş bir yanıtı var; yerine bu yanıt gösterilir."
+  "forum.accept_replace_body": "Bu konunun kabul edilmiş bir yanıtı var; yerine bu yanıt gösterilir.",
+  "forum.already_handled": "Bu gönderi zaten işlendi ya da silindi. Liste yenilendi.",
+  "forum.topic_first": "Bu yanıtın konusu henüz yayınlanmadı. Önce konuyu onaylayın.",
+  "forum.show_all": "Tamamını göster",
+  "forum.show_less": "Daha az göster"
 }

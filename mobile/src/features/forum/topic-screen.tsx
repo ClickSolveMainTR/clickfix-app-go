@@ -4,7 +4,7 @@ import { RefreshControl, View } from 'react-native';
 
 import { isApiError } from '@/core/api/errors';
 import { WEB_URL } from '@/core/config';
-import { formatShort } from '@/core/format';
+import { formatShortWithYear } from '@/core/format';
 import { Button } from '@/ui/button';
 import { EmptyState } from '@/ui/empty-state';
 import { List, ListRow, SectionHeader } from '@/ui/list';
@@ -12,12 +12,11 @@ import { QueryState } from '@/ui/query-state';
 import { Screen } from '@/ui/screen';
 import { StatusPill } from '@/ui/status-pill';
 import { Text } from '@/ui/text';
-import { toast } from '@/ui/toast';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 
 import { type ForumReply, type ForumTopic, useForumActions, useForumScope, useForumTopic } from './api';
 import { acceptedReply } from './core';
-import { confirmAction, forumFailed, ForumNotice, useForumT, useSingleFlight } from './parts';
+import { confirmAction, ForumNotice, useForumT, useSingleFlight } from './parts';
 
 /**
  * One published topic (CF-171) as visitors see it, with the moderator's
@@ -53,14 +52,7 @@ export function ForumTopicScreen() {
   const markAccepted = (data: ForumTopic, reply: ForumReply, replaces: boolean) => {
     const run = () => {
       if (!flight.start()) return;
-      accept.mutate(
-        { topic: data.uuid, reply: reply.uuid },
-        {
-          onSuccess: () => toast.success(t('forum.accepted_done')),
-          onError: (e) => forumFailed(t, e),
-          onSettled: flight.end,
-        },
-      );
+      accept.mutate({ topic: data, reply }, { onSettled: flight.end });
     };
     // Replacing an answer the community already sees asks first.
     if (!replaces) return run();
@@ -86,7 +78,7 @@ export function ForumTopicScreen() {
                   <ListRow
                     title={data.title}
                     titleLines={4}
-                    subtitle={formatShort(data.created_at)}
+                    subtitle={formatShortWithYear(data.created_at)}
                     trailing={accepted ? <StatusPill label={t('forum.answered')} tone="done" /> : undefined}
                   />
                   <View className="px-4 py-3">
@@ -122,7 +114,7 @@ export function ForumTopicScreen() {
                             </Text>
                             <View className="flex-row flex-wrap items-center gap-3">
                               <Text variant="footnote" tone="muted">
-                                {[formatShort(r.created_at), t('forum.votes', { count: r.votes })].join(' · ')}
+                                {[formatShortWithYear(r.created_at), t('forum.votes', { count: r.votes })].join(' · ')}
                               </Text>
                               {isAccepted ? <StatusPill label={t('forum.accepted')} tone="done" /> : null}
                             </View>
@@ -132,7 +124,7 @@ export function ForumTopicScreen() {
                                 icon="accept"
                                 variant="ghost"
                                 disabled={accept.isPending}
-                                loading={accept.isPending && accept.variables?.reply === r.uuid}
+                                loading={accept.isPending && accept.variables?.reply.uuid === r.uuid}
                                 onPress={() => markAccepted(data, r, !!accepted)}
                                 className="self-start"
                               />

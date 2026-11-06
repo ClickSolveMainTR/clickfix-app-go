@@ -82,3 +82,35 @@ export function acceptedReply(
   if (detail) return detail.accepted_answer?.uuid ?? null;
   return summary?.accepted_reply_uuid ?? null;
 }
+
+/** Is the post still in the pages of the queue (which lists pending posts only)? */
+export function stillPending(pages: { items: { uuid: string }[] }[] | undefined, uuid: string) {
+  return (pages ?? []).some((p) => p.items.some((i) => i.uuid === uuid));
+}
+
+/** Thrown before a decision is sent when the post left the queue meanwhile (another moderator decided). */
+export class AlreadyHandled extends Error {
+  constructor() {
+    super('forum post already handled');
+    this.name = 'AlreadyHandled';
+  }
+}
+
+/**
+ * Why a decision was refused, as a message key; null leaves it to the API's
+ * own error text. 404: the post is gone. 409: a reply cannot be published
+ * before its topic (`forum/usecase/service.go`, `Moderate`).
+ */
+export function decisionProblem(
+  error: unknown,
+  status: number | null,
+): 'forum.already_handled' | 'forum.topic_first' | null {
+  if (error instanceof AlreadyHandled || status === 404) return 'forum.already_handled';
+  if (status === 409) return 'forum.topic_first';
+  return null;
+}
+
+/** Long enough that the queue row cuts it: the row then offers "show all". */
+export function isLongBody(body: string, maxChars = 320, maxLines = 8) {
+  return body.length > maxChars || body.split('\n').length > maxLines;
+}

@@ -1,12 +1,23 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api, orgHeader, unwrap } from '@/core/api/client';
+import { isApiError } from '@/core/api/errors';
 import { orgKey, useOrgSlug } from '@/core/api/org';
 import type { components } from '@/core/api/schema';
 import { P, useCan } from '@/core/auth/permissions';
+import { errorMessage, i18n } from '@/core/i18n';
 import { nextOffset } from '@/ui/paged-list';
+import { toast } from '@/ui/toast';
 
-import { type ModerationItem, type Outcome, outcomeStatus, readModerationItem } from './core';
+import {
+  AlreadyHandled,
+  decisionProblem,
+  type ModerationItem,
+  type Outcome,
+  outcomeStatus,
+  readModerationItem,
+  stillPending,
+} from './core';
 
 /**
  * Community forum moderation (CF-171), the endpoints the panel's forum page
@@ -23,6 +34,12 @@ export type ForumReply = components['schemas']['ForumReply'];
 const PAGE = 20;
 /** Replies shown on a topic; the panel reads the same first 100. */
 export const REPLY_LIMIT = 100;
+
+/**
+ * The public forum endpoints answer `Cache-Control: public, max-age=30`. A
+ * moderator must see what was just decided, so these reads skip the HTTP cache.
+ */
+const FRESH = { cache: 'no-store' } as const;
 
 const keys = {
   all: (org: string) => orgKey(org, 'forum'),
@@ -71,6 +88,7 @@ export function useForumCategories() {
     queryFn: () =>
       unwrap(
         api.GET('/v1/public/help/{organization_slug}/forum/categories', {
+          ...FRESH,
           params: { path: { organization_slug: org } },
         }),
       ),
@@ -92,6 +110,7 @@ export function useForumTopics(q: string, category: string) {
     queryFn: ({ pageParam }): Promise<TopicPage> =>
       unwrap(
         api.GET('/v1/public/help/{organization_slug}/forum/topics', {
+          ...FRESH,
           params: {
             path: { organization_slug: org },
             query: {
@@ -116,46 +135,90 @@ export function useForumTopic(slug: string) {
     queryFn: () =>
       unwrap(
         api.GET('/v1/public/help/{organization_slug}/forum/topics/{topic_slug}', {
+          ...FRESH,
           params: { path: { organization_slug: org, topic_slug: slug }, query: { limit: REPLY_LIMIT, offset: 0 } },
         }),
       ),
   });
 }
 
+const tr = (key: string, params?: Record<string, string | number>) => i18n.t(`admin:${key}`, params ?? {});
+
+/** A refused write: the reason the app knows, else the API's own words. */
+function failed(e: unknown) {
+  const known = decisionProblem(e, isApiError(e) ? e.status : null);
+  toast.error(known ? tr(known) : `${tr('forum.failed')} ${errorMessage(isApiError(e) ? e.code : undefined)}`);
+}
+
 /**
  * The moderator's decisions. Each write sends only its own field (`status`,
- * `reply_uuid`), never a record rebuilt from the cache. Every success
- * refreshes the whole forum: the queue and its count, the topics, the topic.
+ * `reply_uuid`), never a record rebuilt from the cache. Whatever the answer,
+ * the forum is read again afterwards (a refused decision usually means the
+ * queue on the phone was old). Results are announced from here, so they still
+ * show when the screen that started them is gone.
  */
 export function useForumActions() {
   const qc = useQueryClient();
   const { org } = useForumScope();
-  const done = () => qc.invalidateQueries({ queryKey: keys.all(org) });
+  const refresh = () => qc.invalidateQueries({ queryKey: keys.all(org) });
   const moderate = useMutation({
-    mutationFn: ({ uuid, outcome }: { uuid: string; outcome: Outcome }) =>
-      unwrap(
+    mutationFn: async ({ uuid, outcome }: { uuid: string; outcome: Outcome }) => {
+      // The API takes the last writer, so a decision made from an old queue
+      // could publish a post another moderator rejected: read the queue again
+      // and stop when the post is no longer waiting.
+      await qc.refetchQueries({ queryKey: keys.moderation(org), exact: true });
+      const queue = qc.getQueryData<InfiniteData<ModerationPage>>(keys.moderation(org));
+      if (!stillPending(queue?.pages, uuid)) throw new AlreadyHandled();
+      return unwrap(
         api.PATCH('/v1/tenant/forum/posts/{uuid}', {
           params: { header: orgHeader(), path: { uuid } },
           body: { status: outcomeStatus(outcome) },
         }),
-      ),
-    onSuccess: done,
+      );
+    },
+    onSuccess: (_d, v) => toast.success(tr(`forum.done_${v.outcome}`)),
+    onError: failed,
+    onSettled: refresh,
   });
   /** Explicit, credit-metered AI triage; it only saves a suggestion on the post. */
   const assist = useMutation({
     mutationFn: (uuid: string) =>
       unwrap(api.POST('/v1/tenant/forum/posts/{uuid}/assist', { params: { header: orgHeader(), path: { uuid } } })),
-    onSuccess: done,
+    onSuccess: (r) => toast.success(r.flagged ? tr('forum.ai_flagged', { reason: r.reason }) : tr('forum.ai_clean')),
+    onError: (e) => (isApiError(e) && e.status === 429 ? toast.error(tr('forum.ai_limited')) : failed(e)),
+    onSettled: refresh,
   });
   const accept = useMutation({
-    mutationFn: ({ topic, reply }: { topic: string; reply: string }) =>
+    mutationFn: ({ topic, reply }: { topic: ForumTopic; reply: ForumReply }) =>
       unwrap(
         api.POST('/v1/tenant/forum/topics/{uuid}/accept', {
-          params: { header: orgHeader(), path: { uuid: topic } },
-          body: { reply_uuid: reply },
+          params: { header: orgHeader(), path: { uuid: topic.uuid } },
+          body: { reply_uuid: reply.uuid },
         }),
       ),
-    onSuccess: done,
+    onSuccess: (_d, { topic, reply }) => {
+      // The public API may answer from a 30-second cache; the topic on screen
+      // is updated from what was just accepted instead of waiting for it.
+      qc.setQueryData<ForumTopic>(keys.topic(org, topic.slug), (old) =>
+        old
+          ? {
+              ...old,
+              accepted_answer: {
+                uuid: reply.uuid,
+                body: reply.body,
+                created_at: reply.created_at,
+                updated_at: reply.updated_at,
+              },
+            }
+          : old,
+      );
+      toast.success(tr('forum.accepted_done'));
+    },
+    onError: (e, { topic }) => {
+      failed(e);
+      void qc.invalidateQueries({ queryKey: keys.topic(org, topic.slug) });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: [...keys.all(org), 'topics'] }),
   });
   return { moderate, assist, accept };
 }
