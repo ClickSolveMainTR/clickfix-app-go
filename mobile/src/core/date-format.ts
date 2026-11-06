@@ -33,3 +33,10 @@ const INSTANT = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2
 export function localizeInstants(text: string, format: (iso: string) => string) {
   return text.replace(INSTANT, (iso) => format(iso) || iso);
 }
+
+/** True when the instant falls in another calendar year than `now` (a compact date then needs its year). */
+export function inOtherYear(value: Date | string | null | undefined, now = new Date()) {
+  if (value == null || value === '') return false;
+  const at = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(at.getTime()) && at.getFullYear() !== now.getFullYear();
+}

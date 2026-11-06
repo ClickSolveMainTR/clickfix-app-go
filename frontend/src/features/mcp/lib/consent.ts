@@ -115,3 +115,42 @@ export function decideErrorKey(status: number | null) {
   if (status === 403) return "mcp.consent.forbidden";
   return "mcp.consent.failed";
 }
+
+/**
+ * Where the browser may be sent after a decision. The API builds the address
+ * from the client's registered redirect URI; the page checks it again and
+ * follows only what a redirect URI can be: `https:`, or `http:` on a loopback
+ * address (a program on the member's own computer). Anything else
+ * (`javascript:`, `data:`, plain `http:` to a website) is refused.
+ */
+export function safeClientRedirect(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password) return null;
+  if (url.protocol === "https:") return url.toString();
+  if (url.protocol === "http:") {
+    const host = url.hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]"
+      ? url.toString()
+      : null;
+  }
+  return null;
+}
+
+/** A lifetime in whole hours or days, as the screen words it. */
+export function lifetime(
+  seconds: number | null | undefined,
+): { unit: "hours" | "days"; count: number } | null {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
+  const hours = Math.round(seconds / 3600);
+  return hours >= 48
+    ? { unit: "days", count: Math.round(hours / 24) }
+    : { unit: "hours", count: Math.max(1, hours) };
+}

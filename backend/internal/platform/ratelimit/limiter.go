@@ -62,6 +62,35 @@ func (l *Limiter) Allow(ctx context.Context, action, subject string, limit int, 
 	return l.allowWindow(ctx, action, subject, limit, window)
 }
 
+// AllowStrict is Allow that fails closed: when Redis cannot be reached (or the
+// limiter has no store) the hit is refused and the caller should try again
+// after the window. For anonymous endpoints where "no limit" is worse than
+// "temporarily unavailable".
+func (l *Limiter) AllowStrict(ctx context.Context, action, subject string, limit int, window time.Duration) (bool, time.Duration) {
+	if limit <= 0 || window <= 0 {
+		return true, 0
+	}
+	if l == nil || l.rdb == nil {
+		return false, window
+	}
+	key := fmt.Sprintf("app:%s:rl:%s:%s", l.env, action, subject)
+	n, err := l.rdb.Incr(ctx, key).Result()
+	if err != nil {
+		return false, window
+	}
+	if n == 1 {
+		_ = l.rdb.Expire(ctx, key, window).Err()
+	}
+	if n > int64(limit) {
+		ttl, ttlErr := l.rdb.TTL(ctx, key).Result()
+		if ttlErr != nil || ttl < 0 {
+			ttl = window
+		}
+		return false, ttl
+	}
+	return true, 0
+}
+
 func (l *Limiter) allow(ctx context.Context, action, subject string, limit int) (bool, time.Duration) {
 	return l.allowWindow(ctx, action, subject, limit, defaultWindow)
 }

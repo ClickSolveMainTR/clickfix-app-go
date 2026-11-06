@@ -164,5 +164,6 @@
   "dashboard.pending_incidents_one": "{{count}} ongoing incident",
   "dashboard.pending_incidents_other": "{{count}} ongoing incidents",
   "dashboard.load_failed": "This section could not be loaded",
+  "more.forum": "Community forum",
   "more.mcp": "Connect with MCP"
 }

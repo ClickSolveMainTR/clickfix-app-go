@@ -145,6 +145,15 @@ passthrough for exactly `/mcp/business`, `/oauth/{authorize,register,token,revok
 (`frontend/src/lib/server/mcp-proxy-core.ts`). It forwards the client's own
 `Authorization` header and never a cookie.
 
+Because registration is anonymous, `/oauth/authorize` never redirects to a
+client's `redirect_uri` on an error (that would be an open redirect): errors are
+shown as a page, and the browser leaves for the client only after a decision on
+the consent screen. Redirect hosts must be ASCII (punycode for IDN), client
+names are cleaned of control and format characters and capped at 80 characters,
+registration is limited per address and globally and fails closed when the
+limiter is down, never-approved registrations live 24 hours, and `/mcp/business`
+is limited per address before authentication.
+
 `mcp:read` is always included. `mcp:write` is opt-in at consent and additionally
 requires organization settings write permission. Tool listing filters by live
 resource permissions; every call re-enters the authenticated tenant API. Tools
