@@ -32,7 +32,9 @@ const KNOWN_FLAGS = new Set([
 /**
  * Pending posts (CF-78): every visitor topic and reply waits here. Approve
  * publishes; reject and "spam" both hide it (the API has two outcomes:
- * published / rejected). AI triage is explicit and only adds a suggestion.
+ * published / rejected). A post is decided once: the API answers 409 when
+ * someone else already handled it. AI triage is explicit and only adds a
+ * suggestion.
  */
 export function ModerationTab({ org }: { org: string }) {
   const { t, locale } = useLocale();
@@ -53,6 +55,7 @@ export function ModerationTab({ org }: { org: string }) {
       uuid: string;
       status: "published" | "rejected";
       spam?: boolean;
+      reply?: boolean;
     }) => forumService.moderate(v.uuid, v.status),
     onSuccess: async (_d, v) => {
       await invalidate();
@@ -66,7 +69,20 @@ export function ModerationTab({ org }: { org: string }) {
         ),
       );
     },
-    onError,
+    // 409: the post is no longer pending (another moderator decided it) or,
+    // for a reply being published, its topic is not published yet. The
+    // queue on screen is stale either way, so reload it.
+    onError: async (error, v) => {
+      if (!isApiError(error) || error.status !== 409) return onError(error);
+      await invalidate();
+      appToast.warning(
+        t(
+          v.status === "published" && v.reply
+            ? "forum.toast.reply_conflict"
+            : "forum.toast.already_moderated",
+        ),
+      );
+    },
   });
   const assist = useMutation({
     mutationFn: (uuid: string) => forumService.assist(uuid),
@@ -163,7 +179,11 @@ export function ModerationTab({ org }: { org: string }) {
                   size="sm"
                   disabled={busy(p.uuid)}
                   onClick={() =>
-                    moderate.mutate({ uuid: p.uuid, status: "published" })
+                    moderate.mutate({
+                      uuid: p.uuid,
+                      status: "published",
+                      reply: isReply,
+                    })
                   }
                 >
                   <Check className="size-4" />
