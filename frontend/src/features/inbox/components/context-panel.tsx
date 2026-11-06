@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Hash, Mail, Phone } from "lucide-react";
 
+import { ConversationIssuesPanel } from "@/features/engineering";
 import { ConversationToTopic } from "@/features/forum/components/conversation-to-topic";
 import { ConversationFormPanel } from "@/features/request-forms/components/conversation-form-panel";
 import { SidebarAppsPanel } from "@/features/sidebar-apps/components/sidebar-apps-panel";
@@ -126,6 +127,7 @@ export function ContextPanel({
       />
       <SlaPanel conversation={c} />
       <ConversationLinksPanel conversation={c} onOpen={onOpen} />
+      <ConversationIssuesPanel conversationUuid={c.uuid} />
       <SideConversationsPanel conversation={c} />
       <LinkedAppointmentsCard
         compact

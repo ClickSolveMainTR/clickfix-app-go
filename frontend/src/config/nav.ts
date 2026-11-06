@@ -1,4 +1,5 @@
 import {
+  Bug,
   Blocks,
   Puzzle,
   Workflow,
@@ -46,6 +47,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Timer,
+  TriangleAlert,
   Trophy,
   Upload,
   Users,
@@ -60,6 +62,7 @@ import { defineNav } from "@/features/nav-engine";
 import type { NavCatalog } from "@/features/nav-engine";
 import { CalendarNavAdornment } from "@/features/calendar/nav";
 import { inboxNavAdornments } from "@/features/inbox/nav";
+import { TeamChatNavAdornment } from "@/features/team-chat/nav";
 import { usersNavItem } from "@/features/users/nav";
 
 const integrationReadPermissions = [
@@ -410,6 +413,20 @@ export const cmsNav = defineNav({
           href: "/replies",
           icon: MessageSquareText,
         },
+        {
+          id: "engineering",
+          titleKey: "layout.nav_engineering",
+          href: routes.cms.engineering.root,
+          icon: Bug,
+          permission: permissions.tenant.tickets.read,
+        },
+        {
+          id: "incidents",
+          titleKey: "layout.nav_incidents",
+          href: routes.cms.incidents,
+          icon: TriangleAlert,
+          permission: permissions.tenant.conversations.read,
+        },
       ],
     },
     {
@@ -459,6 +476,14 @@ export const cmsNav = defineNav({
           href: routes.cms.video.root,
           icon: Video,
           permission: permissions.tenant.video.use,
+        },
+        {
+          id: "team-chat",
+          titleKey: "layout.nav_team_chat",
+          href: routes.cms.teamChat,
+          icon: MessagesSquare,
+          permission: permissions.tenant.teamChat.use,
+          Adornment: TeamChatNavAdornment,
         },
         {
           id: "team-status",

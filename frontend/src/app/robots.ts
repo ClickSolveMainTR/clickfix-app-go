@@ -8,6 +8,7 @@ import { brand } from "@/config/brand";
  */
 const APP_PATHS = [
   "/dashboard",
+  "/engineering",
   "/apps",
   "/billing",
   "/calendar",
@@ -19,12 +20,14 @@ const APP_PATHS = [
   "/inbox",
   "/setup",
   "/objects",
+  "/incidents",
   "/oncall",
   "/profile",
   "/replies",
   "/reports",
   "/rules",
   "/settings",
+  "/team-chat",
   "/team-status",
   "/teams",
   "/video",

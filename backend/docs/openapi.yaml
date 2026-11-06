@@ -39420,7 +39420,7 @@ paths:
         - "Status"
       operationId: "listStatusIncidents"
       summary: "List incidents and maintenance, including private records"
-      description: "Requires tenant.conversations.read_all and tenant.conversations.manage for mutations; reads require tenant.conversations.read."
+      description: "Requires tenant.conversations.read only, so agents without tenant.conversations.read_all can see ongoing incidents. Private records and postmortems are included."
       security:
         -
           bearerAuth: []
@@ -39442,6 +39442,8 @@ paths:
                         type: "array"
                         items:
                           "$ref": "#/components/schemas/StatusIncident"
+                      total:
+                        type: "integer"
                       limit:
                         type: "integer"
                       offset:

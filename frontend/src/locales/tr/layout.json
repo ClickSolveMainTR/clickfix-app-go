@@ -77,7 +77,9 @@
   "org_support": "Destek",
   "nav_tenant_settings_sla": "SLA ve çalışma saatleri",
   "nav_team_status": "Ekip durumu",
+  "nav_team_chat": "Ekip sohbeti",
   "nav_reports": "Raporlar",
+  "nav_incidents": "Olaylar",
   "nav_oncall": "Nöbet ve uptime",
   "nav_workforce": "İş gücü planlama",
   "nav_coaching": "Koçluk ve oyunlaştırma",
@@ -100,5 +102,6 @@
   "nav_rules": "Kurallar",
   "nav_platform_assistant": "ClickFix Asistan",
   "nav_platform_guides": "Modül rehberleri",
-  "nav_platform_product_feedback": "Ürün geri bildirimleri"
+  "nav_platform_product_feedback": "Ürün geri bildirimleri",
+  "nav_engineering": "Ürün talepleri"
 }
