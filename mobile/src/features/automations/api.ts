@@ -14,7 +14,7 @@ import {
   type RawRule,
   type Rule,
   type RuleExecution,
-  toRuleInput,
+  toggleBody,
   type Workflow,
 } from './core';
 
@@ -129,24 +129,24 @@ export function useRuleExecutions() {
 
 /**
  * Rules have no enable endpoint: like the panel's list switch, the rule is
- * saved again with only `enabled` changed (`PUT`, full replacement).
+ * saved again with only `enabled` changed (`PUT`, full replacement). The body
+ * is built from the rule as the API holds it at that moment, never from the
+ * cached list, so an edit made on the panel meanwhile is not overwritten.
  */
 export function useToggleRule() {
   const qc = useQueryClient();
   const { org } = useAutomationScope();
   const key = keys.rules(org);
   return useMutation({
-    mutationFn: ({ rule, enabled }: { rule: Rule; enabled: boolean }) =>
-      unwrap(
-        api.PUT('/v1/tenant/automations/{uuid}', {
-          params: { header: orgHeader(), path: { uuid: rule.uuid } },
-          body: { ...toRuleInput(rule), enabled },
-        }),
-      ),
-    onMutate: async ({ rule, enabled }) => {
+    mutationFn: async ({ uuid, enabled }: { uuid: string; enabled: boolean }) => {
+      const params = { header: orgHeader(), path: { uuid } };
+      const current = (await unwrap(api.GET('/v1/tenant/automations/{uuid}', { params }))) as RawRule;
+      return unwrap(api.PUT('/v1/tenant/automations/{uuid}', { params, body: toggleBody(current, enabled) }));
+    },
+    onMutate: async ({ uuid, enabled }) => {
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<Page<Rule>>(key);
-      qc.setQueryData<Page<Rule>>(key, patchRow(prev, rule.uuid, { enabled }));
+      qc.setQueryData<Page<Rule>>(key, patchRow(prev, uuid, { enabled }));
       return { prev };
     },
     onError: (_e, _v, ctx) => {

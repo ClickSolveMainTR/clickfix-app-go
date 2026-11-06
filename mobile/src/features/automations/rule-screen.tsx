@@ -16,6 +16,7 @@ import {
   countConditions,
   describeAction,
   emptyCondition,
+  executionStatusLabel,
   lastExecution,
   type RuleExecution,
   runTone,
@@ -40,7 +41,7 @@ function executionDetail(t: T, e: RuleExecution) {
 export function RuleScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const t = useAutomationT();
-  const { canWrite } = useAutomationScope();
+  const { canRead, canWrite } = useAutomationScope();
   const list = useRules();
   const log = useRuleExecutions();
   const names = useTargetNames();
@@ -50,6 +51,16 @@ export function RuleScreen() {
     isRefetching: list.isRefetching || log.isRefetching,
     refetch: () => Promise.all([list.refetch(), log.refetch()]),
   });
+
+  if (!canRead)
+    return (
+      <>
+        <Stack.Screen options={{ title: t('automations.rules') }} />
+        <Screen>
+          <EmptyState icon="macro" title={t('automations.rules_no_permission')} />
+        </Screen>
+      </>
+    );
 
   return (
     <>
@@ -110,10 +121,7 @@ export function RuleScreen() {
                       }
                       trailing={
                         last ? (
-                          <StatusPill
-                            label={t(`automations.execution_status.${last.status}`)}
-                            tone={runTone(last.status)}
-                          />
+                          <StatusPill label={executionStatusLabel(t, last.status)} tone={runTone(last.status)} />
                         ) : undefined
                       }
                     />

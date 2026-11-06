@@ -101,6 +101,16 @@ export function toRuleInput(r: Rule): RuleInput {
   };
 }
 
+/**
+ * Body of the on/off switch: the rule as the API holds it now, with only
+ * `enabled` changed. The save is a full replacement, so it is never built
+ * from the list the phone has cached (the panel may have edited the rule
+ * since).
+ */
+export function toggleBody(current: RawRule, enabled: boolean): RuleInput {
+  return { ...toRuleInput(decodeRule(current)), enabled };
+}
+
 /** Number of field comparisons in the tree. */
 export function countConditions(c: Condition | undefined): number {
   if (!c) return 0;
@@ -203,6 +213,25 @@ const OPERATORS = new Set([
   'exists',
   'not_exists',
 ]);
+
+const KNOWN_KINDS = new Set(['trigger', 'condition', 'branch', 'action', 'wait', 'end']);
+const RUN_STATUSES = new Set(['pending', 'running', 'waiting', 'succeeded', 'failed', 'blocked']);
+const EXECUTION_STATUSES = new Set(['running', 'succeeded', 'failed', 'skipped']);
+
+/** A value the app has no label for yet, shown readable instead of as a translation key. */
+const readable = (raw: string) => raw.replace(/[._]+/g, ' ').trim();
+
+export function kindLabel(t: T, kind: string) {
+  return KNOWN_KINDS.has(kind) ? t(`automations.kind.${kind}`) : readable(kind);
+}
+
+export function runStatusLabel(t: T, status: string) {
+  return RUN_STATUSES.has(status) ? t(`automations.run_status.${status}`) : readable(status);
+}
+
+export function executionStatusLabel(t: T, status: string) {
+  return EXECUTION_STATUSES.has(status) ? t(`automations.execution_status.${status}`) : readable(status);
+}
 
 export function triggerLabel(t: T, name: string | undefined, scheduleMinutes = 0) {
   if (!name) return t('automations.trigger_none');
@@ -348,7 +377,7 @@ function waitLabel(t: T, seconds: number) {
 
 /** One step of the flow: what kind of node it is and what it does, in words. */
 export function describeNode(t: T, node: WorkflowNode, names?: Names): { title: string; lines: ConditionLine[] } {
-  const title = t(`automations.kind.${node.type}`);
+  const title = kindLabel(t, node.type);
   const line = (text: string): ConditionLine[] => (text ? [{ depth: 0, text }] : []);
   switch (node.type) {
     case 'trigger':
@@ -368,8 +397,10 @@ export function describeNode(t: T, node: WorkflowNode, names?: Names): { title: 
     }
     case 'wait':
       return { title, lines: line(waitLabel(t, node.delay_seconds ?? 0)) };
-    default:
+    case 'end':
       return { title, lines: line(t('automations.flow_ends')) };
+    default:
+      return { title, lines: [] };
   }
 }
 

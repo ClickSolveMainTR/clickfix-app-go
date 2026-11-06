@@ -8,14 +8,18 @@ import {
   describeAction,
   describeNode,
   emptyCondition,
+  executionStatusLabel,
   hasUnpublishedChanges,
+  kindLabel,
   lastExecution,
   orderedNodes,
   patchRow,
   type RawRule,
   type RuleExecution,
+  runStatusLabel,
   runTone,
   type T,
+  toggleBody,
   toRuleInput,
   triggerLabel,
   type Workflow,
@@ -244,4 +248,41 @@ test('patchRow changes one row and can be undone with the previous page', () => 
   ]);
   assert.equal(page.items[1].enabled, false);
   assert.equal(patchRow(undefined, 'b', { enabled: true }), undefined);
+});
+
+test('toggleBody saves the rule the API holds now, changing only `enabled`', () => {
+  const b64 = (v: unknown) => Buffer.from(JSON.stringify(v), 'utf8').toString('base64');
+  // The panel edited the rule after the phone cached its list.
+  const conditions = { all: [{ field: 'priority', operator: 'eq', value: 'urgent' }] };
+  const actions = [{ type: 'add_note', content: 'Yeni not' }];
+  const current = raw({
+    name: 'Panelde değişti',
+    position: 9,
+    enabled: true,
+    stop_on_match: true,
+    conditions: b64(conditions),
+    actions: b64(actions),
+  });
+  assert.deepEqual(toggleBody(current, false), {
+    name: 'Panelde değişti',
+    trigger: 'conversation.created',
+    conditions,
+    actions,
+    position: 9,
+    enabled: false,
+    stop_on_match: true,
+    schedule_minutes: 0,
+  });
+  assert.equal(toggleBody(current, true).enabled, true);
+});
+
+test('a kind or status without a label is shown readable, never as a translation key', () => {
+  assert.equal(kindLabel(t, 'action'), 'automations.kind.action');
+  assert.equal(kindLabel(t, 'human_review'), 'human review');
+  assert.equal(runStatusLabel(t, 'waiting'), 'automations.run_status.waiting');
+  assert.equal(runStatusLabel(t, 'timed_out'), 'timed out');
+  assert.equal(executionStatusLabel(t, 'skipped'), 'automations.execution_status.skipped');
+  assert.equal(executionStatusLabel(t, 'rate.limited'), 'rate limited');
+  const unknown = describeNode(t, { id: 'x', type: 'human_review' } as never);
+  assert.deepEqual(unknown, { title: 'human review', lines: [] });
 });

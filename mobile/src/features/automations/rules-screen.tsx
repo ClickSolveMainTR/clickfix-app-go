@@ -22,7 +22,7 @@ export function useRuleSwitch() {
     disabled: !canWrite || toggle.isPending,
     change: (rule: Rule, enabled: boolean) =>
       toggle.mutate(
-        { rule, enabled },
+        { uuid: rule.uuid, enabled },
         {
           onSuccess: () => toast.success(t(enabled ? 'automations.rule_enabled' : 'automations.rule_disabled')),
           onError: (e) => toggleFailed(t, e),

@@ -16,6 +16,7 @@ import {
   describeNode,
   hasUnpublishedChanges,
   orderedNodes,
+  runStatusLabel,
   runTone,
   triggerLabel,
   triggerNode,
@@ -33,7 +34,7 @@ const STATE_TONE = { draft: 'neutral', enabled: 'done', disabled: 'neutral' } as
 export function WorkflowScreen() {
   const { uuid } = useLocalSearchParams<{ uuid: string }>();
   const t = useAutomationT();
-  const { canWrite } = useAutomationScope();
+  const { canRead, canWrite } = useAutomationScope();
   const list = useWorkflows();
   const workflow = list.data?.items.find((w) => w.uuid === uuid);
   const lastRun = useWorkflowLastRun(uuid, !!workflow && workflow.published_version !== null);
@@ -43,6 +44,16 @@ export function WorkflowScreen() {
     isRefetching: list.isRefetching || lastRun.isRefetching,
     refetch: () => Promise.all([list.refetch(), lastRun.refetch()]),
   });
+
+  if (!canRead)
+    return (
+      <>
+        <Stack.Screen options={{ title: t('automations.workflows') }} />
+        <Screen>
+          <EmptyState icon="split" title={t('automations.workflows_no_permission')} />
+        </Screen>
+      </>
+    );
 
   return (
     <>
@@ -129,7 +140,7 @@ export function WorkflowScreen() {
                       }
                       trailing={
                         run ? (
-                          <StatusPill label={t(`automations.run_status.${run.status}`)} tone={runTone(run.status)} />
+                          <StatusPill label={runStatusLabel(t, run.status)} tone={runTone(run.status)} />
                         ) : undefined
                       }
                     />
