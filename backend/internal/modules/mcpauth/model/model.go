@@ -22,11 +22,14 @@ const (
 
 // Per-IP limits per hour of the public endpoints.
 const (
-	RegisterPerHour  = 20
-	AuthorizePerHour = 60
-	TokenPerHour     = 120
-	RevokePerHour    = 120
-	RateWindow       = time.Hour
+	RegisterPerHour = 20
+	// RegisterGlobalPerHour caps anonymous client registration across all
+	// addresses, so a distributed caller cannot fill the client table.
+	RegisterGlobalPerHour = 300
+	AuthorizePerHour      = 60
+	TokenPerHour          = 120
+	RevokePerHour         = 120
+	RateWindow            = time.Hour
 )
 
 // Scopes. mcp:read is always granted; mcp:write is opt-in on the consent
@@ -284,9 +287,16 @@ type Consent struct {
 	ClientID     string    `json:"client_id"`
 	ClientName   string    `json:"client_name"`
 	RedirectHost string    `json:"redirect_host"`
-	Resource     string    `json:"resource"`
-	ResourceURL  string    `json:"resource_url"`
-	Layer        string    `json:"layer"`
+	// RedirectLoopback: the answer goes to a program on the user's own
+	// computer (http on a loopback address), not to a website.
+	RedirectLoopback bool `json:"redirect_loopback"`
+	// AccessTTLSeconds / RefreshTTLSeconds: how long an access token lasts
+	// and for how long the connection can renew itself without asking again.
+	AccessTTLSeconds  int64  `json:"access_ttl_seconds"`
+	RefreshTTLSeconds int64  `json:"refresh_ttl_seconds"`
+	Resource          string `json:"resource"`
+	ResourceURL       string `json:"resource_url"`
+	Layer             string `json:"layer"`
 	// Scopes the client asked for.
 	Scopes []string `json:"scopes"`
 	// WriteRequested: the client asked for mcp:write; the user may grant it

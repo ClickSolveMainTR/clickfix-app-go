@@ -100,11 +100,18 @@ func (s *Service) record(ctx context.Context, a Actor, orgID int64, action, reso
 
 // Authorize serves GET /oauth/authorize: it applies the per-IP limit,
 // validates and stores the request and returns where to send the browser:
-// the consent screen of the layer (staff panel or customer panel), or (for
-// errors after client and redirect_uri are verified) the client's
-// redirect_uri with error, state and iss. An unknown client, an unregistered
-// redirect_uri or the rate limit is returned as a *model.Error that must be
-// shown to the user, never redirected.
+// the consent screen of this origin, or an error.
+//
+// RFC 6749 §4.1.2.1 lets errors found after the client and redirect_uri are
+// verified (Redirectable) go back to the client's redirect_uri. Registration
+// here is anonymous and accepts any https address, so for a remote address
+// that would make this endpoint an open redirect (register
+// https://evil.example/, then link to /oauth/authorize with a deliberately
+// invalid request). So such an error is redirected only when the redirect_uri
+// is a loopback address (a program on the user's own computer, which needs
+// the error to show it); for a remote address it is shown as a page, and the
+// browser leaves for the client's site only after an explicit decision on the
+// consent screen (Decide).
 func (s *Service) Authorize(ctx context.Context, ip string, in model.AuthorizeInput) (string, error) {
 	if err := s.allow(ctx, "authorize", ip, model.AuthorizePerHour); err != nil {
 		return "", err
@@ -113,10 +120,10 @@ func (s *Service) Authorize(ctx context.Context, ip string, in model.AuthorizeIn
 	if err != nil {
 		var oe *model.Error
 		if errors.As(err, &oe) {
-			if !oe.Redirectable {
-				return "", oe
+			if oe.Redirectable && loopbackRedirect(in.RedirectURI) {
+				return s.errorRedirect(in.RedirectURI, in.State, oe.Code, oe.Description)
 			}
-			return s.errorRedirect(in.RedirectURI, in.State, oe.Code, oe.Description)
+			return "", oe
 		}
 		return "", serverError(err)
 	}
@@ -124,8 +131,16 @@ func (s *Service) Authorize(ctx context.Context, ip string, in model.AuthorizeIn
 	return s.issuer + path + "?request=" + req.ID.String(), nil
 }
 
+// loopbackRedirect reports whether a registered redirect_uri points at the
+// user's own computer (http on localhost, 127.0.0.1 or ::1).
+func loopbackRedirect(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "http" && loopbackHost(u.Hostname())
+}
+
 // errorRedirect builds the client redirect of an authorization error (RFC
-// 6749 §4.1.2.1, iss per RFC 9207).
+// 6749 §4.1.2.1, iss per RFC 9207): a denial on the consent screen, or a
+// request error for a loopback client.
 func (s *Service) errorRedirect(redirectURI, state, code, desc string) (string, error) {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
@@ -224,12 +239,16 @@ func (s *Service) Consent(ctx context.Context, a Actor, id uuid.UUID) (model.Con
 	if err != nil {
 		return model.Consent{}, err
 	}
-	host := req.RedirectURI
+	// The redirect URI passed validRedirect, so its host is ASCII (punycode
+	// for an internationalized name): what is shown cannot imitate another
+	// host with look-alike letters.
+	host, loopback := req.RedirectURI, false
 	if u, err := url.Parse(req.RedirectURI); err == nil {
-		host = u.Host
+		host, loopback = u.Host, u.Scheme == "http" && loopbackHost(u.Hostname())
 	}
 	out := model.Consent{
-		RequestID: req.ID, ClientID: req.ClientID, ClientName: req.ClientName, RedirectHost: host,
+		RequestID: req.ID, ClientID: req.ClientID, ClientName: cleanClientName(req.ClientName), RedirectHost: host, RedirectLoopback: loopback,
+		AccessTTLSeconds: int64(model.AccessTTL / time.Second), RefreshTTLSeconds: int64(model.RefreshTTL / time.Second),
 		Resource: req.Resource, ResourceURL: s.ResourceURL(req.Resource), Layer: model.LayerOf(req.Resource),
 		Scopes: req.Scopes, WriteRequested: model.HasScope(req.Scopes, model.ScopeWrite),
 		Organizations: []model.ConsentOrganization{}, ExpiresAt: req.ExpiresAt,
@@ -415,7 +434,7 @@ func (s *Service) ListGrants(ctx context.Context, a Actor, f ListFilter) ([]mode
 	out := make([]model.Grant, 0, len(rows))
 	for _, r := range rows {
 		g := model.Grant{
-			UUID: r.Uuid, ClientID: r.ClientID, ClientName: r.ClientName, Resource: r.Resource,
+			UUID: r.Uuid, ClientID: r.ClientID, ClientName: cleanClientName(r.ClientName), Resource: r.Resource,
 			Layer: model.LayerOf(r.Resource), Scopes: r.Scopes, CreatedAt: r.CreatedAt.Time, LastUsedAt: timePtr(r.LastUsedAt),
 		}
 		if r.OrganizationUuid.Valid {

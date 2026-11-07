@@ -1,23 +1,21 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertOctagon,
   BookOpen,
-  ChevronLeft,
-  ChevronRight,
   Cpu,
   FileInput,
   FileOutput,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -32,8 +30,6 @@ import { useLocale } from "@/providers/locale-provider";
 import { formatLatency, formatMicros, formatNumber } from "../lib/format";
 import type { AIRun, Page } from "../services/ai-settings.service";
 import { QueryState, Stat } from "./parts";
-
-const PAGE_SIZE = 20;
 
 const STATUS_VARIANT: Record<AIRun["status"], BadgeProps["variant"]> = {
   completed: "success",
@@ -75,7 +71,8 @@ export function RunLog({
   onSelect,
 }: RunLogProps) {
   const { t, locale } = useLocale();
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset } = listState.params;
   const [local, setLocal] = useState<string | null>(null);
   const selected = controlled !== undefined ? controlled : local;
   const select = (uuid: string | null) => {
@@ -83,138 +80,104 @@ export function RunLog({
     onSelect?.(uuid);
   };
   const page = useQuery({
-    queryKey: [...queryKey, "page", offset],
-    queryFn: () => fetchPage(offset, PAGE_SIZE),
+    queryKey: [...queryKey, "page", limit, offset],
+    queryFn: () => fetchPage(offset, limit),
     placeholderData: keepPreviousData,
   });
-  const items = page.data?.items ?? [];
-  const total = page.data?.total ?? 0;
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<AIRun>({
+          accessorKey: "created_at",
+          labelKey: "ai_settings.runs.created",
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="whitespace-nowrap">
+              {datetime(row.original.created_at, "dd.MM.yyyy HH:mm:ss", locale)}
+            </span>
+          ),
+        }),
+        createColumn<AIRun>({
+          accessorKey: "task",
+          labelKey: "ai_settings.runs.task",
+          gridPrimary: true,
+          cell: ({ row }) =>
+            t(`ai_settings.runs.task_name.${row.original.task}`),
+        }),
+        createColumn<AIRun>({
+          accessorKey: "status",
+          labelKey: "ai_settings.runs.status_label",
+          cell: ({ row }) => <RunStatusBadge status={row.original.status} />,
+        }),
+        createColumn<AIRun>({
+          accessorKey: "model",
+          labelKey: "ai_settings.runs.model",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground block max-w-[12rem] truncate">
+              {row.original.model || "-"}
+            </span>
+          ),
+        }),
+        createColumn<AIRun>({
+          id: "tokens",
+          accessorFn: (row) => row.input_tokens + row.output_tokens,
+          labelKey: "ai_settings.runs.tokens",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) =>
+            formatNumber(
+              row.original.input_tokens + row.original.output_tokens,
+              locale,
+            ),
+        }),
+        createColumn<AIRun>({
+          accessorKey: "cost_micros",
+          labelKey: "ai_settings.runs.cost",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => formatMicros(row.original.cost_micros, locale),
+        }),
+        createColumn<AIRun>({
+          accessorKey: "latency_ms",
+          labelKey: "ai_settings.runs.latency",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => formatLatency(row.original.latency_ms, locale),
+        }),
+      ] as ColumnDef<AIRun, unknown>[],
+    [locale, t],
+  );
 
   return (
     <div className="space-y-3">
-      {!page.data && (
-        <QueryState
-          loading={page.isLoading}
-          error={page.isError}
-          onRetry={() => void page.refetch()}
-        />
-      )}
-      {page.data && items.length === 0 && (
-        <EmptyState
-          className="py-8"
-          title={t("ai_settings.runs.empty_title")}
-          description={t("ai_settings.runs.empty")}
-        />
-      )}
-      {items.length > 0 && (
-        <Card className="py-0">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[44rem] text-sm">
-                <thead className="text-muted-foreground border-b text-xs">
-                  <tr className="text-start">
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.created")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.task")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.status_label")}
-                    </th>
-                    <th className="px-3 py-2 text-start font-medium">
-                      {t("ai_settings.runs.model")}
-                    </th>
-                    <th className="px-3 py-2 text-end font-medium">
-                      {t("ai_settings.runs.tokens")}
-                    </th>
-                    <th className="px-3 py-2 text-end font-medium">
-                      {t("ai_settings.runs.cost")}
-                    </th>
-                    <th className="px-3 py-2 text-end font-medium">
-                      {t("ai_settings.runs.latency")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((run) => (
-                    <tr
-                      key={run.uuid}
-                      className="hover:bg-muted/50 focus-within:bg-muted/50 border-b last:border-0"
-                    >
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          className="focus-visible:ring-ring rounded-sm text-start underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none"
-                          onClick={() => select(run.uuid)}
-                        >
-                          {datetime(
-                            run.created_at,
-                            "dd.MM.yyyy HH:mm:ss",
-                            locale,
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2">
-                        {t(`ai_settings.runs.task_name.${run.task}`)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <RunStatusBadge status={run.status} />
-                      </td>
-                      <td className="text-muted-foreground max-w-[12rem] truncate px-3 py-2">
-                        {run.model || "-"}
-                      </td>
-                      <td className="px-3 py-2 text-end tabular-nums">
-                        {formatNumber(
-                          run.input_tokens + run.output_tokens,
-                          locale,
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-end tabular-nums">
-                        {formatMicros(run.cost_micros, locale)}
-                      </td>
-                      <td className="px-3 py-2 text-end tabular-nums">
-                        {formatLatency(run.latency_ms, locale)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-muted-foreground">
-            {t("ai_settings.pager", {
-              from: offset + 1,
-              to: Math.min(offset + PAGE_SIZE, total),
-              total,
-            })}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={offset === 0}
-              onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-            >
-              <ChevronLeft className="size-4" />
-              {t("ai_settings.prev")}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={offset + PAGE_SIZE >= total}
-              onClick={() => setOffset((o) => o + PAGE_SIZE)}
-            >
-              {t("ai_settings.next")}
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <EntityTable
+        columns={columns}
+        data={page.data?.items ?? []}
+        getRowId={(row) => row.uuid}
+        onRowClick={(row) => select(row.uuid)}
+        isLoading={page.isLoading}
+        isError={page.isError}
+        onRetry={() => void page.refetch()}
+        emptyTitle={t("ai_settings.runs.empty_title")}
+        emptyDescription={t("ai_settings.runs.empty")}
+        total={page.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `limit` and `offset` only (it rejects `sort`
+          // and `q`).
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+        }}
+      />
       <Sheet
         open={Boolean(selected)}
         onOpenChange={(open) => {

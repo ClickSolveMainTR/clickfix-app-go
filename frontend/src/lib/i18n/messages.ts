@@ -74,12 +74,14 @@ import enAppointments from "@/locales/en/appointments.json";
 import enBooking from "@/locales/en/booking.json";
 import enBrands from "@/locales/en/brands.json";
 import enForum from "@/locales/en/forum.json";
+import enMcp from "@/locales/en/mcp.json";
 import enWorkflows from "@/locales/en/workflows.json";
 import enRules from "@/locales/en/rules.json";
 import enApps from "@/locales/en/apps.json";
 import trAccess from "@/locales/tr/access.json";
 import trBrands from "@/locales/tr/brands.json";
 import trForum from "@/locales/tr/forum.json";
+import trMcp from "@/locales/tr/mcp.json";
 import trWorkflows from "@/locales/tr/workflows.json";
 import trRules from "@/locales/tr/rules.json";
 import trApps from "@/locales/tr/apps.json";
@@ -214,6 +216,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     booking: trBooking,
     brands: trBrands,
     forum: trForum,
+    mcp: trMcp,
     workflows: trWorkflows,
     rules: trRules,
     apps: trApps,
@@ -293,6 +296,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     booking: enBooking,
     brands: enBrands,
     forum: enForum,
+    mcp: enMcp,
     workflows: enWorkflows,
     rules: enRules,
     apps: enApps,

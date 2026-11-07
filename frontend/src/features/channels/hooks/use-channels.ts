@@ -26,8 +26,8 @@ export const channelsKeys = {
     [...channelsKeys.all(slug), "slack-conversations", uuid] as const,
   googleChat: (slug: string, uuid: string) =>
     [...channelsKeys.all(slug), "google-chat-spaces", uuid] as const,
-  calls: (slug: string, uuid: string, page: number) =>
-    [...channelsKeys.all(slug), "voice-calls", uuid, page] as const,
+  calls: (slug: string, uuid: string, limit: number, offset: number) =>
+    [...channelsKeys.all(slug), "voice-calls", uuid, limit, offset] as const,
 };
 
 /** Instances refresh every minute so health and last-seen stay current. */
@@ -236,20 +236,12 @@ export function useGoogleChatSpaces(uuid: string) {
   });
 }
 
-export const VOICE_CALLS_PAGE_SIZE = 25;
-
 /** One page of a voice channel's call log (CF-122). */
-export function useVoiceCalls(uuid: string, page: number) {
+export function useVoiceCalls(uuid: string, limit: number, offset: number) {
   const { slug } = useTenant();
   return useQuery({
-    queryKey: channelsKeys.calls(slug, uuid, page),
-    queryFn: () =>
-      channelsService.voiceCalls(
-        slug,
-        uuid,
-        VOICE_CALLS_PAGE_SIZE,
-        page * VOICE_CALLS_PAGE_SIZE,
-      ),
+    queryKey: channelsKeys.calls(slug, uuid, limit, offset),
+    queryFn: () => channelsService.voiceCalls(slug, uuid, limit, offset),
     placeholderData: (prev) => prev,
     refetchInterval: 30_000,
   });

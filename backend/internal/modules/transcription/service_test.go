@@ -61,31 +61,41 @@ func fundedAI(t *testing.T, modes ...string) (*aiusecase.Service, int64, int64) 
 	}
 	enabled := true
 	limit := int64(1000000)
-	features, err := billing.Features(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	grants := []billingmodel.Grant{}
-	for _, feature := range features {
-		g := billingmodel.Grant{Feature: feature.Key, Enforcement: "hard", WarnPercent: 80}
-		if feature.Kind == "boolean" {
-			g.Enabled = &enabled
-		} else {
-			g.Limit = &limit
-			if feature.Key == "ai.credits" {
-				credits := int64(1000)
-				g.Limit = &credits
+	// Other packages' tests share this database and may add features (e.g. the
+	// billing scenario test's module.sim_* rows) between Features and SaveVersion;
+	// the complete-catalog validator then reports "missing feature". Rebuild the
+	// grants from a fresh catalog and retry a few times instead of failing.
+	var version billingmodel.Version
+	for attempt := 0; ; attempt++ {
+		features, err := billing.Features(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		grants := []billingmodel.Grant{}
+		for _, feature := range features {
+			g := billingmodel.Grant{Feature: feature.Key, Enforcement: "hard", WarnPercent: 80}
+			if feature.Kind == "boolean" {
+				g.Enabled = &enabled
+			} else {
+				g.Limit = &limit
+				if feature.Key == "ai.credits" {
+					credits := int64(1000)
+					g.Limit = &credits
+				}
 			}
+			if len(modes) > 0 && modes[0] == "unlimited" && feature.Key == "ai.credits" {
+				g.Limit = nil
+				g.Unlimited = true
+			}
+			grants = append(grants, g)
 		}
-		if len(modes) > 0 && modes[0] == "unlimited" && feature.Key == "ai.credits" {
-			g.Limit = nil
-			g.Unlimited = true
+		version, err = billing.SaveVersion(ctx, plan.UUID, uuid.Nil, billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}, Entitlements: grants})
+		if err == nil {
+			break
 		}
-		grants = append(grants, g)
-	}
-	version, err := billing.SaveVersion(ctx, plan.UUID, uuid.Nil, billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}, Entitlements: grants})
-	if err != nil {
-		t.Fatal(err)
+		if attempt >= 5 || !strings.Contains(err.Error(), "missing feature") {
+			t.Fatal(err)
+		}
 	}
 	if len(modes) > 0 && modes[0] == "missing-tokens" {
 		// Simulate an immutable legacy version created before the current complete-catalog validator.

@@ -56,6 +56,7 @@
   "more.oncall": "Nöbet",
   "more.oncall_hint": "Kim nöbette, açık uyarılar",
   "more.workforce": "İş gücü planlama",
+  "more.coaching": "Koçluk ve oyunlaştırma",
   "more.reports": "Raporlar",
   "more.reports_hint": "Hacim, ilk yanıt, çözüm, CSAT, SLA",
   "more.engineering": "Ürün talepleri",
@@ -63,6 +64,8 @@
   "more.incidents": "Olaylar",
   "more.incidents_hint": "Durum sayfası olayları ve güncellemeleri",
   "more.knowledge": "Bilgi bankası",
+  "more.objects": "Özel nesneler",
+  "more.apps": "Uygulamalar",
   "more.knowledge_hint": "Makalelere göz atın ve arayın",
   "more.channels": "Kanallar",
   "more.channels_hint": "Bağlantı sağlığı ve hatalar",
@@ -163,5 +166,7 @@
   "dashboard.pending_setup_other": "Kurulumda {{count}} adım kaldı",
   "dashboard.pending_incidents_one": "Süren {{count}} olay",
   "dashboard.pending_incidents_other": "Süren {{count}} olay",
-  "dashboard.load_failed": "Bu bölüm yüklenemedi"
+  "dashboard.load_failed": "Bu bölüm yüklenemedi",
+  "more.forum": "Topluluk forumu",
+  "more.mcp": "MCP ile bağlan"
 }

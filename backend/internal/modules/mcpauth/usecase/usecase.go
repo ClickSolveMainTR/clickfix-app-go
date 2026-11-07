@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -51,6 +52,13 @@ type Limiter interface {
 	Allow(ctx context.Context, action, subject string, limit int, window time.Duration) (bool, time.Duration)
 }
 
+// StrictLimiter is a Limiter that can also refuse when its store is
+// unavailable (ratelimit.Limiter.AllowStrict). Anonymous registration uses
+// it: with no working limit nothing would cap the client table.
+type StrictLimiter interface {
+	AllowStrict(ctx context.Context, action, subject string, limit int, window time.Duration) (bool, time.Duration)
+}
+
 // Service is the authorization server.
 type Service struct {
 	db       DB
@@ -67,8 +75,9 @@ type Service struct {
 }
 
 // DefaultUnusedClientAge is the Cleanup age of never connected client
-// registrations.
-const DefaultUnusedClientAge = 7 * 24 * time.Hour
+// registrations: anyone may register without signing in, so a registration
+// nobody approved is kept for a day only.
+const DefaultUnusedClientAge = 24 * time.Hour
 
 // New builds the service. issuer is the public origin clients reach (the
 // frontend, which proxies /oauth/*, /.well-known/* and /mcp/* to Go).
@@ -101,10 +110,34 @@ func (s *Service) allow(ctx context.Context, action, ip string, limit int) error
 	if ok {
 		return nil
 	}
+	return tooMany(retry)
+}
+
+func tooMany(retry time.Duration) error {
 	return &model.Error{
 		Status: http.StatusTooManyRequests, Code: model.ErrSlowDown,
 		Description: "too many requests, try again later", RetryAfter: retry,
 	}
+}
+
+// allowRegister limits anonymous client registration: per address and across
+// all addresses. Unlike the other limits it fails closed: when the limiter's
+// store is down, registration is refused rather than left uncapped.
+func (s *Service) allowRegister(ctx context.Context, ip string) error {
+	if s.limiter == nil {
+		return nil
+	}
+	check := s.limiter.Allow
+	if strict, ok := s.limiter.(StrictLimiter); ok {
+		check = strict.AllowStrict
+	}
+	if ok, retry := check(ctx, "mcp_oauth_register", ip, model.RegisterPerHour, model.RateWindow); !ok {
+		return tooMany(retry)
+	}
+	if ok, retry := check(ctx, "mcp_oauth_register_all", "all", model.RegisterGlobalPerHour, model.RateWindow); !ok {
+		return tooMany(retry)
+	}
+	return nil
 }
 
 // --- helpers -------------------------------------------------------------------
@@ -151,20 +184,73 @@ func S256(verifier string) string {
 }
 
 // validRedirect accepts https URLs and loopback http URLs (native clients),
-// without a fragment (RFC 6749 §3.1.2, OAuth 2.1 §2.3.1).
+// without a fragment (RFC 6749 §3.1.2, OAuth 2.1 §2.3.1). The host must be
+// plain ASCII: a Unicode host can imitate a known one on the consent screen
+// (a Cyrillic "а" in "claude.ai"); an internationalized name is accepted only
+// in its punycode form (xn--…), which is what the screen then shows.
 func validRedirect(raw string) bool {
 	u, err := url.Parse(raw)
-	if err != nil || u.Fragment != "" || u.Host == "" || u.User != nil {
+	if err != nil || u.Fragment != "" || u.Host == "" || u.User != nil || !asciiHost(u.Host) {
 		return false
 	}
 	switch u.Scheme {
 	case "https":
 		return true
 	case "http":
-		h := u.Hostname()
-		return h == "localhost" || h == "127.0.0.1" || h == "::1"
+		return loopbackHost(u.Hostname())
 	}
 	return false
+}
+
+func loopbackHost(h string) bool { return h == "localhost" || h == "127.0.0.1" || h == "::1" }
+
+// asciiHost reports whether host (with an optional port or IPv6 brackets) has
+// only the characters a registered name or an IP literal can have.
+func asciiHost(host string) bool {
+	for _, c := range host {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '-', c == ':', c == '[', c == ']':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// maxClientName is how much of a self-chosen client name is kept.
+const maxClientName = 80
+
+// cleanClientName makes the name a client gave itself safe to show: control
+// and format characters (line breaks, bidirectional overrides, zero width
+// characters) are dropped, runs of spaces collapsed and the length capped.
+// The name is still the client's own claim; the consent screen says so.
+func cleanClientName(raw string) string {
+	var b strings.Builder
+	space := false
+	for _, r := range raw {
+		switch {
+		// Line breaks and tabs count as spaces, so two lines cannot be glued
+		// into one word.
+		case unicode.IsSpace(r), r == '\u2028', r == '\u2029':
+			space = true
+			continue
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r):
+			continue
+		}
+		if space && b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		space = false
+		b.WriteRune(r)
+	}
+	name := b.String()
+	if r := []rune(name); len(r) > maxClientName {
+		name = strings.TrimSpace(string(r[:maxClientName]))
+	}
+	if name == "" {
+		return "MCP client"
+	}
+	return name
 }
 
 // resourcePath resolves an RFC 8707 resource indicator to an MCP endpoint
@@ -236,7 +322,7 @@ func textOf(s string) pgtype.Text {
 // the authorization_code and refresh_token grants and the code response type
 // are accepted.
 func (s *Service) Register(ctx context.Context, ip string, in model.RegisterInput) (model.Client, error) {
-	if err := s.allow(ctx, "register", ip, model.RegisterPerHour); err != nil {
+	if err := s.allowRegister(ctx, ip); err != nil {
 		return model.Client{}, err
 	}
 	if len(in.RedirectURIs) == 0 || len(in.RedirectURIs) > maxRedirectURIs {
@@ -244,7 +330,7 @@ func (s *Service) Register(ctx context.Context, ip string, in model.RegisterInpu
 	}
 	for _, u := range in.RedirectURIs {
 		if !validRedirect(u) {
-			return model.Client{}, model.BadRequest(model.ErrInvalidRedirectURI, "redirect URIs must be https (or http on a loopback host) without a fragment")
+			return model.Client{}, model.BadRequest(model.ErrInvalidRedirectURI, "redirect URIs must be https (or http on a loopback host) with an ASCII host (punycode for internationalized names) and without a fragment")
 		}
 	}
 	if in.TokenEndpointAuthMethod != "" && in.TokenEndpointAuthMethod != "none" {
@@ -263,13 +349,7 @@ func (s *Service) Register(ctx context.Context, ip string, in model.RegisterInpu
 	if _, ok := parseScopes(in.Scope); !ok {
 		return model.Client{}, model.BadRequest(model.ErrInvalidClientMetadata, "supported scopes: mcp:read mcp:write")
 	}
-	name := strings.TrimSpace(in.ClientName)
-	if name == "" {
-		name = "MCP client"
-	}
-	if r := []rune(name); len(r) > 200 {
-		name = string(r[:200])
-	}
+	name := cleanClientName(in.ClientName)
 	ip = strings.TrimSpace(ip)
 	if len(ip) > 64 {
 		ip = ip[:64]
@@ -287,10 +367,10 @@ func (s *Service) Register(ctx context.Context, ip string, in model.RegisterInpu
 // --- authorization request -------------------------------------------------------
 
 // CreateAuthRequest validates an authorize request and stores it for
-// consent. An unknown client or an unregistered redirect_uri is a
-// non-redirectable error; every later error is Redirectable. PKCE is
-// required with code_challenge_method S256 and resource must name one of the
-// MCP endpoints.
+// consent. PKCE is required with code_challenge_method S256 and resource must
+// name one of the MCP endpoints. Errors found after the client and its
+// redirect_uri are verified are marked Redirectable (RFC 6749 §4.1.2.1);
+// Authorize redirects them only for a loopback redirect_uri.
 func (s *Service) CreateAuthRequest(ctx context.Context, in model.AuthorizeInput) (model.AuthRequest, error) {
 	client, err := s.q.GetMCPOAuthClient(ctx, in.ClientID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && client.RevokedAt.Valid) {
@@ -301,6 +381,10 @@ func (s *Service) CreateAuthRequest(ctx context.Context, in model.AuthorizeInput
 	}
 	if !slices.Contains(client.RedirectUris, in.RedirectURI) {
 		return model.AuthRequest{}, model.BadRequest(model.ErrInvalidRequest, "redirect_uri is not registered for this client")
+	}
+	// Registrations made before the redirect policy was tightened.
+	if !validRedirect(in.RedirectURI) {
+		return model.AuthRequest{}, model.BadRequest(model.ErrInvalidRequest, "redirect_uri is not allowed; register the client again")
 	}
 	fail := func(code, desc string) error {
 		e := model.BadRequest(code, desc)

@@ -28003,7 +28003,7 @@ paths:
   "/v1/public/help/{organization_slug}/forum/notifications/{uuid}/read": {"post":{"operationId":"readForumNotification","summary":"read Forum Notification","tags":["Community forum"],"description":"Public published content only. Same-origin BFF. Writes and notification inbox require a verified widget visitor token and X-Widget-ID belonging to this organization. Public reads are cacheable for 30s. Per-IP rate limits: 180 reads/minute, 20 mutations/minute per action.","security":[{"widgetVisitor":[]}],"parameters":[{"name":"organization_slug","in":"path","required":true,"schema":{"type":"string"}},{"name":"uuid","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Widget-ID","in":"header","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","properties":{"read":{"type":"boolean"}},"required":["read"],"additionalProperties":false},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}}}}
   "/v1/tenant/forum/categories": {"post":{"operationId":"createForumCategory","summary":"create Forum Category","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).","security":[{"bearerAuth":[]}],"parameters":[{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"$ref":"#/components/schemas/ForumCategory"},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}},"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"slug":{"type":"string"},"name":{"type":"string","maxLength":120}},"required":["slug","name"],"additionalProperties":false}}}}}}
   "/v1/tenant/forum/moderation": {"get":{"operationId":"listForumModeration","summary":"list Forum Moderation","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).","security":[{"bearerAuth":[]}],"parameters":[{"name":"limit","in":"query","schema":{"type":"integer","minimum":1,"maximum":100,"default":20}},{"name":"offset","in":"query","schema":{"type":"integer","minimum":0,"default":0}},{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":true}},"total":{"type":"integer","format":"int64"},"limit":{"type":"integer"},"offset":{"type":"integer"}},"required":["items","total","limit","offset"],"additionalProperties":false},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}}}}
-  "/v1/tenant/forum/posts/{uuid}": {"patch":{"operationId":"moderateForumPost","summary":"moderate Forum Post","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).","security":[{"bearerAuth":[]}],"parameters":[{"name":"uuid","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","additionalProperties":true},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}},"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"status":{"type":"string","enum":["published","rejected"]}},"required":["status"],"additionalProperties":false}}}}}}
+  "/v1/tenant/forum/posts/{uuid}": {"patch":{"operationId":"moderateForumPost","summary":"moderate Forum Post","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage. Decides a pending post once: only a post whose status is `pending` can be published or rejected. A post that was already decided (for example by another moderator working from the same queue) is left unchanged and answers 409 CONFLICT; clients should tell the moderator the post was already handled and reload the queue. Publishing a reply whose topic is not published also answers 409. An unknown post answers 404.","security":[{"bearerAuth":[]}],"parameters":[{"name":"uuid","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","additionalProperties":true},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"409":{"$ref":"#/components/responses/Conflict"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}},"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"status":{"type":"string","enum":["published","rejected"]}},"required":["status"],"additionalProperties":false}}}}}}
   "/v1/tenant/forum/posts/{uuid}/assist": {"post":{"operationId":"assistForumModeration","summary":"assist Forum Moderation","tags":["Community forum"],"description":"Explicit credit-controlled AI triage. Requires tenant.feedback.manage. Respects existing org AI enablement, credits, concurrency, daily and cost budgets. Saves suggestion only; never publishes or rejects content.","security":[{"bearerAuth":[]}],"parameters":[{"name":"uuid","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","properties":{"flagged":{"type":"boolean"},"reason":{"type":"string"}},"required":["flagged","reason"],"additionalProperties":false},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}}}}
   "/v1/tenant/forum/topics/{uuid}/accept": {"post":{"operationId":"acceptForumAnswer","summary":"accept Forum Answer","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).","security":[{"bearerAuth":[]}],"parameters":[{"name":"uuid","in":"path","required":true,"schema":{"type":"string"}},{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","properties":{"accepted":{"type":"boolean"}},"required":["accepted"],"additionalProperties":false},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}},"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"reply_uuid":{"type":"string","format":"uuid"}},"required":["reply_uuid"],"additionalProperties":false}}}}}}
   "/v1/tenant/forum/from-conversation": {"post":{"operationId":"forumTopicFromConversation","summary":"forum Topic From Conversation","tags":["Community forum"],"description":"Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).","security":[{"bearerAuth":[]}],"parameters":[{"name":"X-Organization","in":"header","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Success","content":{"application/json":{"schema":{"type":"object","properties":{"success":{"type":"boolean","const":true},"data":{"type":"object","additionalProperties":true},"meta":{"$ref":"#/components/schemas/ResponseMeta"}},"required":["success","data","meta"],"additionalProperties":false}}}},"400":{"$ref":"#/components/responses/BadRequest"},"403":{"$ref":"#/components/responses/Forbidden"},"404":{"$ref":"#/components/responses/NotFound"},"429":{"description":"Rate limited (or AI credit/budget limit)","headers":{"Retry-After":{"schema":{"type":"string"}}}}},"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ForumConversion"}}}}}}
@@ -37157,6 +37157,7 @@ paths:
       ],
       "operationId": "postOauthRegister",
       "summary": "Register a public MCP OAuth client",
+      "description": "Anonymous. redirect_uris must be https (or http on a loopback host) with an ASCII host (punycode for internationalized names), without userinfo or fragment. client_name is the client's own claim: control and format characters are removed and it is cut to 80 characters. Limited per address and across all addresses; refused (429) when the limiter is unavailable. A registration that is never approved is deleted after 24 hours.",
       "security": [],
       "responses": {
         "201": {
@@ -37363,10 +37364,10 @@ paths:
           "$ref": "#/components/responses/Forbidden"
         },
         "302": {
-          "description": "Redirect to consent or validated client redirect URI"
+          "description": "Redirect to the consent screen of this origin, or (request errors of a loopback redirect_uri only) to the client with error, state and iss. A remote client never receives a redirect before the consent decision; its invalid request is answered with an error page (400)."
         }
       },
-      "description": "PKCE S256 required. Resource is the absolute /mcp/business URL. Redirects to the staff consent screen /oauth/consent?request=UUID; the frontend consent screen is a separate integration dependency.",
+      "description": "PKCE S256 required. Resource is the absolute /mcp/business URL. A valid request redirects to the staff consent screen /oauth/consent?request=UUID. Errors are shown as an error page; only for a loopback redirect_uri (a program on the user's computer) is a request error redirected there per RFC 6749 §4.1.2.1. A remote redirect_uri never receives a redirect before a decision on the consent screen (registration is anonymous, so that would be an open redirect).",
       "parameters": [
         {
           "name": "client_id",
@@ -37616,6 +37617,72 @@ paths:
           }
         }
       ]
+    }
+  }
+  "/v1/tenant/mcp/guide": {
+    "get": {
+      "tags": [
+        "Developer platform"
+      ],
+      "operationId": "getV1TenantMcpGuide",
+      "summary": "Read the MCP connection guide of the member",
+      "description": "Requires tenant.settings.read (the MCP connect permission). Returns the MCP endpoint and authorization server a client is pointed at and every tool of the organization layer with whether the member gets it in this organization. Write tools are available only with tenant.settings.write and additionally need the mcp:write scope granted on the consent screen. Carries no secret.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "success",
+                  "data"
+                ],
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/MCPGuide"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "properties": {
+                      "request_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "#/components/responses/BadRequest"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
     }
   }
   "/mcp/business": {
@@ -56880,6 +56947,64 @@ components:
         "events",
         "enabled"
       ]
+    }
+    MCPGuide: {
+      "type": "object",
+      "required": [
+        "resource_url",
+        "authorization_server",
+        "scopes",
+        "can_write",
+        "tools"
+      ],
+      "properties": {
+        "resource_url": {
+          "type": "string",
+          "description": "MCP endpoint a client is pointed at."
+        },
+        "authorization_server": {
+          "type": "string",
+          "description": "OAuth issuer the client discovers."
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "can_write": {
+          "type": "boolean",
+          "description": "The member may grant mcp:write in this organization."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "description",
+              "write",
+              "available"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "write": {
+                "type": "boolean",
+                "description": "The tool changes data and needs the mcp:write scope."
+              },
+              "available": {
+                "type": "boolean",
+                "description": "The member's permissions in this organization include the tool."
+              }
+            }
+          }
+        }
+      }
     }
     IntegrationEnvelope: {
       "type": "object",

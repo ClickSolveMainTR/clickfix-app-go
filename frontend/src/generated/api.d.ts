@@ -11641,7 +11641,7 @@ export interface paths {
         head?: never;
         /**
          * moderate Forum Post
-         * @description Organization-scoped. Requires tenant.feedback.manage (conversation conversion requires tenant.conversations.manage).
+         * @description Organization-scoped. Requires tenant.feedback.manage. Decides a pending post once: only a post whose status is `pending` can be published or rejected. A post that was already decided (for example by another moderator working from the same queue) is left unchanged and answers 409 CONFLICT; clients should tell the moderator the post was already handled and reload the queue. Publishing a reply whose topic is not published also answers 409. An unknown post answers 404.
          */
         patch: operations["moderateForumPost"];
         trace?: never;
@@ -13608,7 +13608,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a public MCP OAuth client */
+        /**
+         * Register a public MCP OAuth client
+         * @description Anonymous. redirect_uris must be https (or http on a loopback host) with an ASCII host (punycode for internationalized names), without userinfo or fragment. client_name is the client's own claim: control and format characters are removed and it is cut to 80 characters. Limited per address and across all addresses; refused (429) when the limiter is unavailable. A registration that is never approved is deleted after 24 hours.
+         */
         post: operations["postOauthRegister"];
         delete?: never;
         options?: never;
@@ -13659,7 +13662,7 @@ export interface paths {
         };
         /**
          * Validate MCP authorization request and redirect to consent
-         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. Redirects to the staff consent screen /oauth/consent?request=UUID; the frontend consent screen is a separate integration dependency.
+         * @description PKCE S256 required. Resource is the absolute /mcp/business URL. A valid request redirects to the staff consent screen /oauth/consent?request=UUID. Errors are shown as an error page; only for a loopback redirect_uri (a program on the user's computer) is a request error redirected there per RFC 6749 §4.1.2.1. A remote redirect_uri never receives a redirect before a decision on the consent screen (registration is anonymous, so that would be an open redirect).
          */
         get: operations["getOauthAuthorize"];
         put?: never;
@@ -13733,6 +13736,26 @@ export interface paths {
         post?: never;
         /** Disconnect an MCP grant */
         delete: operations["deleteV1McpGrantsUuid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/mcp/guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the MCP connection guide of the member
+         * @description Requires tenant.settings.read (the MCP connect permission). Returns the MCP endpoint and authorization server a client is pointed at and every tool of the organization layer with whether the member gets it in this organization. Write tools are available only with tenant.settings.write and additionally need the mcp:write scope granted on the consent screen. Carries no secret.
+         */
+        get: operations["getV1TenantMcpGuide"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -25266,6 +25289,23 @@ export interface components {
             url: string;
             events: string[];
             enabled: boolean;
+        };
+        MCPGuide: {
+            /** @description MCP endpoint a client is pointed at. */
+            resource_url: string;
+            /** @description OAuth issuer the client discovers. */
+            authorization_server: string;
+            scopes: string[];
+            /** @description The member may grant mcp:write in this organization. */
+            can_write: boolean;
+            tools: {
+                name: string;
+                description: string;
+                /** @description The tool changes data and needs the mcp:write scope. */
+                write: boolean;
+                /** @description The member's permissions in this organization include the tool. */
+                available: boolean;
+            }[];
         };
         IntegrationEnvelope: {
             success: boolean;
@@ -52745,6 +52785,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             /** @description Rate limited (or AI credit/budget limit) */
             429: {
                 headers: {
@@ -58420,7 +58461,7 @@ export interface operations {
                     "application/json": components["schemas"]["IntegrationEnvelope"];
                 };
             };
-            /** @description Redirect to consent or validated client redirect URI */
+            /** @description Redirect to the consent screen of this origin, or (request errors of a loopback redirect_uri only) to the client with error, state and iss. A remote client never receives a redirect before the consent decision; its invalid request is answered with an error page (400). */
             302: {
                 headers: {
                     [name: string]: unknown;
@@ -58527,6 +58568,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrationEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getV1TenantMcpGuide: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["MCPGuide"];
+                        meta?: {
+                            request_id?: string;
+                        };
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];

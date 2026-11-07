@@ -137,10 +137,23 @@ membership is checked at consent, refresh and every MCP request.
 
 The JSON consent API is `/v1/mcp/consent/{uuid}` and `/{uuid}/decide`; connected apps
 are `/v1/mcp/grants` and `DELETE /{uuid}`. Authorize redirects to
-`<AUTH_FRONTEND_URL>/oauth/consent?request=UUID`. **The frontend consent screen and
-proxies for `/oauth/*`, `/.well-known/*`, `/mcp/*` are still required before a
-browser-based client can connect in production.** They are outside this backend
-worker's scope.
+`<AUTH_FRONTEND_URL>/oauth/consent?request=UUID`. The frontend provides the other
+half (CF-173): the consent screen at `/oauth/consent` and a session-less
+passthrough for exactly `/mcp/business`, `/oauth/{authorize,register,token,revoke}`,
+`/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource/mcp/business`
+(`frontend/src/lib/server/mcp-proxy-core.ts`). It forwards the client's own
+`Authorization` header and never a cookie.
+
+Because registration is anonymous, `/oauth/authorize` does not redirect a
+request error to a remote `redirect_uri` (that would be an open redirect): it is
+shown as a page, and the browser leaves for the client's site only after a
+decision on the consent screen. A loopback `redirect_uri` (a program on the
+user's computer) does receive the RFC 6749 error redirect. Redirect hosts must be ASCII (punycode for IDN), client
+names are cleaned of control and format characters and capped at 80 characters,
+registration is limited per address and globally and fails closed when the
+limiter is down, never-approved registrations live 24 hours, and `/mcp/business`
+is limited per address before authentication.
 
 `mcp:read` is always included. `mcp:write` is opt-in at consent and additionally
 requires organization settings write permission. Tool listing filters by live

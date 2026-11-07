@@ -16,14 +16,18 @@ import { workflowsService } from "../services/workflows.service";
 
 export const workflowKeys = {
   all: (org: string | undefined) => ["tenant", org, "workflows"] as const,
-  list: (org: string | undefined) =>
-    [...workflowKeys.all(org), "list"] as const,
+  list: (org: string | undefined, limit: number, offset: number) =>
+    [...workflowKeys.all(org), "list", limit, offset] as const,
   detail: (org: string | undefined, uuid: string) =>
     [...workflowKeys.all(org), "detail", uuid] as const,
   versions: (org: string | undefined, uuid: string) =>
     [...workflowKeys.all(org), "versions", uuid] as const,
-  runs: (org: string | undefined, uuid: string, limit: number) =>
-    [...workflowKeys.all(org), "runs", uuid, limit] as const,
+  runs: (
+    org: string | undefined,
+    uuid: string,
+    limit: number,
+    offset: number,
+  ) => [...workflowKeys.all(org), "runs", uuid, limit, offset] as const,
   run: (org: string | undefined, run: string) =>
     [...workflowKeys.all(org), "run", run] as const,
   lastRun: (org: string | undefined, uuid: string) =>
