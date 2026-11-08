@@ -237,5 +237,8 @@
   "actions.roles.created": "Platform role created",
   "actions.roles.updated": "Platform role updated",
   "actions.roles.deleted": "Platform role deleted",
-  "resources.outbound_webhooks": "Outbound webhooks"
+  "resources.outbound_webhooks": "Outbound webhooks",
+  "actions.assistant.action_dry_run": "Assistant proposal dry run",
+  "actions.assistant.action_rejected": "Assistant proposal rejected",
+  "actions.assistant.action_forbidden": "Assistant proposal refused: missing permission"
 }
