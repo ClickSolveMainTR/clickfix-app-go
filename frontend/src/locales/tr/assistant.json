@@ -85,5 +85,8 @@
   "fields.name": "Ad",
   "fields.route": "Sayfa",
   "fields.target": "Vurgulanacak alan",
-  "fields.type": "Kanal türü"
+  "fields.type": "Kanal türü",
+  "fields.webhook_url": "Webhook adresi",
+  "fields.channel_uuid": "Kanal",
+  "fields.signing_secret": "İmza anahtarı"
 }

@@ -4856,6 +4856,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/channels/{uuid}/test-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a signed test event to the channel's own endpoint
+         * @description REST API channels only (CF-185): posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. Changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`.
+         */
+        post: operations["testDeliveryTenantChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/channels/{uuid}/reconnect": {
         parameters: {
             query?: never;
@@ -22275,6 +22295,21 @@ export interface components {
             data: components["schemas"]["MessengerPages"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        ChannelDeliveryTest: {
+            /** @description The endpoint answered 2xx */
+            ok: boolean;
+            status_code?: number;
+            /** @description Why it failed (never a credential) */
+            detail?: string;
+            /** @description id of the test event (also its Idempotency-Key) */
+            event_id: string;
+        };
+        EnvelopeChannelDeliveryTest: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ChannelDeliveryTest"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeChannelInstance: {
             /** @enum {boolean} */
             success: true;
@@ -36539,6 +36574,40 @@ export interface operations {
                     "application/json": components["schemas"]["EnvelopeChannelInstance"];
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    testDeliveryTenantChannel: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeChannelDeliveryTest"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];

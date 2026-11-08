@@ -189,6 +189,25 @@ func (h *Handler) Check(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, v)
 }
 
+// TestDelivery sends a test event to the channel's own endpoint.
+func (h *Handler) TestDelivery(w http.ResponseWriter, r *http.Request) {
+	scope, id, ok := scopeAndID(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.svc.TestDelivery(r.Context(), scope.ID, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if h.activity != nil {
+		actor := authctx.MustPrincipal(r.Context()).UserInternal
+		h.activity.Record(r.Context(), &actor, "channels.test_delivery", Resource, &id,
+			map[string]any{"organization_uuid": scope.UUID, "ok": out.OK, "status_code": out.StatusCode}, r)
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
 // Reconnect runs the provider connection again with the stored credentials.
 func (h *Handler) Reconnect(w http.ResponseWriter, r *http.Request) {
 	scope, id, ok := scopeAndID(w, r)

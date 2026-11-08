@@ -648,7 +648,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Capability registry (CF-183): every capability calls the panel's /v1
 	// routes as the confirming user, so the routes re-check permissions.
 	assistantBridge := &apibridge.Bridge{Handler: mux, Tokens: tokens}
-	assistantSvc.Caps = capability.NewRegistry().Register(assistantmodule.CoreCapabilities(deps.Queries)...)
+	assistantSvc.Caps = capability.NewRegistry().
+		Register(assistantmodule.CoreCapabilities(deps.Queries)...).
+		Register(channelsmodule.Capabilities()...)
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}

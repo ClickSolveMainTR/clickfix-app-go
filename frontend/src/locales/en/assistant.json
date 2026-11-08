@@ -85,5 +85,8 @@
   "fields.name": "Name",
   "fields.route": "Page",
   "fields.target": "Field to highlight",
-  "fields.type": "Channel type"
+  "fields.type": "Channel type",
+  "fields.webhook_url": "Webhook URL",
+  "fields.channel_uuid": "Channel",
+  "fields.signing_secret": "Signing secret"
 }
