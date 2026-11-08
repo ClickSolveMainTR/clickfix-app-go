@@ -85,5 +85,12 @@
   "fields.name": "Ad",
   "fields.route": "Sayfa",
   "fields.target": "Vurgulanacak alan",
-  "fields.type": "Kanal türü"
+  "fields.type": "Kanal türü",
+  "fields.trigger": "Tetikleyici",
+  "fields.schedule_minutes": "Sıklık (dakika)",
+  "fields.condition": "Koşul",
+  "fields.actions": "Eylemler",
+  "fields.enable": "Yayınla ve etkinleştir",
+  "fields.workflow_uuid": "İş akışı",
+  "fields.enabled": "Etkin"
 }

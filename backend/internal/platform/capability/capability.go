@@ -149,6 +149,9 @@ type Capability struct {
 	Routes []string
 	// Undo tells the user how to revert (human text or a capability name).
 	Undo string
+	// Simulations are dry-run endpoints ("POST /v1/tenant/workflows/{uuid}/test")
+	// that change no data; only they may pass the read-only API besides GET.
+	Simulations []string
 
 	// Validate checks rules beyond the schema (cross-field, formats).
 	Validate func(p Params) error

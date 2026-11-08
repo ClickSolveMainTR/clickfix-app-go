@@ -85,5 +85,12 @@
   "fields.name": "Name",
   "fields.route": "Page",
   "fields.target": "Field to highlight",
-  "fields.type": "Channel type"
+  "fields.type": "Channel type",
+  "fields.trigger": "Trigger",
+  "fields.schedule_minutes": "Every (minutes)",
+  "fields.condition": "Condition",
+  "fields.actions": "Actions",
+  "fields.enable": "Publish and enable",
+  "fields.workflow_uuid": "Workflow",
+  "fields.enabled": "Enabled"
 }

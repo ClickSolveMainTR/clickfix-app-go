@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/apibridge"
@@ -135,17 +136,50 @@ func ReadResponse(status int, body []byte, truncated bool) Response {
 }
 
 // ReadOnly wraps an API so only GET goes through: dry runs and read
-// capabilities can never change data or trigger a provider call.
-func ReadOnly(api API) API { return readOnly{api} }
+// capabilities can never change data or trigger a provider call. The
+// optional simulations ("POST /v1/tenant/workflows/{uuid}/test") are
+// dry-run endpoints that change nothing and may pass too.
+func ReadOnly(api API, simulations ...string) API {
+	r := readOnly{next: api}
+	for _, s := range simulations {
+		r.allow = append(r.allow, simulationPattern(s))
+	}
+	return r
+}
 
-type readOnly struct{ next API }
+func simulationPattern(s string) *regexp.Regexp {
+	method, path, _ := strings.Cut(s, " ")
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
+			parts[i] = `[^/?#]+`
+		} else {
+			parts[i] = regexp.QuoteMeta(p)
+		}
+	}
+	return regexp.MustCompile("^" + regexp.QuoteMeta(method) + " " + strings.Join(parts, "/") + "$")
+}
+
+type readOnly struct {
+	next  API
+	allow []*regexp.Regexp
+}
 
 func (r readOnly) Call(ctx context.Context, method, path string, body any) (Response, error) {
-	if method != http.MethodGet {
+	if method != http.MethodGet && !r.allowed(method, path) {
 		return Response{}, ErrReadOnly
 	}
 	if r.next == nil {
 		return Response{}, fmt.Errorf("capability: no API")
 	}
 	return r.next.Call(ctx, method, path, body)
+}
+
+func (r readOnly) allowed(method, path string) bool {
+	for _, a := range r.allow {
+		if a.MatchString(method + " " + path) {
+			return true
+		}
+	}
+	return false
 }

@@ -61,7 +61,7 @@ func capabilityTools(caps []*capability.Capability) []ai.Tool {
 }
 
 // exec builds the execution context; reads and dry runs get a GET-only API.
-func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, readOnly bool) capability.Exec {
+func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, cp *capability.Capability, readOnly bool) capability.Exec {
 	e := capability.Exec{OrgID: c.Scope.ID, OrgUUID: c.Scope.UUID, UserID: c.UserID, Locale: guides.NormalizeLocale(c.Locale), Thread: thread}
 	if u, err := s.Q.GetUserByID(ctx, c.UserID); err == nil {
 		e.UserUUID = u.Uuid
@@ -70,7 +70,7 @@ func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, readOnly
 		e.API = s.API(e.UserUUID, c.Scope.UUID)
 	}
 	if readOnly {
-		e.API = capability.ReadOnly(e.API)
+		e.API = capability.ReadOnly(e.API, cp.Simulations...)
 	}
 	return e
 }
@@ -89,7 +89,7 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 		if err := cp.Check(p); err != nil {
 			return toolError(err.Error())
 		}
-		res, err := cp.Run(ctx, r.svc.exec(ctx, r.caller, r.thread, true), p)
+		res, err := cp.Run(ctx, r.svc.exec(ctx, r.caller, r.thread, cp, true), p)
 		if err != nil {
 			return toolError(safeError(err))
 		}
@@ -226,7 +226,7 @@ func (s *Service) DryRun(ctx context.Context, c Caller, threadID uuid.UUID, acti
 		if err := cp.Check(params); err != nil {
 			return err
 		}
-		res, runErr := cp.DryRun(ctx, s.exec(ctx, c, t.Uuid, true), params)
+		res, runErr := cp.DryRun(ctx, s.exec(ctx, c, t.Uuid, cp, true), params)
 		a.Preview = &Preview{OK: runErr == nil, Summary: res.Summary, Details: res.Details}
 		if runErr != nil {
 			a.Preview.Summary, a.Preview.Details = safeError(runErr), nil
@@ -253,7 +253,7 @@ func (s *Service) confirmCapability(ctx context.Context, q *db.Queries, c Caller
 	if err := cp.FillSecrets(secrets); err != nil {
 		return ConfirmResult{}, err
 	}
-	e := s.exec(ctx, c, t.Uuid, false)
+	e := s.exec(ctx, c, t.Uuid, cp, false)
 	e.Secrets = secrets
 	res, runErr := cp.Apply(ctx, e, params)
 	a.Params, a.Capability = params, cp.Name
