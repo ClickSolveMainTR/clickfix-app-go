@@ -681,6 +681,7 @@ func (s *Service) Confirm(ctx context.Context, c Caller, threadID uuid.UUID, act
 		return ConfirmResult{}, err
 	}
 	var out ConfirmResult
+	var pending *pendingApply
 	err = pgx.BeginFunc(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := s.Q.WithTx(tx)
 		msg, actions, idx, err := findAction(ctx, q, t, actionID)
@@ -692,7 +693,7 @@ func (s *Service) Confirm(ctx context.Context, c Caller, threadID uuid.UUID, act
 			return ErrActionState
 		}
 		if cp, ok := s.Caps.Get(a.Kind); ok {
-			out, err = s.confirmCapability(ctx, q, c, t, msg, actions, idx, cp, edited)
+			pending, err = s.prepareCapability(ctx, q, c, t, msg, actions, idx, cp, edited)
 			return err
 		}
 		ex, ok := s.Actions[a.Kind]
@@ -731,7 +732,10 @@ func (s *Service) Confirm(ctx context.Context, c Caller, threadID uuid.UUID, act
 		out.Message, err = s.addMessage(ctx, q, t, "tool", text, nil, []ProposedAction{*a})
 		return err
 	})
-	return out, err
+	if err != nil || pending == nil {
+		return out, err
+	}
+	return s.applyCapability(ctx, c, t, actionID, pending)
 }
 
 func resultText(locale string, a ProposedAction, err error) string {

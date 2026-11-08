@@ -19,7 +19,8 @@ export function focusHref(route: string, target?: string | null) {
     !route.startsWith("/") ||
     route.startsWith("//") ||
     route.includes("\\") ||
-    /[?#]/.test(route)
+    // Browsers drop tabs and newlines in URLs: "/\t/evil" becomes "//evil".
+    /[?#\s\u0000-\u001f\u007f]/.test(route)
   )
     return null;
   if (!validTarget(target)) return route;
