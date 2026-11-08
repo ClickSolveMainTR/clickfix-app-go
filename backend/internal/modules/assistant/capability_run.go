@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -237,51 +238,85 @@ func (s *Service) DryRun(ctx context.Context, c Caller, threadID uuid.UUID, acti
 	return out, err
 }
 
-// confirmCapability applies a registry capability inside Confirm's
-// transaction: the caller's own permission, the (edited) params checked
-// again, secrets generated here and returned once, then Verify.
-func (s *Service) confirmCapability(ctx context.Context, q *db.Queries, c Caller, t db.AssistantThread, msg db.AssistantMessage,
-	actions []ProposedAction, idx int, cp *capability.Capability, edited capability.Params) (ConfirmResult, error) {
+// pendingApply is a capability action marked confirmed, ready to apply.
+type pendingApply struct {
+	cp      *capability.Capability
+	params  capability.Params
+	secrets map[string]string
+}
+
+// prepareCapability runs inside Confirm's transaction: the caller's own
+// permission, the (edited) params checked again, secrets generated. It
+// marks the action "confirmed" and stores it before anything is applied,
+// so a failure after Apply can never leave it confirmable a second time
+// (no duplicate channel, no second rotation).
+func (s *Service) prepareCapability(ctx context.Context, q *db.Queries, c Caller, t db.AssistantThread, msg db.AssistantMessage,
+	actions []ProposedAction, idx int, cp *capability.Capability, edited capability.Params) (*pendingApply, error) {
 	a := &actions[idx]
 	if !cp.Allowed(c.Scope.Has, threadSurface(t)) {
-		return ConfirmResult{}, ErrForbidden
+		return nil, ErrForbidden
 	}
 	params, secrets := cp.SplitSecrets(mergeParams(a.Params, edited))
 	if err := cp.Check(params); err != nil {
-		return ConfirmResult{}, err
+		return nil, err
 	}
 	if err := cp.FillSecrets(secrets); err != nil {
-		return ConfirmResult{}, err
+		return nil, err
 	}
-	e := s.exec(ctx, c, t.Uuid, false)
-	e.Secrets = secrets
-	res, runErr := cp.Apply(ctx, e, params)
-	a.Params, a.Capability = params, cp.Name
-	a.Status, a.Result = ActionDone, res.Summary
-	a.Details, a.Route, a.Focus = res.Details, res.Route, res.Focus
-	if runErr != nil {
-		a.Status, a.Result, a.Details = ActionFailed, safeError(runErr), nil
-	} else if cp.Verify != nil {
-		e.Secrets = nil
-		check := cp.Verify(ctx, e, params, res)
-		a.Verification = &check
-	}
-	text := resultText(c.Locale, *a, runErr)
-	if a.Verification != nil && a.Verification.Status == capability.VerifyFailed {
-		text += "\n" + verifyText(c.Locale, a.Verification.Message)
-	}
+	a.Params, a.Capability, a.Status = params, cp.Name, ActionConfirmed
 	if err := q.AssistantMessageSetActions(ctx, db.AssistantMessageSetActionsParams{OrganizationID: t.OrganizationID, ID: msg.ID, Actions: encodeActions(actions)}); err != nil {
-		return ConfirmResult{}, err
+		return nil, err
 	}
-	out, err := s.addMessage(ctx, q, t, "tool", text, nil, []ProposedAction{*a})
+	return &pendingApply{cp: cp, params: params, secrets: secrets}, nil
+}
+
+// applyCapability runs Apply and Verify after the confirmed state is
+// committed, then stores the outcome in its own transaction.
+func (s *Service) applyCapability(ctx context.Context, c Caller, t db.AssistantThread, actionID string, p *pendingApply) (ConfirmResult, error) {
+	e := s.exec(ctx, c, t.Uuid, false)
+	e.Secrets = p.secrets
+	res, runErr := p.cp.Apply(ctx, e, p.params)
+	var check *capability.Check
+	if runErr == nil && p.cp.Verify != nil {
+		e.Secrets = nil
+		v := p.cp.Verify(ctx, e, p.params, res)
+		check = &v
+	}
+	// The outcome is stored even if the request was cancelled meanwhile.
+	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	var out ConfirmResult
+	err := pgx.BeginFunc(saveCtx, s.Pool, func(tx pgx.Tx) error {
+		q := s.Q.WithTx(tx)
+		msg, actions, idx, err := findAction(saveCtx, q, t, actionID)
+		if err != nil {
+			return err
+		}
+		a := &actions[idx]
+		a.Status, a.Result = ActionDone, res.Summary
+		a.Details, a.Route, a.Focus, a.Verification = res.Details, res.Route, res.Focus, check
+		if runErr != nil {
+			a.Status, a.Result, a.Details = ActionFailed, safeError(runErr), nil
+		}
+		text := resultText(c.Locale, *a, runErr)
+		if check != nil && check.Status == capability.VerifyFailed {
+			text += "\n" + verifyText(c.Locale, check.Message)
+		}
+		if err := q.AssistantMessageSetActions(saveCtx, db.AssistantMessageSetActionsParams{OrganizationID: t.OrganizationID, ID: msg.ID, Actions: encodeActions(actions)}); err != nil {
+			return err
+		}
+		out.Message, err = s.addMessage(saveCtx, q, t, "tool", text, nil, []ProposedAction{*a})
+		return err
+	})
 	if err != nil {
+		// Applied, but the card could not be updated: it stays
+		// "confirmed" and cannot run again.
 		return ConfirmResult{}, err
 	}
-	result := ConfirmResult{Message: out}
 	if runErr == nil && len(res.Secrets) > 0 {
-		result.SecretOnce = res.Secrets
+		out.SecretOnce = res.Secrets
 	}
-	return result, nil
+	return out, nil
 }
 
 func verifyText(locale, detail string) string {

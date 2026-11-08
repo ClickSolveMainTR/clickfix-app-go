@@ -17,6 +17,9 @@ test("focusHref keeps the user inside the app", () => {
     "javascript:alert(1)",
     "/x?next=https://evil.example",
     "relative/path",
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/ /evil.example",
   ]) {
     assert.equal(focusHref(bad, "a"), null, bad);
   }
