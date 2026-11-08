@@ -15885,9 +15885,29 @@ export interface paths {
         put?: never;
         /**
          * Confirm a proposed action
-         * @description Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for enable_ai); missing permission answers 403 and the action stays proposed. Returns the result as a `tool` message. `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
+         * @description Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for ai.enable); missing permission answers 403 and the action stays proposed. The optional body carries fields edited in the card; they are validated again against the capability schema (400 VALIDATION_ERROR with the reason). Registry capabilities call the panel's own /v1 routes as the user, then verify the result. Returns the result as a `tool` message plus `secret_once` (generated secrets, this response only). `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
          */
         post: operations["confirmTenantAssistantAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a proposed action
+         * @description Runs the capability's dry run with the (optionally edited) params and stores the preview on the card. It never changes data or leaves the server (the capability only gets GET access to the API). 404 when the action has no dry run; 403 without the capability's permission; 400 VALIDATION_ERROR for invalid params.
+         */
+        post: operations["dryRunTenantAssistantAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26763,7 +26783,7 @@ export interface components {
         };
         AssistantProposedAction: {
             id: string;
-            /** @description open_route, invite_member, create_channel_email, connect_channel, install_widget, set_business_hours, create_sla, enable_ai, escalate_to_support */
+            /** @description A registry capability name (navigation.open_route, channels.connect, ai.enable, ...) or an older action kind (invite_member, create_channel_email, install_widget, set_business_hours, create_sla, escalate_to_support). Stored cards may carry the old names open_route, connect_channel, enable_ai, which still confirm. */
             kind: string;
             title: string;
             summary: string;
@@ -26773,8 +26793,79 @@ export interface components {
             /** @enum {string} */
             status: "proposed" | "confirmed" | "rejected" | "done" | "failed";
             route?: string;
-            /** @description Short result after execution (e.g. invited e-mail, ticket reference) */
+            /** @description Short result after execution (e.g. invited e-mail, ticket reference); on failure the API's own validation message */
             result?: string;
+            /** @description Registry capability name (CF-184), e.g. channels.api.create; empty for older actions. kind carries the same value. */
+            capability?: string;
+            /** @enum {string} */
+            risk?: "write" | "destructive";
+            /** @description Editable fields of the confirmation card. Secret fields are never prefilled. */
+            form?: components["schemas"]["AssistantActionField"][];
+            /** @description The action can be previewed with the dry-run endpoint (no data changes). */
+            dry_run?: boolean;
+            /** @description How to revert the change (text or a page path) */
+            undo?: string;
+            preview?: components["schemas"]["AssistantActionPreview"];
+            verification?: components["schemas"]["AssistantActionVerification"];
+            details?: components["schemas"]["AssistantActionDetail"][];
+            focus?: components["schemas"]["AssistantActionFocus"];
+        };
+        AssistantActionField: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "url" | "number" | "boolean" | "enum" | "json" | "secret";
+            required: boolean;
+            options?: string[];
+            help?: string;
+            /** @description A secret the server generates when left empty */
+            generated?: boolean;
+        };
+        AssistantActionDetail: {
+            label: string;
+            value?: string;
+            /** @description Copyable code block (an example request); secrets appear as placeholders */
+            code?: string;
+        };
+        AssistantActionPreview: {
+            ok: boolean;
+            summary: string;
+            details?: components["schemas"]["AssistantActionDetail"][];
+        };
+        AssistantActionVerification: {
+            /** @enum {string} */
+            status: "ok" | "failed" | "skipped";
+            message?: string;
+        };
+        AssistantActionFocus: {
+            /** @description Internal path (never a URL) */
+            route: string;
+            /** @description data-guide key to highlight (?focus=) */
+            target?: string;
+        };
+        AssistantActionRequest: {
+            /** @description Fields edited in the card; merged over the proposed params and validated again. A null value removes a field. */
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        AssistantConfirmResult: components["schemas"]["AssistantMessage"] & {
+            /** @description Secrets the action generated (e.g. a signing secret). Returned only in this response; never stored or shown again. */
+            secret_once?: {
+                [key: string]: string;
+            };
+        };
+        EnvelopeAssistantConfirmResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantConfirmResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeAssistantProposedAction: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantProposedAction"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         AssistantMessage: {
             /** @description Generation stopped or connection lost; content is a saved partial reply. */
@@ -26917,12 +27008,6 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["AssistantThreadList"];
-            meta: components["schemas"]["ResponseMeta"];
-        };
-        EnvelopeAssistantMessage: {
-            /** @enum {boolean} */
-            success: true;
-            data: components["schemas"]["AssistantMessage"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeAssistantMessageList: {
@@ -64176,7 +64261,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssistantActionRequest"];
+            };
+        };
         responses: {
             /** @description Result message */
             200: {
@@ -64184,7 +64273,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeAssistantMessage"];
+                    "application/json": components["schemas"]["EnvelopeAssistantConfirmResult"];
                 };
             };
             400: components["responses"]["OrganizationRequired"];
@@ -64193,6 +64282,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    dryRunTenantAssistantAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssistantActionRequest"];
+            };
+        };
+        responses: {
+            /** @description The action with its preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantProposedAction"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };

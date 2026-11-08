@@ -18,6 +18,7 @@ import (
 	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	slamodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/sla/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 	"github.com/google/uuid"
@@ -35,6 +36,24 @@ type ProposedAction struct {
 	Status  string         `json:"status"`
 	Route   string         `json:"route,omitempty"`
 	Result  string         `json:"result,omitempty"`
+
+	// Card v2 (CF-184), set for registry capabilities.
+	Capability   string              `json:"capability,omitempty"`
+	Risk         string              `json:"risk,omitempty"`
+	Form         []capability.Field  `json:"form,omitempty"`
+	DryRun       bool                `json:"dry_run,omitempty"`
+	Undo         string              `json:"undo,omitempty"`
+	Preview      *Preview            `json:"preview,omitempty"`
+	Verification *capability.Check   `json:"verification,omitempty"`
+	Details      []capability.Detail `json:"details,omitempty"`
+	Focus        *capability.Focus   `json:"focus,omitempty"`
+}
+
+// Preview is the last dry run of an action.
+type Preview struct {
+	OK      bool                `json:"ok"`
+	Summary string              `json:"summary"`
+	Details []capability.Detail `json:"details,omitempty"`
 }
 
 // Action statuses.
@@ -83,13 +102,6 @@ var (
 	hhmm     = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$|^24:00$`)
 	routeRxp = regexp.MustCompile(`^/[a-z0-9/_\-\[\]]{0,150}$`)
 )
-
-func validRoute(p map[string]any) error {
-	if !routeRxp.MatchString(str(p, "route")) || strings.HasPrefix(str(p, "route"), "//") {
-		return ErrActionInvalid
-	}
-	return nil
-}
 
 // navigate builds an executor that only sends the user to a page where
 // the change needs a form the assistant cannot fill (credentials etc.).
@@ -204,45 +216,15 @@ func validTimezone(tz string) bool {
 
 func validName(n string) bool { return utf8.RuneCountInString(n) <= 120 }
 
-// DefaultActions is the action catalog the assistant may propose.
+// DefaultActions are the CF-141 actions not yet moved to the capability
+// registry (open_route, connect_channel and enable_ai now are
+// capabilities, see CoreCapabilities); CF-188/CF-189 move the rest.
 func DefaultActions(d ActionDeps) Registry {
 	r := Registry{
-		"open_route": {
-			Describe: "Open a page of the app for the user. params: {route: \"/settings/sla\"}",
-			Validate: validRoute,
-			Run: func(_ context.Context, _ ActionContext, p map[string]any) (string, error) {
-				return str(p, "route"), nil
-			},
-		},
 		"create_channel_email": navigate(rbac.PermTenantChannelsManage, "/channels/connect/email",
 			"Start connecting a support e-mail address (opens the e-mail channel form). params: {}"),
-		"connect_channel": {
-			Permission: rbac.PermTenantChannelsManage,
-			Describe:   "Start connecting a channel. params: {type: whatsapp|instagram|messenger|telegram|email|sms|voice|slack}",
-			Validate: func(p map[string]any) error {
-				if !inList(str(p, "type"), []string{"whatsapp", "instagram", "messenger", "telegram", "email", "sms", "voice", "slack"}) {
-					return ErrActionInvalid
-				}
-				return nil
-			},
-			Run: func(_ context.Context, _ ActionContext, p map[string]any) (string, error) {
-				return "/channels/connect/" + str(p, "type"), nil
-			},
-		},
 		"install_widget": navigate(rbac.PermTenantChannelsManage, "/widget",
 			"Open the web widget set-up (snippet, colors, greeting). params: {}"),
-		"enable_ai": {
-			Permission: rbac.PermTenantAiWrite,
-			Route:      "/settings/ai",
-			Describe:   "Turn on AI features (reply suggestions, AI agent) for the organization. params: {}",
-			Validate:   func(map[string]any) error { return nil },
-			Run: func(ctx context.Context, ac ActionContext, _ map[string]any) (string, error) {
-				if d.Q == nil {
-					return "", ErrActionInvalid
-				}
-				return "/settings/ai", d.Q.AssistantEnableAI(ctx, ac.Scope.ID)
-			},
-		},
 	}
 	if d.Inviter != nil {
 		r["invite_member"] = Executor{

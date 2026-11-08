@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -15,6 +16,7 @@ import (
 	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/jwt"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
@@ -64,6 +66,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/messages", h.Send)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/messages/stream", h.SendStream)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/confirm", h.Confirm)
+		tenant("POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run", h.DryRun)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/reject", h.Reject)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/escalate", h.Escalate)
 	}
@@ -86,7 +89,10 @@ func decode(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 // WriteError maps service errors to API responses.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *orgusecase.ValidationError
+	var pe *capability.ParamError
 	switch {
+	case errors.As(err, &pe):
+		response.ValidationError(w, r, []response.Detail{{Code: response.CodeValidationError, Message: pe.Message}})
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrActionInvalid), errors.As(err, &ve), errors.Is(err, usecase.ErrInvalid):
 		response.ValidationError(w, r, []response.Detail{{Code: response.CodeValidationError, Message: "invalid input"}})
 	case errors.Is(err, ErrNotFound):
@@ -241,6 +247,51 @@ func (h *Handler) Send(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, out)
 }
 
+type actionRequest struct {
+	Params capability.Params `json:"params"`
+}
+
+// actionInput reads the optional {params} body of confirm / dry-run.
+func actionInput(w http.ResponseWriter, r *http.Request) (capability.Params, bool) {
+	var in actionRequest
+	if r.ContentLength == 0 {
+		return nil, true
+	}
+	if !decode(w, r, &in, 32<<10) {
+		return nil, false
+	}
+	return in.Params, true
+}
+
+// actionAllowed is the per-organization limit of dry runs and confirms.
+func (h *Handler) actionAllowed(w http.ResponseWriter, r *http.Request, c Caller) bool {
+	if h.limit != nil && !h.limit(r, "assistant_action", strconv.FormatInt(c.Scope.ID, 10), 30, time.Minute) {
+		response.TooManyRequests(w, r, "Too many actions, slow down")
+		return false
+	}
+	return true
+}
+
+// auditAction records an action event; params never carry secrets
+// (capabilities strip them) and pass through activity.Scrub.
+func (h *Handler) auditAction(r *http.Request, c Caller, event string, id uuid.UUID, a *ProposedAction, extra map[string]any) {
+	meta := map[string]any{"action_id": r.PathValue("action_id")}
+	if a != nil {
+		meta["kind"], meta["status"] = a.Kind, a.Status
+		if a.Capability != "" {
+			meta["capability"], meta["risk"] = a.Capability, a.Risk
+			if cp, ok := h.svc.Caps.Get(a.Capability); ok {
+				meta["params"] = map[string]any(cp.WithoutSecrets(a.Params))
+			}
+		}
+		if a.Verification != nil {
+			meta["verification"] = a.Verification.Status
+		}
+	}
+	maps.Copy(meta, extra)
+	h.record(r, c, event, id, meta)
+}
+
 // Confirm: POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/confirm
 func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	c, ok := caller(w, r)
@@ -251,17 +302,50 @@ func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	msg, err := h.svc.Confirm(r.Context(), c, id, r.PathValue("action_id"))
+	params, ok := actionInput(w, r)
+	if !ok || !h.actionAllowed(w, r, c) {
+		return
+	}
+	out, err := h.svc.Confirm(r.Context(), c, id, r.PathValue("action_id"), params)
+	if errors.Is(err, ErrForbidden) {
+		h.auditAction(r, c, "assistant.action_forbidden", id, nil, nil)
+	}
 	if err != nil {
 		WriteError(w, r, err)
 		return
 	}
-	meta := map[string]any{"action_id": r.PathValue("action_id")}
-	if len(msg.Actions) == 1 {
-		meta["kind"], meta["status"] = msg.Actions[0].Kind, msg.Actions[0].Status
+	var a *ProposedAction
+	if len(out.Actions) == 1 {
+		a = &out.Actions[0]
 	}
-	h.record(r, c, "assistant.action_confirmed", id, meta)
-	response.JSON(w, r, http.StatusOK, msg)
+	h.auditAction(r, c, "assistant.action_confirmed", id, a, map[string]any{"edited": len(params) > 0})
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+// DryRun: POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run
+func (h *Handler) DryRun(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := threadID(w, r)
+	if !ok {
+		return
+	}
+	params, ok := actionInput(w, r)
+	if !ok || !h.actionAllowed(w, r, c) {
+		return
+	}
+	a, err := h.svc.DryRun(r.Context(), c, id, r.PathValue("action_id"), params)
+	if errors.Is(err, ErrForbidden) {
+		h.auditAction(r, c, "assistant.action_forbidden", id, nil, map[string]any{"dry_run": true})
+	}
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	h.auditAction(r, c, "assistant.action_dry_run", id, &a, map[string]any{"ok": a.Preview != nil && a.Preview.OK})
+	response.JSON(w, r, http.StatusOK, a)
 }
 
 // Reject: POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/reject
@@ -278,6 +362,7 @@ func (h *Handler) Reject(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, err)
 		return
 	}
+	h.auditAction(r, c, "assistant.action_rejected", id, nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -6,7 +6,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 )
 
 // Tool names.
@@ -64,6 +67,10 @@ type toolRun struct {
 	locale      string
 	actions     []ProposedAction
 	suggestions []string
+	surface     string
+	thread      uuid.UUID
+	// caps are the capabilities offered in this reply, by tool name.
+	caps map[string]*capability.Capability
 }
 
 func toolJSON(v any) ai.ToolResult {
@@ -114,6 +121,9 @@ func (r *toolRun) run(ctx context.Context, call ai.ToolCall) (ai.ToolResult, err
 		r.actions = append(r.actions, a)
 		return toolJSON(map[string]any{"status": "proposed", "id": a.ID, "note": "Shown to the user as a confirmation card."}), nil
 	}
+	if cp, ok := r.caps[call.Name]; ok {
+		return r.runCapability(ctx, cp, call.Input), nil
+	}
 	return toolError("unknown tool"), nil
 }
 
@@ -145,9 +155,6 @@ func (r *toolRun) propose(in ProposedAction) ai.ToolResult {
 		return toolError("params do not fit this action: " + ex.Describe)
 	}
 	a := ProposedAction{ID: newActionID(), Kind: in.Kind, Title: in.Title, Summary: in.Summary, Params: in.Params, Status: ActionProposed, Route: ex.Route}
-	if in.Kind == "open_route" {
-		a.Route = str(in.Params, "route")
-	}
 	r.actions = append(r.actions, a)
 	return toolJSON(map[string]any{"status": "proposed", "id": a.ID, "note": "Shown to the user as a confirmation card; wait for their decision."})
 }
