@@ -152,7 +152,7 @@ func simulationPattern(s string) *regexp.Regexp {
 	parts := strings.Split(path, "/")
 	for i, p := range parts {
 		if strings.HasPrefix(p, "{") && strings.HasSuffix(p, "}") {
-			parts[i] = `[^/?#]+`
+			parts[i] = `[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`
 		} else {
 			parts[i] = regexp.QuoteMeta(p)
 		}

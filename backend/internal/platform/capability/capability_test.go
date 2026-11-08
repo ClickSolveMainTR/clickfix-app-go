@@ -171,10 +171,10 @@ func TestReadOnlyAPIRefusesWrites(t *testing.T) {
 		t.Fatalf("calls %v", rec.methods)
 	}
 	sim := ReadOnly(rec, "POST /v1/tenant/workflows/{uuid}/test")
-	if _, err := sim.Call(context.Background(), "POST", "/v1/tenant/workflows/0b6f/test", nil); err != nil {
+	if _, err := sim.Call(context.Background(), "POST", "/v1/tenant/workflows/0b6f2c1e-5d4a-4b3c-9a8b-7c6d5e4f3a2b/test", nil); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"/v1/tenant/workflows/0b6f/publish", "/v1/tenant/workflows/a/b/test", "/v1/tenant/workflows/0b6f/test?x=1"} {
+	for _, p := range []string{"/v1/tenant/workflows/0b6f/test", "/v1/tenant/workflows/../test", "/v1/tenant/workflows/0b6f2c1e-5d4a-4b3c-9a8b-7c6d5e4f3a2b/publish", "/v1/tenant/workflows/a/b/test", "/v1/tenant/workflows/0b6f/test?x=1"} {
 		if _, err := sim.Call(context.Background(), "POST", p, nil); !errors.Is(err, ErrReadOnly) {
 			t.Fatalf("%s passed", p)
 		}

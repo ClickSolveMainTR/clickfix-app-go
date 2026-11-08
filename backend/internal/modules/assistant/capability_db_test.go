@@ -376,3 +376,37 @@ func TestActionEndpoints(t *testing.T) {
 		t.Fatalf("confirm %d %s", w.Code, w.Body)
 	}
 }
+
+func TestConfirmIsMarkedBeforeApply(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	pc := assistant.Context{Surface: "web", Route: "/"}
+	th, _ := f.svc.CreateThread(ctx, f.scope.ID, f.user, pc)
+	var actionID string
+	var reentry error
+	applied := 0
+	f.svc.Caps = capability.NewRegistry().Register(&capability.Capability{
+		Name: "once.do", Kind: capability.Write, Description: "Do it once.",
+		Apply: func(ctx context.Context, _ capability.Exec, _ capability.Params) (capability.Result, error) {
+			applied++
+			// A second confirm while this one runs (double click, retry
+			// after a lost response) must not run the action again.
+			_, reentry = f.svc.Confirm(ctx, f.caller(), th.UUID, actionID, nil)
+			return capability.Result{Summary: "ok"}, nil
+		},
+	})
+	f.svc.API = func(uuid.UUID, uuid.UUID) capability.API { return &fakeAPI{} }
+	f.prov.steps = []ai.Result{call("c1", "once_do", `{"params":{}}`), {Text: `{"reply":"Hazır.","suggestions":[]}`}}
+	res, err := f.svc.Send(ctx, f.caller(), th.UUID, "yap", pc)
+	if err != nil || len(res.Reply.Actions) != 1 {
+		t.Fatalf("%+v %v", res.Reply, err)
+	}
+	actionID = res.Reply.Actions[0].ID
+	out, err := f.svc.Confirm(ctx, f.caller(), th.UUID, actionID, nil)
+	if err != nil || out.Actions[0].Status != "done" {
+		t.Fatalf("%+v %v", out, err)
+	}
+	if applied != 1 || !errors.Is(reentry, assistant.ErrActionState) {
+		t.Fatalf("applied %d times, re-entry: %v", applied, reentry)
+	}
+}
