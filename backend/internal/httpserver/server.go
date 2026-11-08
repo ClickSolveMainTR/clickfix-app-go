@@ -555,6 +555,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: channels: %w", err)
 	}
+	channelTestLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
+	channelsHandler.TestDeliveryAllowed = func(r *http.Request, channel uuid.UUID) bool {
+		ok, _ := channelTestLimiter.Allow(r.Context(), "channel_test_delivery", channel.String(), 6, 10*time.Minute)
+		return ok
+	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)

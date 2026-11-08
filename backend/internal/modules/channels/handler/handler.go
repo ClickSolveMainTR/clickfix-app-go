@@ -42,7 +42,10 @@ type Handler struct {
 	svc      *usecase.Service
 	receiver func(ctx context.Context, inst channels.Instance, res channels.WebhookResult) error
 	activity *activity.Recorder
-	log      *slog.Logger
+	// TestDeliveryAllowed limits test deliveries per channel (each one is
+	// an outbound request); nil = no limit.
+	TestDeliveryAllowed func(r *http.Request, channel uuid.UUID) bool
+	log                 *slog.Logger
 	// providers and oauthKey serve the connect wizards (providers.go).
 	providers Providers
 	oauthKey  []byte
@@ -193,6 +196,10 @@ func (h *Handler) Check(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TestDelivery(w http.ResponseWriter, r *http.Request) {
 	scope, id, ok := scopeAndID(w, r)
 	if !ok {
+		return
+	}
+	if h.TestDeliveryAllowed != nil && !h.TestDeliveryAllowed(r, id) {
+		response.TooManyRequests(w, r, "Too many test deliveries, try again later")
 		return
 	}
 	out, err := h.svc.TestDelivery(r.Context(), scope.ID, id)
