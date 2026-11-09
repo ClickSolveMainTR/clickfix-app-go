@@ -19,7 +19,7 @@ import (
 )
 
 // Token is the fake system's bearer token.
-const Token = "acc-test-token-7f3a9c"
+const Token = "acc-test-token-7f3a9c" // #nosec G101 -- sahte test sisteminin sabit anahtarı
 
 // Accounting is a fake accounting system: GET /faturalar?musteri=<id>
 // lists invoices, POST /faturalar/<no>/tekrar-gonder resends one.
