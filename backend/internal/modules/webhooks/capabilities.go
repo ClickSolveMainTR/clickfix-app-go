@@ -9,7 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 )
 
@@ -187,4 +189,179 @@ func Pages() []*capability.Page {
 			return st, nil
 		},
 	}}
+}
+
+// Webhook subscription writes (CF-190). The signing secret is created by
+// the route on create and shown once on the card; it is never stored in
+// the chat.
+
+func validURL(p capability.Params) error {
+	if u, _ := p["url"].(string); u != "" {
+		if err := usecase.ValidateURL(strings.TrimSpace(u)); err != nil {
+			return capability.Invalid("url must be a public https address (no localhost, private IP or user:password)")
+		}
+	}
+	return nil
+}
+
+func hookByID(ctx context.Context, api capability.API, id string) (hookView, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return hookView{}, capability.Invalid("webhook_uuid must be a UUID")
+	}
+	hooks, err := listHooks(ctx, api)
+	if err != nil {
+		return hookView{}, err
+	}
+	for _, h := range hooks {
+		if h.UUID.String() == id {
+			return h, nil
+		}
+	}
+	return hookView{}, capability.Invalid("webhook %s not found", id)
+}
+
+func strList(v any) []string {
+	items, _ := v.([]any)
+	out := []string{}
+	for _, it := range items {
+		if s, ok := it.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// WriteCapabilities are the webhook subscription changes.
+func WriteCapabilities() []*capability.Capability {
+	routes := []string{"/settings/integrations"}
+	events := map[string]any{"type": "array", "title": "Events", "minItems": 1, "maxItems": 50,
+		"items": map[string]any{"type": "string", "enum": events.WebhookEvents()}}
+	idField := map[string]any{"type": "string", "title": "Webhook", "pattern": "^[0-9a-fA-F-]{36}$"}
+	props := map[string]any{
+		"name":    map[string]any{"type": "string", "title": "Name", "minLength": 1, "maxLength": 120},
+		"url":     map[string]any{"type": "string", "title": "URL", "format": "uri", "maxLength": 2048},
+		"events":  events,
+		"enabled": map[string]any{"type": "boolean", "title": "Enabled"},
+	}
+	withID := map[string]any{"webhook_uuid": idField}
+	for k, v := range props {
+		withID[k] = v
+	}
+	return []*capability.Capability{
+		{
+			Name: "webhooks.create", Module: "webhooks", Kind: capability.Write, Permission: rbac.PermTenantWebhooksWrite, Routes: routes,
+			Title: map[string]string{"tr": "Webhook aboneliği oluştur", "en": "Create a webhook"},
+			Description: "Subscribe the organization's endpoint (public https URL) to events, e.g. conversation.created. The signing secret is " +
+				"created by the server and shown to the user once; never ask for it. Offer webhooks_test afterwards.",
+			Undo:     "/settings/integrations",
+			Input:    map[string]any{"type": "object", "additionalProperties": false, "required": []string{"name", "url", "events"}, "properties": props},
+			Validate: validURL,
+			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				hooks, err := listHooks(ctx, e.API)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				for _, h := range hooks {
+					if h.URL == str(p, "url") {
+						return capability.Result{}, capability.Invalid("%s", tr(e, "Bu adrese giden bir abonelik zaten var (%s); güncellemeyi öneririm.", "A webhook to this URL already exists (%s); update it instead.", h.Name))
+					}
+				}
+				return capability.Result{Summary: tr(e, "“%s” aboneliği %s adresine %d olay gönderecek; imza anahtarı bir kez gösterilecek.",
+					"“%s” will post to %s (%d events); the signing secret is shown once.", str(p, "name"), str(p, "url"), len(strList(p["events"]))),
+					Details: []capability.Detail{{Label: tr(e, "Olaylar", "Events"), Value: strings.Join(strList(p["events"]), ", ")}}}, nil
+			},
+			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				enabled := true
+				if v, ok := p["enabled"].(bool); ok {
+					enabled = v
+				}
+				r, err := e.API.Call(ctx, http.MethodPost, hooksPath, map[string]any{"name": str(p, "name"), "url": str(p, "url"), "events": strList(p["events"]), "enabled": enabled})
+				if err != nil {
+					return capability.Result{}, err
+				}
+				var out struct {
+					UUID   uuid.UUID `json:"uuid"`
+					Secret string    `json:"secret"`
+				}
+				if err := r.Decode(&out); err != nil {
+					return capability.Result{}, err
+				}
+				res := capability.Result{Summary: out.UUID.String(), Route: "/settings/integrations",
+					Details: []capability.Detail{{Label: tr(e, "İmza doğrulama", "Signature check"),
+						Value: tr(e, "ClickFix-Webhook-Signature = v1= + hex(HMAC-SHA256(anahtar, zaman damgası + \".\" + gövde)); ClickFix-Webhook-Timestamp ile birlikte gelir.",
+							"ClickFix-Webhook-Signature = v1= + hex(HMAC-SHA256(secret, timestamp + \".\" + body)); sent with ClickFix-Webhook-Timestamp.")}}}
+				if out.Secret != "" {
+					res.Secrets = map[string]string{"signing_secret": out.Secret}
+				}
+				return res, nil
+			},
+			Verify: func(ctx context.Context, e capability.Exec, _ capability.Params, res capability.Result) capability.Check {
+				if _, err := hookByID(ctx, e.API, res.Summary); err != nil {
+					return capability.Check{Status: capability.VerifyFailed}
+				}
+				return capability.Check{Status: capability.VerifyOK, Message: tr(e, "Abonelik kayıtlı; test teslimatı gönderebilirim.", "Saved; I can send a test delivery.")}
+			},
+		},
+		{
+			Name: "webhooks.update", Module: "webhooks", Kind: capability.Write, Permission: rbac.PermTenantWebhooksWrite, Routes: routes,
+			Title:       map[string]string{"tr": "Webhook aboneliğini güncelle", "en": "Update a webhook"},
+			Description: "Change the name, URL, events or enabled state of a webhook (webhook_uuid from webhooks_list); fields left out stay.",
+			Input:       map[string]any{"type": "object", "additionalProperties": false, "required": []string{"webhook_uuid"}, "properties": withID},
+			Validate:    validURL,
+			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				h, err := hookByID(ctx, e.API, str(p, "webhook_uuid"))
+				if err != nil {
+					return capability.Result{}, err
+				}
+				body := map[string]any{"name": h.Name, "url": h.URL, "events": h.Events, "enabled": h.Enabled}
+				if v := str(p, "name"); v != "" {
+					body["name"] = v
+				}
+				if v := str(p, "url"); v != "" {
+					body["url"] = v
+				}
+				if v := strList(p["events"]); len(v) > 0 {
+					body["events"] = v
+				}
+				if v, ok := p["enabled"].(bool); ok {
+					body["enabled"] = v
+				}
+				r, err := e.API.Call(ctx, http.MethodPut, hooksPath+"/"+h.UUID.String(), body)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				return capability.Result{Summary: h.UUID.String(), Route: "/settings/integrations"}, r.Err()
+			},
+		},
+		{
+			Name: "webhooks.delete", Module: "webhooks", Kind: capability.Destructive, Permission: rbac.PermTenantWebhooksWrite, Routes: routes,
+			Title:       map[string]string{"tr": "Webhook aboneliğini sil", "en": "Delete a webhook"},
+			Description: "Delete a webhook subscription for good; its endpoint stops receiving events.",
+			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"webhook_uuid"},
+				"properties": map[string]any{"webhook_uuid": idField}},
+			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				h, err := hookByID(ctx, e.API, str(p, "webhook_uuid"))
+				if err != nil {
+					return capability.Result{}, err
+				}
+				return capability.Result{Summary: tr(e, "“%s” (%s) kalıcı olarak silinecek.", "“%s” (%s) will be deleted for good.", h.Name, h.URL)}, nil
+			},
+			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				h, err := hookByID(ctx, e.API, str(p, "webhook_uuid"))
+				if err != nil {
+					return capability.Result{}, err
+				}
+				r, err := e.API.Call(ctx, http.MethodDelete, hooksPath+"/"+h.UUID.String(), nil)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				return capability.Result{Summary: h.Name, Route: "/settings/integrations"}, r.Err()
+			},
+		},
+	}
+}
+
+func str(p capability.Params, k string) string {
+	s, _ := p[k].(string)
+	return strings.TrimSpace(s)
 }

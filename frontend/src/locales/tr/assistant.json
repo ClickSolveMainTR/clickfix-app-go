@@ -138,5 +138,12 @@
   "fields.greeting_title": "Karşılama başlığı",
   "fields.greeting_text": "Karşılama metni",
   "fields.allowed_domains": "İzinli alan adları",
-  "fields.publish": "Hemen yayınla"
+  "fields.publish": "Hemen yayınla",
+  "fields.url": "Adres",
+  "fields.events": "Olaylar",
+  "fields.key_uuid": "Anahtar",
+  "fields.scopes": "Yetki kapsamları",
+  "fields.rate_limit": "Dakikada istek",
+  "fields.expires_in_days": "Geçerlilik (gün)",
+  "fields.api_key": "API anahtarı"
 }

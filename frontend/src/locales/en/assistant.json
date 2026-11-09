@@ -138,5 +138,12 @@
   "fields.greeting_title": "Greeting title",
   "fields.greeting_text": "Greeting text",
   "fields.allowed_domains": "Allowed domains",
-  "fields.publish": "Publish now"
+  "fields.publish": "Publish now",
+  "fields.url": "URL",
+  "fields.events": "Events",
+  "fields.key_uuid": "Key",
+  "fields.scopes": "Scopes",
+  "fields.rate_limit": "Requests per minute",
+  "fields.expires_in_days": "Valid for (days)",
+  "fields.api_key": "API key"
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	appsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/apps"
 	automationmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation"
 	forummodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum"
 	forumhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/handler"
 	forumuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
+	publicapimodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/publicapi"
 	webhooksmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/apibridge"
@@ -666,6 +668,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Register(assistantmodule.TeamAndAICapabilities(deps.Queries)...).
 		Register(teamsmodule.Capabilities()...).
 		Register(widgetmodule.Capabilities(cfg.Auth.FrontendURL)...).
+		Register(webhooksmodule.WriteCapabilities()...).
+		Register(publicapimodule.Capabilities(cfg.Channels.PublicAPIURL)...).
+		Register(appsmodule.Capabilities()...).
 		Register(webhooksmodule.Capabilities()...).
 		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
 		RegisterPages(channelsmodule.Pages()...).
