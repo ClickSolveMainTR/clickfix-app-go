@@ -410,3 +410,50 @@ func TestConfirmIsMarkedBeforeApply(t *testing.T) {
 		t.Fatalf("applied %d times, re-entry: %v", applied, reentry)
 	}
 }
+
+// Review fix: without the panel API the action is not confirmed (it stays
+// pending and can be retried), and a panic in Apply stores a failed card.
+func TestConfirmWithoutAPIStaysPendingAndPanicFails(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	pc := assistant.Context{Surface: "web", Route: "/"}
+	th, _ := f.svc.CreateThread(ctx, f.scope.ID, f.user, pc)
+	boom := false
+	f.svc.Caps = capability.NewRegistry().Register(&capability.Capability{
+		Name: "api.do", Kind: capability.Write, Description: "Calls the API.",
+		Apply: func(ctx context.Context, e capability.Exec, _ capability.Params) (capability.Result, error) {
+			if boom {
+				panic("boom")
+			}
+			if _, err := e.API.Call(ctx, "GET", "/v1/tenant/x", nil); err != nil {
+				return capability.Result{}, err
+			}
+			return capability.Result{Summary: "ok"}, nil
+		},
+	})
+	f.svc.API = nil
+	propose := func() string {
+		t.Helper()
+		f.prov.steps = []ai.Result{call("c1", "api_do", `{"params":{}}`), {Text: `{"reply":"Hazır.","suggestions":[]}`}}
+		res, err := f.svc.Send(ctx, f.caller(), th.UUID, "yap", pc)
+		if err != nil || len(res.Reply.Actions) != 1 {
+			t.Fatalf("%+v %v", res.Reply, err)
+		}
+		return res.Reply.Actions[0].ID
+	}
+	id := propose()
+	if _, err := f.svc.Confirm(ctx, f.caller(), th.UUID, id, nil); !errors.Is(err, assistant.ErrAPIUnavailable) {
+		t.Fatalf("no API: %v", err)
+	}
+	// Still pending: once the API is back the same card confirms.
+	f.svc.API = func(uuid.UUID, uuid.UUID) capability.API { return &fakeAPI{} }
+	if out, err := f.svc.Confirm(ctx, f.caller(), th.UUID, id, nil); err != nil || out.Actions[0].Status != "done" {
+		t.Fatalf("retry %+v %v", out, err)
+	}
+	boom = true
+	id = propose()
+	out, err := f.svc.Confirm(ctx, f.caller(), th.UUID, id, nil)
+	if err != nil || out.Actions[0].Status != "failed" {
+		t.Fatalf("panic %+v %v", out, err)
+	}
+}

@@ -139,6 +139,14 @@ func TestTeamsAndWidgetFromTheChat(t *testing.T) {
 	if pv, _ := f.svc.DryRun(ctx, c, th.UUID, acts[0].ID, nil); pv.Preview == nil || pv.Preview.OK {
 		t.Fatalf("duplicate team %+v", pv.Preview)
 	}
+	// ...and by the confirm itself, without a dry run.
+	if out, err := f.svc.Confirm(ctx, c, th.UUID, acts[0].ID, nil); err != nil || out.Actions[0].Status != "failed" {
+		t.Fatalf("duplicate team confirm %+v %v", out.Actions, err)
+	}
+	// An empty domain list (= every site) is never proposed.
+	if acts := run("Alan adı kısıtını kaldır", ai.ToolCall{ID: "w5", Name: "widget_update", Input: json.RawMessage(`{"params":{"widget_uuid":"` + widgetID + `","allowed_domains":[]}}`)}); len(acts) != 0 {
+		t.Fatal("empty domain list proposed")
+	}
 }
 
 // policyAPI answers the AI policy and invitation routes and records writes.

@@ -277,4 +277,21 @@ func TestScenarioRESTAPIChannel(t *testing.T) {
 	if hint != "https://example.com/v2/clickfix" {
 		t.Fatalf("update not applied: %q", hint)
 	}
+
+	// 8. A duplicate confirmed without a dry run is still refused.
+	f.prov.steps = []ai.Result{
+		call("x1", "channels_api_create", `{"params":{"name":"sipariş sistemi","webhook_url":"https://example.com/other"}}`),
+		{Text: `{"reply":"Onayınıza sundum.","suggestions":[]}`},
+	}
+	res, err = f.svc.Send(ctx, c, th.UUID, "Bir REST API kanalı daha kur", pc)
+	if err != nil || len(res.Reply.Actions) != 1 {
+		t.Fatalf("duplicate proposal %+v %v", res.Reply, err)
+	}
+	if out, err := f.svc.Confirm(ctx, c, th.UUID, res.Reply.Actions[0].ID, nil); err != nil || out.Actions[0].Status != "failed" {
+		t.Fatalf("duplicate confirm %+v %v", out, err)
+	}
+	_ = f.pool.QueryRow(ctx, "SELECT COUNT(*) FROM channel_instances WHERE organization_id = $1 AND deleted_at IS NULL", f.scope.ID).Scan(&n)
+	if n != 1 {
+		t.Fatalf("duplicate created: %d channels", n)
+	}
 }
