@@ -41,6 +41,9 @@ var (
 	ErrActionState        = errors.New("assistant: action is no longer pending")
 	ErrSupportUnavailable = errors.New("assistant: support escalation is not configured")
 	ErrUnsafe             = errors.New("assistant: message rejected by the safety filter")
+	// ErrAPIUnavailable: the panel API cannot be reached as the user, so a
+	// capability is not confirmed (the card stays pending and can be retried).
+	ErrAPIUnavailable = errors.New("assistant: panel API unavailable")
 )
 
 // Status reasons.
