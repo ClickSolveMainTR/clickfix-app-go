@@ -503,6 +503,8 @@ func (a *Applier) applyCustomField(ctx context.Context, st *applyState, f PlanCu
 	row, err := a.Q.CreateCustomFieldDefinition(ctx, db.CreateCustomFieldDefinitionParams{
 		OrganizationID: st.org, EntityType: f.Entity, Key: f.Key, Label: f.Label, FieldType: f.Type,
 		Options: optJSON, Config: []byte(`{}`),
+		// CF-196: live at once, every surface, identified visitors may send it.
+		Visibility: mustJSON(customfields.DefaultVisibility), WidgetAccess: customfields.WidgetAccessVerified,
 	})
 	if err != nil {
 		return result{}, err

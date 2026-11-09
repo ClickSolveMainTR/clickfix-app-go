@@ -42,6 +42,7 @@ type Service struct {
 	resyncer Resyncer
 	log      *slog.Logger
 	now      func() time.Time
+	fields   FieldSource
 }
 
 // New builds the service.

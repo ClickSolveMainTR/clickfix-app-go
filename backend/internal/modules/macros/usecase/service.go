@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"regexp"
 	"strings"
 	"time"
@@ -92,9 +93,21 @@ type Macro struct {
 
 // Service manages canned responses and macros.
 type Service struct {
-	q     *db.Queries
-	inbox *convusecase.Service
+	q      *db.Queries
+	inbox  *convusecase.Service
+	fields FieldSource
 }
+
+// FieldSource lists custom field definitions (customfields usecase).
+type FieldSource interface {
+	Definitions(ctx context.Context, orgID int64, entity string, objectTypeID *int64) ([]customfields.Definition, error)
+}
+
+// WithFields renders custom field variables through the catalog (CF-196):
+// list fields show their option label, sensitive and agent-hidden fields
+// render empty, and {{contact.<key>}} / {{company.<key>}} work besides
+// {{contact.custom.<key>}}.
+func (s *Service) WithFields(f FieldSource) *Service { s.fields = f; return s }
 
 // New builds the service.
 func New(q *db.Queries, inbox *convusecase.Service) *Service {
@@ -262,8 +275,18 @@ func (s *Service) variables(ctx context.Context, v Viewer, conversation uuid.UUI
 	if c, err := s.q.GetContactByUUID(ctx, db.GetContactByUUIDParams{OrganizationID: v.OrganizationID, Uuid: d.Contact.UUID}); err == nil {
 		var custom map[string]any
 		if json.Unmarshal(c.CustomFields, &custom) == nil {
-			for k, val := range custom {
-				vars["contact.custom."+k] = fmt.Sprint(val)
+			if err := s.customVars(ctx, v.OrganizationID, vars, "contact", customfields.EntityContact, custom); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if d.Company != nil && s.fields != nil {
+		if c, err := s.q.CustomFieldsOfCompany(ctx, db.CustomFieldsOfCompanyParams{OrganizationID: v.OrganizationID, Uuid: d.Company.UUID}); err == nil {
+			var custom map[string]any
+			if json.Unmarshal(c.CustomFields, &custom) == nil {
+				if err := s.customVars(ctx, v.OrganizationID, vars, "company", customfields.EntityCompany, custom); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -273,6 +296,30 @@ func (s *Service) variables(ctx context.Context, v Viewer, conversation uuid.UUI
 		}
 	}
 	return vars, nil
+}
+
+// customVars adds "<prefix>.custom.<key>" and, unless a built-in variable
+// owns the name, "<prefix>.<key>" for the agent-visible, non-sensitive
+// fields. Without a field source the raw stored values are used (legacy).
+func (s *Service) customVars(ctx context.Context, org int64, vars map[string]string, prefix, entity string, custom map[string]any) error {
+	if s.fields == nil {
+		for k, val := range custom {
+			vars[prefix+".custom."+k] = fmt.Sprint(val)
+		}
+		return nil
+	}
+	defs, err := s.fields.Definitions(ctx, org, entity, nil)
+	if err != nil {
+		return err
+	}
+	for k, val := range customfields.TemplateVars(prefix, defs, custom, customfields.AudienceAgent) {
+		key := strings.TrimPrefix(k, prefix+".")
+		vars[prefix+".custom."+key] = val
+		if _, builtin := vars[k]; !builtin {
+			vars[k] = val
+		}
+	}
+	return nil
 }
 
 var varRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}`)

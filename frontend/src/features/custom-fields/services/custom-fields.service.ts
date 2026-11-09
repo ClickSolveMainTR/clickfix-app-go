@@ -12,6 +12,8 @@ import type {
   CustomObjectRecordRequest,
   CustomObjectType,
   CustomObjectTypeRequest,
+  CustomFieldEntityValues,
+  CustomFieldUnknownKey,
 } from "../types";
 
 /** Which entity's definitions: a built-in entity or one custom object type. */
@@ -99,6 +101,32 @@ export const customFieldsService = {
       { body },
     );
     return data?.items ?? [];
+  },
+
+  /** Undefined keys the widget sent (CF-196), optionally of one widget. */
+  async listUnknownKeys(channelUuid?: string | null) {
+    const data = await tenantQueryRequest<{ items: CustomFieldUnknownKey[] }>(
+      "GET",
+      `${BASE}/unknown-keys`,
+      { query: { channel_uuid: channelUuid ?? undefined } },
+    );
+    return data.items ?? [];
+  },
+
+  dismissUnknownKey(uuid: string) {
+    return tenantQueryRequest<{ dismissed: boolean }>(
+      "POST",
+      `${BASE}/unknown-keys/${uuid}/dismiss`,
+    );
+  },
+
+  /** Agent view of one contact's or company's fields (CF-196). */
+  values(entityType: "contact" | "company", entityUuid: string) {
+    return tenantQueryRequest<CustomFieldEntityValues>(
+      "GET",
+      `${BASE}/values`,
+      { query: { entity_type: entityType, entity_uuid: entityUuid } },
+    );
   },
 
   async listObjectTypes() {

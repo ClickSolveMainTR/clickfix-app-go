@@ -133,7 +133,7 @@ func (q *Queries) InsertRequestForm(ctx context.Context, arg InsertRequestFormPa
 }
 
 const listFormCustomFieldDefinitions = `-- name: ListFormCustomFieldDefinitions :many
-SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at FROM custom_field_definitions
+SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access FROM custom_field_definitions
 WHERE organization_id = $1 AND entity_type IN ('conversation', 'contact') AND object_type_id IS NULL
 ORDER BY entity_type, position, id
 `
@@ -167,6 +167,9 @@ func (q *Queries) ListFormCustomFieldDefinitions(ctx context.Context, organizati
 			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Visibility,
+			&i.Sensitive,
+			&i.WidgetAccess,
 		); err != nil {
 			return nil, err
 		}

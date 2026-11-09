@@ -102,10 +102,16 @@ export interface paths {
         head?: never;
         /**
          * Store mapped visitor attributes
-         * @description `ClickFix('setAttributes', ...)`. Only keys of the widget's attribute
-         *     mapping are stored; keys not marked anonymous need an identified
-         *     visitor. Without a contact yet the result is `pending` and the SDK
-         *     sends the attributes with the first message.
+         * @description `ClickFix('setAttributes', ...)`. A key is stored when it is the key of
+         *     a contact custom field (CF-196: defining the field is the only step;
+         *     the field's `widget_access` decides whether anonymous visitors may
+         *     write it, default identified visitors only) or an entry of the
+         *     widget's attribute mapping (an alias; entries not marked anonymous
+         *     need an identified visitor). List fields accept the option id or its
+         *     label and store the id. A key no field defines is listed in `unknown`
+         *     (and `ignored`), recorded as a "tanımsız alan" warning and kept on the
+         *     contact until a field is defined. Without a contact yet the result is
+         *     `pending` and the SDK sends the attributes with the first message.
          */
         patch: operations["widgetSetAttributes"];
         trace?: never;
@@ -457,6 +463,8 @@ export interface components {
         WidgetAttributesResult: {
             applied: string[];
             ignored: string[];
+            /** @description Keys no field defines (CF-196); recorded as warnings, also in `ignored`. */
+            unknown: string[];
             /** @description No contact yet; send them with the first message */
             pending: boolean;
         };

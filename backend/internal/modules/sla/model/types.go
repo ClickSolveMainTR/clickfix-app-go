@@ -2,6 +2,7 @@
 package model
 
 import (
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
@@ -79,6 +80,10 @@ type Conditions struct {
 	// MinCompanyMRRMinor matches companies whose MRR (minor units, any
 	// currency) is at least this amount (CF-86).
 	MinCompanyMRRMinor *int64 `json:"min_company_mrr_minor"`
+	// CustomFields match list custom fields of the contact, company or
+	// conversation by option id (CF-196 catalog): every entry must hold,
+	// any of its options matches. Labels may be renamed without breaking it.
+	CustomFields []customfields.FieldMatch `json:"custom_fields"`
 }
 
 // Target is the goal of one priority, in working minutes (nil: not measured).

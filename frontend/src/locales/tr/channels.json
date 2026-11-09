@@ -293,5 +293,9 @@
   "calls.statuses.failed": "Başarısız",
   "calls.statuses.no-answer": "Yanıtsız",
   "calls.statuses.canceled": "İptal edildi",
-  "calls.statuses.recording": "Kayıt"
+  "calls.statuses.recording": "Kayıt",
+  "health.detail.identity_secret_missing": "Kimlik anahtarı tanımlı değil: oturum açmış kullanıcılar doğrulanamıyor ve anonim kalıyor.",
+  "health.detail.identity_rejected": "Son bir haftada kimlik doğrulama denemeleri reddedildi: {{reason}}",
+  "health.identity_code.WIDGET_IDENTITY_DISABLED": "widget'ta kimlik anahtarı yok.",
+  "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash eşleşmiyor (anahtar veya imza hatalı)."
 }

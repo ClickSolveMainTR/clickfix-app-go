@@ -80,7 +80,17 @@ func (h *Handler) CreateDefinition(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	h.record(r, "custom_fields.created", "custom_fields", def.UUID, map[string]any{"key": def.Key, "entity_type": def.EntityType, "type": def.Type})
+	// The field is live now: close its unknown-key warning and apply the
+	// values contacts already sent under that key.
+	adopted, err := h.svc.Adopt(r.Context(), scope.ID, def, in.FromUnknownKey)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	h.record(r, "custom_fields.created", "custom_fields", def.UUID, map[string]any{
+		"key": def.Key, "entity_type": def.EntityType, "type": def.Type, "visibility": def.Visibility,
+		"sensitive": def.Sensitive, "widget_access": def.WidgetAccess, "adopted_values": adopted,
+	})
 	response.JSON(w, r, http.StatusCreated, def)
 }
 
@@ -108,12 +118,12 @@ func (h *Handler) UpdateDefinition(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	def, err := h.svc.UpdateDefinition(r.Context(), scope.ID, id, in)
+	def, changes, err := h.svc.UpdateDefinitionAudited(r.Context(), scope.ID, id, in)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
-	h.record(r, "custom_fields.updated", "custom_fields", def.UUID, map[string]any{"key": def.Key, "entity_type": def.EntityType})
+	h.record(r, "custom_fields.updated", "custom_fields", def.UUID, changes)
 	response.JSON(w, r, http.StatusOK, def)
 }
 
@@ -352,6 +362,65 @@ func (h *Handler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	h.record(r, "custom_objects.record_deleted", "custom_objects", id, map[string]any{"object_type": rs.Type.Key})
 	response.JSON(w, r, http.StatusOK, map[string]any{"deleted": true})
+}
+
+// ListUnknownKeys lists the open "tanımsız alan geldi" warnings
+// (?channel_uuid= narrows them to one widget).
+func (h *Handler) ListUnknownKeys(w http.ResponseWriter, r *http.Request) {
+	scope, ok := scopeOf(w, r)
+	if !ok {
+		return
+	}
+	var channel *uuid.UUID
+	if raw := strings.TrimSpace(r.URL.Query().Get("channel_uuid")); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			response.BadRequest(w, r, response.CodeValidationError, "channel_uuid must be a UUID")
+			return
+		}
+		channel = &id
+	}
+	items, err := h.svc.ListUnknownKeys(r.Context(), scope.ID, channel)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
+// DismissUnknownKey hides one warning until the key arrives again.
+func (h *Handler) DismissUnknownKey(w http.ResponseWriter, r *http.Request) {
+	scope, id, ok := scopeAndID(w, r, "uuid")
+	if !ok {
+		return
+	}
+	if err := h.svc.DismissUnknownKey(r.Context(), scope.ID, id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	h.record(r, "custom_fields.unknown_dismissed", "custom_fields", id, map[string]any{})
+	response.JSON(w, r, http.StatusOK, map[string]any{"dismissed": true})
+}
+
+// Values returns the agent view of one contact or company
+// (?entity_type=contact|company&entity_uuid=).
+func (h *Handler) Values(w http.ResponseWriter, r *http.Request) {
+	scope, ok := scopeOf(w, r)
+	if !ok {
+		return
+	}
+	entity := r.URL.Query().Get("entity_type")
+	id, err := uuid.Parse(r.URL.Query().Get("entity_uuid"))
+	if err != nil {
+		response.BadRequest(w, r, response.CodeValidationError, "entity_uuid must be a UUID")
+		return
+	}
+	out, err := h.svc.EntityValues(r.Context(), scope.ID, entity, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 func (h *Handler) recordScope(w http.ResponseWriter, r *http.Request) (usecase.RecordScope, bool) {

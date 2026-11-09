@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { UnknownFieldsAlert } from "@/features/custom-fields";
 import {
   Group,
   LocalizedRow,
@@ -469,6 +470,7 @@ export function InstallSection({
         title={t("widget.install.check")}
         description={t("widget.install.check_hint")}
       >
+        <UnknownFieldsAlert channelUuid={widgetId} />
         <div className="flex items-center justify-between gap-2">
           <Label>{t("widget.install.seen_on")}</Label>
           <Button

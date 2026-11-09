@@ -20,6 +20,39 @@ export type CustomObjectTypeRequest = Schemas["CustomObjectTypeRequest"];
 export type CustomObjectRecord = Schemas["CustomObjectRecord"];
 export type CustomObjectRecordRequest = Schemas["CustomObjectRecordRequest"];
 export type CustomObjectRecordPage = Schemas["CustomObjectRecordPage"];
+export type CustomFieldVisibility = Schemas["CustomFieldVisibility"];
+export type CustomFieldWidgetAccess = Schemas["CustomFieldWidgetAccess"];
+export type CustomFieldMatch = Schemas["CustomFieldMatch"];
+export type CustomFieldUnknownKey = Schemas["CustomFieldUnknownKey"];
+export type CustomFieldEntityValues = Schemas["CustomFieldEntityValues"];
+export type CustomFieldEntityFieldValue =
+  Schemas["CustomFieldEntityFieldValue"];
+export type CustomFieldUnknownValue = Schemas["CustomFieldUnknownValue"];
+
+/** Surfaces a field's value is shown on (CF-196), one switch each. */
+export const VISIBILITY_KEYS = [
+  "agent",
+  "ai",
+  "workflow",
+  "reports",
+] as const satisfies readonly (keyof CustomFieldVisibility)[];
+
+export const DEFAULT_VISIBILITY: CustomFieldVisibility = {
+  agent: true,
+  ai: true,
+  workflow: true,
+  reports: true,
+};
+
+export const WIDGET_ACCESS_LEVELS = [
+  "verified",
+  "anonymous",
+  "none",
+] as const satisfies readonly CustomFieldWidgetAccess[];
+
+/** Entities a catalog condition may point at. */
+export const MATCH_ENTITIES = ["contact", "company", "conversation"] as const;
+export type MatchEntity = (typeof MATCH_ENTITIES)[number];
 
 /** Stored money value. */
 export type MoneyValue = { amount_minor: number; currency: string };

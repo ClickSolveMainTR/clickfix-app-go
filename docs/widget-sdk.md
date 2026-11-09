@@ -94,6 +94,31 @@ Her komut iki biçimde çağrılır: `ClickFix("open", "help")` veya `ClickFix.o
 **Güvenlik** bölümünde üretilir ve bir kez gösterilir. Örnekler (Node, Go, PHP, Python) aynı bölümdedir.
 Doğrulanan kullanıcının anonim geçmişi aynı kişiye taşınır.
 
+### Dış kimlik (CF-195)
+
+`user_id` kişinin **dış kimliği** (`external_id`) olur; `company.id` şirketin dış kimliğidir. İki alan
+birbirinden bağımsızdır ve organizasyon içinde tekildir. Panelde kişi ve şirket kartında görünür, listede
+aranabilir; konuşma yanıtlarında ve webhook olaylarında (`contact_external_id`, `company_external_id`) döner.
+
+```js
+ClickFix("identify", {
+  user_id: "1001",                 // kişinin dış kimliği
+  user_hash: "<sunucuda hesaplanan>",
+  name: "Ayşe Yılmaz",
+  company: { id: "F-77", name: "Acme", domain: "acme.com.tr" }, // şirketin dış kimliği: F-77
+});
+```
+
+- Kişiyi daha önce API ile aynı dış kimlikle açtıysanız (`PUT /v1/public-api/contacts/by-external-id`),
+  `identify` yeni kişi açmaz, o kişiye bağlanır. Temsilcinin müşteri siteye girmeden açtığı widget
+  konuşması (`contact_external_id` ile) kullanıcı oturum açınca widget'ta görünür.
+- Geçerli `user_hash` ile doğrulanan kişi panelde **Doğrulanmış** rozeti alır. Ad, e-posta veya telefon
+  vermeyen ziyaretçi **Anonim**, bunları kendisi yazan ama doğrulanmayan ziyaretçi **Adını kendisi yazdı**
+  olarak görünür; konuşma listesi bu üç duruma göre süzülebilir. Anonim bir ziyaretçinin yazdığı e-posta
+  doğrulanmış kişiye karışmaz.
+- Önceki sürümde dış kimlik yalnız widget kimliğinde (`user:<id>`) tutuluyordu; geçiş migration'ı bu
+  kayıtlardan kişi dış kimliğini doldurur, mevcut entegrasyonda değişiklik gerekmez.
+
 ### identify reddedilirse
 
 `identify` (ve `boot({ user })`) reddedilirse widget çalışmaya devam eder ama kullanıcı **anonim kalır**:
@@ -116,7 +141,9 @@ ClickFix("boot", { widgetId: "<id>", user: { user_id: "42", user_hash: "<sunucud
 ```
 
 Panel de aynı durumu gösterir: **Kurulum → Kurulum kontrolü** ve **Güvenlik** bölümleri, widget'ın son
-reddedilen denemesini (yalnız hata kodu ve zamanı) uyarı olarak listeler. Geçerli bir `user_hash` ile ilk
+reddedilen denemesini (yalnız hata kodu ve zamanı) uyarı olarak listeler. Kanallar sayfasında widget'ın
+sağlığı da **Uyarı** olur: kimlik anahtarı tanımlı değilse "kimlik anahtarı yok", son bir hafta içinde
+reddedilen deneme varsa "kimlik doğrulama reddedildi" nedeniyle (CF-195). Geçerli bir `user_hash` ile ilk
 doğrulamada uyarı kalkar. Konsol uyarısında, `error` olayında ve bu kayıtta `user_id`, `user_hash` veya
 anahtar değeri bulunmaz.
 

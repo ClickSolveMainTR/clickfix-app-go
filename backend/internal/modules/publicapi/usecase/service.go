@@ -153,6 +153,15 @@ func Route(method, path string) (string, string, bool) {
 				return target, "contacts:write", true
 			}
 		}
+		// CF-195: create, and create-or-update by the customer's own user
+		// id. The bridge runs them as the key's user, so that user's
+		// contacts permissions apply (no organization-wide shortcut).
+		if resource == "contacts" && len(parts) == 1 && method == http.MethodPost {
+			return target, "contacts:write", true
+		}
+		if resource == "contacts" && len(parts) == 2 && parts[1] == "by-external-id" && method == http.MethodPut {
+			return target, "contacts:write", true
+		}
 
 		if len(parts) == 1 && method == http.MethodGet {
 			return "/v1/tenant/integration-" + resource, resource + ":read", true

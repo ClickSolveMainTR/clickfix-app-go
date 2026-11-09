@@ -293,5 +293,9 @@
   "calls.statuses.failed": "Failed",
   "calls.statuses.no-answer": "No answer",
   "calls.statuses.canceled": "Canceled",
-  "calls.statuses.recording": "Recording"
+  "calls.statuses.recording": "Recording",
+  "health.detail.identity_secret_missing": "No identity secret: signed-in users cannot be verified and stay anonymous.",
+  "health.detail.identity_rejected": "Identify calls were rejected in the last week: {{reason}}",
+  "health.identity_code.WIDGET_IDENTITY_DISABLED": "the widget has no identity secret.",
+  "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash does not match (wrong secret or signature)."
 }

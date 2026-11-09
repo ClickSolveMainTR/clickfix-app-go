@@ -57,6 +57,8 @@ export type InboxFilters = {
   tags?: string[];
   /** Original brand uuid of the conversation (?br, CF-124). */
   brand?: string;
+  /** Contact identity state (?id, CF-195). */
+  identity?: "verified" | "anonymous" | "self_named";
   /** A saved view's stored filters, applied on top (CF-47). */
   saved?: ConversationViewFilters;
 };

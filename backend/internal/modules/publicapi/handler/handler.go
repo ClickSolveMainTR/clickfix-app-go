@@ -14,6 +14,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"io"
 	"net/http"
 	"slices"
@@ -138,12 +139,14 @@ func (h *Handler) Contacts(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.Service.Store.ListIntegrationContacts(r.Context(), db.ListIntegrationContactsParams{OrganizationID: org.ID, Q: q.Q, RowLimit: q.Limit, RowOffset: q.Offset})
+	// CF-195: ?external_id= finds the customer's own user id exactly.
+	ext := externalIDParam(r)
+	rows, err := h.Service.Store.ListIntegrationContacts(r.Context(), db.ListIntegrationContactsParams{OrganizationID: org.ID, Q: q.Q, ExternalID: ext, RowLimit: q.Limit, RowOffset: q.Offset})
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	n, err := h.Service.Store.CountIntegrationContacts(r.Context(), db.CountIntegrationContactsParams{OrganizationID: org.ID, Q: q.Q})
+	n, err := h.Service.Store.CountIntegrationContacts(r.Context(), db.CountIntegrationContactsParams{OrganizationID: org.ID, Q: q.Q, ExternalID: ext})
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -156,18 +159,26 @@ func (h *Handler) Companies(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.Service.Store.ListIntegrationCompanies(r.Context(), db.ListIntegrationCompaniesParams{OrganizationID: org.ID, Limit: q.Limit, Offset: q.Offset})
+	ext := externalIDParam(r)
+	rows, err := h.Service.Store.ListIntegrationCompanies(r.Context(), db.ListIntegrationCompaniesParams{OrganizationID: org.ID, ExternalID: ext, RowLimit: q.Limit, RowOffset: q.Offset})
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	n, err := h.Service.Store.CountIntegrationCompanies(r.Context(), org.ID)
+	n, err := h.Service.Store.CountIntegrationCompanies(r.Context(), db.CountIntegrationCompaniesParams{OrganizationID: org.ID, ExternalID: ext})
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
 	response.JSON(w, r, 200, apiquery.NewPage(rows, n, q.Limit, q.Offset))
 }
+
+// externalIDParam is the optional exact external id filter (CF-195).
+func externalIDParam(r *http.Request) pgtype.Text {
+	v := strings.TrimSpace(r.URL.Query().Get("external_id"))
+	return pgtype.Text{String: v, Valid: v != ""}
+}
+
 func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrInvalid):

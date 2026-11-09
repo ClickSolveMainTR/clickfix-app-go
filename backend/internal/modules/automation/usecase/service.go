@@ -47,6 +47,9 @@ type Service struct {
 	Resolver      orgctx.Resolver
 	Webhooks      *hooks.Service
 	Notifications *notify.Service
+	// Fields exposes contact/company custom fields to conditions and keeps
+	// fields hidden from workflows out of the data map (CF-196).
+	Fields FieldSource
 }
 
 func TriggerNames() []string {
@@ -257,6 +260,13 @@ func (s *Service) data(ctx context.Context, rule db.AutomationRule, id uuid.UUID
 	out["clock"] = map[string]any{"hour": float64(now.Hour()), "weekday": float64(now.Weekday())}
 	// Screen context (CF-197): the page and events of the latest widget message.
 	out["screen"] = d.ScreenContext.Conditions()
+	var company *uuid.UUID
+	if d.Company != nil {
+		company = &d.Company.UUID
+	}
+	if err := s.addCustomFields(ctx, rule.OrganizationID, out, d.Contact.UUID, company); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

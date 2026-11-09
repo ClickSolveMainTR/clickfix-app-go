@@ -93,11 +93,14 @@ type ListFilter struct {
 	// SLADueWithin keeps open conversations whose next SLA target is due
 	// within this duration (and not breached yet).
 	SLADueWithin time.Duration
-	Q            string
-	Sort         string
-	Desc         bool
-	Limit        int32
-	Offset       int32
+	// IdentityState keeps conversations whose contact is verified,
+	// anonymous or self_named (CF-195); "" for any.
+	IdentityState string
+	Q             string
+	Sort          string
+	Desc          bool
+	Limit         int32
+	Offset        int32
 }
 
 // List returns one page of the inbox for viewer.
@@ -108,6 +111,12 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 		BrandID: nullableUUID(f.BrandID), ViewerID: viewerID, OrganizationID: orgID, SeeAll: v.All, ViewerTeamIds: v.Teams(), Statuses: nonNilStrings(f.Statuses), Priorities: nonNilStrings(f.Priorities),
 		ChannelTypes: nonNilStrings(f.ChannelTypes), ChannelInstanceIds: []int64{}, TagIds: []int64{},
 		Mentioned: f.Mentioned, UnreadOnly: f.Unread, SortField: f.Sort, SortDesc: f.Desc, RowLimit: f.Limit, RowOffset: f.Offset,
+	}
+	if f.IdentityState != "" {
+		if !model.ValidIdentityState(f.IdentityState) {
+			return nil, 0, fmt.Errorf("%w: unknown identity state %q", ErrInvalid, f.IdentityState)
+		}
+		p.IdentityState = pgText(f.IdentityState)
 	}
 	for _, st := range p.Statuses {
 		if !model.Valid(st, model.Statuses) {
@@ -216,7 +225,7 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 		ChannelTypes: p.ChannelTypes, ChannelInstanceIds: p.ChannelInstanceIds, Assignee: p.Assignee,
 		AssigneeUserID: p.AssigneeUserID, TeamID: p.TeamID, ContactID: p.ContactID, CompanyID: p.CompanyID,
 		TagIds: p.TagIds, Mentioned: p.Mentioned, MyTeams: p.MyTeams, UnreadOnly: p.UnreadOnly, SlaBreached: p.SlaBreached, SlaDueBefore: p.SlaDueBefore, Q: p.Q,
-		MatchUuids: p.MatchUuids,
+		MatchUuids: p.MatchUuids, IdentityState: p.IdentityState,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -224,7 +233,8 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 	out := make([]model.Conversation, 0, len(rows))
 	for _, r := range rows {
 		c := s.toConversation(r.Conversation, int(r.UnreadCount), r.TagUuids)
-		c.Contact = model.ContactRef{UUID: r.ContactUuid, Name: r.ContactName, Email: textPtr(r.ContactEmail), Phone: textPtr(r.ContactPhone)}
+		c.Contact = contactRef(r.ContactUuid, r.ContactName, r.ContactEmail, r.ContactPhone, r.ContactExternalID, r.ContactVerifiedAt)
+		c.Company = companyRef(r.CompanyUuid, r.CompanyName.String, r.CompanyExternalID)
 		c.Inbox = ref(r.ChannelInstanceUuid, r.ChannelInstanceName.String)
 		c.Assignee = ref(r.AssigneeUuid, fullName(r.AssigneeName, r.AssigneeSurname))
 		c.Team = ref(r.TeamUuid, r.TeamName.String)
@@ -302,8 +312,8 @@ func (s *Service) Get(ctx context.Context, orgID, viewerID int64, id uuid.UUID) 
 		return Detail{}, err
 	}
 	c := s.toConversation(r.Conversation, int(r.UnreadCount), r.TagUuids)
-	c.Contact = model.ContactRef{UUID: r.ContactUuid, Name: r.ContactName, Email: textPtr(r.ContactEmail), Phone: textPtr(r.ContactPhone)}
-	c.Company = ref(r.CompanyUuid, r.CompanyName.String)
+	c.Contact = contactRef(r.ContactUuid, r.ContactName, r.ContactEmail, r.ContactPhone, r.ContactExternalID, r.ContactVerifiedAt)
+	c.Company = companyRef(r.CompanyUuid, r.CompanyName.String, r.CompanyExternalID)
 	c.Inbox = ref(r.ChannelInstanceUuid, r.ChannelInstanceName.String)
 	c.Assignee = ref(r.AssigneeUuid, fullName(r.AssigneeName, r.AssigneeSurname))
 	c.Team = ref(r.TeamUuid, r.TeamName.String)
@@ -916,6 +926,25 @@ func (s *Service) toConversation(c db.Conversation, unread int, tags []uuid.UUID
 		}
 	}
 	return out
+}
+
+// contactRef builds the contact of a conversation row (CF-195: with its
+// external id and identity state).
+func contactRef(id uuid.UUID, name string, email, phone, externalID pgtype.Text, verifiedAt pgtype.Timestamptz) model.ContactRef {
+	c := model.ContactRef{UUID: id, Name: name, Email: textPtr(email), Phone: textPtr(phone), ExternalID: textPtr(externalID)}
+	if verifiedAt.Valid {
+		t := verifiedAt.Time.UTC()
+		c.VerifiedAt = &t
+	}
+	c.IdentityState = model.IdentityState(c.VerifiedAt, c.Name, c.Email, c.Phone)
+	return c
+}
+
+func companyRef(id pgtype.UUID, name string, externalID pgtype.Text) *model.CompanyRef {
+	if !id.Valid {
+		return nil
+	}
+	return &model.CompanyRef{UUID: uuid.UUID(id.Bytes), Name: name, ExternalID: textPtr(externalID)}
 }
 
 func ref(id pgtype.UUID, name string) *model.Ref {

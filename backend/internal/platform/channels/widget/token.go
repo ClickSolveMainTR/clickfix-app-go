@@ -46,10 +46,15 @@ type Claims struct {
 // user id, else the anonymous visitor id.
 func (c Claims) ExternalID() string {
 	if c.User != "" {
-		return "user:" + c.User
+		return UserExternalID(c.User)
 	}
 	return "visitor:" + c.Visitor
 }
+
+// UserExternalID is the widget identity id of the customer's user id: the
+// id a verified visitor writes and is written to as (CF-195 creates it
+// ahead of the first visit for agent-started conversations).
+func UserExternalID(userID string) string { return "user:" + userID }
 
 // Verified reports whether the visitor proved a user id.
 func (c Claims) Verified() bool { return c.User != "" }

@@ -321,5 +321,8 @@
   "fields.screen_event_names": "Ekran: olaylar",
   "fields_ui.system_action": "İş",
   "issues.action_system": "Bağlı sistemden bir iş seçin.",
-  "system_action.none": "İş akışına açık iş yok. Sistemini bağla ekranından tanımlayın."
+  "system_action.none": "İş akışına açık iş yok. Sistemini bağla ekranından tanımlayın.",
+  "fields.catalog_contact": "Kişi",
+  "fields.catalog_company": "Şirket",
+  "fields.catalog_conversation": "Konuşma"
 }

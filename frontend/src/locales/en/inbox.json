@@ -399,5 +399,6 @@
   "screen.label": "Screen the customer wrote from",
   "screen.title": "Screen context",
   "screen.page": "Page",
-  "screen.events": "Events"
+  "screen.events": "Events",
+  "filters.identity": "Identity"
 }

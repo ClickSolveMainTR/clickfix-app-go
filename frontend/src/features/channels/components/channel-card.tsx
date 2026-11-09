@@ -152,9 +152,16 @@ export function ChannelCard({
           <p className="text-muted-foreground line-clamp-2 text-xs break-words">
             {h.detail.startsWith("Bakiye:")
               ? h.detail
-              : t(`channels.health.detail.${h.detail}`, {
-                  defaultValue: h.detail,
-                })}
+              : h.detail.startsWith("identity_rejected:")
+                ? // CF-195: the widget's last identify calls were rejected.
+                  t("channels.health.detail.identity_rejected", {
+                    reason: t(
+                      `channels.health.identity_code.${h.detail.slice("identity_rejected:".length)}`,
+                    ),
+                  })
+                : t(`channels.health.detail.${h.detail}`, {
+                    defaultValue: h.detail,
+                  })}
           </p>
         ) : null}
         <dl className="text-muted-foreground grid grid-cols-2 gap-x-3 gap-y-1 text-xs">

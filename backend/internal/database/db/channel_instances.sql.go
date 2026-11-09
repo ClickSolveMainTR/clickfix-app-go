@@ -455,6 +455,39 @@ func (q *Queries) ListLiveChannelInstances(ctx context.Context, types []string) 
 	return items, nil
 }
 
+const listWidgetIdentityRejections = `-- name: ListWidgetIdentityRejections :many
+SELECT channel_instance_id, code, rejected_at FROM widget_identity_rejections
+WHERE organization_id = $1 AND rejected_at > now() - interval '7 days'
+`
+
+type ListWidgetIdentityRejectionsRow struct {
+	ChannelInstanceID int64              `json:"channel_instance_id"`
+	Code              string             `json:"code"`
+	RejectedAt        pgtype.Timestamptz `json:"rejected_at"`
+}
+
+// CF-195: rejected identify calls of the last week per widget (CF-176
+// records them); channel health turns them into a warning.
+func (q *Queries) ListWidgetIdentityRejections(ctx context.Context, organizationID int64) ([]ListWidgetIdentityRejectionsRow, error) {
+	rows, err := q.db.Query(ctx, listWidgetIdentityRejections, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWidgetIdentityRejectionsRow{}
+	for rows.Next() {
+		var i ListWidgetIdentityRejectionsRow
+		if err := rows.Scan(&i.ChannelInstanceID, &i.Code, &i.RejectedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setChannelInstanceError = `-- name: SetChannelInstanceError :exec
 UPDATE channel_instances SET last_error = $1::text, last_error_at = NOW()
 WHERE organization_id = $2 AND id = $3

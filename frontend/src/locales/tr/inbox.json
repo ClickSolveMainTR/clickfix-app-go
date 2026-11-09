@@ -399,5 +399,6 @@
   "screen.label": "Müşterinin yazdığı ekran",
   "screen.title": "Ekran bağlamı",
   "screen.page": "Sayfa",
-  "screen.events": "Olaylar"
+  "screen.events": "Olaylar",
+  "filters.identity": "Kimlik"
 }

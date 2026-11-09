@@ -62,6 +62,16 @@ export function useContact(uuid: string | null) {
   });
 }
 
+/** One company (CF-195: its external id and custom field values). */
+export function useCompany(uuid: string | null) {
+  const { org, canRead } = useContactsScope();
+  return useQuery({
+    queryKey: [...contactsKeys.all(org), "company", uuid ?? ""],
+    queryFn: () => contactsService.getCompany(uuid as string),
+    enabled: Boolean(org && uuid) && canRead,
+  });
+}
+
 export function useCompanyList(q: {
   q?: string;
   limit: number;

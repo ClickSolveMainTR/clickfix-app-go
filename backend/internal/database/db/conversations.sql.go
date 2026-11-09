@@ -500,17 +500,24 @@ WHERE c.organization_id = $2
         WHERE m3.organization_id = c.organization_id AND m3.conversation_id = c.id
           AND m3.id > COALESCE(r.last_read_message_id, 0) AND m3.direction = 'in'))
   AND ($19::boolean IS NULL OR (c.sla_breached_at IS NOT NULL) = $19)
-  AND ($20::timestamptz IS NULL OR (
+  -- CF-195: who the contact is (verified with user_hash, anonymous, or
+  -- named by itself without proof).
+  AND ($20::text IS NULL
+       OR ($20::text = 'verified' AND ct.verified_at IS NOT NULL)
+       OR ($20::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
+       OR ($20::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
+  AND ($21::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
-        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $20::timestamptz))
-  AND ($21::text IS NULL
-       OR c.subject ILIKE '%' || $21 || '%'
-       OR c.last_message_preview ILIKE '%' || $21 || '%'
-       OR ct.name ILIKE '%' || $21 || '%'
-       OR ct.email ILIKE '%' || $21 || '%'
-       OR ct.phone ILIKE '%' || $21 || '%'
-       OR c.number::text = $21
-       OR c.uuid = ANY($22::uuid[]))
+        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $21::timestamptz))
+  AND ($22::text IS NULL
+       OR c.subject ILIKE '%' || $22 || '%'
+       OR c.last_message_preview ILIKE '%' || $22 || '%'
+       OR ct.name ILIKE '%' || $22 || '%'
+       OR ct.email ILIKE '%' || $22 || '%'
+       OR ct.phone ILIKE '%' || $22 || '%'
+       OR ct.external_id = $22
+       OR c.number::text = $22
+       OR c.uuid = ANY($23::uuid[]))
 `
 
 type CountConversationsParams struct {
@@ -533,6 +540,7 @@ type CountConversationsParams struct {
 	Mentioned          bool               `json:"mentioned"`
 	UnreadOnly         bool               `json:"unread_only"`
 	SlaBreached        pgtype.Bool        `json:"sla_breached"`
+	IdentityState      pgtype.Text        `json:"identity_state"`
 	SlaDueBefore       pgtype.Timestamptz `json:"sla_due_before"`
 	Q                  pgtype.Text        `json:"q"`
 	MatchUuids         []uuid.UUID        `json:"match_uuids"`
@@ -559,6 +567,7 @@ func (q *Queries) CountConversations(ctx context.Context, arg CountConversations
 		arg.Mentioned,
 		arg.UnreadOnly,
 		arg.SlaBreached,
+		arg.IdentityState,
 		arg.SlaDueBefore,
 		arg.Q,
 		arg.MatchUuids,
@@ -930,6 +939,43 @@ func (q *Queries) GetConversationByUUID(ctx context.Context, arg GetConversation
 	return i, err
 }
 
+const getConversationExternalRefs = `-- name: GetConversationExternalRefs :one
+SELECT ct.uuid AS contact_uuid, ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.external_id AS company_external_id
+FROM contacts ct
+LEFT JOIN companies co ON co.organization_id = ct.organization_id AND co.id = $1::bigint
+WHERE ct.organization_id = $2 AND ct.id = $3
+`
+
+type GetConversationExternalRefsParams struct {
+	CompanyID      pgtype.Int8 `json:"company_id"`
+	OrganizationID int64       `json:"organization_id"`
+	ContactID      int64       `json:"contact_id"`
+}
+
+type GetConversationExternalRefsRow struct {
+	ContactUuid       uuid.UUID          `json:"contact_uuid"`
+	ContactExternalID pgtype.Text        `json:"contact_external_id"`
+	ContactVerifiedAt pgtype.Timestamptz `json:"contact_verified_at"`
+	CompanyUuid       pgtype.UUID        `json:"company_uuid"`
+	CompanyExternalID pgtype.Text        `json:"company_external_id"`
+}
+
+// CF-195: the contact's and company's external ids for event payloads
+// (webhooks, integrations).
+func (q *Queries) GetConversationExternalRefs(ctx context.Context, arg GetConversationExternalRefsParams) (GetConversationExternalRefsRow, error) {
+	row := q.db.QueryRow(ctx, getConversationExternalRefs, arg.CompanyID, arg.OrganizationID, arg.ContactID)
+	var i GetConversationExternalRefsRow
+	err := row.Scan(
+		&i.ContactUuid,
+		&i.ContactExternalID,
+		&i.ContactVerifiedAt,
+		&i.CompanyUuid,
+		&i.CompanyExternalID,
+	)
+	return i, err
+}
+
 const getConversationStatusByUUID = `-- name: GetConversationStatusByUUID :one
 SELECT id, uuid, organization_id, name, slug, category, color, sort_order, is_default, created_at, updated_at FROM conversation_statuses WHERE organization_id = $1 AND uuid = $2
 `
@@ -961,7 +1007,8 @@ func (q *Queries) GetConversationStatusByUUID(ctx context.Context, arg GetConver
 const getConversationView = `-- name: GetConversationView :one
 SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id,
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
-       co.uuid AS company_uuid, co.name AS company_name,
+       ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
@@ -993,24 +1040,27 @@ type GetConversationViewParams struct {
 }
 
 type GetConversationViewRow struct {
-	Conversation        Conversation `json:"conversation"`
-	ContactUuid         uuid.UUID    `json:"contact_uuid"`
-	ContactName         string       `json:"contact_name"`
-	ContactEmail        pgtype.Text  `json:"contact_email"`
-	ContactPhone        pgtype.Text  `json:"contact_phone"`
-	CompanyUuid         pgtype.UUID  `json:"company_uuid"`
-	CompanyName         pgtype.Text  `json:"company_name"`
-	ChannelInstanceUuid pgtype.UUID  `json:"channel_instance_uuid"`
-	ChannelInstanceName pgtype.Text  `json:"channel_instance_name"`
-	AssigneeUuid        pgtype.UUID  `json:"assignee_uuid"`
-	AssigneeName        pgtype.Text  `json:"assignee_name"`
-	AssigneeSurname     pgtype.Text  `json:"assignee_surname"`
-	TeamUuid            pgtype.UUID  `json:"team_uuid"`
-	TeamName            pgtype.Text  `json:"team_name"`
-	StatusUuid          pgtype.UUID  `json:"status_uuid"`
-	StatusName          pgtype.Text  `json:"status_name"`
-	TagUuids            []uuid.UUID  `json:"tag_uuids"`
-	UnreadCount         int32        `json:"unread_count"`
+	Conversation        Conversation       `json:"conversation"`
+	ContactUuid         uuid.UUID          `json:"contact_uuid"`
+	ContactName         string             `json:"contact_name"`
+	ContactEmail        pgtype.Text        `json:"contact_email"`
+	ContactPhone        pgtype.Text        `json:"contact_phone"`
+	ContactExternalID   pgtype.Text        `json:"contact_external_id"`
+	ContactVerifiedAt   pgtype.Timestamptz `json:"contact_verified_at"`
+	CompanyUuid         pgtype.UUID        `json:"company_uuid"`
+	CompanyName         pgtype.Text        `json:"company_name"`
+	CompanyExternalID   pgtype.Text        `json:"company_external_id"`
+	ChannelInstanceUuid pgtype.UUID        `json:"channel_instance_uuid"`
+	ChannelInstanceName pgtype.Text        `json:"channel_instance_name"`
+	AssigneeUuid        pgtype.UUID        `json:"assignee_uuid"`
+	AssigneeName        pgtype.Text        `json:"assignee_name"`
+	AssigneeSurname     pgtype.Text        `json:"assignee_surname"`
+	TeamUuid            pgtype.UUID        `json:"team_uuid"`
+	TeamName            pgtype.Text        `json:"team_name"`
+	StatusUuid          pgtype.UUID        `json:"status_uuid"`
+	StatusName          pgtype.Text        `json:"status_name"`
+	TagUuids            []uuid.UUID        `json:"tag_uuids"`
+	UnreadCount         int32              `json:"unread_count"`
 }
 
 func (q *Queries) GetConversationView(ctx context.Context, arg GetConversationViewParams) (GetConversationViewRow, error) {
@@ -1062,8 +1112,11 @@ func (q *Queries) GetConversationView(ctx context.Context, arg GetConversationVi
 		&i.ContactName,
 		&i.ContactEmail,
 		&i.ContactPhone,
+		&i.ContactExternalID,
+		&i.ContactVerifiedAt,
 		&i.CompanyUuid,
 		&i.CompanyName,
+		&i.CompanyExternalID,
 		&i.ChannelInstanceUuid,
 		&i.ChannelInstanceName,
 		&i.AssigneeUuid,
@@ -2114,6 +2167,8 @@ func (q *Queries) ListConversationViews(ctx context.Context, arg ListConversatio
 const listConversations = `-- name: ListConversations :many
 SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id,
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
+       ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
@@ -2128,6 +2183,7 @@ SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_inst
                    AND m.direction <> 'internal'), 0)::int AS unread_count
 FROM conversations c
 JOIN contacts ct ON ct.organization_id = c.organization_id AND ct.id = c.contact_id
+LEFT JOIN companies co ON co.organization_id = c.organization_id AND co.id = c.company_id AND co.deleted_at IS NULL
 LEFT JOIN channel_instances inst ON inst.organization_id = c.organization_id AND inst.id = c.channel_instance_id
 LEFT JOIN users u ON u.id = c.assignee_user_id
 LEFT JOIN teams tm ON tm.organization_id = c.organization_id AND tm.id = c.assignee_team_id
@@ -2168,31 +2224,38 @@ WHERE c.organization_id = $2
         WHERE m3.organization_id = c.organization_id AND m3.conversation_id = c.id
           AND m3.id > COALESCE(r.last_read_message_id, 0) AND m3.direction = 'in'))
   AND ($19::boolean IS NULL OR (c.sla_breached_at IS NOT NULL) = $19)
-  AND ($20::timestamptz IS NULL OR (
+  -- CF-195: who the contact is (verified with user_hash, anonymous, or
+  -- named by itself without proof).
+  AND ($20::text IS NULL
+       OR ($20::text = 'verified' AND ct.verified_at IS NOT NULL)
+       OR ($20::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
+       OR ($20::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
+  AND ($21::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
-        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $20::timestamptz))
-  AND ($21::text IS NULL
-       OR c.subject ILIKE '%' || $21 || '%'
-       OR c.last_message_preview ILIKE '%' || $21 || '%'
-       OR ct.name ILIKE '%' || $21 || '%'
-       OR ct.email ILIKE '%' || $21 || '%'
-       OR ct.phone ILIKE '%' || $21 || '%'
-       OR c.number::text = $21
-       OR c.uuid = ANY($22::uuid[]))
+        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $21::timestamptz))
+  AND ($22::text IS NULL
+       OR c.subject ILIKE '%' || $22 || '%'
+       OR c.last_message_preview ILIKE '%' || $22 || '%'
+       OR ct.name ILIKE '%' || $22 || '%'
+       OR ct.email ILIKE '%' || $22 || '%'
+       OR ct.phone ILIKE '%' || $22 || '%'
+       OR ct.external_id = $22
+       OR c.number::text = $22
+       OR c.uuid = ANY($23::uuid[]))
 ORDER BY
-  CASE WHEN $23::text = 'last_message_at' AND $24::boolean THEN c.last_message_at END DESC,
-  CASE WHEN $23::text = 'last_message_at' AND NOT $24::boolean THEN c.last_message_at END ASC,
-  CASE WHEN $23::text = 'created_at' AND $24::boolean THEN c.created_at END DESC,
-  CASE WHEN $23::text = 'created_at' AND NOT $24::boolean THEN c.created_at END ASC,
-  CASE WHEN $23::text = 'waiting_since' AND $24::boolean THEN c.waiting_since END DESC NULLS LAST,
-  CASE WHEN $23::text = 'waiting_since' AND NOT $24::boolean THEN c.waiting_since END ASC NULLS LAST,
-  CASE WHEN $23::text = 'priority' AND $24::boolean
+  CASE WHEN $24::text = 'last_message_at' AND $25::boolean THEN c.last_message_at END DESC,
+  CASE WHEN $24::text = 'last_message_at' AND NOT $25::boolean THEN c.last_message_at END ASC,
+  CASE WHEN $24::text = 'created_at' AND $25::boolean THEN c.created_at END DESC,
+  CASE WHEN $24::text = 'created_at' AND NOT $25::boolean THEN c.created_at END ASC,
+  CASE WHEN $24::text = 'waiting_since' AND $25::boolean THEN c.waiting_since END DESC NULLS LAST,
+  CASE WHEN $24::text = 'waiting_since' AND NOT $25::boolean THEN c.waiting_since END ASC NULLS LAST,
+  CASE WHEN $24::text = 'priority' AND $25::boolean
        THEN CASE c.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END END DESC,
-  CASE WHEN $23::text = 'priority' AND NOT $24::boolean
+  CASE WHEN $24::text = 'priority' AND NOT $25::boolean
        THEN CASE c.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END END ASC,
   c.last_message_at DESC,
   c.id DESC
-LIMIT $26 OFFSET $25
+LIMIT $27 OFFSET $26
 `
 
 type ListConversationsParams struct {
@@ -2215,6 +2278,7 @@ type ListConversationsParams struct {
 	Mentioned          bool               `json:"mentioned"`
 	UnreadOnly         bool               `json:"unread_only"`
 	SlaBreached        pgtype.Bool        `json:"sla_breached"`
+	IdentityState      pgtype.Text        `json:"identity_state"`
 	SlaDueBefore       pgtype.Timestamptz `json:"sla_due_before"`
 	Q                  pgtype.Text        `json:"q"`
 	MatchUuids         []uuid.UUID        `json:"match_uuids"`
@@ -2225,20 +2289,25 @@ type ListConversationsParams struct {
 }
 
 type ListConversationsRow struct {
-	Conversation        Conversation `json:"conversation"`
-	ContactUuid         uuid.UUID    `json:"contact_uuid"`
-	ContactName         string       `json:"contact_name"`
-	ContactEmail        pgtype.Text  `json:"contact_email"`
-	ContactPhone        pgtype.Text  `json:"contact_phone"`
-	ChannelInstanceUuid pgtype.UUID  `json:"channel_instance_uuid"`
-	ChannelInstanceName pgtype.Text  `json:"channel_instance_name"`
-	AssigneeUuid        pgtype.UUID  `json:"assignee_uuid"`
-	AssigneeName        pgtype.Text  `json:"assignee_name"`
-	AssigneeSurname     pgtype.Text  `json:"assignee_surname"`
-	TeamUuid            pgtype.UUID  `json:"team_uuid"`
-	TeamName            pgtype.Text  `json:"team_name"`
-	TagUuids            []uuid.UUID  `json:"tag_uuids"`
-	UnreadCount         int32        `json:"unread_count"`
+	Conversation        Conversation       `json:"conversation"`
+	ContactUuid         uuid.UUID          `json:"contact_uuid"`
+	ContactName         string             `json:"contact_name"`
+	ContactEmail        pgtype.Text        `json:"contact_email"`
+	ContactPhone        pgtype.Text        `json:"contact_phone"`
+	ContactExternalID   pgtype.Text        `json:"contact_external_id"`
+	ContactVerifiedAt   pgtype.Timestamptz `json:"contact_verified_at"`
+	CompanyUuid         pgtype.UUID        `json:"company_uuid"`
+	CompanyName         pgtype.Text        `json:"company_name"`
+	CompanyExternalID   pgtype.Text        `json:"company_external_id"`
+	ChannelInstanceUuid pgtype.UUID        `json:"channel_instance_uuid"`
+	ChannelInstanceName pgtype.Text        `json:"channel_instance_name"`
+	AssigneeUuid        pgtype.UUID        `json:"assignee_uuid"`
+	AssigneeName        pgtype.Text        `json:"assignee_name"`
+	AssigneeSurname     pgtype.Text        `json:"assignee_surname"`
+	TeamUuid            pgtype.UUID        `json:"team_uuid"`
+	TeamName            pgtype.Text        `json:"team_name"`
+	TagUuids            []uuid.UUID        `json:"tag_uuids"`
+	UnreadCount         int32              `json:"unread_count"`
 }
 
 // The inbox list. assignee: ” any, 'me' viewer, 'unassigned', or a user id
@@ -2266,6 +2335,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		arg.Mentioned,
 		arg.UnreadOnly,
 		arg.SlaBreached,
+		arg.IdentityState,
 		arg.SlaDueBefore,
 		arg.Q,
 		arg.MatchUuids,
@@ -2327,6 +2397,11 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.ContactName,
 			&i.ContactEmail,
 			&i.ContactPhone,
+			&i.ContactExternalID,
+			&i.ContactVerifiedAt,
+			&i.CompanyUuid,
+			&i.CompanyName,
+			&i.CompanyExternalID,
 			&i.ChannelInstanceUuid,
 			&i.ChannelInstanceName,
 			&i.AssigneeUuid,

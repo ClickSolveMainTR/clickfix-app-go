@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2, TriangleAlert } from "lucide-react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import {
   type HomeCard,
   type PreChatField,
 } from "@/features/widget/lib/settings";
+import { TemplateVariableChips } from "@/features/custom-fields";
 import { useLocale } from "@/providers/locale-provider";
 
 const TEXT_FIELDS = [
@@ -61,6 +63,19 @@ export function TextsSection() {
         {TEXT_FIELDS.map(([key, max, multiline]) => (
           <div key={key} className="space-y-2">
             <p className="text-sm font-medium">{t(`widget.text.${key}`)}</p>
+            {key === "greeting_title" || key === "greeting_text" ? (
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-xs">
+                  {t("widget.text.greeting_variables_hint")}
+                </p>
+                <TemplateVariableChips
+                  audience="ai"
+                  onPick={(token) => {
+                    void navigator.clipboard?.writeText(token);
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
               {(["tr", "en"] as const).map((loc) => (
                 <TextRow
@@ -530,6 +545,12 @@ function AttributeMapping() {
       title={t("widget.g.attributes")}
       description={t("widget.g.attributes_hint")}
     >
+      <Alert>
+        <TriangleAlert />
+        <AlertDescription>
+          {t("widget.g.attributes_publish_notice")}
+        </AlertDescription>
+      </Alert>
       {list.map((m, i) => (
         <div
           key={i}
