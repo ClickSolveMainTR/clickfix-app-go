@@ -33,7 +33,8 @@ func count(ctx context.Context, api capability.API, path string) (int, error) {
 	var out struct {
 		Items []json.RawMessage `json:"items"`
 	}
-	return len(out.Items), r.Decode(&out)
+	decErr := r.Decode(&out)
+	return len(out.Items), decErr
 }
 
 // Capabilities are the SLA capabilities.

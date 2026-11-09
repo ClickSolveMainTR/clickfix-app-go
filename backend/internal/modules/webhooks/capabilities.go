@@ -51,7 +51,8 @@ func listHooks(ctx context.Context, api capability.API) ([]hookView, error) {
 	var page struct {
 		Items []hookView `json:"items"`
 	}
-	return page.Items, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, decErr
 }
 
 func recentDeliveries(ctx context.Context, api capability.API) ([]delivery, error) {
@@ -62,7 +63,8 @@ func recentDeliveries(ctx context.Context, api capability.API) ([]delivery, erro
 	var page struct {
 		Items []delivery `json:"items"`
 	}
-	return page.Items, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, decErr
 }
 
 // Capabilities are the webhook capabilities.
