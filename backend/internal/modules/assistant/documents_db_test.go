@@ -128,8 +128,11 @@ func TestDocumentsSharedWithTheAssistant(t *testing.T) {
 	if w := upload("spec.yaml", "application/yaml", []byte("openapi: 3.0.0\n")); w.Code != 201 {
 		t.Fatalf("upload %d %s", w.Code, w.Body)
 	}
-	if w := upload("doc.pdf", "application/pdf", []byte("%PDF-1.7\n\x00\x01")); w.Code != http.StatusUnsupportedMediaType {
-		t.Fatalf("pdf %d", w.Code)
+	if w := upload("image.png", "image/png", []byte("\x89PNG\r\n\x1a\n\x00\x00")); w.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("png %d", w.Code)
+	}
+	if w := upload("broken.pdf", "application/pdf", []byte("%PDF-1.7\n\x00\x01")); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "ASSISTANT_DOCUMENT_PDF") {
+		t.Fatalf("broken pdf %d %s", w.Code, w.Body)
 	}
 	if w := upload("big.txt", "text/plain", bytes.Repeat([]byte("a"), assistant.MaxDocumentBytes+1)); w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("size %d", w.Code)

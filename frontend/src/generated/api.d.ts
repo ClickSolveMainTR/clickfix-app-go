@@ -15949,7 +15949,7 @@ export interface paths {
         put?: never;
         /**
          * Share a file with the assistant
-         * @description CF-191: multipart upload (field `file`, at most 2 MB): text, Markdown, CSV, JSON, YAML or HTML; binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE; PDF is not supported yet). Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data.
+         * @description CF-191: multipart upload (field `file`, at most 2 MB): PDF, text, Markdown, CSV, JSON, YAML or HTML; other binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE). PDF text is read within limits (200 pages, 5 s); an encrypted, damaged or scanned PDF answers 422 ASSISTANT_DOCUMENT_PDF. Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data.
          */
         post: operations["uploadTenantAssistantDocument"];
         delete?: never;
@@ -64539,7 +64539,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No readable text (ASSISTANT_DOCUMENT_EMPTY) */
+            /** @description No readable text (ASSISTANT_DOCUMENT_EMPTY, ASSISTANT_DOCUMENT_PDF) */
             422: {
                 headers: {
                     [name: string]: unknown;

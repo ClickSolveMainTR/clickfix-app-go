@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.0
 	github.com/beevik/etree v1.6.0
 	github.com/crewjam/saml v0.5.1
+	github.com/dslipak/pdf v0.0.2
 	github.com/emersion/go-imap v1.2.1
 	github.com/furkanmeclis/go-ubltr v0.0.0-20260816110918-5b412e96178d
 	github.com/furkanmeclis/go-ubltr/render v0.0.0-20260816110918-5b412e96178d

@@ -1,12 +1,15 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/jung-kurt/gofpdf/v2"
 )
 
 func TestDocumentTypes(t *testing.T) {
@@ -23,7 +26,8 @@ func TestDocumentTypes(t *testing.T) {
 		}
 	}
 	bad := map[string][2]string{
-		"doc.pdf":    {"application/pdf", "%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj"},
+		"text.pdf":   {"application/pdf", "not a pdf at all"},
+		"pdf.txt":    {"text/plain", "%PDF-1.7\n1 0 obj"},
 		"image.png":  {"image/png", "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"},
 		"fake.txt":   {"text/plain", "MZ\x90\x00\x03\x00\x00\x00"},
 		"latin1.txt": {"text/plain", "caf\xe9"},
@@ -121,5 +125,38 @@ func TestFetcherRefusesPrivateTargetsAndRedirects(t *testing.T) {
 	}
 	if got := cleanName("../../etc/pass\x00wd"); got != "passwd" {
 		t.Fatalf("clean name %q", got)
+	}
+}
+
+func samplePDF(t *testing.T, lines ...string) []byte {
+	t.Helper()
+	doc := gofpdf.New("P", "mm", "A4", "")
+	doc.AddPage()
+	doc.SetFont("Helvetica", "", 12)
+	for _, l := range lines {
+		doc.Cell(0, 10, l)
+		doc.Ln(10)
+	}
+	var buf bytes.Buffer
+	if err := doc.Output(&buf); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestPDFDocuments(t *testing.T) {
+	data := samplePDF(t, "Order API", "Webhook: https://shop.example.com/clickfix", "api_key=sk_live_ABCDEFGHIJKLMNOPQRSTUVWX")
+	typ, err := documentType("api.pdf", "application/pdf", data)
+	if err != nil || typ != "application/pdf" {
+		t.Fatalf("%q %v", typ, err)
+	}
+	text, _, masked, err := extract(typ, data)
+	if err != nil || !masked || !strings.Contains(text, "shop.example.com/clickfix") || strings.Contains(text, "sk_live_") {
+		t.Fatalf("%q %v %v", text, masked, err)
+	}
+	for _, bad := range [][]byte{[]byte("%PDF-1.7\ngarbage"), append([]byte("%PDF-1.4\n"), bytes.Repeat([]byte{0xff, 0x00}, 500)...)} {
+		if _, _, _, err := extract("application/pdf", bad); !errors.Is(err, ErrDocumentPDF) {
+			t.Fatalf("damaged pdf: %v", err)
+		}
 	}
 }

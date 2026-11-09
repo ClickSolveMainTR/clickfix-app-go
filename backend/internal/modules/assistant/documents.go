@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/dslipak/pdf"
 	"github.com/google/uuid"
 	"golang.org/x/net/html"
 
@@ -76,13 +77,20 @@ var textTypes = map[string]string{
 	"text/csv": "text/csv", "application/json": "application/json", "text/json": "application/json",
 	"application/yaml": "application/yaml", "application/x-yaml": "application/yaml", "text/yaml": "application/yaml",
 	"text/x-yaml": "application/yaml", "text/html": "text/html", "application/xhtml+xml": "text/html",
+	"application/pdf": "application/pdf",
 }
 
 var extTypes = map[string]string{
 	".txt": "text/plain", ".md": "text/markdown", ".markdown": "text/markdown", ".csv": "text/csv",
 	".json": "application/json", ".yaml": "application/yaml", ".yml": "application/yaml",
-	".html": "text/html", ".htm": "text/html",
+	".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf",
 }
+
+// PDF limits: a PDF is untrusted input, so parsing is bounded.
+const (
+	maxPDFPages = 200
+	pdfBudget   = 5 * time.Second
+)
 
 // documentType decides the type from the declared type and the name, and
 // refuses binary content whatever it claims to be.
@@ -96,6 +104,14 @@ func documentType(name, declared string, data []byte) (string, error) {
 	}
 	if typ == "" {
 		return "", ErrDocumentType
+	}
+	isPDF := bytes.HasPrefix(data, []byte("%PDF-"))
+	if typ == "application/pdf" || isPDF {
+		// A PDF must be one by content and by name or declared type.
+		if !isPDF || typ != "application/pdf" {
+			return "", ErrDocumentType
+		}
+		return typ, nil
 	}
 	sniff := http.DetectContentType(data)
 	if !strings.HasPrefix(sniff, "text/") || !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
@@ -165,8 +181,13 @@ func normalize(s string) string {
 // truncated to MaxDocumentChars, then PII and secrets masked.
 func extract(typ string, data []byte) (content string, truncated, masked bool, err error) {
 	text := string(data)
-	if typ == "text/html" {
+	switch typ {
+	case "text/html":
 		text = htmlText(data)
+	case "application/pdf":
+		if text, err = pdfText(data); err != nil {
+			return "", false, false, err
+		}
 	}
 	text = normalize(text)
 	if text == "" {
@@ -437,4 +458,54 @@ func documentsPrompt(docs []Document) string {
 		b.WriteString(")\n")
 	}
 	return b.String()
+}
+
+// ErrDocumentPDF is a PDF whose text cannot be read (encrypted, damaged,
+// too long to parse, or scanned images without text).
+var ErrDocumentPDF = errors.New("assistant: the PDF text cannot be read")
+
+// pdfText reads the text of a PDF: at most maxPDFPages pages within
+// pdfBudget; a panic of the parser on hostile input is an error.
+func pdfText(data []byte) (out string, err error) {
+	defer func() {
+		if recover() != nil {
+			out, err = "", ErrDocumentPDF
+		}
+	}()
+	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", ErrDocumentPDF
+	}
+	pages := r.NumPage()
+	if pages <= 0 {
+		return "", ErrDocumentPDF
+	}
+	deadline := time.Now().Add(pdfBudget)
+	fonts := map[string]*pdf.Font{}
+	var b strings.Builder
+	for i := 1; i <= min(pages, maxPDFPages); i++ {
+		if time.Now().After(deadline) || b.Len() > MaxDocumentChars*4 {
+			break
+		}
+		p := r.Page(i)
+		if p.V.IsNull() {
+			continue
+		}
+		for _, name := range p.Fonts() {
+			if _, ok := fonts[name]; !ok {
+				f := p.Font(name)
+				fonts[name] = &f
+			}
+		}
+		text, err := p.GetPlainText(fonts)
+		if err != nil {
+			continue
+		}
+		b.WriteString(text)
+		b.WriteString("\n")
+	}
+	if strings.TrimSpace(b.String()) == "" {
+		return "", ErrDocumentPDF
+	}
+	return b.String(), nil
 }

@@ -17,7 +17,7 @@ import { useLocale } from "@/providers/locale-provider";
 import { assistantService } from "../services/assistant.service";
 
 const ACCEPT =
-  ".txt,.md,.markdown,.csv,.json,.yaml,.yml,.html,.htm,text/plain,text/markdown,text/csv,application/json,application/yaml,text/html";
+  ".pdf,application/pdf,.txt,.md,.markdown,.csv,.json,.yaml,.yml,.html,.htm,text/plain,text/markdown,text/csv,application/json,application/yaml,text/html";
 const MAX_BYTES = 2 * 1024 * 1024;
 
 function documentError(err: unknown): string {
@@ -33,6 +33,8 @@ function documentError(err: unknown): string {
         return "assistant.documents.errors.empty";
       case "ASSISTANT_DOCUMENT_FETCH":
         return "assistant.documents.errors.fetch";
+      case "ASSISTANT_DOCUMENT_PDF":
+        return "assistant.documents.errors.pdf";
     }
   }
   return "assistant.documents.errors.generic";

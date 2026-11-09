@@ -38,6 +38,7 @@ const (
 	CodeDocumentLimit      = "ASSISTANT_DOCUMENT_LIMIT"
 	CodeDocumentEmpty      = "ASSISTANT_DOCUMENT_EMPTY"
 	CodeDocumentFetch      = "ASSISTANT_DOCUMENT_FETCH"
+	CodeDocumentPDF        = "ASSISTANT_DOCUMENT_PDF"
 )
 
 // Handler serves /v1/tenant/assistant/* and /v1/platform/assistant/*.
@@ -104,7 +105,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &fe):
 		response.Error(w, r, http.StatusUnprocessableEntity, CodeDocumentFetch, fe.Message)
 	case errors.Is(err, ErrDocumentType):
-		response.Error(w, r, http.StatusUnsupportedMediaType, CodeDocumentType, "Only text, Markdown, CSV, JSON, YAML and HTML documents can be read")
+		response.Error(w, r, http.StatusUnsupportedMediaType, CodeDocumentType, "Only PDF, text, Markdown, CSV, JSON, YAML and HTML documents can be read")
+	case errors.Is(err, ErrDocumentPDF):
+		response.Error(w, r, http.StatusUnprocessableEntity, CodeDocumentPDF, "The PDF text cannot be read (encrypted, damaged or scanned)")
 	case errors.Is(err, ErrDocumentTooLarge):
 		response.Error(w, r, http.StatusRequestEntityTooLarge, CodeDocumentTooLarge, "The document is larger than 2 MB")
 	case errors.Is(err, ErrDocumentLimit):

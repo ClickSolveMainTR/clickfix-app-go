@@ -88,16 +88,17 @@
   "fields.type": "Kanal türü",
   "documents.title": "Paylaşılan belgeler",
   "documents.add": "Belge ya da bağlantı ekle",
-  "documents.hint": "API dokümanınızı ya da örnek isteği paylaşın: metin, Markdown, CSV, JSON, YAML veya HTML, en fazla 2 MB. Yalnız metni 7 gün saklanır; kişisel veriler ve anahtarlar maskelenir.",
+  "documents.hint": "API dokümanınızı ya da örnek isteği paylaşın: PDF, metin, Markdown, CSV, JSON, YAML veya HTML, en fazla 2 MB. Yalnız metni 7 gün saklanır; kişisel veriler ve anahtarlar maskelenir.",
   "documents.file": "Dosya seç",
   "documents.link": "Belge bağlantısı",
   "documents.add_link": "Ekle",
   "documents.remove": "{{name}} belgesini kaldır",
   "documents.masked": "Belgedeki kişisel veriler ve anahtarlar maskelendi",
-  "documents.errors.type": "Bu dosya okunamıyor. Metin, Markdown, CSV, JSON, YAML ya da HTML paylaşın (PDF henüz desteklenmiyor).",
+  "documents.errors.type": "Bu dosya okunamıyor. PDF, metin, Markdown, CSV, JSON, YAML ya da HTML paylaşın.",
   "documents.errors.size": "Belge 2 MB'tan büyük.",
   "documents.errors.limit": "Bir sohbette en fazla 5 belge olabilir; önce birini kaldırın.",
   "documents.errors.empty": "Belgede okunabilir metin yok.",
   "documents.errors.fetch": "Bağlantı okunamadı. Herkese açık bir https adresi olmalı.",
-  "documents.errors.generic": "Belge eklenemedi, tekrar deneyin."
+  "documents.errors.generic": "Belge eklenemedi, tekrar deneyin.",
+  "documents.errors.pdf": "PDF'in metni okunamadı (şifreli, bozuk ya da taranmış görüntü olabilir)."
 }
