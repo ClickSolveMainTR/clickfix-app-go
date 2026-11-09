@@ -81,9 +81,28 @@ func (b Bridge) Call(ctx context.Context, method, path string, body any) (Respon
 }
 
 // ReadResponse converts a /v1 envelope.
+// StatusCode is the error code of a /v1 status when the envelope has none
+// (the MCP tools' codes: FORBIDDEN, NOT_FOUND, CONFLICT, RATE_LIMITED,
+// TOOL_FAILED, INVALID_REQUEST).
+func StatusCode(status int) string {
+	switch {
+	case status == http.StatusUnauthorized, status == http.StatusForbidden:
+		return "FORBIDDEN"
+	case status == http.StatusNotFound:
+		return "NOT_FOUND"
+	case status == http.StatusConflict:
+		return "CONFLICT"
+	case status == http.StatusTooManyRequests:
+		return "RATE_LIMITED"
+	case status >= 500:
+		return "TOOL_FAILED"
+	}
+	return "INVALID_REQUEST"
+}
+
 func ReadResponse(status int, body []byte, truncated bool) Response {
 	if truncated {
-		return Response{Status: status, Code: "RESULT_TOO_LARGE", Message: "the result is too large"}
+		return Response{Status: status, Code: "RESULT_TOO_LARGE", Message: "The result is too large. Ask for fewer rows (limit) or narrow the filters."}
 	}
 	if status == http.StatusNoContent {
 		return Response{Status: status, OK: true, Data: json.RawMessage(`{}`)}
@@ -101,7 +120,10 @@ func ReadResponse(status int, body []byte, truncated bool) Response {
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
-		return Response{Status: status, Code: "UNREADABLE", Message: http.StatusText(status)}
+		if status < 300 {
+			return Response{Status: status, Code: "TOOL_FAILED", Message: "The server returned an unreadable response."}
+		}
+		return Response{Status: status, Code: StatusCode(status), Message: http.StatusText(status)}
 	}
 	if status < 300 && env.Success {
 		if len(env.Data) == 0 || string(env.Data) == "null" {
@@ -109,10 +131,7 @@ func ReadResponse(status int, body []byte, truncated bool) Response {
 		}
 		return Response{Status: status, OK: true, Data: env.Data}
 	}
-	out := Response{Status: status, Code: "ERROR", Message: http.StatusText(status)}
-	if status == http.StatusForbidden || status == http.StatusUnauthorized {
-		out.Code = "FORBIDDEN"
-	}
+	out := Response{Status: status, Code: StatusCode(status), Message: http.StatusText(status)}
 	if env.Error != nil {
 		if env.Error.Code != "" {
 			out.Code = env.Error.Code

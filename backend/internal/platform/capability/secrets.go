@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"regexp"
+	"strings"
 )
 
 // RandomSecret is 32 random bytes as hex (64 characters).
@@ -33,8 +34,41 @@ var secretRules = []*regexp.Regexp{
 // stored or sent to a model. It keeps the key name so the assistant can
 // still say "you shared an API key; enter it in the card instead".
 func RedactSecrets(text string) string {
-	for _, rule := range secretRules {
+	for i, rule := range secretRules {
+		if i == len(secretRules)-1 {
+			text = redactOutsideURLs(rule, text)
+			continue
+		}
 		text = rule.ReplaceAllString(text, "${1}"+Masked)
 	}
 	return text
+}
+
+var urlRxp = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
+
+// redactOutsideURLs applies the long-token rule outside URLs: long path
+// segments of a webhook URL are not secrets (query tokens are already
+// masked by the key=value rule).
+func redactOutsideURLs(rule *regexp.Regexp, text string) string {
+	urls := urlRxp.FindAllStringIndex(text, -1)
+	inURL := func(i int) bool {
+		for _, u := range urls {
+			if i >= u[0] && i < u[1] {
+				return true
+			}
+		}
+		return false
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range rule.FindAllStringIndex(text, -1) {
+		if inURL(m[0]) {
+			continue
+		}
+		b.WriteString(text[last:m[0]])
+		b.WriteString(Masked)
+		last = m[1]
+	}
+	b.WriteString(text[last:])
+	return b.String()
 }

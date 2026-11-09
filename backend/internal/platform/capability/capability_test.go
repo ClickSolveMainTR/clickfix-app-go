@@ -199,3 +199,67 @@ func TestReadResponse(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+// Long path segments of a URL are not secrets; the same token alone is.
+func TestRedactSecretsKeepsURLPaths(t *testing.T) {
+	seg := strings.Repeat("a1B2", 12)
+	if out := RedactSecrets("adres https://shop.example.com/hooks/" + seg + "/in"); !strings.Contains(out, seg) {
+		t.Fatalf("URL path masked: %s", out)
+	}
+	if out := RedactSecrets("anahtar " + seg); strings.Contains(out, seg) {
+		t.Fatalf("bare token kept: %s", out)
+	}
+	if out := RedactSecrets("https://x.example.com/h?token=" + seg); strings.Contains(out, seg) {
+		t.Fatalf("query token kept: %s", out)
+	}
+}
+
+// MCP tool names are unique, and MCP tools always carry a permission.
+func TestRegistryMCPNameAndPermission(t *testing.T) {
+	run := func(context.Context, Exec, Params) (Result, error) { return Result{}, nil }
+	mk := func(name, mcp, perm string) *Capability {
+		return &Capability{Name: name, MCPName: mcp, Kind: Read, Run: run, Permission: perm, Surfaces: []string{SurfaceWeb, SurfaceMCP}}
+	}
+	mustPanic := func(what string, f func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Fatalf("%s: no panic", what)
+			}
+		}()
+		f()
+	}
+	mustPanic("duplicate MCP name", func() {
+		NewRegistry().Register(mk("a.reply", "reply", "p"), mk("b.reply", "reply", "p"))
+	})
+	mustPanic("MCP name of another tool name", func() {
+		NewRegistry().Register(mk("a.list", "", "p"), mk("b.list", "a_list", "p"))
+	})
+	mustPanic("MCP without permission", func() { NewRegistry().Register(mk("a.list", "", "")) })
+	// Off the MCP surface the MCP name is not reserved.
+	web := mk("c.reply", "reply", "")
+	web.Surfaces = []string{SurfaceWeb}
+	NewRegistry().Register(mk("a.reply", "reply", "p"), web)
+}
+
+// Errors without an envelope code keep the MCP tools' codes.
+func TestReadResponseCodes(t *testing.T) {
+	cases := map[int]string{401: "FORBIDDEN", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 500: "TOOL_FAILED", 502: "TOOL_FAILED", 422: "INVALID_REQUEST"}
+	for status, want := range cases {
+		if r := ReadResponse(status, []byte(`{"success":false}`), false); r.Code != want {
+			t.Errorf("%d: %s", status, r.Code)
+		}
+		if r := ReadResponse(status, []byte(`<html>`), false); r.Code != want {
+			t.Errorf("%d unreadable: %s", status, r.Code)
+		}
+	}
+	if r := ReadResponse(200, []byte(`<html>`), false); r.Code != "TOOL_FAILED" {
+		t.Errorf("unreadable 200: %s", r.Code)
+	}
+	if r := ReadResponse(404, []byte(`{"success":false,"error":{"code":"WEBHOOK_NOT_FOUND","message":"x"}}`), false); r.Code != "WEBHOOK_NOT_FOUND" {
+		t.Errorf("envelope code: %s", r.Code)
+	}
+	if r := ReadResponse(200, nil, true); r.Code != "RESULT_TOO_LARGE" || !strings.Contains(r.Message, "limit") {
+		t.Errorf("too large: %+v", r)
+	}
+}
