@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,6 +115,9 @@ import (
 	oauthprovidermodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/oauthprovider"
 	oauthproviderhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/oauthprovider/handler"
 	oauthproviderusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/oauthprovider/usecase"
+	systemsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems"
+	systemshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/handler"
+	systemsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	kbmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge"
 	kbhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/handler"
 	logsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/logs"
@@ -578,6 +582,15 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	agentSvc.Tools = &agentusecase.ToolService{Repo: agentSvc.Repo, Core: aiCore.AI, Conversations: inboxCore.Conversations, Box: agentBox}
 	agentmodule.RegisterRoutes(mux, &agenthandler.Handler{Service: agentSvc, Activity: activityRec}, tokens, loader, tenantResolver)
+	// Connected system, "Sistemini bağla" (CF-197): the AI agent reads its
+	// playbooks, concept data and AI-allowed actions.
+	systemsLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
+	systemsSvc := systemsusecase.New(deps.Queries, secretBox, systemsLimiter)
+	agentSvc.Systems = systemsSvc
+	systemsmodule.RegisterRoutes(mux, systemshandler.New(systemsSvc, activityRec, func(r *http.Request, org int64) bool {
+		ok, _ := systemsLimiter.Allow(r.Context(), "integration_api", strconv.FormatInt(org, 10), 120, time.Minute)
+		return ok
+	}), tokens, loader, tenantResolver)
 	aimodule.RegisterRoutes(mux, &aihandler.Handler{Service: aiCore.AI, Activity: activityRec}, tokens, loader, tenantResolver)
 	kbmodule.RegisterRoutes(mux, &kbhandler.Handler{Service: aiCore.KB, RAG: aiCore.RAG, Activity: activityRec}, tokens, loader, tenantResolver)
 	// AI-assisted set-up and use-case template gallery (CF-140).
@@ -685,6 +698,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Register(publicapimodule.Capabilities(cfg.Channels.PublicAPIURL)...).
 		Register(appsmodule.Capabilities()...).
 		Register(webhooksmodule.Capabilities()...).
+		Register(systemsmodule.Capabilities()...).
+		Register(systemsmodule.SetupCapabilities()...).
 		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
 		RegisterPages(channelsmodule.Pages()...).
 		RegisterPages(automationmodule.Pages()...).

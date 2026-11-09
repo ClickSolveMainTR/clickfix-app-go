@@ -41454,6 +41454,337 @@ paths:
         '404': *id007
 
 
+  /v1/tenant/integrations/system:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConnectedSystem
+      summary: Connected system overview
+      description: |
+        The "Sistemini bağla" screen (CF-197): connection (never the secret), concepts (custom object
+        types) with their sources, actions, playbooks and the latest 20 calls (masked paths, no bodies).
+        Requires `tenant.integrations.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemOverview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/connection:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemConnection
+      summary: Save the connection
+      description: |
+        Base URL (public https) and authentication. The secret is encrypted and write-only;
+        `keep_secret` keeps the stored one.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemConnectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemConnection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/sources/{uuid}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemSource
+      summary: Set where a concept is read from
+      description: |
+        `path_template` is relative to the base URL and must hold `{external_id}` or `{company_external_id}`.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemSourceInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemSource
+      summary: Remove a concept's source
+      description: |
+        Removes where the concept is read from.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/sources/{uuid}/test:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemSourceTest
+      summary: Try a concept's endpoint
+      description: |
+        The "Dene" button: calls the organization's endpoint for one external id and returns the real
+        answer with pickable paths. Call failures (SSRF_BLOCKED, TIMEOUT, RATE_LIMITED, HTTP_ERROR, ...) are a
+        200 with `ok: false`.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemTestInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/actions/{key}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemAction
+      summary: Create or update an action
+      description: |
+        An action of the organization's system: endpoint, params, approval and who may use it.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemActionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemAction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemAction
+      summary: Delete an action
+      description: |
+        Deletes the action.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/actions/{key}/run:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemActionRun
+      summary: Run an action
+      description: |
+        The action's `allowed_for` must hold `agent` (or `workflow` for workflow runs). An action that
+        requires approval runs only with `approved: true`. `dry_run` never calls out. Errors: `403`,
+        `409 APPROVAL_REQUIRED`, `409 ACTION_DISABLED`, `409 SYSTEM_NOT_CONNECTED`.
+        Requires `tenant.integrations.use`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemRunInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemRunResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/playbooks/{intent}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemPlaybook
+      summary: Create or update an AI playbook
+      description: |
+        Plain-language instructions; the intent is offered to the AI triage as a candidate.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: intent, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemPlaybookInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemPlaybook" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemPlaybook
+      summary: Delete an AI playbook
+      description: |
+        Deletes the playbook.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: intent, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/concepts/{key}/lookup:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConnectedSystemLookup
+      summary: Read a concept for a customer
+      description: |
+        By `contact_uuid` or `external_id`. A missing source or external id is `status: skipped` with the reason.
+        Requires `tenant.integrations.use`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+        - { name: contact_uuid, in: query, schema: { type: string, format: uuid } }
+        - { name: external_id, in: query, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemLookup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/preview:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemPreview
+      summary: Try as this customer
+      description: |
+        "Bu müşteri olarak dene": what ClickFix accepts or rejects (and why) from the identity, attributes,
+        company, page and events, the latest widget identity rejections, and the context the AI would see.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemPreviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemPreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
 webhooks:
   apiChannelReply:
     post:
@@ -53120,6 +53451,9 @@ components:
           properties:
             tags: { type: array, items: { $ref: "#/components/schemas/Tag" } }
             participants: { type: array, items: { $ref: "#/components/schemas/ConversationParticipant" } }
+            screen_context:
+              description: Page and events the widget sent with the latest inbound message (CF-197)
+              oneOf: [{ $ref: "#/components/schemas/ScreenContext" }, { type: "null" }]
 
     ConversationMergeRequest:
       type: object
@@ -57622,6 +57956,7 @@ components:
             "add_note",
             "notify",
             "call_webhook",
+            "run_system_action",
             "run_ai_procedure",
             "create_engineering_issue",
             "route"
@@ -60134,3 +60469,349 @@ components:
           $ref: '#/components/schemas/AssistantUsage'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
+
+    SystemConnection:
+      type: object
+      required: [uuid, name, base_url, auth_type, auth_header, has_secret, timeout_ms]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        base_url: { type: string }
+        auth_type: { type: string, enum: [none, bearer, header, basic] }
+        auth_header: { type: string }
+        has_secret: { type: boolean }
+        timeout_ms: { type: integer }
+        updated_at: { type: string, format: date-time }
+    SystemConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [base_url]
+      properties:
+        name: { type: string, maxLength: 120 }
+        base_url: { type: string, maxLength: 500, description: Public https base URL }
+        auth_type: { type: string, enum: [none, bearer, header, basic] }
+        auth_header: { type: string, maxLength: 64, description: Header name when auth_type is header }
+        secret: { type: string, maxLength: 4000, writeOnly: true, description: "Token, header value or user:password" }
+        keep_secret: { type: boolean }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 15000 }
+    SystemField:
+      type: object
+      additionalProperties: false
+      required: [path, label]
+      properties:
+        path: { type: string, maxLength: 520 }
+        label: { type: string, maxLength: 80 }
+    SystemSource:
+      type: object
+      required: [uuid, path_template, identity_key, items_path, fields, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        path_template: { type: string }
+        identity_key: { type: string, enum: [external_id, company_external_id] }
+        items_path: { type: string }
+        fields: { type: array, items: { $ref: "#/components/schemas/SystemField" } }
+        enabled: { type: boolean }
+    SystemSourceInput:
+      type: object
+      additionalProperties: false
+      required: [path_template]
+      properties:
+        path_template: { type: string, maxLength: 500 }
+        identity_key: { type: string, enum: [external_id, company_external_id] }
+        items_path: { type: string, maxLength: 200 }
+        fields: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/SystemField" } }
+        enabled: { type: boolean }
+    SystemConcept:
+      type: object
+      required: [object_type_uuid, key, label, plural_label, icon, source]
+      properties:
+        object_type_uuid: { type: string, format: uuid }
+        key: { type: string }
+        label: { type: string }
+        plural_label: { type: string }
+        icon: { type: string }
+        source: { oneOf: [{ $ref: "#/components/schemas/SystemSource" }, { type: "null" }] }
+    SystemParam:
+      type: object
+      additionalProperties: false
+      required: [key, label, type, required]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        label: { type: string, maxLength: 80 }
+        type: { type: string, enum: [string, number, boolean] }
+        required: { type: boolean }
+    SystemChannel:
+      type: string
+      enum: [ai, agent, workflow]
+    SystemAction:
+      type: object
+      required: [uuid, key, title, description, concept_key, method, path_template, params, requires_approval, allowed_for, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        concept_key: { type: string }
+        method: { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path_template: { type: string }
+        params: { type: array, items: { $ref: "#/components/schemas/SystemParam" } }
+        requires_approval: { type: boolean }
+        allowed_for: { type: array, items: { $ref: "#/components/schemas/SystemChannel" } }
+        enabled: { type: boolean }
+    SystemActionInput:
+      type: object
+      additionalProperties: false
+      required: [title, path_template]
+      properties:
+        title: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        concept_key: { type: string }
+        method: { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path_template: { type: string, maxLength: 500 }
+        params: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/SystemParam" } }
+        requires_approval: { type: boolean }
+        allowed_for: { type: array, items: { $ref: "#/components/schemas/SystemChannel" } }
+        enabled: { type: boolean }
+    SystemPlaybook:
+      type: object
+      required: [uuid, intent, title, instructions, concept_keys, action_keys, procedure_uuid, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        intent: { type: string }
+        title: { type: string }
+        instructions: { type: string }
+        concept_keys: { type: array, items: { type: string } }
+        action_keys: { type: array, items: { type: string } }
+        procedure_uuid: { type: [string, "null"], format: uuid }
+        enabled: { type: boolean }
+    SystemPlaybookInput:
+      type: object
+      additionalProperties: false
+      required: [title, instructions]
+      properties:
+        title: { type: string, maxLength: 200 }
+        instructions: { type: string, maxLength: 3000 }
+        concept_keys: { type: array, maxItems: 10, items: { type: string } }
+        action_keys: { type: array, maxItems: 10, items: { type: string } }
+        procedure_uuid: { type: [string, "null"], format: uuid }
+        enabled: { type: boolean }
+    SystemCall:
+      type: object
+      required: [kind, target, channel, method, masked_path, status_code, ok, error_code, duration_ms, created_at]
+      properties:
+        kind: { type: string, enum: [source, action, test] }
+        target: { type: string }
+        channel: { type: string, enum: [ai, agent, workflow, test] }
+        method: { type: string }
+        masked_path: { type: string }
+        status_code: { type: integer }
+        ok: { type: boolean }
+        error_code: { type: string }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+    SystemOverview:
+      type: object
+      required: [connection, concepts, actions, playbooks, calls]
+      properties:
+        connection: { oneOf: [{ $ref: "#/components/schemas/SystemConnection" }, { type: "null" }] }
+        concepts: { type: array, items: { $ref: "#/components/schemas/SystemConcept" } }
+        actions: { type: array, items: { $ref: "#/components/schemas/SystemAction" } }
+        playbooks: { type: array, items: { $ref: "#/components/schemas/SystemPlaybook" } }
+        calls: { type: array, items: { $ref: "#/components/schemas/SystemCall" } }
+    SystemTestInput:
+      type: object
+      additionalProperties: false
+      properties:
+        external_id: { type: string, maxLength: 255 }
+        company_external_id: { type: string, maxLength: 255 }
+        path_template: { type: string, maxLength: 500, description: Unsaved edit to try }
+        items_path: { type: string, maxLength: 200, description: Unsaved edit to try }
+    SystemPathOption:
+      type: object
+      required: [path, type, sample]
+      properties:
+        path: { type: string }
+        type: { type: string, enum: [string, number, boolean, "null", object, array] }
+        sample: {}
+    SystemTestResult:
+      type: object
+      required: [ok, status_code, error_code, message, duration_ms, request, body, truncated, paths, items]
+      properties:
+        ok: { type: boolean }
+        status_code: { type: integer }
+        error_code: { type: string }
+        message: { type: string }
+        duration_ms: { type: integer }
+        request: { type: string, description: Method and URL with secrets masked }
+        body: { description: The JSON answer }
+        truncated: { type: boolean }
+        paths: { type: array, items: { $ref: "#/components/schemas/SystemPathOption" } }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+    SystemIdentity:
+      type: object
+      required: [contact_uuid, contact_name, external_id, company_uuid, company_name, company_external_id]
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        contact_name: { type: string }
+        external_id: { type: string }
+        company_uuid: { type: [string, "null"], format: uuid }
+        company_name: { type: string }
+        company_external_id: { type: string }
+    SystemLookup:
+      type: object
+      required: [concept, label, identity, items, status, reason]
+      properties:
+        concept: { type: string }
+        label: { type: string }
+        identity: { $ref: "#/components/schemas/SystemIdentity" }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        status: { type: string, enum: [ok, skipped, error] }
+        reason: { type: string }
+    SystemRunInput:
+      type: object
+      additionalProperties: false
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        external_id: { type: string, maxLength: 255 }
+        conversation_uuid: { type: [string, "null"], format: uuid }
+        params: { type: object, additionalProperties: true }
+        dry_run: { type: boolean }
+        approved: { type: boolean }
+    SystemRunResult:
+      type: object
+      required: [action, dry_run, ok, status_code, error_code, request, body, summary]
+      properties:
+        action: { type: string }
+        dry_run: { type: boolean }
+        ok: { type: boolean }
+        status_code: { type: integer }
+        error_code: { type: string }
+        request: { type: string }
+        body: {}
+        summary: { type: string }
+    ScreenEvent:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        properties: { type: object, additionalProperties: true }
+        at: { type: string, format: date-time }
+    ScreenContext:
+      type: object
+      description: Page and tracked events the web widget sent with the latest inbound message (CF-197)
+      required: [page_url, page_path, last_event, events]
+      properties:
+        page_url: { type: string, description: Without query string or fragment }
+        page_path: { type: string }
+        last_event: { type: string }
+        events: { type: array, items: { $ref: "#/components/schemas/ScreenEvent" } }
+        at: { type: string, format: date-time }
+    SystemPreviewInput:
+      type: object
+      additionalProperties: false
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        external_id: { type: string, maxLength: 255 }
+        company_external_id: { type: string, maxLength: 255 }
+        company_name: { type: string, maxLength: 200 }
+        attributes: { type: object, additionalProperties: true }
+        page_url: { type: string, maxLength: 2000 }
+        events: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ScreenEvent" } }
+        intent: { type: string, maxLength: 64 }
+    SystemCheck:
+      type: object
+      required: [key, status, reason]
+      properties:
+        key: { type: string }
+        status: { type: string, enum: [accepted, rejected, skipped] }
+        reason: { type: string }
+    SystemIntent:
+      type: object
+      required: [intent, title]
+      properties:
+        intent: { type: string }
+        title: { type: string }
+    SystemWidgetRejection:
+      type: object
+      required: [channel_uuid, channel_name, code, rejected_at]
+      properties:
+        channel_uuid: { type: string, format: uuid }
+        channel_name: { type: string }
+        code: { type: string, enum: [WIDGET_IDENTITY_DISABLED, WIDGET_IDENTITY_INVALID] }
+        rejected_at: { type: string, format: date-time }
+    SystemPreview:
+      type: object
+      required: [identity, checks, attributes, screen, intents, intent, lookups, ai_context, widget_rejections]
+      properties:
+        identity: { $ref: "#/components/schemas/SystemIdentity" }
+        checks: { type: array, items: { $ref: "#/components/schemas/SystemCheck" } }
+        attributes: { type: object, additionalProperties: true }
+        screen: { oneOf: [{ $ref: "#/components/schemas/ScreenContext" }, { type: "null" }] }
+        intents: { type: array, items: { $ref: "#/components/schemas/SystemIntent" } }
+        intent: { type: string }
+        lookups: { type: array, items: { $ref: "#/components/schemas/SystemLookup" } }
+        ai_context: { type: string, description: The block the AI reply model sees for this customer }
+        widget_rejections: { type: array, items: { $ref: "#/components/schemas/SystemWidgetRejection" } }
+    EnvelopeSystemOverview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemConnection:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemConnection" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemSource:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemSource" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemTestResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemTestResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemAction:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemAction" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemRunResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemRunResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemPlaybook:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemPlaybook" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemLookup:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemLookup" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemPreview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }

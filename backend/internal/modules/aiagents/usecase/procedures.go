@@ -84,18 +84,42 @@ func (s *Service) procedure(ctx context.Context, org int64, conversation uuid.UU
 		if err = json.Unmarshal(job.Result, &triage); err != nil {
 			return nil, err
 		}
-		row, err := s.Repo.Q.AIProcedurePublished(ctx, db.AIProcedurePublishedParams{OrganizationID: org, Intent: triage.Intent, Locale: locale})
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		var p Procedure
-		if err = json.Unmarshal(row.Published, &p); err != nil {
-			return nil, err
-		}
-		return &p, nil
+		return s.publishedProcedure(ctx, org, triage.Intent, locale)
 	}
 	return nil, nil
+}
+
+// publishedProcedure is the published procedure of an intent (nil when none).
+func (s *Service) publishedProcedure(ctx context.Context, org int64, intent, locale string) (*Procedure, error) {
+	row, err := s.Repo.Q.AIProcedurePublished(ctx, db.AIProcedurePublishedParams{OrganizationID: org, Intent: intent, Locale: locale})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var p Procedure
+	if err = json.Unmarshal(row.Published, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// triageIntent is the intent the completed triage of a message found.
+func (s *Service) triageIntent(ctx context.Context, org int64, conversation uuid.UUID, message int64) (string, error) {
+	jobs, err := s.Repo.Q.AIAgentJobs(ctx, db.AIAgentJobsParams{OrganizationID: org, Uuid: conversation, Limit: 20})
+	if err != nil {
+		return "", err
+	}
+	for _, job := range jobs {
+		if job.MessageID != message || job.Task != "triage" || job.Status != "completed" {
+			continue
+		}
+		var triage model.Triage
+		if err = json.Unmarshal(job.Result, &triage); err != nil {
+			return "", err
+		}
+		return triage.Intent, nil
+	}
+	return "", nil
 }

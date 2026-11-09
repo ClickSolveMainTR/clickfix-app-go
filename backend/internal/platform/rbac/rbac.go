@@ -167,3 +167,10 @@ const (
 	PermPlatformGuidesManage        = "platform.guides.manage"
 	PermPlatformProductFeedbackRead = "platform.product_feedback.read"
 )
+
+// Connected system, "Sistemini bağla" (CF-197).
+const (
+	PermTenantIntegrationsRead   = "tenant.integrations.read"
+	PermTenantIntegrationsManage = "tenant.integrations.manage"
+	PermTenantIntegrationsUse    = "tenant.integrations.use"
+)

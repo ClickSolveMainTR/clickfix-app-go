@@ -16414,6 +16414,217 @@ export interface paths {
         patch: operations["updatePlatformProductFeedback"];
         trace?: never;
     };
+    "/v1/tenant/integrations/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connected system overview
+         * @description The "Sistemini bağla" screen (CF-197): connection (never the secret), concepts (custom object
+         *     types) with their sources, actions, playbooks and the latest 20 calls (masked paths, no bodies).
+         *     Requires `tenant.integrations.read`.
+         */
+        get: operations["getTenantConnectedSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the connection
+         * @description Base URL (public https) and authentication. The secret is encrypted and write-only;
+         *     `keep_secret` keeps the stored one.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemConnection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/sources/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set where a concept is read from
+         * @description `path_template` is relative to the base URL and must hold `{external_id}` or `{company_external_id}`.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemSource"];
+        post?: never;
+        /**
+         * Remove a concept's source
+         * @description Removes where the concept is read from.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/sources/{uuid}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a concept's endpoint
+         * @description The "Dene" button: calls the organization's endpoint for one external id and returns the real
+         *     answer with pickable paths. Call failures (SSRF_BLOCKED, TIMEOUT, RATE_LIMITED, HTTP_ERROR, ...) are a
+         *     200 with `ok: false`.
+         *     Requires `tenant.integrations.manage`.
+         */
+        post: operations["postTenantConnectedSystemSourceTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/actions/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update an action
+         * @description An action of the organization's system: endpoint, params, approval and who may use it.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemAction"];
+        post?: never;
+        /**
+         * Delete an action
+         * @description Deletes the action.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemAction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/actions/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run an action
+         * @description The action's `allowed_for` must hold `agent` (or `workflow` for workflow runs). An action that
+         *     requires approval runs only with `approved: true`. `dry_run` never calls out. Errors: `403`,
+         *     `409 APPROVAL_REQUIRED`, `409 ACTION_DISABLED`, `409 SYSTEM_NOT_CONNECTED`.
+         *     Requires `tenant.integrations.use`.
+         */
+        post: operations["postTenantConnectedSystemActionRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/playbooks/{intent}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update an AI playbook
+         * @description Plain-language instructions; the intent is offered to the AI triage as a candidate.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemPlaybook"];
+        post?: never;
+        /**
+         * Delete an AI playbook
+         * @description Deletes the playbook.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemPlaybook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/concepts/{key}/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a concept for a customer
+         * @description By `contact_uuid` or `external_id`. A missing source or external id is `status: skipped` with the reason.
+         *     Requires `tenant.integrations.use`.
+         */
+        get: operations["getTenantConnectedSystemLookup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try as this customer
+         * @description "Bu müşteri olarak dene": what ClickFix accepts or rejects (and why) from the identity, attributes,
+         *     company, page and events, the latest widget identity rejections, and the context the AI would see.
+         *     Requires `tenant.integrations.manage`.
+         */
+        post: operations["postTenantConnectedSystemPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export interface webhooks {
     apiChannelReply: {
@@ -22742,6 +22953,8 @@ export interface components {
         ConversationDetail: components["schemas"]["Conversation"] & {
             tags: components["schemas"]["Tag"][];
             participants: components["schemas"]["ConversationParticipant"][];
+            /** @description Page and events the widget sent with the latest inbound message (CF-197) */
+            screen_context?: components["schemas"]["ScreenContext"] | null;
         };
         ConversationMergeRequest: {
             /**
@@ -25790,7 +26003,7 @@ export interface components {
         };
         WorkflowAction: {
             /** @enum {string} */
-            type: "assign_user" | "add_tag" | "remove_tag" | "set_priority" | "set_status" | "send_canned_reply" | "send_template" | "add_note" | "notify" | "call_webhook" | "run_ai_procedure" | "create_engineering_issue" | "route";
+            type: "assign_user" | "add_tag" | "remove_tag" | "set_priority" | "set_status" | "send_canned_reply" | "send_template" | "add_note" | "notify" | "call_webhook" | "run_system_action" | "run_ai_procedure" | "create_engineering_issue" | "route";
             value?: string;
             content?: string;
             /** Format: uuid */
@@ -27632,6 +27845,333 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["AssistantUsage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        SystemConnection: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            base_url: string;
+            /** @enum {string} */
+            auth_type: "none" | "bearer" | "header" | "basic";
+            auth_header: string;
+            has_secret: boolean;
+            timeout_ms: number;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        SystemConnectionInput: {
+            name?: string;
+            /** @description Public https base URL */
+            base_url: string;
+            /** @enum {string} */
+            auth_type?: "none" | "bearer" | "header" | "basic";
+            /** @description Header name when auth_type is header */
+            auth_header?: string;
+            /** @description Token, header value or user:password */
+            secret?: string;
+            keep_secret?: boolean;
+            timeout_ms?: number;
+        };
+        SystemField: {
+            path: string;
+            label: string;
+        };
+        SystemSource: {
+            /** Format: uuid */
+            uuid: string;
+            path_template: string;
+            /** @enum {string} */
+            identity_key: "external_id" | "company_external_id";
+            items_path: string;
+            fields: components["schemas"]["SystemField"][];
+            enabled: boolean;
+        };
+        SystemSourceInput: {
+            path_template: string;
+            /** @enum {string} */
+            identity_key?: "external_id" | "company_external_id";
+            items_path?: string;
+            fields?: components["schemas"]["SystemField"][];
+            enabled?: boolean;
+        };
+        SystemConcept: {
+            /** Format: uuid */
+            object_type_uuid: string;
+            key: string;
+            label: string;
+            plural_label: string;
+            icon: string;
+            source: components["schemas"]["SystemSource"] | null;
+        };
+        SystemParam: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "number" | "boolean";
+            required: boolean;
+        };
+        /** @enum {string} */
+        SystemChannel: "ai" | "agent" | "workflow";
+        SystemAction: {
+            /** Format: uuid */
+            uuid: string;
+            key: string;
+            title: string;
+            description: string;
+            concept_key: string;
+            /** @enum {string} */
+            method: "POST" | "PUT" | "PATCH" | "DELETE";
+            path_template: string;
+            params: components["schemas"]["SystemParam"][];
+            requires_approval: boolean;
+            allowed_for: components["schemas"]["SystemChannel"][];
+            enabled: boolean;
+        };
+        SystemActionInput: {
+            title: string;
+            description?: string;
+            concept_key?: string;
+            /** @enum {string} */
+            method?: "POST" | "PUT" | "PATCH" | "DELETE";
+            path_template: string;
+            params?: components["schemas"]["SystemParam"][];
+            requires_approval?: boolean;
+            allowed_for?: components["schemas"]["SystemChannel"][];
+            enabled?: boolean;
+        };
+        SystemPlaybook: {
+            /** Format: uuid */
+            uuid: string;
+            intent: string;
+            title: string;
+            instructions: string;
+            concept_keys: string[];
+            action_keys: string[];
+            /** Format: uuid */
+            procedure_uuid: string | null;
+            enabled: boolean;
+        };
+        SystemPlaybookInput: {
+            title: string;
+            instructions: string;
+            concept_keys?: string[];
+            action_keys?: string[];
+            /** Format: uuid */
+            procedure_uuid?: string | null;
+            enabled?: boolean;
+        };
+        SystemCall: {
+            /** @enum {string} */
+            kind: "source" | "action" | "test";
+            target: string;
+            /** @enum {string} */
+            channel: "ai" | "agent" | "workflow" | "test";
+            method: string;
+            masked_path: string;
+            status_code: number;
+            ok: boolean;
+            error_code: string;
+            duration_ms: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SystemOverview: {
+            connection: components["schemas"]["SystemConnection"] | null;
+            concepts: components["schemas"]["SystemConcept"][];
+            actions: components["schemas"]["SystemAction"][];
+            playbooks: components["schemas"]["SystemPlaybook"][];
+            calls: components["schemas"]["SystemCall"][];
+        };
+        SystemTestInput: {
+            external_id?: string;
+            company_external_id?: string;
+            /** @description Unsaved edit to try */
+            path_template?: string;
+            /** @description Unsaved edit to try */
+            items_path?: string;
+        };
+        SystemPathOption: {
+            path: string;
+            /** @enum {string} */
+            type: "string" | "number" | "boolean" | "null" | "object" | "array";
+            sample: unknown;
+        };
+        SystemTestResult: {
+            ok: boolean;
+            status_code: number;
+            error_code: string;
+            message: string;
+            duration_ms: number;
+            /** @description Method and URL with secrets masked */
+            request: string;
+            /** @description The JSON answer */
+            body: unknown;
+            truncated: boolean;
+            paths: components["schemas"]["SystemPathOption"][];
+            items: {
+                [key: string]: unknown;
+            }[];
+        };
+        SystemIdentity: {
+            /** Format: uuid */
+            contact_uuid: string | null;
+            contact_name: string;
+            external_id: string;
+            /** Format: uuid */
+            company_uuid: string | null;
+            company_name: string;
+            company_external_id: string;
+        };
+        SystemLookup: {
+            concept: string;
+            label: string;
+            identity: components["schemas"]["SystemIdentity"];
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** @enum {string} */
+            status: "ok" | "skipped" | "error";
+            reason: string;
+        };
+        SystemRunInput: {
+            /** Format: uuid */
+            contact_uuid?: string | null;
+            external_id?: string;
+            /** Format: uuid */
+            conversation_uuid?: string | null;
+            params?: {
+                [key: string]: unknown;
+            };
+            dry_run?: boolean;
+            approved?: boolean;
+        };
+        SystemRunResult: {
+            action: string;
+            dry_run: boolean;
+            ok: boolean;
+            status_code: number;
+            error_code: string;
+            request: string;
+            body: unknown;
+            summary: string;
+        };
+        ScreenEvent: {
+            name: string;
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            at?: string;
+        };
+        /** @description Page and tracked events the web widget sent with the latest inbound message (CF-197) */
+        ScreenContext: {
+            /** @description Without query string or fragment */
+            page_url: string;
+            page_path: string;
+            last_event: string;
+            events: components["schemas"]["ScreenEvent"][];
+            /** Format: date-time */
+            at?: string;
+        };
+        SystemPreviewInput: {
+            /** Format: uuid */
+            contact_uuid?: string | null;
+            external_id?: string;
+            company_external_id?: string;
+            company_name?: string;
+            attributes?: {
+                [key: string]: unknown;
+            };
+            page_url?: string;
+            events?: components["schemas"]["ScreenEvent"][];
+            intent?: string;
+        };
+        SystemCheck: {
+            key: string;
+            /** @enum {string} */
+            status: "accepted" | "rejected" | "skipped";
+            reason: string;
+        };
+        SystemIntent: {
+            intent: string;
+            title: string;
+        };
+        SystemWidgetRejection: {
+            /** Format: uuid */
+            channel_uuid: string;
+            channel_name: string;
+            /** @enum {string} */
+            code: "WIDGET_IDENTITY_DISABLED" | "WIDGET_IDENTITY_INVALID";
+            /** Format: date-time */
+            rejected_at: string;
+        };
+        SystemPreview: {
+            identity: components["schemas"]["SystemIdentity"];
+            checks: components["schemas"]["SystemCheck"][];
+            attributes: {
+                [key: string]: unknown;
+            };
+            screen: components["schemas"]["ScreenContext"] | null;
+            intents: components["schemas"]["SystemIntent"][];
+            intent: string;
+            lookups: components["schemas"]["SystemLookup"][];
+            /** @description The block the AI reply model sees for this customer */
+            ai_context: string;
+            widget_rejections: components["schemas"]["SystemWidgetRejection"][];
+        };
+        EnvelopeSystemOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemConnection: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemConnection"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemSource: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemSource"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemTestResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemTestResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemAction: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemAction"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemRunResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemRunResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemPlaybook: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemPlaybook"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemLookup: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemLookup"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemPreview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemPreview"];
             meta: components["schemas"]["ResponseMeta"];
         };
     };
@@ -65929,6 +66469,435 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConnectedSystem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemSourceInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemSource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemSourceTest: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemTestInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemActionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemAction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemActionRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemRunInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemRunResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemPlaybook: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                intent: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemPlaybookInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemPlaybook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemPlaybook: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                intent: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConnectedSystemLookup: {
+        parameters: {
+            query?: {
+                contact_uuid?: string;
+                external_id?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemLookup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemPreview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };

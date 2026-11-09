@@ -2419,10 +2419,88 @@ type ImportJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type IntegrationAction struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	Key              string             `json:"key"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	ObjectTypeID     pgtype.Int8        `json:"object_type_id"`
+	Method           string             `json:"method"`
+	PathTemplate     string             `json:"path_template"`
+	Params           []byte             `json:"params"`
+	RequiresApproval bool               `json:"requires_approval"`
+	AllowedFor       []string           `json:"allowed_for"`
+	Enabled          bool               `json:"enabled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationCall struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	Kind           string             `json:"kind"`
+	Target         string             `json:"target"`
+	Channel        string             `json:"channel"`
+	Method         string             `json:"method"`
+	MaskedPath     string             `json:"masked_path"`
+	StatusCode     int32              `json:"status_code"`
+	Ok             bool               `json:"ok"`
+	ErrorCode      string             `json:"error_code"`
+	DurationMs     int32              `json:"duration_ms"`
+	ActorUserID    pgtype.Int8        `json:"actor_user_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type IntegrationConnection struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	BaseUrl        string             `json:"base_url"`
+	AuthType       string             `json:"auth_type"`
+	AuthHeader     string             `json:"auth_header"`
+	AuthEnc        string             `json:"auth_enc"`
+	TimeoutMs      int32              `json:"timeout_ms"`
+	UpdatedBy      pgtype.Int8        `json:"updated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IntegrationEventCursor struct {
 	OrganizationID int64 `json:"organization_id"`
 	LastSequence   int64 `json:"last_sequence"`
 	PrunedSequence int64 `json:"pruned_sequence"`
+}
+
+type IntegrationPlaybook struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Intent         string             `json:"intent"`
+	Title          string             `json:"title"`
+	Instructions   string             `json:"instructions"`
+	ConceptKeys    []string           `json:"concept_keys"`
+	ActionKeys     []string           `json:"action_keys"`
+	ProcedureID    pgtype.Int8        `json:"procedure_id"`
+	Enabled        bool               `json:"enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationSource struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ObjectTypeID   int64              `json:"object_type_id"`
+	PathTemplate   string             `json:"path_template"`
+	IdentityKey    string             `json:"identity_key"`
+	ItemsPath      string             `json:"items_path"`
+	Fields         []byte             `json:"fields"`
+	Enabled        bool               `json:"enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type IntegrationTriggerEvent struct {

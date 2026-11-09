@@ -42,6 +42,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
+	systemsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	logsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/logs/usecase"
 	mobileextmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mobileext"
 	notifmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications"
@@ -76,6 +77,7 @@ import (
 	ioadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ioengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/mail"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/outbox"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ratelimit"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/searchengine"
 	searchadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/searchengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/storage"
@@ -280,6 +282,12 @@ func main() {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
 	}
 	agentSvc.Tools = &agentusecase.ToolService{Repo: agentSvc.Repo, Core: aiCore.AI, Conversations: inboxCore.Conversations, Box: agentBox}
+	// Connected system (CF-197): playbooks, concept data and AI actions.
+	var systemsLimiter systemsusecase.Limiter
+	if inboxRedis != nil {
+		systemsLimiter = ratelimit.New(inboxRedis, cfg.App.Env)
+	}
+	agentSvc.Systems = systemsusecase.New(queries, agentBox, systemsLimiter)
 	complianceSvc := &complianceuc.Service{Search: searchClient, Repo: compliancerepo.New(pool, queries), Store: store, Jobs: queueClient, Activity: activityRec}
 	accountRepo := authrepo.NewPostgres(pool, queries)
 	accountRepo.SetDeletionSearch(searchClient)

@@ -297,6 +297,12 @@ assistant_messages
 product_feedback
 # Mobile widget tokens (CF-152)
 widget_tokens
+# Connected system, "Sistemini bağla" (CF-197)
+integration_connections
+integration_sources
+integration_actions
+integration_playbooks
+integration_calls
 # CF-196 custom field catalog
 custom_field_unknown_keys
 custom_field_unknown_values

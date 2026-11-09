@@ -610,6 +610,9 @@ type Querier interface {
 	// Sidebar badges of the inbox for one agent (open work only).
 	ConversationInboxCounts(ctx context.Context, arg ConversationInboxCountsParams) (ConversationInboxCountsRow, error)
 	ConversationReplayChunks(ctx context.Context, arg ConversationReplayChunksParams) ([]WidgetReplayChunk, error)
+	// Screen context (CF-197): the page and tracked events the widget sent
+	// with the latest inbound message of a conversation.
+	ConversationScreenContext(ctx context.Context, arg ConversationScreenContextParams) (ConversationScreenContextRow, error)
 	ConversationStatusFacets(ctx context.Context, arg ConversationStatusFacetsParams) ([]ConversationStatusFacetsRow, error)
 	// The single-conversation form of the team visibility rule above (detail,
 	// messages, replies, realtime conversation channel).
@@ -1194,11 +1197,40 @@ type Querier interface {
 	InsertWidgetReplayChunk(ctx context.Context, arg InsertWidgetReplayChunkParams) (WidgetReplayChunk, error)
 	InsertWidgetSession(ctx context.Context, arg InsertWidgetSessionParams) (WidgetSession, error)
 	InsertWidgetVersion(ctx context.Context, arg InsertWidgetVersionParams) (WidgetVersion, error)
+	IntegrationActionByKey(ctx context.Context, arg IntegrationActionByKeyParams) (IntegrationActionByKeyRow, error)
+	IntegrationActions(ctx context.Context, organizationID int64) ([]IntegrationActionsRow, error)
+	// CF-197: connected system ("Sistemini bağla").
+	IntegrationConnection(ctx context.Context, organizationID int64) (IntegrationConnection, error)
+	IntegrationContactByExternalID(ctx context.Context, arg IntegrationContactByExternalIDParams) (uuid.UUID, error)
+	// Identity of a customer for the connected system. The widget keys a
+	// signed-in user as "user:<id>" (CF-176); the company external id is the
+	// raw companies.external_id. CF-195 replaces both with first-class
+	// columns; see modules/integrations/systems/usecase/identity.go.
+	IntegrationContactIdentity(ctx context.Context, arg IntegrationContactIdentityParams) (IntegrationContactIdentityRow, error)
+	IntegrationConversationContact(ctx context.Context, arg IntegrationConversationContactParams) (uuid.UUID, error)
+	IntegrationConversationContactByUUID(ctx context.Context, arg IntegrationConversationContactByUUIDParams) (uuid.UUID, error)
+	IntegrationDeleteAction(ctx context.Context, arg IntegrationDeleteActionParams) (int64, error)
+	IntegrationDeletePlaybook(ctx context.Context, arg IntegrationDeletePlaybookParams) (int64, error)
+	IntegrationDeleteSource(ctx context.Context, arg IntegrationDeleteSourceParams) (int64, error)
+	IntegrationLogCall(ctx context.Context, arg IntegrationLogCallParams) error
+	IntegrationObjectTypeByKey(ctx context.Context, arg IntegrationObjectTypeByKeyParams) (CustomObjectType, error)
+	IntegrationObjectTypeByUUID(ctx context.Context, arg IntegrationObjectTypeByUUIDParams) (CustomObjectType, error)
+	IntegrationPlaybookByIntent(ctx context.Context, arg IntegrationPlaybookByIntentParams) (IntegrationPlaybookByIntentRow, error)
+	IntegrationPlaybooks(ctx context.Context, organizationID int64) ([]IntegrationPlaybooksRow, error)
 	IntegrationPollTriggers(ctx context.Context, arg IntegrationPollTriggersParams) ([]IntegrationPollTriggersRow, error)
+	IntegrationProcedureByUUID(ctx context.Context, arg IntegrationProcedureByUUIDParams) (IntegrationProcedureByUUIDRow, error)
 	IntegrationPurgeTriggers(ctx context.Context) error
+	IntegrationRecentCalls(ctx context.Context, organizationID int64) ([]IntegrationRecentCallsRow, error)
 	IntegrationRecordTrigger(ctx context.Context, arg IntegrationRecordTriggerParams) error
+	IntegrationSaveAction(ctx context.Context, arg IntegrationSaveActionParams) (IntegrationAction, error)
+	IntegrationSaveConnection(ctx context.Context, arg IntegrationSaveConnectionParams) (IntegrationConnection, error)
+	IntegrationSavePlaybook(ctx context.Context, arg IntegrationSavePlaybookParams) (IntegrationPlaybook, error)
+	IntegrationSaveSource(ctx context.Context, arg IntegrationSaveSourceParams) (IntegrationSource, error)
+	IntegrationSourceByKey(ctx context.Context, arg IntegrationSourceByKeyParams) (IntegrationSourceByKeyRow, error)
+	IntegrationSources(ctx context.Context, organizationID int64) ([]IntegrationSourcesRow, error)
 	IntegrationTriggerCursor(ctx context.Context, organizationID int64) (int64, error)
 	IntegrationTriggerOldest(ctx context.Context, organizationID int64) (int64, error)
+	IntegrationWidgetRejections(ctx context.Context, organizationID int64) ([]IntegrationWidgetRejectionsRow, error)
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
 	KnowledgeArticle(ctx context.Context, arg KnowledgeArticleParams) (KnowledgeArticle, error)
 	// CF-196: article audiences (catalog conditions by option id).

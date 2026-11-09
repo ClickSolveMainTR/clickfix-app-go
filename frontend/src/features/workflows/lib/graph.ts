@@ -47,6 +47,7 @@ export const ACTIONS: ActionType[] = [
   "add_note",
   "notify",
   "call_webhook",
+  "run_system_action",
   "run_ai_procedure",
   "create_engineering_issue",
   "route",
@@ -80,6 +81,11 @@ export const CONDITION_FIELDS = [
   "sla_breached",
   "clock.hour",
   "clock.weekday",
+  // Screen context of the latest widget message (CF-197).
+  "screen.page_url",
+  "screen.page_path",
+  "screen.last_event",
+  "screen.event_names",
 ] as const;
 
 export const NUMERIC_FIELDS = new Set<string>([
@@ -315,6 +321,10 @@ export function validateAction(a: WorkflowAction): Issue | null {
       return (PRIORITIES as readonly string[]).includes(a.value ?? "")
         ? null
         : { key: "workflows.issues.action_priority" };
+    case "run_system_action":
+      return /^[a-z][a-z0-9_]{1,49}$/.test(a.value ?? "")
+        ? null
+        : { key: "workflows.issues.action_system" };
     case "add_note":
     case "send_canned_reply":
       return content && [...content].length <= LIMITS.maxContent

@@ -14,7 +14,9 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/screenctx"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -294,6 +296,9 @@ type Detail struct {
 	model.Conversation
 	Tags         []Tag         `json:"tags"`
 	Participants []Participant `json:"participants"`
+	// ScreenContext is the page and events the widget sent with the latest
+	// inbound message: "hangi ekrandan yazdı" (CF-197). Null when none.
+	ScreenContext *screenctx.Screen `json:"screen_context"`
 }
 
 // Get returns one conversation for viewer.
@@ -327,6 +332,13 @@ func (s *Service) Get(ctx context.Context, orgID, viewerID int64, id uuid.UUID) 
 	}
 	for _, p := range parts {
 		d.Participants = append(d.Participants, Participant{UUID: p.UserUuid, Name: strings.TrimSpace(p.UserName + " " + p.UserSurname), Email: p.UserEmail, Role: p.Role})
+	}
+	screen, err := q.ConversationScreenContext(ctx, db.ConversationScreenContextParams{OrganizationID: orgID, ConversationID: r.Conversation.ID})
+	switch {
+	case err == nil:
+		d.ScreenContext = screenctx.Parse(screen.PageUrl, screen.Events, screen.CreatedAt.Time)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return Detail{}, err
 	}
 	return d, nil
 }

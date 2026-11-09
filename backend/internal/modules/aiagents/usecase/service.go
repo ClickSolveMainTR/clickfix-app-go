@@ -18,6 +18,8 @@ import (
 	coremodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	core "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
+	sysmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/model"
+	systems "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
@@ -32,6 +34,17 @@ type Engine interface {
 type BotSender interface {
 	PostAI(context.Context, int64, uuid.UUID, string, int32) (uuid.UUID, error)
 }
+
+// SystemProvider is the organization's connected system (CF-197): its
+// playbook intents go to triage, the matched playbook's concept data and
+// instructions go to the reply, and its AI-allowed actions are tools.
+type SystemProvider interface {
+	Intents(ctx context.Context, org int64) ([]sysmodel.Intent, error)
+	Context(ctx context.Context, org, conversation int64, intent string) (systems.AIContext, error)
+	Tools(ctx context.Context, org int64, only []string) ([]ai.Tool, error)
+	InvokeTool(ctx context.Context, org, conversation int64, name string, args json.RawMessage) (string, error)
+}
+
 type Service struct {
 	Sources  *SourceService
 	Feedback AIFeedback
@@ -40,6 +53,7 @@ type Service struct {
 	Sender   BotSender
 	Now      func() time.Time
 	Tools    *ToolService
+	Systems  SystemProvider
 	// Fields adds the AI-visible contact/company custom fields to the
 	// context (CF-196); nil leaves them out.
 	Fields FieldSource
@@ -175,7 +189,17 @@ func (s *Service) triage(ctx context.Context, org int64, msg db.Message, conv db
 	if e != nil {
 		return e
 	}
-	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: transcript + "\nAllowed assignment candidates (untrusted labels; UUIDs only): " + string(candidatesJSON), Locale: cfg.Locale, MaxTokens: 512}, core.AgentOptions{
+	triageInput := transcript + "\nAllowed assignment candidates (untrusted labels; UUIDs only): " + string(candidatesJSON)
+	if s.Systems != nil {
+		// Playbook intents make the model classify a free sentence onto the
+		// organization's own intents (CF-197); a failure only drops the hint.
+		if intents, err := s.Systems.Intents(ctx, org); err != nil {
+			slog.WarnContext(ctx, "ai_system_intents_unavailable", "error", err)
+		} else {
+			triageInput += systems.TriageHint(intents)
+		}
+	}
+	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: triageInput, Locale: cfg.Locale, MaxTokens: 512}, core.AgentOptions{
 		ConversationID: conv.ID, Instructions: triageInstructions, Schema: triageSchema,
 	})
 	status, reason := "completed", ""
@@ -287,9 +311,21 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 	}
 	input := transcript
+	if screen := screenOf(msg); screen != nil {
+		input += "\n" + screen.Prompt()
+	}
 	procedure, err := s.procedure(ctx, org, conv.Uuid, msg.ID, cfg.Locale)
 	if err != nil {
 		return err
+	}
+	system := s.systemContext(ctx, org, conv, msg.ID)
+	if procedure == nil && system.ProcedureIntent != "" {
+		if procedure, err = s.publishedProcedure(ctx, org, system.ProcedureIntent, cfg.Locale); err != nil {
+			return err
+		}
+	}
+	if system.Text != "" {
+		input += clipInput(system.Text, maxInputBytes-len(input)-1024)
 	}
 	if procedure != nil {
 		raw, _ := json.Marshal(procedure)
@@ -312,8 +348,13 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			}
 			offered = filtered
 		}
+		offered = append(offered, s.systemTools(ctx, org, system)...)
 		options.Tools = offered
 		options.Runner = func(ctx context.Context, call ai.ToolCall) (ai.ToolResult, error) {
+			if s.Systems != nil && strings.HasPrefix(call.Name, systems.ToolPrefix) {
+				value, err := s.Systems.InvokeTool(ctx, org, conv.ID, call.Name, call.Input)
+				return ai.ToolResult{Content: value}, err
+			}
 			value, err := s.Tools.Invoke(ctx, org, 0, conv.Uuid, Invocation{Name: call.Name, Arguments: call.Input, Key: uuid.NewSHA1(job.Uuid, []byte(call.ID))})
 			return ai.ToolResult{Content: value}, err
 		}
@@ -335,6 +376,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			}
 		}
 		grounded = grounded && found
+	}
+	// Connected system data about this customer grounds an answer that
+	// cites no public chunk (CF-197); a wrong citation still does not.
+	if system.Grounded && len(answer.Citations) == 0 {
+		grounded = true
 	}
 	status, reason := "draft", "Agent review required"
 	if answer.Handoff || answer.Confidence < cfg.Confidence || !grounded || strings.TrimSpace(answer.Text) == "" {

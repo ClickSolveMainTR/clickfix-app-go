@@ -61,6 +61,7 @@ import enTeamChat from "@/locales/en/team_chat.json";
 import enWorkforce from "@/locales/en/workforce.json";
 import enCoaching from "@/locales/en/coaching.json";
 import enAutomationIntegrations from "@/locales/en/automation_integrations.json";
+import enIntegrationsConnect from "@/locales/en/integrations_connect.json";
 import enVideo from "@/locales/en/video.json";
 import enGuides from "@/locales/en/guides.json";
 import enAssistant from "@/locales/en/assistant.json";
@@ -145,6 +146,7 @@ import trTeamChat from "@/locales/tr/team_chat.json";
 import trWorkforce from "@/locales/tr/workforce.json";
 import trCoaching from "@/locales/tr/coaching.json";
 import trAutomationIntegrations from "@/locales/tr/automation_integrations.json";
+import trIntegrationsConnect from "@/locales/tr/integrations_connect.json";
 import trVideo from "@/locales/tr/video.json";
 import trGuides from "@/locales/tr/guides.json";
 import trAssistant from "@/locales/tr/assistant.json";
@@ -203,6 +205,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     workforce: trWorkforce,
     coaching: trCoaching,
     automation_integrations: trAutomationIntegrations,
+    integrations_connect: trIntegrationsConnect,
     video: trVideo,
     guides: trGuides,
     assistant: trAssistant,
@@ -283,6 +286,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     workforce: enWorkforce,
     coaching: enCoaching,
     automation_integrations: enAutomationIntegrations,
+    integrations_connect: enIntegrationsConnect,
     video: enVideo,
     guides: enGuides,
     assistant: enAssistant,
