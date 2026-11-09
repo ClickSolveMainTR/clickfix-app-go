@@ -66,26 +66,15 @@ func Capabilities() []*capability.Capability {
 					"description": map[string]any{"type": "string", "title": "Description", "maxLength": 500},
 				}},
 			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
-				r, err := e.API.Call(ctx, http.MethodGet, teamsPath+"?limit=100", nil)
-				if err != nil {
+				if err := teamDuplicate(ctx, e, text(p, "name")); err != nil {
 					return capability.Result{}, err
-				}
-				var page struct {
-					Items []struct {
-						Name string `json:"name"`
-					} `json:"items"`
-				}
-				if err := r.Decode(&page); err != nil {
-					return capability.Result{}, err
-				}
-				for _, t := range page.Items {
-					if strings.EqualFold(t.Name, text(p, "name")) {
-						return capability.Result{}, capability.Invalid("%s", say(e, "“%s” takımı zaten var.", "Team “%s” already exists.", t.Name))
-					}
 				}
 				return capability.Result{Summary: say(e, "“%s” takımı oluşturulacak.", "Team “%s” will be created.", text(p, "name"))}, nil
 			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				if err := teamDuplicate(ctx, e, text(p, "name")); err != nil {
+					return capability.Result{}, err
+				}
 				body := map[string]any{"name": text(p, "name")}
 				if d := text(p, "description"); d != "" {
 					body["description"] = d
@@ -131,4 +120,26 @@ func Capabilities() []*capability.Capability {
 			},
 		},
 	}
+}
+
+// teamDuplicate refuses a second team with the same name (dry run and apply).
+func teamDuplicate(ctx context.Context, e capability.Exec, name string) error {
+	r, err := e.API.Call(ctx, http.MethodGet, teamsPath+"?limit=100", nil)
+	if err != nil {
+		return err
+	}
+	var page struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	if err := r.Decode(&page); err != nil {
+		return err
+	}
+	for _, t := range page.Items {
+		if strings.EqualFold(t.Name, name) {
+			return capability.Invalid("%s", say(e, "“%s” takımı zaten var.", "Team “%s” already exists.", t.Name))
+		}
+	}
+	return nil
 }
