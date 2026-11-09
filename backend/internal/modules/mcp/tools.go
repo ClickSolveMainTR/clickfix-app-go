@@ -133,15 +133,18 @@ func (s *Server) run(ctx context.Context, sess *session, t *Tool, raw json.RawMe
 	return okResult(t.Name, data), OutcomeOK, ""
 }
 
+var errBridgeUnavailable = errors.New("mcp: the panel API bridge is not configured")
+
 // execute runs the capability as the principal: the /v1 routes check the
 // permission again. The MCP client confirmed a write tool itself (tools
 // carry readOnly/destructive hints), so Apply runs directly.
 func (s *Server) execute(ctx context.Context, sess *session, t *Tool, args Args) (capability.Result, error) {
 	p := sess.principal
 	e := capability.Exec{OrgID: p.Scope.ID, OrgUUID: p.Scope.UUID, UserID: p.UserID, UserUUID: p.UserUUID, Locale: "en"}
-	if s.cfg.Bridge != nil && s.cfg.Bridge.API != nil {
-		e.API = capability.Bridge{API: s.cfg.Bridge.API, User: p.UserUUID, Org: p.Scope.UUID}
+	if s.cfg.Bridge == nil || s.cfg.Bridge.API == nil {
+		return capability.Result{}, errBridgeUnavailable
 	}
+	e.API = capability.Bridge{API: s.cfg.Bridge.API, User: p.UserUUID, Org: p.Scope.UUID}
 	cp := t.Capability
 	params := capability.Params(args)
 	if !cp.Writes() {
