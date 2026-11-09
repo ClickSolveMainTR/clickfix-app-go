@@ -166,7 +166,7 @@ func ruleFields(required bool) map[string]any {
 		"trigger":          map[string]any{"type": "string", "title": "Trigger", "enum": usecase.TriggerNames()},
 		"conditions":       map[string]any{"type": "object", "title": "Conditions", "description": conditionDoc + " Use {\"all\":[]} for none."},
 		"actions":          map[string]any{"type": "array", "title": "Actions", "minItems": 1, "maxItems": 20, "items": actionItemSchema()},
-		"enabled":          map[string]any{"type": "boolean", "title": "Enabled"},
+		"enabled":          map[string]any{"type": "boolean", "title": "Enabled", "description": "A new rule is off unless true."},
 		"stop_on_match":    map[string]any{"type": "boolean", "title": "Stop other rules"},
 		"schedule_minutes": map[string]any{"type": "integer", "title": "Every (minutes)", "minimum": 1, "maximum": 525600},
 	}
@@ -190,7 +190,8 @@ func actionItemSchema() map[string]any {
 func RuleWriteCapabilities() []*capability.Capability {
 	routes := []string{"/rules"}
 	newRule := func(p capability.Params) (model.RuleInput, error) {
-		in := model.RuleInput{Conditions: model.Condition{All: []model.Condition{}}, Enabled: true}
+		// Off unless asked, like workflows.create: the card's form can turn it on.
+		in := model.RuleInput{Conditions: model.Condition{All: []model.Condition{}}}
 		if err := applyRuleParams(&in, p); err != nil {
 			return in, err
 		}
