@@ -116,5 +116,17 @@
   "documents.errors.empty": "Belgede okunabilir metin yok.",
   "documents.errors.fetch": "Bağlantı okunamadı. Herkese açık bir https adresi olmalı.",
   "documents.errors.generic": "Belge eklenemedi, tekrar deneyin.",
-  "documents.errors.pdf": "PDF'in metni okunamadı (şifreli, bozuk ya da taranmış görüntü olabilir)."
+  "documents.errors.pdf": "PDF'in metni okunamadı (şifreli, bozuk ya da taranmış görüntü olabilir).",
+  "fields.days": "Günler ve saatler",
+  "fields.timezone": "Saat dilimi",
+  "fields.is_default": "Varsayılan takvim",
+  "fields.use_public_holidays": "Resmî tatillerde kapalı",
+  "fields.targets": "Hedefler",
+  "fields.description": "Açıklama",
+  "fields.business_hours_uuid": "Çalışma saatleri",
+  "fields.priorities": "Yalnız bu öncelikler",
+  "fields.is_active": "Etkin",
+  "fields.policy_uuid": "SLA politikası",
+  "fields.conditions": "Koşullar",
+  "fields.stop_on_match": "Diğer kuralları durdur"
 }

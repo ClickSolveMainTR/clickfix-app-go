@@ -116,5 +116,17 @@
   "documents.errors.empty": "The document has no readable text.",
   "documents.errors.fetch": "The link could not be read. It must be a public https address.",
   "documents.errors.generic": "The document could not be added; try again.",
-  "documents.errors.pdf": "The PDF text could not be read (it may be encrypted, damaged or a scanned image)."
+  "documents.errors.pdf": "The PDF text could not be read (it may be encrypted, damaged or a scanned image).",
+  "fields.days": "Days and hours",
+  "fields.timezone": "Time zone",
+  "fields.is_default": "Default schedule",
+  "fields.use_public_holidays": "Closed on public holidays",
+  "fields.targets": "Targets",
+  "fields.description": "Description",
+  "fields.business_hours_uuid": "Business hours",
+  "fields.priorities": "Only these priorities",
+  "fields.is_active": "Active",
+  "fields.policy_uuid": "SLA policy",
+  "fields.conditions": "Conditions",
+  "fields.stop_on_match": "Stop other rules"
 }

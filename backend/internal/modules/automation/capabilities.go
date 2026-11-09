@@ -202,7 +202,8 @@ func getWorkflow(ctx context.Context, api capability.API, id string) (workflowVi
 	if err != nil {
 		return w, err
 	}
-	return w, r.Decode(&w)
+	decErr := r.Decode(&w)
+	return w, decErr
 }
 
 // latestConversation is the conversation a saved workflow is simulated on.
@@ -244,7 +245,8 @@ func simulate(ctx context.Context, e capability.Exec, id, conversation string) (
 	var out struct {
 		Trace []traceStep `json:"trace"`
 	}
-	return out.Trace, conversation, r.Decode(&out)
+	decErr := r.Decode(&out)
+	return out.Trace, conversation, decErr
 }
 
 var errNoConversation = errors.New("no conversation to simulate on yet")

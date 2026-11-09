@@ -33,7 +33,8 @@ func listRules(ctx context.Context, api capability.API) ([]ruleView, int64, erro
 		Items []ruleView `json:"items"`
 		Total int64      `json:"total"`
 	}
-	return page.Items, page.Total, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, page.Total, decErr
 }
 
 func listWorkflows(ctx context.Context, api capability.API) ([]workflowView, error) {
@@ -44,7 +45,8 @@ func listWorkflows(ctx context.Context, api capability.API) ([]workflowView, err
 	var page struct {
 		Items []workflowView `json:"items"`
 	}
-	return page.Items, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, decErr
 }
 
 // RuleCapabilities are the automation rule capabilities.
@@ -147,9 +149,9 @@ func Pages() []*capability.Page {
 					return st, err
 				}
 				if len(items) == 0 {
-					st.Missing = append(st.Missing, capability.Step{Key: "create_rule",
+					st.Missing = append(st.Missing, capability.Step{Key: "create_rule", Capability: "automations.create",
 						Title:  t(e, "Henüz otomasyon kuralı yok", "No automation rule yet"),
-						Prompt: t(e, "Hangi otomasyon kurallarıyla başlamalıyım?", "Which automation rules should I start with?")})
+						Prompt: t(e, "Hangi otomasyon kurallarıyla başlamalıyım? Birini birlikte kuralım", "Which automation rules should I start with? Let's set one up")})
 				}
 				for i, r := range items {
 					if i >= 3 {

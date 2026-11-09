@@ -650,7 +650,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Help:      &assistantmodule.HelpAdapter{Q: deps.Queries, Help: helpSvc},
 	}
 	assistantSvc.Actions = assistantmodule.DefaultActions(assistantmodule.ActionDeps{
-		Q: deps.Queries, Inviter: orgMgmt, SLA: slaSvc, Escalate: assistantSvc.EscalateFromAction,
+		Q: deps.Queries, Inviter: orgMgmt, Escalate: assistantSvc.EscalateFromAction,
 	})
 	// Capability registry (CF-183): every capability calls the panel's /v1
 	// routes as the confirming user, so the routes re-check permissions.
@@ -661,6 +661,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Register(channelsmodule.Capabilities()...).
 		Register(automationmodule.RuleCapabilities()...).
 		Register(slamodule.Capabilities()...).
+		Register(slamodule.WriteCapabilities()...).
+		Register(automationmodule.RuleWriteCapabilities()...).
 		Register(webhooksmodule.Capabilities()...).
 		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
 		RegisterPages(channelsmodule.Pages()...).

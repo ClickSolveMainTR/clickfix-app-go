@@ -10,14 +10,11 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	orgmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/model"
 	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
-	slamodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/sla/model"
-	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
@@ -99,7 +96,6 @@ func str(p map[string]any, key string) string {
 }
 
 var (
-	hhmm     = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$|^24:00$`)
 	routeRxp = regexp.MustCompile(`^/[a-z0-9/_\-\[\]]{0,150}$`)
 )
 
@@ -118,17 +114,10 @@ type Inviter interface {
 	CreateInvitation(ctx context.Context, scope orgctx.Scope, actor orgusecase.Actor, in orgmodel.CreateInvitationInput) (orgmodel.Invitation, error)
 }
 
-// SLAService creates schedules and policies (sla usecase).
-type SLAService interface {
-	CreateBusinessHours(ctx context.Context, orgID int64, in slamodel.BusinessHoursInput) (slamodel.BusinessHours, error)
-	CreatePolicy(ctx context.Context, orgID int64, in slamodel.PolicyInput) (slamodel.Policy, error)
-}
-
 // ActionDeps are the services the default actions call.
 type ActionDeps struct {
 	Q       *db.Queries
 	Inviter Inviter
-	SLA     SLAService
 	// Escalate runs the support escalation (escalate_to_support).
 	Escalate func(ctx context.Context, ac ActionContext, note string) (string, error)
 }
@@ -143,78 +132,6 @@ func inList(v string, list []string) bool {
 	}
 	return false
 }
-
-var priorities = []string{"low", "normal", "high", "urgent"}
-
-func minutes(v any) (*int32, bool) {
-	f, ok := v.(float64)
-	if !ok {
-		if v == nil {
-			return nil, true
-		}
-		return nil, false
-	}
-	if f < 1 || f > 60*24*90 || f != float64(int64(f)) {
-		return nil, false
-	}
-	n := int32(f)
-	return &n, true
-}
-
-func parseTargets(p map[string]any) ([]slamodel.Target, error) {
-	raw, ok := p["targets"].([]any)
-	if !ok || len(raw) == 0 || len(raw) > 4 {
-		return nil, ErrActionInvalid
-	}
-	out := []slamodel.Target{}
-	for _, item := range raw {
-		m, ok := item.(map[string]any)
-		if !ok || !inList(str(m, "priority"), priorities) {
-			return nil, ErrActionInvalid
-		}
-		first, ok1 := minutes(m["first_response_minutes"])
-		res, ok2 := minutes(m["resolution_minutes"])
-		if !ok1 || !ok2 || (first == nil && res == nil) {
-			return nil, ErrActionInvalid
-		}
-		out = append(out, slamodel.Target{Priority: str(m, "priority"), FirstResponseMinutes: first, ResolutionMinutes: res})
-	}
-	return out, nil
-}
-
-func parseWeek(p map[string]any) (businesshours.Week, error) {
-	days, ok := p["days"].(map[string]any)
-	if !ok || len(days) == 0 {
-		return nil, ErrActionInvalid
-	}
-	week := businesshours.Week{}
-	for key, v := range days {
-		if !inList(key, businesshours.DayKeys[:]) {
-			return nil, ErrActionInvalid
-		}
-		m, ok := v.(map[string]any)
-		if !ok {
-			return nil, ErrActionInvalid
-		}
-		closed, _ := m["closed"].(bool)
-		d := businesshours.Day{Closed: closed, Open: str(m, "open"), Close: str(m, "close")}
-		if !closed && (!hhmm.MatchString(d.Open) || !hhmm.MatchString(d.Close) || d.Open >= d.Close) {
-			return nil, ErrActionInvalid
-		}
-		week[key] = d
-	}
-	return week, nil
-}
-
-func validTimezone(tz string) bool {
-	if tz == "" {
-		return true
-	}
-	_, err := time.LoadLocation(tz)
-	return err == nil
-}
-
-func validName(n string) bool { return utf8.RuneCountInString(n) <= 120 }
 
 // DefaultActions are the CF-141 actions not yet moved to the capability
 // registry (open_route, connect_channel and enable_ai now are
@@ -255,63 +172,6 @@ func DefaultActions(d ActionDeps) Registry {
 					return "", err
 				}
 				return inv.Email, nil
-			},
-		}
-	}
-	if d.SLA != nil {
-		r["set_business_hours"] = Executor{
-			Permission: rbac.PermTenantSlaWrite,
-			Route:      "/settings/sla",
-			Describe: "Create the business hours schedule. params: {name, timezone (IANA, e.g. Europe/Istanbul), " +
-				"days: {mon:{open:\"09:00\",close:\"18:00\"}, sat:{closed:true}, ...}, is_default: bool}",
-			Validate: func(p map[string]any) error {
-				if _, err := parseWeek(p); err != nil || !validTimezone(str(p, "timezone")) || !validName(str(p, "name")) {
-					return ErrActionInvalid
-				}
-				return nil
-			},
-			Run: func(ctx context.Context, ac ActionContext, p map[string]any) (string, error) {
-				week, err := parseWeek(p)
-				if err != nil {
-					return "", err
-				}
-				name, tz := str(p, "name"), str(p, "timezone")
-				if name == "" {
-					name = "Çalışma saatleri"
-				}
-				if tz == "" {
-					tz = "Europe/Istanbul"
-				}
-				def, _ := p["is_default"].(bool)
-				bh, err := d.SLA.CreateBusinessHours(ctx, ac.Scope.ID, slamodel.BusinessHoursInput{Name: name, Timezone: tz, WorkingHours: week, IsDefault: def})
-				if err != nil {
-					return "", err
-				}
-				return bh.Name, nil
-			},
-		}
-		r["create_sla"] = Executor{
-			Permission: rbac.PermTenantSlaWrite,
-			Route:      "/settings/sla",
-			Describe: "Create an SLA policy. params: {name, description, targets: [{priority: low|normal|high|urgent, " +
-				"first_response_minutes, resolution_minutes}]}",
-			Validate: func(p map[string]any) error {
-				if _, err := parseTargets(p); err != nil || str(p, "name") == "" || !validName(str(p, "name")) {
-					return ErrActionInvalid
-				}
-				return nil
-			},
-			Run: func(ctx context.Context, ac ActionContext, p map[string]any) (string, error) {
-				targets, err := parseTargets(p)
-				if err != nil {
-					return "", err
-				}
-				active := true
-				pol, err := d.SLA.CreatePolicy(ctx, ac.Scope.ID, slamodel.PolicyInput{Name: str(p, "name"), Description: str(p, "description"), IsActive: &active, Targets: targets})
-				if err != nil {
-					return "", err
-				}
-				return pol.Name, nil
 			},
 		}
 	}
