@@ -170,13 +170,21 @@ ON CONFLICT (conversation_id, metric) DO UPDATE SET
 DELETE FROM conversation_sla_metrics WHERE organization_id = $1 AND conversation_id = $2 AND metric = $3;
 
 -- name: ClaimDueSLAMetrics :many
--- Running clocks whose warning or due time has come, locked for the sweep.
-SELECT * FROM conversation_sla_metrics
-WHERE completed_at IS NULL AND paused_at IS NULL AND breached_at IS NULL
-  AND (due_at <= sqlc.arg(now)::timestamptz OR (warned_at IS NULL AND warn_at <= sqlc.arg(now)::timestamptz))
-ORDER BY COALESCE(LEAST(due_at, warn_at), due_at)
+-- Running clocks whose warning or due time has come, locked for the sweep
+-- together with their conversation. Sync locks the conversation first and
+-- writes the metrics second; a sweep that locked the metric first and then
+-- updated the conversation deadlocked against it (and against a cascading
+-- organization delete). Claiming both rows here, skipping any that is held,
+-- means the sweep never waits on a conversation. Platform-wide sweep by
+-- design: the organization is taken from each row for the follow-up writes.
+SELECT sqlc.embed(m), sqlc.embed(c) FROM conversation_sla_metrics m
+JOIN conversations c ON c.organization_id = m.organization_id AND c.id = m.conversation_id
+WHERE m.completed_at IS NULL AND m.paused_at IS NULL AND m.breached_at IS NULL
+  AND c.deleted_at IS NULL
+  AND (m.due_at <= sqlc.arg(now)::timestamptz OR (m.warned_at IS NULL AND m.warn_at <= sqlc.arg(now)::timestamptz))
+ORDER BY COALESCE(LEAST(m.due_at, m.warn_at), m.due_at)
 LIMIT sqlc.arg(max_rows)
-FOR UPDATE SKIP LOCKED;
+FOR UPDATE OF m, c SKIP LOCKED;
 
 -- name: MarkSLAMetricWarned :exec
 UPDATE conversation_sla_metrics SET warned_at = $4, updated_at = NOW()

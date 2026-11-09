@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/billingtest"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
@@ -65,33 +66,9 @@ func setup(t *testing.T, minutes int64) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	features, err := f.billing.Features(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
 	in := model.VersionInput{Prices: []model.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}}
-	for _, feature := range features {
-		g := model.Grant{Feature: feature.Key, Enforcement: "hard", WarnPercent: 80}
-		if feature.Kind == "boolean" {
-			v := true
-			g.Enabled = &v
-		} else {
-			v := int64(10)
-			switch feature.Key {
-			case "ai.credits":
-				v = 0
-			case "video.minutes":
-				v = minutes
-			}
-			g.Limit = &v
-		}
-		in.Entitlements = append(in.Entitlements, g)
-	}
-	v, err := f.billing.SaveVersion(ctx, plan.UUID, uuid.Nil, in)
+	v, err := billingtest.PublishVersion(ctx, f.billing, plan.UUID, f.actor, in, billingtest.Grant(10, map[string]int64{"ai.credits": 0, "video.minutes": minutes}))
 	if err != nil {
-		t.Fatal(err)
-	}
-	if v, err = f.billing.Publish(ctx, plan.UUID, v.UUID, f.actor); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.billing.CreateSubscription(ctx, model.CreateSubscription{OrganizationUUID: orgUUID, VersionUUID: v.UUID, PriceUUID: v.Prices[0].UUID, Status: "active",

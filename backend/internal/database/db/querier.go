@@ -509,8 +509,14 @@ type Querier interface {
 	ClaimAutomationExecution(ctx context.Context, arg ClaimAutomationExecutionParams) (AutomationExecution, error)
 	// One worker tick claims due reminders (SKIP LOCKED keeps ticks apart).
 	ClaimDueReminders(ctx context.Context, now pgtype.Timestamptz) ([]ConversationReminder, error)
-	// Running clocks whose warning or due time has come, locked for the sweep.
-	ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ConversationSlaMetric, error)
+	// Running clocks whose warning or due time has come, locked for the sweep
+	// together with their conversation. Sync locks the conversation first and
+	// writes the metrics second; a sweep that locked the metric first and then
+	// updated the conversation deadlocked against it (and against a cascading
+	// organization delete). Claiming both rows here, skipping any that is held,
+	// means the sweep never waits on a conversation. Platform-wide sweep by
+	// design: the organization is taken from each row for the follow-up writes.
+	ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ClaimDueSLAMetricsRow, error)
 	// Registers a sender domain for an organization; a domain already owned by
 	// another organization returns no row.
 	ClaimEmailDomain(ctx context.Context, arg ClaimEmailDomainParams) (ChannelEmailDomain, error)
