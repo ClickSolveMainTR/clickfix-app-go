@@ -145,5 +145,6 @@
   "fields.scopes": "Yetki kapsamları",
   "fields.rate_limit": "Dakikada istek",
   "fields.expires_in_days": "Geçerlilik (gün)",
-  "fields.api_key": "API anahtarı"
+  "fields.api_key": "API anahtarı",
+  "support_chat": "Canlı destek"
 }

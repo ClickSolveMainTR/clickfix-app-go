@@ -127,3 +127,26 @@ test("client: API errors carry the code, never the server text", async () => {
       !e.message.includes("secret"),
   );
 });
+
+test("capture: false turns co-browsing and replay off", async () => {
+  const { Widget } = await load("../src/runtime/widget.ts");
+  const off = new Widget("w", { capture: false }, PANEL, null);
+  const on = new Widget("w", {}, PANEL, null);
+  let asked = 0;
+  for (const w of [off, on]) {
+    w.capture.askCapture = () => asked++;
+    w.api.call = async () => ({ cobrowse_enabled: true });
+  }
+  const ev = {
+    type: "cobrowse.requested",
+    conversation_uuid: "c",
+    session: { kind: "cobrowse" },
+  };
+  off.onRealtime(ev);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(asked, 0);
+  on.onRealtime(ev);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(asked, 1);
+  assert.equal(await off.startReplay(), undefined);
+});

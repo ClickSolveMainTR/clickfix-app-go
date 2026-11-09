@@ -2,7 +2,9 @@
  * ClickFix's own support widget in the panel (CF-193). The API gives the
  * support organization's widget id and the member's identity signature
  * (computed server-side; the identity secret never reaches the browser).
- * The widget then runs with the assistant tab for the active organization.
+ * In the panel the assistant drawer is the single entry: the widget has
+ * no launcher and opens only from the drawer, for a conversation with the
+ * support team. Co-browsing and session replay stay off on panel pages.
  */
 export type SupportWidgetData = {
   available: boolean;
@@ -17,7 +19,8 @@ export type SupportWidgetInit = {
   widgetId: string;
   locale: string;
   user: { user_id: string; user_hash: string; name: string; email: string };
-  assistant: { organization: string };
+  hideLauncher: true;
+  capture: false;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,13 +30,11 @@ const HASH = /^[0-9a-f]{64}$/;
 export function supportWidgetInit(
   data: SupportWidgetData | null | undefined,
   user: SupportWidgetUser | null | undefined,
-  organization: string,
   locale: string,
 ): SupportWidgetInit | null {
   if (
     !data?.available ||
     !user ||
-    !organization ||
     !UUID.test(data.widget_id ?? "") ||
     !data.user_id ||
     !HASH.test(data.user_hash ?? "")
@@ -48,7 +49,8 @@ export function supportWidgetInit(
       name: user.name,
       email: user.email,
     },
-    assistant: { organization },
+    hideLauncher: true,
+    capture: false,
   };
 }
 
@@ -78,4 +80,12 @@ export function mountSupportWidget(init: SupportWidgetInit): () => void {
     document.body.appendChild(script);
   }
   return () => win.ClickFix?.("shutdown");
+}
+
+/** Opens the support widget on a new conversation (from the drawer). */
+export function openSupportChat(): boolean {
+  const fn = (window as unknown as { ClickFix?: ClickFixFn }).ClickFix;
+  if (!fn) return false;
+  fn("startConversation");
+  return true;
 }

@@ -103,8 +103,16 @@ func (r *Registry) AllowOn(surface string, allow func(*Capability) bool) *Regist
 		if c.OnSurface(surface) || !allow(c) {
 			continue
 		}
-		if surface == SurfaceMCP && len(c.Secrets) > 0 {
-			panic(fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name))
+		if surface == SurfaceMCP {
+			switch old, dup := r.mcpNames[c.MCPToolName()]; {
+			case len(c.Secrets) > 0:
+				panic(fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name))
+			case c.Permission == "":
+				panic(fmt.Errorf("capability %s: capabilities on the MCP surface need a permission", c.Name))
+			case dup && old != c:
+				panic(fmt.Errorf("capability: duplicate MCP tool name %s", c.MCPToolName()))
+			}
+			r.mcpNames[c.MCPToolName()] = c
 		}
 		if len(c.Surfaces) == 0 {
 			c.Surfaces = slices.Clone(DefaultSurfaces)

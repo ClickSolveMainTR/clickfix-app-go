@@ -160,6 +160,11 @@ export type InitOptions = {
    * the assistant tab when the script is served from the page's origin.
    */
   assistant?: { organization: string };
+  /**
+   * false: this page never shares its screen (co-browsing) or records a
+   * session replay, whatever the widget settings say (the ClickFix panel).
+   */
+  capture?: boolean;
 };
 
 export type TrackedEvent = {

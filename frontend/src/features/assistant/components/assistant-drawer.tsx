@@ -10,6 +10,7 @@ import {
   ArrowDown,
   History,
   LifeBuoy,
+  MessagesSquare,
   Loader2,
   Plus,
   SendHorizontal,
@@ -49,6 +50,8 @@ import {
 import { AssistantMarkdown } from "./assistant-markdown";
 import { PageStateCard } from "./page-state-card";
 import { DocumentAttach } from "./document-attach";
+import { useSupportWidget } from "./support-widget";
+import { openSupportChat } from "../lib/support-widget";
 
 type Pending = { prompt?: string; guideKey?: string; nonce: number };
 
@@ -100,6 +103,8 @@ export function AssistantDrawer({
 }) {
   const { t, locale } = useLocale();
   const slug = useOptionalTenant()?.slug ?? "";
+  // Same query as the SupportWidget mount: the drawer opens its chat.
+  const supportWidget = useSupportWidget(slug, true);
   const pathname = usePathname() || "/";
   const qc = useQueryClient();
   const [thread, setThread] = useState<string | null>(null);
@@ -758,18 +763,32 @@ export function AssistantDrawer({
           <div className="text-muted-foreground flex items-center justify-between text-[11px]">
             {/* No support organization/inbox: escalation would answer 409
                 ASSISTANT_SUPPORT_UNAVAILABLE, so the action is hidden. */}
-            {status.data?.escalation_available === false ? (
-              <span />
-            ) : (
-              <button
-                type="button"
-                className="hover:text-foreground inline-flex items-center gap-1"
-                onClick={() => setEscalating((v) => !v)}
-              >
-                <LifeBuoy className="size-3.5" />
-                {t("assistant.escalate.button")}
-              </button>
-            )}
+            <span className="inline-flex items-center gap-3">
+              {status.data?.escalation_available === false ? null : (
+                <button
+                  type="button"
+                  className="hover:text-foreground inline-flex items-center gap-1"
+                  onClick={() => setEscalating((v) => !v)}
+                >
+                  <LifeBuoy className="size-3.5" />
+                  {t("assistant.escalate.button")}
+                </button>
+              )}
+              {/* ClickFix's support widget (no launcher in the panel): a live
+                  conversation with the support team. */}
+              {supportWidget.data?.available ? (
+                <button
+                  type="button"
+                  className="hover:text-foreground inline-flex items-center gap-1"
+                  onClick={() => {
+                    if (openSupportChat()) onOpenChange(false);
+                  }}
+                >
+                  <MessagesSquare className="size-3.5" />
+                  {t("assistant.support_chat")}
+                </button>
+              ) : null}
+            </span>
             {status.data ? (
               <span>
                 {t("assistant.usage", {

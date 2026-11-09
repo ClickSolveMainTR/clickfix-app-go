@@ -3,6 +3,7 @@ package assistant_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -118,6 +119,35 @@ func TestWidgetSurface(t *testing.T) {
 	if out, err := f.svc.Confirm(ctx, c, th.UUID, res.Reply.Actions[0].ID, nil); err != nil || out.Actions[0].Status != "done" {
 		t.Fatalf("navigation confirm %+v %v", out, err)
 	}
+	// A capability off the allowlist, proposed on the web surface, is
+	// refused when confirmed from the widget (the thread's current surface).
+	f.prov.steps = []ai.Result{{Calls: []ai.ToolCall{{ID: "w1", Name: "channels_api_create", Input: json.RawMessage(`{"params":{"name":"Y","webhook_url":"https://shop.example.com/y"}}`)}}},
+		{Text: `{"reply":"Onayınıza sundum.","suggestions":[]}`}}
+	res, err = f.svc.Send(ctx, c, th.UUID, "REST API kanalı kur", assistant.Context{Surface: "web", Route: "/channels"})
+	if err != nil || len(res.Reply.Actions) != 1 {
+		t.Fatalf("web proposal %+v %v", res.Reply, err)
+	}
+	webAction := res.Reply.Actions[0].ID
+	// The member continues in the widget: the thread is on the widget surface again.
+	f.prov.steps = nil
+	if _, err := f.svc.Send(ctx, c, th.UUID, "Tamam", pc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Confirm(ctx, c, th.UUID, webAction, nil); !errors.Is(err, assistant.ErrForbidden) {
+		t.Fatalf("off-list confirm on a widget thread: %v", err)
+	}
+	// A member without the permission cannot confirm an allowed one either.
+	f.prov.steps = []ai.Result{{Calls: []ai.ToolCall{{ID: "n2", Name: "channels_test", Input: json.RawMessage(`{"params":{"channel_uuid":"` + uuid.NewString() + `"}}`)}}},
+		{Text: `{"reply":"Onayınıza sundum.","suggestions":[]}`}}
+	res, err = f.svc.Send(ctx, c, th.UUID, "Kanalı test et", pc)
+	if err != nil || len(res.Reply.Actions) != 1 {
+		t.Fatalf("test proposal %+v %v", res.Reply, err)
+	}
+	limited := c
+	limited.Scope.Permissions = []string{rbac.PermTenantAssistantUse}
+	if _, err := f.svc.Confirm(ctx, limited, th.UUID, res.Reply.Actions[0].ID, nil); !errors.Is(err, assistant.ErrForbidden) {
+		t.Fatalf("confirm without permission: %v", err)
+	}
 	// An unknown surface is refused.
 	if _, err := f.svc.CreateThread(ctx, f.scope.ID, f.user, assistant.Context{Surface: "kiosk"}); err == nil {
 		t.Fatal("unknown surface accepted")
@@ -152,6 +182,14 @@ func TestWidgetSurface(t *testing.T) {
 	raw, _ := json.Marshal(sw)
 	if strings.Contains(string(raw), secret) {
 		t.Fatal("identity secret leaked")
+	}
+	// While the platform assistant is off, nothing is embedded.
+	if _, err := f.q.AssistantSettingsSave(ctx, db.AssistantSettingsSaveParams{Enabled: false, ModelRoute: "reply", DailyLimitPerOrg: 100,
+		SupportOrgUuid: pgtype.UUID{Bytes: f.scope.UUID, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if sw, err := f.svc.SupportWidgetFor(ctx, scope, userUUID); err != nil || sw.Available || sw.UserHash != "" {
+		t.Fatalf("assistant off %+v %v", sw, err)
 	}
 }
 

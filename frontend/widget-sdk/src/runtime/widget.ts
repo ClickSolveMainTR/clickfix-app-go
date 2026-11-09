@@ -770,7 +770,13 @@ export class Widget {
   }
 
   startReplay() {
+    if (!this.captureAllowed) return Promise.resolve();
     return this.capture.startReplay(this.active?.uuid ?? null);
+  }
+
+  /** init({ capture: false }) turns co-browsing and replay off on this page. */
+  private get captureAllowed() {
+    return this.opts.capture !== false;
   }
 
   stopCapture(revoke: boolean) {
@@ -1383,6 +1389,7 @@ export class Widget {
       ev.session &&
       ev.conversation_uuid
     ) {
+      if (!this.captureAllowed) return;
       const conversation = ev.conversation_uuid;
       const session = ev.session;
       void this.api
@@ -3046,7 +3053,7 @@ export class Widget {
               [icon("smile")],
             )
           : null,
-        this.active && this.replayPolicy?.replay_enabled
+        this.active && this.replayPolicy?.replay_enabled && this.captureAllowed
           ? el("button", {
               type: "button",
               class: "icon-btn",

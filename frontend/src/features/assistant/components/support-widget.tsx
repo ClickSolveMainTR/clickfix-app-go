@@ -12,26 +12,33 @@ import { assistantService } from "../services/assistant.service";
 
 /**
  * ClickFix's own support widget in the workspace (CF-193): the member is
- * identified with a server-side signature and gets the assistant tab
- * (widget surface: navigation, help, reads, small confirmed set-ups) next
- * to the support team's chat. Nothing loads until the platform sets a
- * support organization with an identity-verified widget.
+ * identified with a server-side signature. It has no launcher; the
+ * assistant drawer opens it for a conversation with the support team.
+ * Nothing loads until the platform sets a support organization with an
+ * identity-verified widget (and keeps the assistant on).
  */
+export const supportWidgetKey = (slug: string) =>
+  ["assistant", slug, "support-widget"] as const;
+
+/** The support widget answer of the organization (shared query). */
+export function useSupportWidget(slug: string, enabled: boolean) {
+  return useQuery({
+    queryKey: supportWidgetKey(slug),
+    queryFn: () => assistantService.supportWidget(slug),
+    enabled: Boolean(slug) && enabled,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 export function SupportWidget() {
   const slug = useOptionalTenant()?.slug ?? "";
   const { user } = useAuth();
   const { locale } = useLocale();
-  const { data } = useQuery({
-    queryKey: ["assistant", slug, "support-widget"],
-    queryFn: () => assistantService.supportWidget(slug),
-    enabled: Boolean(slug && user),
-    staleTime: Infinity,
-    retry: false,
-  });
+  const { data } = useSupportWidget(slug, Boolean(user));
   const init = supportWidgetInit(
     data,
     user ? { name: user.fullName, email: user.email } : null,
-    slug,
     locale,
   );
   const key = init ? JSON.stringify(init) : "";

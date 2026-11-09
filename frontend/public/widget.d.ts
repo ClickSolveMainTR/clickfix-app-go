@@ -44,6 +44,17 @@ export interface ClickFixInitOptions {
   consent?: boolean;
   /** Log SDK events to the console. */
   debug?: boolean;
+  /**
+   * false: this page never shares its screen (co-browsing) or records a
+   * session replay, whatever the widget settings allow.
+   */
+  capture?: boolean;
+  /**
+   * ClickFix panel only: the signed-in member's organization slug, which
+   * adds the ClickFix Assistant tab. Ignored unless the script is served
+   * from the page's own origin, so it has no effect on other sites.
+   */
+  assistant?: { organization: string };
 }
 
 export interface ClickFixCompany {

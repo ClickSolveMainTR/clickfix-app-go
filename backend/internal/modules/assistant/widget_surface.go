@@ -51,11 +51,14 @@ type SupportWidget struct {
 // SupportWidgetFor returns the support organization's widget and the
 // member's identity signature. The identity secret never leaves the
 // server; without a support organization, an active widget or identity
-// verification the widget is unavailable. The user id is scoped to the
+// verification, or while the platform assistant is off, the widget is
+// unavailable. The user id is scoped to the
 // organization so one person in two organizations is two contacts.
 func (s *Service) SupportWidgetFor(ctx context.Context, scope orgctx.Scope, user uuid.UUID) (SupportWidget, error) {
 	st, err := s.GetSettings(ctx)
-	if err != nil || st.SupportOrgUUID == nil || s.Instances == nil {
+	// The assistant is the panel's single entry to support: while the
+	// platform has it off, the support widget is not embedded either.
+	if err != nil || !st.Enabled || st.SupportOrgUUID == nil || s.Instances == nil {
 		return SupportWidget{}, err
 	}
 	row, err := s.Q.AssistantSupportWidget(ctx, *st.SupportOrgUUID)

@@ -11,8 +11,8 @@ const data = {
 };
 const user = { name: "Ayşe", email: "ayse@example.com" };
 
-test("the widget loads with identity and the assistant for the organization", () => {
-  assert.deepEqual(supportWidgetInit(data, user, "acme", "tr"), {
+test("the widget loads identified, without a launcher and without screen capture", () => {
+  assert.deepEqual(supportWidgetInit(data, user, "tr"), {
     widgetId: data.widget_id,
     locale: "tr",
     user: {
@@ -21,24 +21,21 @@ test("the widget loads with identity and the assistant for the organization", ()
       name: "Ayşe",
       email: "ayse@example.com",
     },
-    assistant: { organization: "acme" },
+    hideLauncher: true,
+    capture: false,
   });
 });
 
 test("nothing loads without a complete, well-formed answer", () => {
+  assert.equal(supportWidgetInit({ available: false }, user, "tr"), null);
+  assert.equal(supportWidgetInit(data, null, "tr"), null);
   assert.equal(
-    supportWidgetInit({ available: false }, user, "acme", "tr"),
-    null,
-  );
-  assert.equal(supportWidgetInit(data, null, "acme", "tr"), null);
-  assert.equal(supportWidgetInit(data, user, "", "tr"), null);
-  assert.equal(
-    supportWidgetInit({ ...data, widget_id: "../x" }, user, "acme", "tr"),
+    supportWidgetInit({ ...data, widget_id: "../x" }, user, "tr"),
     null,
   );
   assert.equal(
-    supportWidgetInit({ ...data, user_hash: "short" }, user, "acme", "tr"),
+    supportWidgetInit({ ...data, user_hash: "short" }, user, "tr"),
     null,
   );
-  assert.equal(supportWidgetInit(undefined, user, "acme", "tr"), null);
+  assert.equal(supportWidgetInit(undefined, user, "tr"), null);
 });

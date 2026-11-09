@@ -145,5 +145,6 @@
   "fields.scopes": "Scopes",
   "fields.rate_limit": "Requests per minute",
   "fields.expires_in_days": "Valid for (days)",
-  "fields.api_key": "API key"
+  "fields.api_key": "API key",
+  "support_chat": "Live support"
 }
