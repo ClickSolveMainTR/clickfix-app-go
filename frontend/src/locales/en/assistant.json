@@ -147,5 +147,15 @@
   "fields.rate_limit": "Requests per minute",
   "fields.expires_in_days": "Valid for (days)",
   "fields.api_key": "API key",
-  "support_chat": "Live support"
+  "support_chat": "Live support",
+  "action.params": "Parameters",
+  "action.applying": "Applying…",
+  "errors.interrupted": "The connection dropped; part of the reply was saved.",
+  "escalate.done": "Sent to support. Reference: {{ref}}",
+  "history_back": "Back to the chat",
+  "mode.dock": "Dock to the side",
+  "mode.undock": "Back to the drawer",
+  "mode.page": "Open full page",
+  "close": "Close",
+  "page.description": "Answers questions and sets things up with you; your past chats are on the left."
 }

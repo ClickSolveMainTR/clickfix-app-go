@@ -12,6 +12,7 @@ import {
   SearchTrigger,
 } from "@/features/search-engine";
 import { AssistantButton } from "@/features/assistant/components/assistant-button";
+import { AssistantDock } from "@/features/assistant/components/assistant-dock";
 import { AssistantProvider } from "@/features/assistant/components/assistant-provider";
 import { GuidesProvider } from "@/features/guides/components/guides-provider";
 import { PageHelpButton } from "@/features/guides/components/page-help-button";
@@ -65,6 +66,7 @@ export function AppLayout({
           </div>
           <Footer />
         </SidebarInset>
+        {variant === "cms" ? <AssistantDock /> : null}
         <NotificationLiveBridge />
         <CommandPalette variant={variant} />
       </SidebarProvider>
