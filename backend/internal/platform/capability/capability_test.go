@@ -185,3 +185,17 @@ func TestReadResponse(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 }
+
+// Long path segments of a URL are not secrets; the same token alone is.
+func TestRedactSecretsKeepsURLPaths(t *testing.T) {
+	seg := strings.Repeat("a1B2", 12)
+	if out := RedactSecrets("adres https://shop.example.com/hooks/" + seg + "/in"); !strings.Contains(out, seg) {
+		t.Fatalf("URL path masked: %s", out)
+	}
+	if out := RedactSecrets("anahtar " + seg); strings.Contains(out, seg) {
+		t.Fatalf("bare token kept: %s", out)
+	}
+	if out := RedactSecrets("https://x.example.com/h?token=" + seg); strings.Contains(out, seg) {
+		t.Fatalf("query token kept: %s", out)
+	}
+}
