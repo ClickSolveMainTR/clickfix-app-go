@@ -1,23 +1,38 @@
 "use client";
 
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
 import { permissions } from "@/config/permissions";
+import { useOptionalTenant } from "@/features/tenant";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
-import { AssistantDrawer } from "./assistant-drawer";
+import {
+  AssistantSurfaceContext,
+  type AssistantSurface,
+} from "../runtime/surface";
+import { useAssistantRuntime } from "../runtime/use-assistant-runtime";
+
+import { AssistantSheet } from "./assistant-sheet";
 import { FocusHighlighter } from "./focus-highlighter";
 import { SupportWidget } from "./support-widget";
 
-type Pending = { prompt?: string; guideKey?: string; nonce: number };
+/** Where the panel lives: an overlay sheet or a docked column beside the page. */
+export type AssistantMode = "drawer" | "docked";
 
 type AssistantContextValue = {
   open: boolean;
@@ -25,28 +40,86 @@ type AssistantContextValue = {
   toggle: () => void;
   /** Opens the panel; with a prompt, sends it as the user's question. */
   ask: (prompt?: string, guideKey?: string) => void;
+  /** The member's choice; `docked` falls back to the sheet on small screens. */
+  mode: AssistantMode;
+  setMode: (mode: AssistantMode) => void;
+  /** The mode in effect for this viewport. */
+  effectiveMode: AssistantMode;
 };
 
 const AssistantContext = createContext<AssistantContextValue | null>(null);
 
 /**
- * ClickFix Asistan of the workspace shell (CF-141): a right-side panel on
- * every page (header button or Cmd/Ctrl + J). Members without
- * `tenant.assistant.use` get no panel.
+ * ClickFix Asistan of the workspace shell (CF-141, CF-200): one assistant-ui
+ * runtime for the organization, shared by the sheet (header button or
+ * Cmd/Ctrl + J), the docked split view and the `/assistant` page. Members
+ * without `tenant.assistant.use` get no panel.
  */
 export function AssistantProvider({ children }: { children: ReactNode }) {
   const allowed = usePermission().can(permissions.assistant.use);
+  if (!allowed) return <>{children}</>;
+  return <Provider>{children}</Provider>;
+}
+
+function Provider({ children }: { children: ReactNode }) {
+  const { t, locale } = useLocale();
+  const slug = useOptionalTenant()?.slug ?? "";
+  const pathname = usePathname() || "/";
+  const qc = useQueryClient();
+  const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [mode, setMode] = useLocalStorage<AssistantMode>(
+    "assistant.mode",
+    "drawer",
+  );
+  const [guideKey, setGuideKey] = useState<string | undefined>();
+  const effectiveMode: AssistantMode =
+    mode === "docked" && !mobile ? "docked" : "drawer";
+
+  const refreshDocuments = useCallback(
+    () =>
+      void qc.invalidateQueries({ queryKey: ["assistant", slug, "documents"] }),
+    [qc, slug],
+  );
+  const { runtime, decisions, ensureThread } = useAssistantRuntime({
+    slug,
+    locale,
+    route: pathname,
+    guideKey,
+    onDocumentUploaded: refreshDocuments,
+    translate: t,
+  });
+  const surface = useMemo<AssistantSurface>(
+    () => ({
+      slug,
+      locale,
+      compact: false,
+      decisions,
+      ensureThread,
+      refreshDocuments,
+    }),
+    [slug, locale, decisions, ensureThread, refreshDocuments],
+  );
 
   const toggle = useCallback(() => setOpen((o) => !o), []);
-  const ask = useCallback((prompt?: string, guideKey?: string) => {
-    setPending({ prompt, guideKey, nonce: Date.now() });
-    setOpen(true);
-  }, []);
+  // A question from a tour step or the "?" popover opens a fresh thread.
+  const pendingPrompt = useRef<string | undefined>(undefined);
+  const ask = useCallback(
+    (prompt?: string, guide?: string) => {
+      setGuideKey(guide);
+      pendingPrompt.current = prompt;
+      setOpen(true);
+      void (async () => {
+        await runtime.threads.switchToNewThread();
+        const text = pendingPrompt.current;
+        pendingPrompt.current = undefined;
+        if (text) runtime.thread.append(text);
+      })();
+    },
+    [runtime],
+  );
 
   useEffect(() => {
-    if (!allowed) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
@@ -55,25 +128,31 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [allowed]);
+  }, []);
+
+  // Closing the panel stops a running answer (the API keeps the partial text).
+  useEffect(() => {
+    if (open) return;
+    if (runtime.thread.getState().isRunning) runtime.thread.cancelRun();
+  }, [open, runtime]);
 
   const value = useMemo<AssistantContextValue>(
-    () => ({ open, setOpen, toggle, ask }),
-    [ask, open, toggle],
+    () => ({ open, setOpen, toggle, ask, mode, setMode, effectiveMode }),
+    [ask, effectiveMode, mode, open, setMode, toggle],
   );
 
-  if (!allowed) return <>{children}</>;
   return (
     <AssistantContext.Provider value={value}>
-      {children}
-      <FocusHighlighter />
-      <SupportWidget />
-      <AssistantDrawer
-        open={open}
-        onOpenChange={setOpen}
-        pending={pending}
-        onPendingHandled={() => setPending(null)}
-      />
+      <AssistantRuntimeProvider runtime={runtime}>
+        <AssistantSurfaceContext.Provider value={surface}>
+          {children}
+          <FocusHighlighter />
+          <SupportWidget />
+          {effectiveMode === "drawer" ? (
+            <AssistantSheet open={open} onOpenChange={setOpen} />
+          ) : null}
+        </AssistantSurfaceContext.Provider>
+      </AssistantRuntimeProvider>
     </AssistantContext.Provider>
   );
 }
