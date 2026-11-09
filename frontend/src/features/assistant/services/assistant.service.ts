@@ -12,6 +12,7 @@ export type AssistantActionField =
   components["schemas"]["AssistantActionField"];
 export type AssistantActionDetail =
   components["schemas"]["AssistantActionDetail"];
+export type AssistantPageState = components["schemas"]["AssistantPageState"];
 export type AssistantConfirmResult =
   components["schemas"]["AssistantConfirmResult"];
 export type AssistantContext = components["schemas"]["AssistantContext"];
@@ -73,6 +74,16 @@ export const assistantService = {
     return tenantRequest<AssistantStatus>(slug, "GET", `${A}/status`, {
       silent: true,
     });
+  },
+  /** The page's missing steps and tests; null when no module describes it. */
+  async pageState(slug: string, route: string, locale: string) {
+    const out = await tenantRequest<AssistantPageState | undefined>(
+      slug,
+      "GET",
+      `${A}/page-state`,
+      { query: { surface: "web", route, locale }, silent: true },
+    );
+    return out ?? null;
   },
   threads(slug: string) {
     return tenantRequest<{ items: AssistantThread[] }>(

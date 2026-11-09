@@ -11,6 +11,7 @@ import (
 type Registry struct {
 	list   []*Capability
 	byName map[string]*Capability
+	pages  []*Page
 }
 
 // NewRegistry builds an empty registry.

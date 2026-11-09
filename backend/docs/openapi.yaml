@@ -35890,6 +35890,64 @@ paths:
       }
     }
   }
+  "/v1/tenant/webhooks/{uuid}/test": {
+    "post": {
+      "tags": [
+        "Developer platform"
+      ],
+      "operationId": "testTenantWebhook",
+      "summary": "Queue a signed test event for a webhook subscription",
+      "description": "CF-187: queues a `webhook.test` event (`{id, event, test: true, sent_at}`) for this subscription. It is delivered by the worker like any event (signature, retries, delivery log); find it in /v1/tenant/webhook-deliveries by `event_id`. Receivers should answer 2xx and ignore it. Requires `tenant.webhooks.write`.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "responses": {
+        "202": {
+          "description": "Queued",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvelopeWebhookTestQueued"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "#/components/responses/BadRequest"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/NotFound"
+        }
+      },
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  }
   "/v1/tenant/webhooks/events": {
     "get": {
       "tags": [
@@ -40321,6 +40379,47 @@ paths:
           $ref: '#/components/responses/OrganizationRequired'
         '403':
           $ref: '#/components/responses/TenantForbidden'
+  /v1/tenant/assistant/page-state:
+    get:
+      tags:
+      - Assistant
+      operationId: getTenantAssistantPageState
+      summary: What is missing and what can be tested on a page
+      description: "CF-187: the state of the page the user is on (missing steps, warnings, tests the assistant can run there, the page's actions), from the module that owns the route. Read-only; steps and tests the caller cannot act on are dropped. 204 when no module describes the page."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: route
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      - name: surface
+        in: query
+        schema:
+          type: string
+          enum:
+          - web
+          - mobile
+      responses:
+        '200':
+          description: Page state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantPageState'
+        '204':
+          description: No module describes this page
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/tenant/assistant/threads:
     get:
       tags:
@@ -58754,6 +58853,110 @@ components:
             $ref: '#/components/schemas/AssistantActionDetail'
         focus:
           $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantPageStep:
+      type: object
+      required:
+      - key
+      - title
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        capability:
+          type: string
+          description: Capability that does it, when the caller may use one
+        prompt:
+          type: string
+          description: Message the drawer sends for "help me"
+        focus:
+          $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantPageTest:
+      type: object
+      required:
+      - capability
+      - title
+      - prompt
+      properties:
+        capability:
+          type: string
+        title:
+          type: string
+        prompt:
+          type: string
+    AssistantPageState:
+      type: object
+      required:
+      - module
+      - title
+      - missing
+      - warnings
+      - tests
+      - actions
+      properties:
+        module:
+          type: string
+        title:
+          type: string
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageStep'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageStep'
+        tests:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageTest'
+        actions:
+          type: array
+          items:
+            type: string
+    EnvelopeAssistantPageState:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantPageState'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    WebhookTestQueued:
+      type: object
+      required:
+      - queued
+      - event_id
+      properties:
+        queued:
+          type: boolean
+        event_id:
+          type: string
+          format: uuid
+    EnvelopeWebhookTestQueued:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/WebhookTestQueued'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     AssistantActionField:
       type: object
       required:

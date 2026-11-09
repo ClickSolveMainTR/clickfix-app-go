@@ -13242,6 +13242,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/webhooks/{uuid}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a signed test event for a webhook subscription
+         * @description CF-187: queues a `webhook.test` event (`{id, event, test: true, sent_at}`) for this subscription. It is delivered by the worker like any event (signature, retries, delivery log); find it in /v1/tenant/webhook-deliveries by `event_id`. Receivers should answer 2xx and ignore it. Requires `tenant.webhooks.write`.
+         */
+        post: operations["testTenantWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/webhooks/events": {
         parameters: {
             query?: never;
@@ -15818,6 +15838,26 @@ export interface paths {
          * @description Whether ClickFix Asistan can answer now. The assistant runs on the platform's AI key: usage is never charged to the organization's AI credits; the platform sets a per-organization daily limit. Requires `tenant.assistant.use`.
          */
         get: operations["getTenantAssistantStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/page-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What is missing and what can be tested on a page
+         * @description CF-187: the state of the page the user is on (missing steps, warnings, tests the assistant can run there, the page's actions), from the module that owns the route. Read-only; steps and tests the caller cannot act on are dropped. 204 when no module describes the page.
+         */
+        get: operations["getTenantAssistantPageState"];
         put?: never;
         post?: never;
         delete?: never;
@@ -26844,6 +26884,46 @@ export interface components {
             verification?: components["schemas"]["AssistantActionVerification"];
             details?: components["schemas"]["AssistantActionDetail"][];
             focus?: components["schemas"]["AssistantActionFocus"];
+        };
+        AssistantPageStep: {
+            key: string;
+            title: string;
+            detail?: string;
+            /** @description Capability that does it, when the caller may use one */
+            capability?: string;
+            /** @description Message the drawer sends for "help me" */
+            prompt?: string;
+            focus?: components["schemas"]["AssistantActionFocus"];
+        };
+        AssistantPageTest: {
+            capability: string;
+            title: string;
+            prompt: string;
+        };
+        AssistantPageState: {
+            module: string;
+            title: string;
+            missing: components["schemas"]["AssistantPageStep"][];
+            warnings: components["schemas"]["AssistantPageStep"][];
+            tests: components["schemas"]["AssistantPageTest"][];
+            actions: string[];
+        };
+        EnvelopeAssistantPageState: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantPageState"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        WebhookTestQueued: {
+            queued: boolean;
+            /** Format: uuid */
+            event_id: string;
+        };
+        EnvelopeWebhookTestQueued: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["WebhookTestQueued"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         AssistantActionField: {
             key: string;
@@ -57749,6 +57829,34 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    testTenantWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeWebhookTestQueued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getV1TenantWebhooksEvents: {
         parameters: {
             query?: never;
@@ -64130,6 +64238,46 @@ export interface operations {
             400: components["responses"]["OrganizationRequired"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantAssistantPageState: {
+        parameters: {
+            query: {
+                route: string;
+                surface?: "web" | "mobile";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantPageState"];
+                };
+            };
+            /** @description No module describes this page */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
     };

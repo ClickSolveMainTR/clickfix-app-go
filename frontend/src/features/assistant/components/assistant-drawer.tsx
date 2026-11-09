@@ -47,6 +47,7 @@ import {
   type EditedParams,
 } from "./action-card";
 import { AssistantMarkdown } from "./assistant-markdown";
+import { PageStateCard } from "./page-state-card";
 
 type Pending = { prompt?: string; guideKey?: string; nonce: number };
 
@@ -140,6 +141,12 @@ export function AssistantDrawer({
     queryKey: ["guides", slug, "route", pathname, locale],
     queryFn: () => guidesService.forRoute(slug, pathname, locale),
     enabled: open && Boolean(slug) && !thread,
+  });
+  const pageState = useQuery({
+    queryKey: ["assistant", slug, "page-state", pathname, locale],
+    queryFn: () => assistantService.pageState(slug, pathname, locale),
+    enabled: open && Boolean(slug) && !thread,
+    staleTime: 30_000,
   });
   const pageTitle = pageGuides.data?.items.find(
     (g) => g.kind === "page",
@@ -528,12 +535,23 @@ export function AssistantDrawer({
               !send.isPending &&
               !messages.isFetching &&
               !messages.isError ? (
-                <div className="bg-card rounded-2xl border p-5 text-sm shadow-xs">
-                  <p className="font-medium">{t("assistant.welcome_title")}</p>
-                  <p className="text-muted-foreground mt-1">
-                    {t("assistant.welcome_body")}
-                  </p>
-                </div>
+                <>
+                  <div className="bg-card rounded-2xl border p-5 text-sm shadow-xs">
+                    <p className="font-medium">
+                      {t("assistant.welcome_title")}
+                    </p>
+                    <p className="text-muted-foreground mt-1">
+                      {t("assistant.welcome_body")}
+                    </p>
+                  </div>
+                  {pageState.data ? (
+                    <PageStateCard
+                      state={pageState.data}
+                      disabled={send.isPending || disabled}
+                      onAsk={submit}
+                    />
+                  ) : null}
+                </>
               ) : null}
               {items.map((m) => (
                 <MessageBubble

@@ -61,6 +61,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		}
 		tenant("GET /v1/tenant/assistant/status", h.Status)
 		tenant("GET /v1/tenant/assistant/threads", h.Threads)
+		tenant("GET /v1/tenant/assistant/page-state", h.PageState)
 		tenant("POST /v1/tenant/assistant/threads", h.CreateThread)
 		tenant("GET /v1/tenant/assistant/threads/{uuid}/messages", h.Messages)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/messages", h.Send)
@@ -161,6 +162,27 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	st, _, err := h.svc.Status(r.Context(), c.Scope.ID)
 	if err != nil {
 		WriteError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, st)
+}
+
+// PageState: GET /v1/tenant/assistant/page-state?surface=web&route=/channels
+// What is missing and what can be tested on the page (CF-187); 204 when no
+// module describes it.
+func (h *Handler) PageState(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	pc := Context{Surface: r.URL.Query().Get("surface"), Route: r.URL.Query().Get("route")}
+	st, found, err := h.svc.PageState(r.Context(), c, pc)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	response.JSON(w, r, http.StatusOK, st)

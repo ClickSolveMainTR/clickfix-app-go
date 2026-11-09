@@ -8,6 +8,7 @@ import (
 	forummodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum"
 	forumhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/handler"
 	forumuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
+	webhooksmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/apibridge"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
@@ -657,7 +658,15 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	assistantSvc.Caps = capability.NewRegistry().
 		Register(assistantmodule.CoreCapabilities(deps.Queries)...).
 		Register(automationmodule.Capabilities()...).
-		Register(channelsmodule.Capabilities()...)
+		Register(channelsmodule.Capabilities()...).
+		Register(automationmodule.RuleCapabilities()...).
+		Register(slamodule.Capabilities()...).
+		Register(webhooksmodule.Capabilities()...).
+		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
+		RegisterPages(channelsmodule.Pages()...).
+		RegisterPages(automationmodule.Pages()...).
+		RegisterPages(slamodule.Pages()...).
+		RegisterPages(webhooksmodule.Pages()...)
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}

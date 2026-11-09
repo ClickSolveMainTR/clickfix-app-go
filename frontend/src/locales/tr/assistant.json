@@ -95,5 +95,11 @@
   "fields.enabled": "Etkin",
   "fields.webhook_url": "Webhook adresi",
   "fields.channel_uuid": "Kanal",
-  "fields.signing_secret": "İmza anahtarı"
+  "fields.signing_secret": "İmza anahtarı",
+  "page_state.title": "Bu sayfada: {{page}}",
+  "page_state.help": "Birlikte yapalım",
+  "page_state.tests": "Buradan çalıştırabileceğiniz testler",
+  "fields.webhook_uuid": "Webhook",
+  "fields.rule_uuid": "Kural",
+  "fields.conversation_uuid": "Konuşma"
 }

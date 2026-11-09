@@ -71,7 +71,11 @@ func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, cp *capa
 		e.API = s.API(e.UserUUID, c.Scope.UUID)
 	}
 	if readOnly {
-		e.API = capability.ReadOnly(e.API, cp.Simulations...)
+		var sims []string
+		if cp != nil {
+			sims = cp.Simulations
+		}
+		e.API = capability.ReadOnly(e.API, sims...)
 	}
 	return e
 }
@@ -338,4 +342,28 @@ func capabilityPrompt(caps []*capability.Capability, route string) string {
 		return ""
 	}
 	return fmt.Sprintf("Tools that belong to the current page: %s.\n", strings.Join(page, ", "))
+}
+
+// pageStateTimeout bounds reading a page's state (it runs on every reply).
+const pageStateTimeout = 3 * time.Second
+
+// PageState is what is missing and what can be tested on the caller's
+// page (CF-187); ok is false when no module describes the page. It only
+// reads (GET-only API) and drops steps the caller cannot act on.
+func (s *Service) PageState(ctx context.Context, c Caller, pc Context) (capability.PageState, bool, error) {
+	if err := pc.normalize(); err != nil {
+		return capability.PageState{}, false, err
+	}
+	page := s.Caps.PageFor(pc.Route, c.Scope.Has)
+	if page == nil {
+		return capability.PageState{}, false, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, pageStateTimeout)
+	defer cancel()
+	st, err := page.State(ctx, s.exec(ctx, c, uuid.Nil, nil, true))
+	if err != nil {
+		return capability.PageState{}, false, err
+	}
+	st.Module = page.Module
+	return s.Caps.Finish(st, capability.Filter{Surface: pc.Surface, Has: c.Scope.Has}), true, nil
 }

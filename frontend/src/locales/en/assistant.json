@@ -95,5 +95,11 @@
   "fields.enabled": "Enabled",
   "fields.webhook_url": "Webhook URL",
   "fields.channel_uuid": "Channel",
-  "fields.signing_secret": "Signing secret"
+  "fields.signing_secret": "Signing secret",
+  "page_state.title": "On this page: {{page}}",
+  "page_state.help": "Let's do it together",
+  "page_state.tests": "Tests you can run from here",
+  "fields.webhook_uuid": "Webhook",
+  "fields.rule_uuid": "Rule",
+  "fields.conversation_uuid": "Conversation"
 }

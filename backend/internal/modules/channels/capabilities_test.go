@@ -100,3 +100,20 @@ func TestSampleRequestsUsePlaceholders(t *testing.T) {
 		t.Fatalf("%+v", d)
 	}
 }
+
+func TestChannelsPageState(t *testing.T) {
+	page := Pages()[0]
+	e := capability.Exec{API: capability.ReadOnly(&stubAPI{items: existing}), Locale: "tr"}
+	st, err := page.State(context.Background(), e)
+	if err != nil || len(st.Missing) != 0 || len(st.Tests) != 2 {
+		t.Fatalf("%+v %v", st, err)
+	}
+	if len(st.Warnings) != 1 || st.Warnings[0].Capability != "channels.api.sample_request" || !strings.Contains(st.Warnings[0].Title, "Sipariş sistemi") {
+		t.Fatalf("warnings %+v", st.Warnings)
+	}
+	// No channel at all: connecting one is the missing step.
+	st, _ = page.State(context.Background(), capability.Exec{API: capability.ReadOnly(&stubAPI{}), Locale: "en"})
+	if len(st.Missing) != 1 || st.Missing[0].Key != "connect_channel" || st.Missing[0].Capability != "channels.connect" {
+		t.Fatalf("empty %+v", st)
+	}
+}
