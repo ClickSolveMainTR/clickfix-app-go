@@ -441,3 +441,35 @@ func TestSMTPPortRestrictionHint(t *testing.T) {
 		t.Fatal("unrestricted port mislabeled")
 	}
 }
+
+func TestTestDeliverySendsARealMailToTheMember(t *testing.T) {
+	a := New(Config{InboundDomain: domain})
+	var rcpts []string
+	var body string
+	fail := false
+	a.smtpSend = func(_ context.Context, _ SMTPConfig, _ string, rcpt []string, msg []byte) error {
+		if fail {
+			return &SMTPError{Step: "auth", Code: 535, Err: errors.New("auth failed for secret-user")}
+		}
+		rcpts, body = rcpt, string(msg)
+		return nil
+	}
+	inst := instance()
+	inst.Credentials = channels.Credentials{
+		FieldProvider: "smtp", FieldFromAddress: "destek@acme.com", FieldSMTPHost: "smtp.acme.com", FieldSMTPPort: "465",
+		FieldSMTPUsername: "destek@acme.com", FieldSMTPPassword: "secret",
+	}
+	out, err := a.TestDelivery(context.Background(), inst, "Ayşe <ayse@acme.com>")
+	if err != nil || !out.OK || out.Recipient != "ayse@acme.com" || len(rcpts) != 1 || rcpts[0] != "ayse@acme.com" ||
+		!strings.Contains(body, "test") || strings.Contains(body, "In-Reply-To") {
+		t.Fatalf("%+v %v %v", out, err, rcpts)
+	}
+	fail = true
+	out, err = a.TestDelivery(context.Background(), inst, "ayse@acme.com")
+	if err != nil || out.OK || out.Detail != "the SMTP server answered 535" || strings.Contains(out.Detail, "secret") {
+		t.Fatalf("failure %+v %v", out, err)
+	}
+	if _, err := a.TestDelivery(context.Background(), inst, ""); err == nil {
+		t.Fatal("no recipient accepted")
+	}
+}

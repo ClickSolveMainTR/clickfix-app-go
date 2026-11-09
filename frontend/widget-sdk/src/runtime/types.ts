@@ -136,7 +136,8 @@ export type IdentifyInput = {
   attributes?: Record<string, string | number | boolean>;
 };
 
-export type View = "home" | "messages" | "help" | "chat" | "callback";
+export type View =
+  "home" | "messages" | "help" | "chat" | "callback" | "assistant";
 
 export type InitOptions = {
   widgetId?: string;
@@ -154,6 +155,16 @@ export type InitOptions = {
   /** Pre-granted consent from the site's own consent manager. */
   consent?: boolean;
   debug?: boolean;
+  /**
+   * ClickFix panel only (CF-193): the member's organization slug. Turns on
+   * the assistant tab when the script is served from the page's origin.
+   */
+  assistant?: { organization: string };
+  /**
+   * false: this page never shares its screen (co-browsing) or records a
+   * session replay, whatever the widget settings say (the ClickFix panel).
+   */
+  capture?: boolean;
 };
 
 export type TrackedEvent = {

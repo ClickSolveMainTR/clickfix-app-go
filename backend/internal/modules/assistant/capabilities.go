@@ -94,3 +94,65 @@ func CoreCapabilities(q *db.Queries) []*capability.Capability {
 		},
 	}
 }
+
+func say(e capability.Exec, tr, en string) string {
+	if e.En() {
+		return en
+	}
+	return tr
+}
+
+// CorePages are the page states of the settings the assistant's own
+// actions cover (CF-187): AI, team and the web widget. They read the
+// organization's set-up snapshot.
+func CorePages(q *db.Queries) []*capability.Page {
+	state := func(module, titleTR, titleEN string, steps func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step) func(context.Context, capability.Exec) (capability.PageState, error) {
+		return func(ctx context.Context, e capability.Exec) (capability.PageState, error) {
+			st := capability.PageState{Module: module, Title: say(e, titleTR, titleEN)}
+			r, err := q.AssistantSetupState(ctx, e.OrgID)
+			if err != nil {
+				return st, err
+			}
+			st.Missing = steps(e, r)
+			return st, nil
+		}
+	}
+	return []*capability.Page{
+		{
+			Module: "ai", Routes: []string{"/settings/ai"},
+			State: state("ai", "Yapay zekâ ayarları", "AI settings", func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step {
+				out := []capability.Step{}
+				if !r.AiEnabled {
+					out = append(out, capability.Step{Key: "enable_ai", Capability: "ai.enable", Title: say(e, "Yapay zekâ kapalı", "AI is off"),
+						Prompt: say(e, "Yapay zekâ özelliklerini aç", "Turn on the AI features")})
+				}
+				if r.AiEnabled && r.KnowledgeArticles == 0 {
+					out = append(out, capability.Step{Key: "knowledge", Title: say(e, "Bilgi bankası boş", "The knowledge base is empty"),
+						Detail: say(e, "AI yanıtları bilgi bankasındaki makalelere dayanır.", "AI answers rely on knowledge base articles."),
+						Prompt: say(e, "Bilgi bankasına hangi makalelerle başlamalıyım?", "Which articles should I start the knowledge base with?")})
+				}
+				return out
+			}),
+		},
+		{
+			Module: "members", Routes: []string{"/settings/members"},
+			State: state("members", "Ekip", "Team", func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step {
+				if r.Members <= 1 && r.PendingInvitations == 0 {
+					return []capability.Step{{Key: "invite_team", Capability: "members.invite", Title: say(e, "Ekipte yalnız sizsiniz", "You are the only member"),
+						Prompt: say(e, "Ekip arkadaşımı davet etmeme yardım et", "Help me invite a teammate")}}
+				}
+				return []capability.Step{}
+			}),
+		},
+		{
+			Module: "widget", Routes: []string{"/widget"},
+			State: state("widget", "Web widget", "Web widget", func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step {
+				if r.Widgets == 0 {
+					return []capability.Step{{Key: "web_widget", Capability: "widget.create", Title: say(e, "Web widget kurulmadı", "The web widget is not set up"),
+						Prompt: say(e, "Web widget'ını siteme kurmama yardım et", "Help me add the web widget to my site")}}
+				}
+				return []capability.Step{}
+			}),
+		},
+	}
+}

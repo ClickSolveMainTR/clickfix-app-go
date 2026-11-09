@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"net/http"
+	"time"
 )
 
 type Handler struct {
@@ -139,3 +140,26 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func actorID(r *http.Request) *int64 { p := authctx.MustPrincipal(r.Context()); return &p.UserInternal }
+
+// TestEvent is the event name of a test delivery.
+const TestEvent = "webhook.test"
+
+// Test queues a signed test event for one subscription (CF-187): it is
+// delivered like any event (signature, retries, delivery log) and its
+// event_id finds it in /v1/tenant/webhook-deliveries.
+func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
+	org := orgctx.Must(r.Context())
+	id, err := uuid.Parse(r.PathValue("uuid"))
+	if err != nil {
+		h.fail(w, r, usecase.ErrInvalid)
+		return
+	}
+	eventID := uuid.New()
+	payload := map[string]any{"id": eventID, "event": TestEvent, "test": true, "sent_at": time.Now().UTC()}
+	if err := h.Service.Enqueue(r.Context(), org.ID, id, eventID, TestEvent, payload); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.Activity.Record(r.Context(), actorID(r), "webhooks.test_queued", "outbound_webhooks", &id, map[string]any{"event_id": eventID}, r)
+	response.JSON(w, r, http.StatusAccepted, map[string]any{"queued": true, "event_id": eventID})
+}

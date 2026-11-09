@@ -34,6 +34,13 @@ import {
 import { Api, ApiError, isNetworkError, type Transport } from "./api";
 import { Capture, type ReplayPolicy, type ReplaySession } from "./capture";
 import { el, icon, renderText, type Child, type IconName } from "./dom";
+import {
+  AssistantClient,
+  assistantAllowed,
+  assistantHref,
+  type AssistantAction,
+  type AssistantMessage,
+} from "./assistant";
 import { askPermission, chime, notify } from "./notify";
 import { FakeApi, type PreviewState } from "./preview";
 import { Realtime, type RealtimeTokens } from "./realtime";
@@ -156,6 +163,12 @@ export class Widget {
   private opts: InitOptions;
   private pendingIdentify: IdentifyInput | null;
   private unbind: (() => void)[] = [];
+  // ClickFix Asistan mode (CF-193): panel origin only.
+  private assistant: AssistantClient | null = null;
+  private aMessages: AssistantMessage[] = [];
+  private aBusy = false;
+  private aDraft = "";
+  private aError = "";
 
   constructor(
     readonly widgetId: string,
@@ -181,6 +194,15 @@ export class Widget {
       appOrigin,
     });
     this.triggers = new TriggerEngine(this.store, (t) => this.fireTrigger(t));
+    if (
+      !previewState &&
+      opts.assistant &&
+      assistantAllowed(appOrigin, window.location?.origin ?? "", opts.assistant)
+    )
+      this.assistant = new AssistantClient(
+        opts.assistant.organization,
+        () => this.locale,
+      );
   }
 
   t(key: StringKey): string {
@@ -748,7 +770,13 @@ export class Widget {
   }
 
   startReplay() {
+    if (!this.captureAllowed) return Promise.resolve();
     return this.capture.startReplay(this.active?.uuid ?? null);
+  }
+
+  /** init({ capture: false }) turns co-browsing and replay off on this page. */
+  private get captureAllowed() {
+    return this.opts.capture !== false;
   }
 
   stopCapture(revoke: boolean) {
@@ -1361,6 +1389,7 @@ export class Widget {
       ev.session &&
       ev.conversation_uuid
     ) {
+      if (!this.captureAllowed) return;
       const conversation = ev.conversation_uuid;
       const session = ev.session;
       void this.api
@@ -1587,6 +1616,9 @@ export class Widget {
     }
     const signature = JSON.stringify([
       this.view,
+      this.aMessages,
+      this.aBusy,
+      this.aError,
       this.active,
       this.messages,
       this.conversations,
@@ -1617,6 +1649,10 @@ export class Widget {
       "input.help-input",
     ) as HTMLInputElement | null;
     const helpFocus = hs !== null && this.shadow?.activeElement === hs;
+    const aTa = this.shadow?.querySelector(
+      "textarea.a-compose",
+    ) as HTMLTextAreaElement | null;
+    const aFocus = aTa !== null && this.shadow?.activeElement === aTa;
     const titleId = "cf-title";
     this.panelEl.setAttribute("aria-labelledby", titleId);
     const needsConsent = s.privacy.consent_required && !this.consentGiven;
@@ -1637,12 +1673,28 @@ export class Widget {
       ];
     else if (this.view === "help")
       parts = [this.header(this.t("tabHelp")), this.helpView(), this.tabs()];
+    else if (this.view === "assistant" && this.assistant)
+      parts = [
+        this.header(this.t("tabAssistant")),
+        this.assistantView(),
+        this.assistantComposer(),
+        this.tabs(),
+      ];
     else parts = [this.homeView(), this.tabs()];
     this.panelEl.replaceChildren(...(parts.filter(Boolean) as Node[]));
     if (this.view === "chat" && !needsConsent) {
       const body = this.panelEl.querySelector(".body");
       if (body) body.scrollTop = body.scrollHeight;
       if (hadFocus) this.focusComposer();
+    } else if (this.view === "assistant") {
+      const body = this.panelEl.querySelector(".body");
+      if (body) body.scrollTop = body.scrollHeight;
+      if (aFocus)
+        (
+          this.panelEl.querySelector(
+            "textarea.a-compose",
+          ) as HTMLTextAreaElement | null
+        )?.focus();
     } else {
       if (this.help === null && !this.helpLoading) void this.loadHelp("");
       if (this.booking === null && !this.bookingLoading)
@@ -1930,6 +1982,7 @@ export class Widget {
     if (s.features.history && s.channels.chat)
       list.push(["messages", "tabMessages", "messages"]);
     if (helpOn) list.push(["help", "tabHelp", "help"]);
+    if (this.assistant) list.push(["assistant", "tabAssistant", "sparkles"]);
     if (list.length < 2) return null;
     return el(
       "div",
@@ -2360,6 +2413,189 @@ export class Widget {
           )
         : null,
     ]);
+  }
+
+  // -- assistant (CF-193) ----------------------------------------------------
+
+  private assistantView(): HTMLElement {
+    const items: Child[] = [
+      el("div", { class: "card" }, [
+        el("p", { class: "muted", text: this.t("assistantIntro") }),
+      ]),
+    ];
+    for (const m of this.aMessages) {
+      if (m.role === "tool") continue;
+      const mine = m.role === "user";
+      const bubble = el("div", { class: "msg" });
+      if (m.content) bubble.append(renderText(m.content, !mine));
+      items.push(el("div", { class: `row ${mine ? "in" : "out"}` }, [bubble]));
+      for (const a of m.actions ?? []) items.push(this.assistantCard(a));
+    }
+    if (this.aBusy)
+      items.push(
+        el("p", {
+          class: "muted",
+          "aria-live": "polite",
+          text: this.t("assistantThinking"),
+        }),
+      );
+    const last = [...this.aMessages].reverse().find((m) => m.role !== "user");
+    if (!this.aBusy && last?.suggestions?.length)
+      items.push(
+        el(
+          "div",
+          { class: "chips" },
+          last.suggestions.slice(0, 4).map((q) =>
+            el("button", {
+              class: "chip",
+              type: "button",
+              text: q,
+              onclick: () => void this.assistantSend(q),
+            }),
+          ),
+        ),
+      );
+    items.push(
+      el(
+        "button",
+        {
+          class: "secondary a-human",
+          type: "button",
+          onclick: () => this.startConversation(),
+        },
+        [icon("headset"), el("span", { text: this.t("assistantHuman") })],
+      ),
+    );
+    return el(
+      "div",
+      { class: "body pad a-body", "aria-live": "polite" },
+      items,
+    );
+  }
+
+  private assistantCard(a: AssistantAction): HTMLElement {
+    const href = a.status === "done" ? assistantHref(a.focus) : null;
+    const state: Record<string, StringKey> = {
+      done: "assistantDone",
+      rejected: "assistantRejected",
+      failed: "assistantFailed",
+    };
+    return el("div", { class: "card a-card" }, [
+      el("h3", { text: a.title }),
+      a.summary ? el("p", { class: "muted", text: a.summary }) : null,
+      a.verification?.message
+        ? el("p", { class: "muted", text: a.verification.message })
+        : null,
+      a.status === "proposed"
+        ? el("div", { class: "chips" }, [
+            el("button", {
+              class: "secondary",
+              type: "button",
+              text: this.t("assistantConfirm"),
+              disabled: this.aBusy,
+              onclick: () => void this.assistantAct(a, true),
+            }),
+            el("button", {
+              class: "secondary",
+              type: "button",
+              text: this.t("assistantReject"),
+              disabled: this.aBusy,
+              onclick: () => void this.assistantAct(a, false),
+            }),
+          ])
+        : state[a.status]
+          ? el("p", { class: "muted", text: this.t(state[a.status]!) })
+          : null,
+      href
+        ? el("a", { class: "card-btn go", href }, [
+            el("span", { class: "grow", text: this.t("assistantOpenPage") }),
+            icon("arrow"),
+          ])
+        : null,
+    ]);
+  }
+
+  private assistantComposer(): HTMLElement {
+    const placeholder = this.t("assistantPlaceholder");
+    const ta = el("textarea", {
+      class: "compose a-compose",
+      rows: 1,
+      placeholder,
+      "aria-label": placeholder,
+      maxlength: 4000,
+    });
+    ta.value = this.aDraft;
+    ta.addEventListener("input", () => {
+      this.aDraft = ta.value;
+    });
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        void this.assistantSend(ta.value);
+      }
+    });
+    return el("div", { class: "footer" }, [
+      this.aError
+        ? el("p", { class: "error", role: "alert", text: this.aError })
+        : null,
+      el("div", { class: "composer" }, [
+        ta,
+        el(
+          "button",
+          {
+            class: "icon-btn send",
+            type: "button",
+            "aria-label": this.t("send"),
+            onclick: () => void this.assistantSend(ta.value),
+          },
+          [icon("send")],
+        ),
+      ]),
+    ]);
+  }
+
+  private async assistantSend(text: string) {
+    const content = text.trim();
+    if (!content || this.aBusy || !this.assistant) return;
+    this.aDraft = "";
+    this.aError = "";
+    this.aBusy = true;
+    this.aMessages.push({ role: "user", content });
+    this.render();
+    try {
+      this.aMessages.push(
+        await this.assistant.send(
+          content.slice(0, 4000),
+          window.location.pathname,
+        ),
+      );
+    } catch {
+      this.aError = this.t("assistantError");
+    } finally {
+      this.aBusy = false;
+      this.render();
+    }
+  }
+
+  private async assistantAct(a: AssistantAction, confirm: boolean) {
+    if (!this.assistant || this.aBusy || a.status !== "proposed") return;
+    this.aBusy = true;
+    this.render();
+    try {
+      if (confirm) {
+        const res = await this.assistant.confirm(a.id);
+        const done = res.actions?.find((x) => x.id === a.id);
+        Object.assign(a, done ?? { status: "done" });
+      } else {
+        await this.assistant.reject(a.id);
+        a.status = "rejected";
+      }
+    } catch {
+      a.status = "failed";
+    } finally {
+      this.aBusy = false;
+      this.render();
+    }
   }
 
   private helpView(): HTMLElement {
@@ -2817,7 +3053,7 @@ export class Widget {
               [icon("smile")],
             )
           : null,
-        this.active && this.replayPolicy?.replay_enabled
+        this.active && this.replayPolicy?.replay_enabled && this.captureAllowed
           ? el("button", {
               type: "button",
               class: "icon-btn",

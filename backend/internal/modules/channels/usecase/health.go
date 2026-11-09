@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -154,6 +155,29 @@ func (s *Service) CheckHealth(ctx context.Context, orgID int64, id uuid.UUID) (I
 		return InstanceView{}, err
 	}
 	return s.Get(ctx, orgID, id)
+}
+
+// TestDelivery sends a test event to the instance's own endpoint (only
+// channels implementing channels.DeliveryTester, e.g. the REST API
+// channel). It changes no data; the result is not stored as health.
+func (s *Service) TestDelivery(ctx context.Context, orgID int64, id uuid.UUID, to string) (channels.DeliveryTest, error) {
+	row, err := s.q.GetChannelInstanceByUUID(ctx, db.GetChannelInstanceByUUIDParams{OrganizationID: orgID, Uuid: id})
+	if err != nil {
+		return channels.DeliveryTest{}, notFound(err)
+	}
+	inst, adapter, err := s.open(row)
+	if err != nil {
+		return channels.DeliveryTest{}, err
+	}
+	tester, ok := adapter.(channels.DeliveryTester)
+	if !ok {
+		return channels.DeliveryTest{}, fmt.Errorf("%w: this channel type has no test delivery", ErrInvalid)
+	}
+	out, err := tester.TestDelivery(ctx, inst, to)
+	if err != nil {
+		return channels.DeliveryTest{}, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+	}
+	return out, nil
 }
 
 // Reconnect runs Connect again with the stored credentials (it re-registers

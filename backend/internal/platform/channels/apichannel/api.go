@@ -10,7 +10,10 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/channelhttp"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Adapter struct{ client channelhttp.Client }
@@ -121,4 +124,48 @@ func (a *Adapter) Send(ctx context.Context,
 	return channels.SendResult{ExternalID: msg.MessageUUID.String()}, nil
 }
 
-var _ channels.Adapter = (*Adapter)(nil)
+// TestDelivery posts a signed test event to the organization's webhook
+// URL (event type "test", header X-ClickFix-Event: test) through the
+// SSRF-guarded client, so the integration can be verified before real
+// traffic. The receiver should answer 2xx and must not create a message.
+func (a *Adapter) TestDelivery(ctx context.Context, inst channels.Instance, _ string) (channels.DeliveryTest, error) {
+	if _, err := a.Connect(ctx, inst); err != nil {
+		return channels.DeliveryTest{}, err
+	}
+	id := "test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	body, err := json.Marshal(map[string]any{"id": id, "type": "test", "text": "ClickFix connection test", "sent_at": time.Now().UTC()})
+	if err != nil {
+		return channels.DeliveryTest{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.Credentials["webhook_url"], bytes.NewReader(body))
+	if err != nil {
+		return channels.DeliveryTest{}, errors.New("invalid webhook URL")
+	}
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ClickFix-Event", "test")
+	req.Header.Set("X-ClickFix-Timestamp", ts)
+	req.Header.Set("X-ClickFix-Signature", channelhttp.Sign(inst.Credentials["signing_secret"], ts, body))
+	req.Header.Set("Idempotency-Key", id)
+	out := channels.DeliveryTest{EventID: id}
+	res, err := a.client.Do(req)
+	if err != nil {
+		out.Detail = "the endpoint could not be reached"
+		if errors.Is(err, channelhttp.ErrWebhookTarget) {
+			out.Detail = channelhttp.ErrWebhookTarget.Error()
+		}
+		return out, nil
+	}
+	_ = res.Body.Close()
+	out.StatusCode = res.StatusCode
+	out.OK = res.StatusCode >= 200 && res.StatusCode < 300
+	if !out.OK {
+		out.Detail = "the endpoint answered HTTP " + strconv.Itoa(res.StatusCode)
+	}
+	return out, nil
+}
+
+var (
+	_ channels.Adapter        = (*Adapter)(nil)
+	_ channels.DeliveryTester = (*Adapter)(nil)
+)

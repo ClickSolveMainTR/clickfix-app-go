@@ -174,6 +174,11 @@ type Querier interface {
 	AppointmentVideoFinish(ctx context.Context, arg AppointmentVideoFinishParams) (int64, error)
 	AssignArticleBrand(ctx context.Context, arg AssignArticleBrandParams) (int64, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
+	AssistantDocumentCreate(ctx context.Context, arg AssistantDocumentCreateParams) (AssistantDocument, error)
+	AssistantDocumentDelete(ctx context.Context, arg AssistantDocumentDeleteParams) (int64, error)
+	AssistantDocumentGet(ctx context.Context, arg AssistantDocumentGetParams) (AssistantDocument, error)
+	AssistantDocumentsList(ctx context.Context, arg AssistantDocumentsListParams) ([]AssistantDocumentsListRow, error)
+	AssistantDocumentsPurgeExpired(ctx context.Context) (int64, error)
 	AssistantEnableAI(ctx context.Context, organizationID int64) error
 	AssistantEscalatedConversation(ctx context.Context, arg AssistantEscalatedConversationParams) (AssistantEscalatedConversationRow, error)
 	AssistantMessageCreate(ctx context.Context, arg AssistantMessageCreateParams) (AssistantMessage, error)
@@ -188,6 +193,9 @@ type Querier interface {
 	AssistantSetupState(ctx context.Context, organizationID int64) (AssistantSetupStateRow, error)
 	// The inbox escalations land in, in ClickFix's own support organization.
 	AssistantSupportInbox(ctx context.Context, organizationUuid uuid.UUID) (AssistantSupportInboxRow, error)
+	// The support organization's active widget (CF-193): the panel embeds it
+	// and identifies the member with a server-side signature.
+	AssistantSupportWidget(ctx context.Context, organizationUuid uuid.UUID) (AssistantSupportWidgetRow, error)
 	AssistantTenantRoleUUID(ctx context.Context, arg AssistantTenantRoleUUIDParams) (uuid.UUID, error)
 	AssistantThreadCreate(ctx context.Context, arg AssistantThreadCreateParams) (AssistantThread, error)
 	AssistantThreadEscalated(ctx context.Context, arg AssistantThreadEscalatedParams) error

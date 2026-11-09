@@ -62,7 +62,7 @@ func capabilityTools(caps []*capability.Capability) []ai.Tool {
 }
 
 // exec builds the execution context; reads and dry runs get a GET-only API.
-func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, readOnly bool) capability.Exec {
+func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, cp *capability.Capability, readOnly bool) capability.Exec {
 	e := capability.Exec{OrgID: c.Scope.ID, OrgUUID: c.Scope.UUID, UserID: c.UserID, Locale: guides.NormalizeLocale(c.Locale), Thread: thread}
 	if u, err := s.Q.GetUserByID(ctx, c.UserID); err == nil {
 		e.UserUUID = u.Uuid
@@ -75,7 +75,11 @@ func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, readOnly
 		e.API = unavailableAPI{}
 	}
 	if readOnly {
-		e.API = capability.ReadOnly(e.API)
+		var sims []string
+		if cp != nil {
+			sims = cp.Simulations
+		}
+		e.API = capability.ReadOnly(e.API, sims...)
 	}
 	return e
 }
@@ -112,7 +116,7 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 		if err := cp.Check(p); err != nil {
 			return toolError(err.Error())
 		}
-		res, err := cp.Run(ctx, r.svc.exec(ctx, r.caller, r.thread, true), p)
+		res, err := cp.Run(ctx, r.svc.exec(ctx, r.caller, r.thread, cp, true), p)
 		if err != nil {
 			return toolError(safeError(err))
 		}
@@ -249,7 +253,7 @@ func (s *Service) DryRun(ctx context.Context, c Caller, threadID uuid.UUID, acti
 		if err := cp.Check(params); err != nil {
 			return err
 		}
-		res, runErr := cp.DryRun(ctx, s.exec(ctx, c, t.Uuid, true), params)
+		res, runErr := cp.DryRun(ctx, s.exec(ctx, c, t.Uuid, cp, true), params)
 		a.Preview = &Preview{OK: runErr == nil, Summary: res.Summary, Details: res.Details}
 		if runErr != nil {
 			a.Preview.Summary, a.Preview.Details = safeError(runErr), nil
@@ -298,7 +302,7 @@ func (s *Service) prepareCapability(ctx context.Context, q *db.Queries, c Caller
 // applyCapability runs Apply and Verify after the confirmed state is
 // committed, then stores the outcome in its own transaction.
 func (s *Service) applyCapability(ctx context.Context, c Caller, t db.AssistantThread, actionID string, p *pendingApply) (ConfirmResult, error) {
-	e := s.exec(ctx, c, t.Uuid, false)
+	e := s.exec(ctx, c, t.Uuid, p.cp, false)
 	e.Secrets = p.secrets
 	res, runErr := safeApply(ctx, p.cp, e, p.params)
 	var check *capability.Check
@@ -362,6 +366,30 @@ func capabilityPrompt(caps []*capability.Capability, route string) string {
 		return ""
 	}
 	return fmt.Sprintf("Tools that belong to the current page: %s.\n", strings.Join(page, ", "))
+}
+
+// pageStateTimeout bounds reading a page's state (it runs on every reply).
+const pageStateTimeout = 3 * time.Second
+
+// PageState is what is missing and what can be tested on the caller's
+// page (CF-187); ok is false when no module describes the page. It only
+// reads (GET-only API) and drops steps the caller cannot act on.
+func (s *Service) PageState(ctx context.Context, c Caller, pc Context) (capability.PageState, bool, error) {
+	if err := pc.normalize(); err != nil {
+		return capability.PageState{}, false, err
+	}
+	page := s.Caps.PageFor(pc.Route, c.Scope.Has)
+	if page == nil {
+		return capability.PageState{}, false, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, pageStateTimeout)
+	defer cancel()
+	st, err := page.State(ctx, s.exec(ctx, c, uuid.Nil, nil, true))
+	if err != nil {
+		return capability.PageState{}, false, err
+	}
+	st.Module = page.Module
+	return s.Caps.Finish(st, capability.Filter{Surface: pc.Surface, Has: c.Scope.Has}), true, nil
 }
 
 // safeApply runs Apply; a panic becomes an error, so the card is stored

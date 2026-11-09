@@ -6,8 +6,9 @@ set -euo pipefail
 
 # Read only in local development (or derived from another variable in prod).
 # DEMO_PASSWORD is given inline to the one-off seed-demo command (CI / E2E) and
-# must never live in the Dokploy environment.
-allow='^(STORAGE_LOCAL_PATH|SMTP_FROM|APP_HTTP_ADDR|REDIS_DB|DEMO_PASSWORD)$'
+# must never live in the Dokploy environment. ASSISTANT_E2E_FAKE_AI turns on the
+# scripted assistant of the E2E suite and is refused outside development/test.
+allow='^(STORAGE_LOCAL_PATH|SMTP_FROM|APP_HTTP_ADDR|REDIS_DB|DEMO_PASSWORD|ASSISTANT_E2E_FAKE_AI)$'
 
 read_vars=$(find backend -name '*.go' ! -name '*_test.go' -print0 |
   xargs -0 grep -hoE '(os\.Getenv|os\.LookupEnv|price|get(Env|Int|Int64|Bool|Duration|Float|CSV|List)[A-Za-z]*)\("[A-Z][A-Z0-9_]+"' |

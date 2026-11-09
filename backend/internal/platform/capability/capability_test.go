@@ -122,6 +122,8 @@ func TestRegisterRejectsBadDefinitions(t *testing.T) {
 		{Name: "x.kind", Kind: "maybe", Run: run},
 		{Name: "x.open", Kind: Read, Run: run, Input: map[string]any{"type": "object"}},
 		{Name: "x.secret", Kind: Write, Apply: run, Secrets: []Secret{{Key: "k"}}},
+		{Name: "x.mcp", Kind: Write, Apply: run, Surfaces: []string{SurfaceMCP}, Secrets: []Secret{{Key: "k"}},
+			Input: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"k": map[string]any{"type": "string"}}}},
 	}
 	for _, c := range bad {
 		func() {
@@ -170,6 +172,18 @@ func TestReadOnlyAPIRefusesWrites(t *testing.T) {
 	if !slices.Equal(rec.methods, []string{"GET"}) {
 		t.Fatalf("calls %v", rec.methods)
 	}
+	sim := ReadOnly(rec, "POST /v1/tenant/workflows/{uuid}/test")
+	if _, err := sim.Call(context.Background(), "POST", "/v1/tenant/workflows/0b6f2c1e-5d4a-4b3c-9a8b-7c6d5e4f3a2b/test", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"/v1/tenant/workflows/0b6f/test", "/v1/tenant/workflows/../test", "/v1/tenant/workflows/0b6f2c1e-5d4a-4b3c-9a8b-7c6d5e4f3a2b/publish", "/v1/tenant/workflows/a/b/test", "/v1/tenant/workflows/0b6f/test?x=1"} {
+		if _, err := sim.Call(context.Background(), "POST", p, nil); !errors.Is(err, ErrReadOnly) {
+			t.Fatalf("%s passed", p)
+		}
+	}
+	if _, err := sim.Call(context.Background(), "PUT", "/v1/tenant/workflows/0b6f/test", nil); !errors.Is(err, ErrReadOnly) {
+		t.Fatal("PUT passed")
+	}
 }
 
 func TestReadResponse(t *testing.T) {
@@ -197,5 +211,55 @@ func TestRedactSecretsKeepsURLPaths(t *testing.T) {
 	}
 	if out := RedactSecrets("https://x.example.com/h?token=" + seg); strings.Contains(out, seg) {
 		t.Fatalf("query token kept: %s", out)
+	}
+}
+
+// MCP tool names are unique, and MCP tools always carry a permission.
+func TestRegistryMCPNameAndPermission(t *testing.T) {
+	run := func(context.Context, Exec, Params) (Result, error) { return Result{}, nil }
+	mk := func(name, mcp, perm string) *Capability {
+		return &Capability{Name: name, MCPName: mcp, Kind: Read, Run: run, Permission: perm, Surfaces: []string{SurfaceWeb, SurfaceMCP}}
+	}
+	mustPanic := func(what string, f func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Fatalf("%s: no panic", what)
+			}
+		}()
+		f()
+	}
+	mustPanic("duplicate MCP name", func() {
+		NewRegistry().Register(mk("a.reply", "reply", "p"), mk("b.reply", "reply", "p"))
+	})
+	mustPanic("MCP name of another tool name", func() {
+		NewRegistry().Register(mk("a.list", "", "p"), mk("b.list", "a_list", "p"))
+	})
+	mustPanic("MCP without permission", func() { NewRegistry().Register(mk("a.list", "", "")) })
+	// Off the MCP surface the MCP name is not reserved.
+	web := mk("c.reply", "reply", "")
+	web.Surfaces = []string{SurfaceWeb}
+	NewRegistry().Register(mk("a.reply", "reply", "p"), web)
+}
+
+// Errors without an envelope code keep the MCP tools' codes.
+func TestReadResponseCodes(t *testing.T) {
+	cases := map[int]string{401: "FORBIDDEN", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 500: "TOOL_FAILED", 502: "TOOL_FAILED", 422: "INVALID_REQUEST"}
+	for status, want := range cases {
+		if r := ReadResponse(status, []byte(`{"success":false}`), false); r.Code != want {
+			t.Errorf("%d: %s", status, r.Code)
+		}
+		if r := ReadResponse(status, []byte(`<html>`), false); r.Code != want {
+			t.Errorf("%d unreadable: %s", status, r.Code)
+		}
+	}
+	if r := ReadResponse(200, []byte(`<html>`), false); r.Code != "TOOL_FAILED" {
+		t.Errorf("unreadable 200: %s", r.Code)
+	}
+	if r := ReadResponse(404, []byte(`{"success":false,"error":{"code":"WEBHOOK_NOT_FOUND","message":"x"}}`), false); r.Code != "WEBHOOK_NOT_FOUND" {
+		t.Errorf("envelope code: %s", r.Code)
+	}
+	if r := ReadResponse(200, nil, true); r.Code != "RESULT_TOO_LARGE" || !strings.Contains(r.Message, "limit") {
+		t.Errorf("too large: %+v", r)
 	}
 }

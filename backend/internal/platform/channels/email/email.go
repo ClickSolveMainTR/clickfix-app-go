@@ -783,3 +783,39 @@ type SMTPPortRestrictionError struct{ Err error }
 
 func (e *SMTPPortRestrictionError) Error() string { return SMTPPortHint }
 func (e *SMTPPortRestrictionError) Unwrap() error { return e.Err }
+
+// TestDelivery sends a real test e-mail through the channel's own
+// provider (SMTP, IMAP+SMTP or Resend) to the confirming member's own
+// address, so sending can be checked end to end (CF-185). It is a new
+// thread and creates no conversation; a failure is reported, not retried.
+func (a *Adapter) TestDelivery(ctx context.Context, inst channels.Instance, to string) (channels.DeliveryTest, error) {
+	addr, err := mail.ParseAddress(strings.TrimSpace(to))
+	if err != nil {
+		return channels.DeliveryTest{}, errors.New("the member has no valid e-mail address")
+	}
+	id := uuid.New()
+	msg := channels.OutboundMessage{
+		MessageUUID: id, To: channels.Recipient{Email: addr.Address}, Kind: "text",
+		Subject: "ClickFix test e-postası / test e-mail",
+		Text: "Bu, ClickFix'teki “" + inst.Name + "” e-posta kanalından gönderilen bir test e-postasıdır. Bu e-postayı aldıysanız gönderim çalışıyor.\n\n" +
+			"This is a test e-mail from the “" + inst.Name + "” e-mail channel in ClickFix. If you received it, sending works.",
+		Attributes: map[string]any{AttrNewThread: true},
+	}
+	out := channels.DeliveryTest{EventID: id.String(), Recipient: addr.Address}
+	if _, err := a.Send(ctx, inst, msg); err != nil {
+		out.Detail = "the provider did not accept the e-mail"
+		var se *SMTPError
+		var ae *APIError
+		switch {
+		case errors.As(err, &se):
+			out.Detail = fmt.Sprintf("the SMTP server answered %d", se.Code)
+		case errors.As(err, &ae):
+			out.Detail = fmt.Sprintf("the e-mail provider answered HTTP %d", ae.Status)
+		}
+		return out, nil
+	}
+	out.OK = true
+	return out, nil
+}
+
+var _ channels.DeliveryTester = (*Adapter)(nil)

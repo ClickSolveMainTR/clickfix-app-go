@@ -34,6 +34,12 @@ const (
 	CodeSupportUnavailable = "ASSISTANT_SUPPORT_UNAVAILABLE"
 	CodeUnsafe             = "ASSISTANT_MESSAGE_REJECTED"
 	CodeActionFailed       = "ASSISTANT_ACTION_FAILED"
+	CodeDocumentType       = "ASSISTANT_DOCUMENT_TYPE"
+	CodeDocumentTooLarge   = "ASSISTANT_DOCUMENT_TOO_LARGE"
+	CodeDocumentLimit      = "ASSISTANT_DOCUMENT_LIMIT"
+	CodeDocumentEmpty      = "ASSISTANT_DOCUMENT_EMPTY"
+	CodeDocumentFetch      = "ASSISTANT_DOCUMENT_FETCH"
+	CodeDocumentPDF        = "ASSISTANT_DOCUMENT_PDF"
 )
 
 // Handler serves /v1/tenant/assistant/* and /v1/platform/assistant/*.
@@ -62,6 +68,8 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		}
 		tenant("GET /v1/tenant/assistant/status", h.Status)
 		tenant("GET /v1/tenant/assistant/threads", h.Threads)
+		tenant("GET /v1/tenant/assistant/page-state", h.PageState)
+		tenant("GET /v1/tenant/assistant/support-widget", h.SupportWidget)
 		tenant("POST /v1/tenant/assistant/threads", h.CreateThread)
 		tenant("GET /v1/tenant/assistant/threads/{uuid}/messages", h.Messages)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/messages", h.Send)
@@ -70,6 +78,10 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run", h.DryRun)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/reject", h.Reject)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/escalate", h.Escalate)
+		tenant("GET /v1/tenant/assistant/threads/{uuid}/documents", h.Documents)
+		tenant("POST /v1/tenant/assistant/threads/{uuid}/documents", h.UploadDocument)
+		tenant("POST /v1/tenant/assistant/threads/{uuid}/documents/link", h.LinkDocument)
+		tenant("DELETE /v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}", h.DeleteDocument)
 	}
 	manage := middleware.RequirePermission(rbac.PermPlatformAssistantManage)
 	mux.Handle("GET /v1/platform/assistant/settings", middleware.Chain(http.HandlerFunc(h.GetSettings), authn, manage))
@@ -91,7 +103,20 @@ func decode(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	var ve *orgusecase.ValidationError
 	var pe *capability.ParamError
+	var fe *FetchError
 	switch {
+	case errors.As(err, &fe):
+		response.Error(w, r, http.StatusUnprocessableEntity, CodeDocumentFetch, fe.Message)
+	case errors.Is(err, ErrDocumentType):
+		response.Error(w, r, http.StatusUnsupportedMediaType, CodeDocumentType, "Only PDF, text, Markdown, CSV, JSON, YAML and HTML documents can be read")
+	case errors.Is(err, ErrDocumentPDF):
+		response.Error(w, r, http.StatusUnprocessableEntity, CodeDocumentPDF, "The PDF text cannot be read (encrypted, damaged or scanned)")
+	case errors.Is(err, ErrDocumentTooLarge):
+		response.Error(w, r, http.StatusRequestEntityTooLarge, CodeDocumentTooLarge, "The document is larger than 2 MB")
+	case errors.Is(err, ErrDocumentLimit):
+		response.Conflict(w, r, CodeDocumentLimit, "A chat can hold 5 documents; remove one first")
+	case errors.Is(err, ErrDocumentEmpty):
+		response.Error(w, r, http.StatusUnprocessableEntity, CodeDocumentEmpty, "The document has no readable text")
 	case errors.As(err, &pe):
 		response.ValidationError(w, r, []response.Detail{{Code: response.CodeValidationError, Message: pe.Message}})
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrActionInvalid), errors.As(err, &ve), errors.Is(err, usecase.ErrInvalid):
@@ -167,6 +192,45 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, r, http.StatusOK, st)
+}
+
+// PageState: GET /v1/tenant/assistant/page-state?surface=web&route=/channels
+// What is missing and what can be tested on the page (CF-187); 204 when no
+// module describes it.
+func (h *Handler) PageState(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	pc := Context{Surface: r.URL.Query().Get("surface"), Route: r.URL.Query().Get("route")}
+	st, found, err := h.svc.PageState(r.Context(), c, pc)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, st)
+}
+
+// SupportWidget: GET /v1/tenant/assistant/support-widget (CF-193). The
+// support organization's widget id and the member's identity signature;
+// the identity secret stays on the server.
+func (h *Handler) SupportWidget(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	p := authctx.MustPrincipal(r.Context())
+	out, err := h.svc.SupportWidgetFor(r.Context(), c.Scope, p.UserID)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 // Threads: GET /v1/tenant/assistant/threads
@@ -451,6 +515,134 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, r, http.StatusOK, out)
+}
+
+// documentAllowed limits document uploads and fetches per organization.
+func (h *Handler) documentAllowed(w http.ResponseWriter, r *http.Request, c Caller) bool {
+	if h.limit != nil && !h.limit(r, "assistant_document", strconv.FormatInt(c.Scope.ID, 10), 20, time.Hour) {
+		response.TooManyRequests(w, r, "Too many documents, try again later")
+		return false
+	}
+	return true
+}
+
+func (h *Handler) documentAdded(r *http.Request, c Caller, id uuid.UUID, d Document) {
+	h.record(r, c, "assistant.document_added", id, map[string]any{"document_uuid": d.UUID, "kind": d.Kind,
+		"content_type": d.ContentType, "size_bytes": d.SizeBytes, "masked": d.Masked})
+}
+
+// Documents: GET /v1/tenant/assistant/threads/{uuid}/documents
+func (h *Handler) Documents(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := threadID(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.Documents(r.Context(), c, id)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
+// UploadDocument: POST /v1/tenant/assistant/threads/{uuid}/documents
+// (multipart/form-data, field "file", at most 2 MB).
+func (h *Handler) UploadDocument(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := threadID(w, r)
+	if !ok {
+		return
+	}
+	if !h.documentAllowed(w, r, c) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, MaxDocumentBytes+64<<10)
+	if err := r.ParseMultipartForm(MaxDocumentBytes + 64<<10); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			WriteError(w, r, ErrDocumentTooLarge)
+			return
+		}
+		response.BadRequest(w, r, response.CodeValidationError, "A multipart form with a file field is required")
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		response.BadRequest(w, r, response.CodeValidationError, "A multipart form with a file field is required")
+		return
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, MaxDocumentBytes+1))
+	if err != nil {
+		response.BadRequest(w, r, response.CodeValidationError, "The file could not be read")
+		return
+	}
+	d, err := h.svc.AddFile(r.Context(), c, id, header.Filename, header.Header.Get("Content-Type"), data)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	h.documentAdded(r, c, id, d)
+	response.JSON(w, r, http.StatusCreated, d)
+}
+
+// LinkDocument: POST /v1/tenant/assistant/threads/{uuid}/documents/link
+func (h *Handler) LinkDocument(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := threadID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		URL string `json:"url"`
+	}
+	if !decode(w, r, &in, 4<<10) {
+		return
+	}
+	if !h.documentAllowed(w, r, c) {
+		return
+	}
+	d, err := h.svc.AddLink(r.Context(), c, id, in.URL)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	h.documentAdded(r, c, id, d)
+	response.JSON(w, r, http.StatusCreated, d)
+}
+
+// DeleteDocument: DELETE /v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}
+func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	id, ok := threadID(w, r)
+	if !ok {
+		return
+	}
+	doc, err := uuid.Parse(r.PathValue("document_uuid"))
+	if err != nil {
+		WriteError(w, r, ErrNotFound)
+		return
+	}
+	if err := h.svc.DeleteDocument(r.Context(), c, id, doc); err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	h.record(r, c, "assistant.document_removed", id, map[string]any{"document_uuid": doc})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // redactParams masks secret-looking strings of older actions' params.

@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	appsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/apps"
+	automationmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation"
 	forummodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum"
 	forumhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/handler"
 	forumuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
+	publicapimodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/publicapi"
+	webhooksmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/apibridge"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
@@ -555,6 +559,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: channels: %w", err)
 	}
+	channelTestLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
+	channelsHandler.TestDeliveryAllowed = func(r *http.Request, channel uuid.UUID) bool {
+		ok, _ := channelTestLimiter.Allow(r.Context(), "channel_test_delivery", channel.String(), 6, 10*time.Minute)
+		return ok
+	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)
@@ -637,18 +646,50 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	seedCancel()
 	assistantAI := &assistantmodule.PlatformAI{Routes: aiCore.AI.Routes, Q: deps.Queries}
+	// End-to-end suite only (CF-194): a scripted provider plays the
+	// assistant scenarios. Refused outside development and test.
+	if os.Getenv("ASSISTANT_E2E_FAKE_AI") == "1" {
+		if cfg.App.Env == "development" || cfg.App.Env == "test" {
+			assistantAI.Routes = assistantmodule.E2ERoutes()
+			log.Warn("assistant_scripted_ai_enabled", "env", cfg.App.Env)
+		} else {
+			log.Error("assistant_scripted_ai_refused", "env", cfg.App.Env)
+		}
+	}
 	assistantSvc := &assistantmodule.Service{
 		Pool: deps.DB, Q: deps.Queries, AI: assistantAI, Guides: guidesSvc,
 		Escalator: &assistantmodule.SupportEscalator{Q: deps.Queries, Instances: inboxCore.Channels, Receiver: inboxCore.Conversations},
 		Help:      &assistantmodule.HelpAdapter{Q: deps.Queries, Help: helpSvc},
 	}
 	assistantSvc.Actions = assistantmodule.DefaultActions(assistantmodule.ActionDeps{
-		Q: deps.Queries, Inviter: orgMgmt, SLA: slaSvc, Escalate: assistantSvc.EscalateFromAction,
+		Q: deps.Queries, Escalate: assistantSvc.EscalateFromAction,
 	})
 	// Capability registry (CF-183): every capability calls the panel's /v1
 	// routes as the confirming user, so the routes re-check permissions.
 	assistantBridge := &apibridge.Bridge{Handler: mux, Tokens: tokens}
-	assistantSvc.Caps = capability.NewRegistry().Register(assistantmodule.CoreCapabilities(deps.Queries)...)
+	assistantSvc.Caps = capability.NewRegistry().
+		Register(assistantmodule.CoreCapabilities(deps.Queries)...).
+		Register(automationmodule.Capabilities()...).
+		Register(channelsmodule.Capabilities()...).
+		Register(automationmodule.RuleCapabilities()...).
+		Register(slamodule.Capabilities()...).
+		Register(slamodule.WriteCapabilities()...).
+		Register(automationmodule.RuleWriteCapabilities()...).
+		Register(assistantmodule.TeamAndAICapabilities(deps.Queries)...).
+		Register(teamsmodule.Capabilities()...).
+		Register(widgetmodule.Capabilities(cfg.Auth.FrontendURL)...).
+		Register(webhooksmodule.WriteCapabilities()...).
+		Register(publicapimodule.Capabilities(cfg.Channels.PublicAPIURL)...).
+		Register(appsmodule.Capabilities()...).
+		Register(webhooksmodule.Capabilities()...).
+		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
+		RegisterPages(channelsmodule.Pages()...).
+		RegisterPages(automationmodule.Pages()...).
+		RegisterPages(slamodule.Pages()...).
+		Register(conversationsmodule.Capabilities()...).
+		RegisterPages(webhooksmodule.Pages()...).
+		AllowOn(capability.SurfaceWidget, assistantmodule.WidgetAllowed)
+	assistantSvc.Instances = inboxCore.Channels
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}
@@ -822,7 +863,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if !ok {
 		return nil, fmt.Errorf("httpserver: billing requires reliable event subscriptions")
 	}
-	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus})
+	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus, Capabilities: assistantSvc.Caps})
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: developer platform: %w", err)
 	}

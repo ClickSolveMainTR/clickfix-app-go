@@ -11,10 +11,15 @@ import (
 type Registry struct {
 	list   []*Capability
 	byName map[string]*Capability
+	pages  []*Page
+	// mcpNames keeps MCP tool names unique (MCPName may differ from Name).
+	mcpNames map[string]*Capability
 }
 
 // NewRegistry builds an empty registry.
-func NewRegistry() *Registry { return &Registry{byName: map[string]*Capability{}} }
+func NewRegistry() *Registry {
+	return &Registry{byName: map[string]*Capability{}, mcpNames: map[string]*Capability{}}
+}
 
 // Register adds capabilities. A bad definition is a programming error and
 // panics at start (as takwim's catalog does for bad schemas).
@@ -56,6 +61,15 @@ func (r *Registry) add(c *Capability) error {
 			}
 		}
 	}
+	if c.OnSurface(SurfaceMCP) && c.Permission == "" {
+		// MCP filters tools by permission; without one every member could call it.
+		return fmt.Errorf("capability %s: capabilities on the MCP surface need a permission", c.Name)
+	}
+	if c.OnSurface(SurfaceMCP) && len(c.Secrets) > 0 {
+		// A generated secret is shown once in the confirmation card; MCP
+		// has no such card, so these capabilities stay off it.
+		return fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name)
+	}
 	schema, err := compile(c.Name, c.Input)
 	if err != nil {
 		return fmt.Errorf("capability %s: schema: %w", c.Name, err)
@@ -65,10 +79,49 @@ func (r *Registry) add(c *Capability) error {
 		if old, dup := r.byName[key]; dup && old != c {
 			return fmt.Errorf("capability: duplicate name %s", key)
 		}
+	}
+	if c.OnSurface(SurfaceMCP) {
+		if old, dup := r.mcpNames[c.MCPToolName()]; dup && old != c {
+			return fmt.Errorf("capability: duplicate MCP tool name %s (%s, %s)", c.MCPToolName(), old.Name, c.Name)
+		}
+	}
+	for _, key := range append([]string{c.Name, c.ToolName()}, c.Aliases...) {
 		r.byName[key] = c
+	}
+	if c.OnSurface(SurfaceMCP) {
+		r.mcpNames[c.MCPToolName()] = c
 	}
 	r.list = append(r.list, c)
 	return nil
+}
+
+// AllowOn adds surface to every registered capability that allow accepts
+// (a surface allowlist, e.g. the support widget). Call it after the last
+// Register; it keeps the rule that secrets never reach the MCP surface.
+func (r *Registry) AllowOn(surface string, allow func(*Capability) bool) *Registry {
+	for _, c := range r.list {
+		if c.OnSurface(surface) || !allow(c) {
+			continue
+		}
+		if surface == SurfaceMCP {
+			switch old, dup := r.mcpNames[c.MCPToolName()]; {
+			case len(c.Secrets) > 0:
+				panic(fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name))
+			case c.Permission == "":
+				panic(fmt.Errorf("capability %s: capabilities on the MCP surface need a permission", c.Name))
+			case dup && old != c:
+				panic(fmt.Errorf("capability: duplicate MCP tool name %s", c.MCPToolName()))
+			}
+			r.mcpNames[c.MCPToolName()] = c
+		}
+		if len(c.Surfaces) == 0 {
+			c.Surfaces = slices.Clone(DefaultSurfaces)
+		} else {
+			c.Surfaces = slices.Clone(c.Surfaces)
+		}
+		c.Surfaces = append(c.Surfaces, surface)
+	}
+	return r
 }
 
 // Get finds a capability by name, tool name or alias.

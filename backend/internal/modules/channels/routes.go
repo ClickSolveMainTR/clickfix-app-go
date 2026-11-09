@@ -38,6 +38,7 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("PATCH /v1/tenant/channels/{uuid}", h.Update, manage)
 	route("DELETE /v1/tenant/channels/{uuid}", h.Delete, manage)
 	route("POST /v1/tenant/channels/{uuid}/check", h.Check, manage)
+	route("POST /v1/tenant/channels/{uuid}/test-delivery", h.TestDelivery, manage)
 
 	// Connect wizards of provider channels (providers.go).
 	route("POST /v1/tenant/channels/email/test", h.EmailTest, manage)
