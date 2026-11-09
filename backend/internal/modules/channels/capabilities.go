@@ -262,16 +262,9 @@ func Capabilities() []*capability.Capability {
 				return validWebhook(str(p, "webhook_url"))
 			},
 			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
-				existing, err := listChannels(ctx, e.API, platformchannels.TypeAPI)
+				existing, err := apiChannelDuplicate(ctx, e, p)
 				if err != nil {
 					return capability.Result{}, err
-				}
-				for _, v := range existing {
-					if strings.EqualFold(v.Name, str(p, "name")) || (v.outbound() != "" && v.outbound() == str(p, "webhook_url")) {
-						return capability.Result{}, capability.Invalid("%s", t(e,
-							"Bu ada ya da adrese sahip bir REST API kanalı zaten var (%s). Yeni kanal yerine onu güncelleyin.",
-							"A REST API channel with this name or address already exists (%s). Update it instead of creating a new one.", v.Name))
-					}
 				}
 				return capability.Result{
 					Summary: t(e, "“%s” adlı REST API kanalı oluşturulacak. Temsilci yanıtları %s adresine imzalı olarak gönderilecek; imza anahtarı sunucuda üretilip size bir kez gösterilecek.",
@@ -284,6 +277,10 @@ func Capabilities() []*capability.Capability {
 				secret := e.Secrets[keySecret]
 				if len(secret) < 32 {
 					return capability.Result{}, capability.Invalid("the signing secret must have at least 32 characters")
+				}
+				// The duplicate check also runs on confirm, with or without a dry run.
+				if _, err := apiChannelDuplicate(ctx, e, p); err != nil {
+					return capability.Result{}, err
 				}
 				r, err := e.API.Call(ctx, http.MethodPost, capChannelsPath, map[string]any{
 					"type": platformchannels.TypeAPI, "name": str(p, "name"),
@@ -454,4 +451,21 @@ func Capabilities() []*capability.Capability {
 			},
 		},
 	}
+}
+
+// apiChannelDuplicate lists the API channels and refuses a second one with
+// the same name or webhook address (dry run and apply).
+func apiChannelDuplicate(ctx context.Context, e capability.Exec, p capability.Params) ([]channelView, error) {
+	existing, err := listChannels(ctx, e.API, platformchannels.TypeAPI)
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range existing {
+		if strings.EqualFold(v.Name, str(p, "name")) || (v.outbound() != "" && v.outbound() == str(p, "webhook_url")) {
+			return nil, capability.Invalid("%s", t(e,
+				"Bu ada ya da adrese sahip bir REST API kanalı zaten var (%s). Yeni kanal yerine onu güncelleyin.",
+				"A REST API channel with this name or address already exists (%s). Update it instead of creating a new one.", v.Name))
+		}
+	}
+	return existing, nil
 }
