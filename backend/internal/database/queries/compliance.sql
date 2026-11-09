@@ -58,7 +58,7 @@ INSERT INTO contact_consents(organization_id,contact_id,purpose,granted,notice_v
 VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *;
 -- name: ComplianceEraseContact :exec
 UPDATE contacts SET name='Silinmiş kişi',email=NULL,phone=NULL,locale=NULL,timezone=NULL,notes='',custom_fields='{}',
-job_title='',company_id=NULL,last_seen_at=NULL,blocked=true,deleted_at=now(),erased_at=now()
+job_title='',company_id=NULL,last_seen_at=NULL,external_id=NULL,verified_at=NULL,blocked=true,deleted_at=now(),erased_at=now()
 WHERE organization_id=$1 AND id=$2;
 -- name: ComplianceEraseIdentities :exec
 DELETE FROM contact_identities WHERE organization_id=$1 AND contact_id=$2;

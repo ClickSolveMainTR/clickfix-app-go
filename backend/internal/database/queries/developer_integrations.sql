@@ -21,13 +21,26 @@ UPDATE public_api_idempotency SET status_code=$4,response_enc=$5 WHERE organizat
 -- name: PurgeIntegrationRequests :exec
 DELETE FROM public_api_idempotency WHERE expires_at<NOW();
 -- name: ListIntegrationContacts :many
-SELECT uuid,name,email,phone,custom_fields,created_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL AND (sqlc.arg(q)::text='' OR name ILIKE '%'||sqlc.arg(q)::text||'%') ORDER BY id DESC LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+-- CF-195: external_id finds the customer's own user id exactly.
+SELECT c.uuid,c.name,c.email,c.phone,c.external_id,c.verified_at,c.custom_fields,c.created_at,
+       co.uuid AS company_uuid, co.external_id AS company_external_id
+FROM contacts c
+LEFT JOIN companies co ON co.organization_id=c.organization_id AND co.id=c.company_id AND co.deleted_at IS NULL
+WHERE c.organization_id=$1 AND c.deleted_at IS NULL
+  AND (sqlc.arg(q)::text='' OR c.name ILIKE '%'||sqlc.arg(q)::text||'%' OR c.email ILIKE '%'||sqlc.arg(q)::text||'%')
+  AND (sqlc.narg(external_id)::text IS NULL OR c.external_id=sqlc.narg(external_id)::text)
+ORDER BY c.id DESC LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 -- name: CountIntegrationContacts :one
-SELECT count(*) FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL AND (sqlc.arg(q)::text='' OR name ILIKE '%'||sqlc.arg(q)::text||'%');
+SELECT count(*) FROM contacts c WHERE c.organization_id=$1 AND c.deleted_at IS NULL
+  AND (sqlc.arg(q)::text='' OR c.name ILIKE '%'||sqlc.arg(q)::text||'%' OR c.email ILIKE '%'||sqlc.arg(q)::text||'%')
+  AND (sqlc.narg(external_id)::text IS NULL OR c.external_id=sqlc.narg(external_id)::text);
 -- name: ListIntegrationCompanies :many
-SELECT uuid,name,created_at FROM companies WHERE organization_id=$1 AND deleted_at IS NULL ORDER BY id DESC LIMIT $2 OFFSET $3;
+SELECT uuid,name,domain,external_id,created_at FROM companies WHERE organization_id=$1 AND deleted_at IS NULL
+  AND (sqlc.narg(external_id)::text IS NULL OR external_id=sqlc.narg(external_id)::text)
+ORDER BY id DESC LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 -- name: CountIntegrationCompanies :one
-SELECT count(*) FROM companies WHERE organization_id=$1 AND deleted_at IS NULL;
+SELECT count(*) FROM companies WHERE organization_id=$1 AND deleted_at IS NULL
+  AND (sqlc.narg(external_id)::text IS NULL OR external_id=sqlc.narg(external_id)::text);
 -- name: CreateAutomationRule :one
 INSERT INTO automation_rules(organization_id,created_by,name,trigger_event,conditions,actions,position,enabled,stop_on_match,schedule_minutes)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *;

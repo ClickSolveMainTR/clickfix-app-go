@@ -147,5 +147,15 @@
   "fields.rate_limit": "Dakikada istek",
   "fields.expires_in_days": "Geçerlilik (gün)",
   "fields.api_key": "API anahtarı",
-  "support_chat": "Canlı destek"
+  "support_chat": "Canlı destek",
+  "action.params": "Parametreler",
+  "action.applying": "Uygulanıyor…",
+  "errors.interrupted": "Bağlantı kesildi; yanıtın bir kısmı kaydedildi.",
+  "escalate.done": "Destek ekibine iletildi. Kayıt: {{ref}}",
+  "history_back": "Sohbete dön",
+  "mode.dock": "Yan panele sabitle",
+  "mode.undock": "Çekmeceye al",
+  "mode.page": "Tam sayfada aç",
+  "close": "Kapat",
+  "page.description": "Sorularınızı yanıtlar, kurulumu sizinle yapar; geçmiş sohbetleriniz solda."
 }

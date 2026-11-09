@@ -43,6 +43,27 @@ const VOICE_COMMANDS: Readonly<
   },
 };
 
+type RecognitionEvent = {
+  resultIndex: number;
+  results: {
+    item(index: number): {
+      isFinal: boolean;
+      item(index: number): { transcript: string };
+    };
+  };
+};
+
+type Recognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  addEventListener(
+    type: "result",
+    listener: (event: RecognitionEvent) => void,
+  ): void;
+  start(): void;
+  stop(): void;
+};
+
 export const SUPPORT_SPEECH_RECOGNITION: boolean =
   CAN_USE_DOM &&
   ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
@@ -51,20 +72,29 @@ function SpeechToTextPluginImpl() {
   const [editor] = useLexicalComposerContext();
   const [isEnabled, setIsEnabled] = useState<boolean>(false);
   const [isSpeechToText, setIsSpeechToText] = useState(false);
+  // Typed loosely on purpose: the browser's SpeechRecognition globals differ
+  // between engines and type libraries (prefixed or not, partial DOM lib).
   const SpeechRecognition =
-    // @ts-expect-error missing type
-    window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = useRef<typeof SpeechRecognition | null>(null);
+    (
+      window as unknown as {
+        SpeechRecognition?: new () => Recognition;
+        webkitSpeechRecognition?: new () => Recognition;
+      }
+    ).SpeechRecognition ??
+    (window as unknown as { webkitSpeechRecognition?: new () => Recognition })
+      .webkitSpeechRecognition;
+  const recognition = useRef<Recognition | null>(null);
   const report = useReport();
 
   useEffect(() => {
     if (isEnabled && recognition.current === null) {
+      if (!SpeechRecognition) return;
       recognition.current = new SpeechRecognition();
       recognition.current.continuous = true;
       recognition.current.interimResults = true;
       recognition.current.addEventListener(
         "result",
-        (event: typeof SpeechRecognition) => {
+        (event: RecognitionEvent) => {
           const resultItem = event.results.item(event.resultIndex);
           const { transcript } = resultItem.item(0);
           report(transcript);

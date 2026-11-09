@@ -15,9 +15,14 @@ function header() {
   return { "X-Organization": getActiveOrganizationSlug() ?? "" };
 }
 
+export type ContactIdentityState =
+  components["schemas"]["ContactIdentityState"];
+
 export type ContactListQuery = {
   q?: string;
   company?: string;
+  /** CF-195: verified / anonymous / self_named. */
+  identity?: ContactIdentityState;
   limit: number;
   offset: number;
   /** One field, `-` prefix for descending. Server default: `-created_at`. */
@@ -39,6 +44,7 @@ export const contactsService = {
             offset: p.offset,
             ...(p.q ? { q: p.q } : {}),
             ...(p.company ? { company: p.company } : {}),
+            ...(p.identity ? { identity: p.identity } : {}),
             ...(p.sort ? { sort: p.sort } : {}),
           },
         },
@@ -102,6 +108,13 @@ export const contactsService = {
       await apiClient.POST("/v1/tenant/companies", {
         params: { header: header() },
         body,
+      }),
+    );
+  },
+  async getCompany(uuid: string) {
+    return unwrap<Company>(
+      await apiClient.GET("/v1/tenant/companies/{uuid}", {
+        params: { header: header(), path: { uuid } },
       }),
     );
   },

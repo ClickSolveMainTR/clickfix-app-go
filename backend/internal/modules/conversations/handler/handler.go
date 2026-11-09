@@ -71,6 +71,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		invalid(w, r, "company must be a uuid")
 		return
 	}
+	f.IdentityState = strings.TrimSpace(v.Get("identity"))
 	if raw := v.Get("sla_breached"); raw != "" {
 		b := raw == "1" || raw == "true"
 		f.SLABreached = &b

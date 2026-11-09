@@ -637,7 +637,7 @@ type Querier interface {
 	CountCustomObjectTypes(ctx context.Context, organizationID int64) (int64, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
-	CountIntegrationCompanies(ctx context.Context, organizationID int64) (int64, error)
+	CountIntegrationCompanies(ctx context.Context, arg CountIntegrationCompaniesParams) (int64, error)
 	CountIntegrationContacts(ctx context.Context, arg CountIntegrationContactsParams) (int64, error)
 	CountIntegrationKeys(ctx context.Context, organizationID int64) (int64, error)
 	CountInvitations(ctx context.Context, arg CountInvitationsParams) (int64, error)
@@ -960,6 +960,8 @@ type Querier interface {
 	GetCompanyByExternalID(ctx context.Context, arg GetCompanyByExternalIDParams) (Company, error)
 	GetCompanyByUUID(ctx context.Context, arg GetCompanyByUUIDParams) (Company, error)
 	GetCompanyEventByIdempotencyKey(ctx context.Context, arg GetCompanyEventByIdempotencyKeyParams) (CompanyEvent, error)
+	// CF-195: the company the AI sees next to the contact.
+	GetCompanyForAIContext(ctx context.Context, arg GetCompanyForAIContextParams) (GetCompanyForAIContextRow, error)
 	// CF-87: customer health score.
 	GetCompanyHealthSettings(ctx context.Context, organizationID int64) (CompanyHealthSetting, error)
 	GetCompanyNoteByUUID(ctx context.Context, arg GetCompanyNoteByUUIDParams) (CompanyNote, error)
@@ -971,12 +973,17 @@ type Querier interface {
 	// CF-86: the customer's revenue plan and MRR feed the company_plans and
 	// min_company_mrr_minor conditions.
 	GetCompanySLA(ctx context.Context, arg GetCompanySLAParams) (GetCompanySLARow, error)
+	// CF-195: the customer's own user id (unique per organization).
+	GetContactByExternalID(ctx context.Context, arg GetContactByExternalIDParams) (Contact, error)
 	GetContactByID(ctx context.Context, arg GetContactByIDParams) (Contact, error)
 	GetContactByUUID(ctx context.Context, arg GetContactByUUIDParams) (Contact, error)
 	GetConversationBrief(ctx context.Context, arg GetConversationBriefParams) (GetConversationBriefRow, error)
 	GetConversationBulkOp(ctx context.Context, arg GetConversationBulkOpParams) (ConversationBulkOp, error)
 	GetConversationByID(ctx context.Context, arg GetConversationByIDParams) (Conversation, error)
 	GetConversationByUUID(ctx context.Context, arg GetConversationByUUIDParams) (Conversation, error)
+	// CF-195: the contact's and company's external ids for event payloads
+	// (webhooks, integrations).
+	GetConversationExternalRefs(ctx context.Context, arg GetConversationExternalRefsParams) (GetConversationExternalRefsRow, error)
 	// Owner of a conversation, for realtime channel authorization.
 	GetConversationOrganization(ctx context.Context, argUuid uuid.UUID) (GetConversationOrganizationRow, error)
 	GetConversationParentID(ctx context.Context, arg GetConversationParentIDParams) (int64, error)
@@ -1332,6 +1339,7 @@ type Querier interface {
 	ListImportChangesForJob(ctx context.Context, jobID int64) ([]ImportChange, error)
 	ListImportJobsForActor(ctx context.Context, arg ListImportJobsForActorParams) ([]ImportJob, error)
 	ListIntegrationCompanies(ctx context.Context, arg ListIntegrationCompaniesParams) ([]ListIntegrationCompaniesRow, error)
+	// CF-195: external_id finds the customer's own user id exactly.
 	ListIntegrationContacts(ctx context.Context, arg ListIntegrationContactsParams) ([]ListIntegrationContactsRow, error)
 	ListIntegrationKeys(ctx context.Context, arg ListIntegrationKeysParams) ([]ListIntegrationKeysRow, error)
 	ListInvitationRoles(ctx context.Context, arg ListInvitationRolesParams) ([]ListInvitationRolesRow, error)
@@ -1472,6 +1480,9 @@ type Querier interface {
 	// organization and, for visitor data, to the visitor's contact and widget.
 	ListWidgetConversations(ctx context.Context, arg ListWidgetConversationsParams) ([]ListWidgetConversationsRow, error)
 	ListWidgetDiagnostics(ctx context.Context, arg ListWidgetDiagnosticsParams) ([]WidgetDiagnostic, error)
+	// CF-195: rejected identify calls of the last week per widget (CF-176
+	// records them); channel health turns them into a warning.
+	ListWidgetIdentityRejections(ctx context.Context, organizationID int64) ([]ListWidgetIdentityRejectionsRow, error)
 	ListWidgetInstalls(ctx context.Context, arg ListWidgetInstallsParams) ([]ListWidgetInstallsRow, error)
 	// What the contact may see: their own messages and agent replies the
 	// channel delivered; never private notes or system events.
@@ -1497,6 +1508,13 @@ type Querier interface {
 	MarkBulkJobProcessing(ctx context.Context, id int64) (BulkJob, error)
 	MarkBulkJobRolledBack(ctx context.Context, arg MarkBulkJobRolledBackParams) (BulkJob, error)
 	MarkContactMerged(ctx context.Context, arg MarkContactMergedParams) error
+	// CF-195: a user_hash check succeeded. The external id is taken only when
+	// the contact has none and no other live contact holds it, so a contact
+	// matched by e-mail never steals another user's id; and the contact is
+	// marked verified only when its external id is the proved user id (a
+	// contact of another user never gets the badge). Returns 0 rows when it
+	// was not verified.
+	MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) (int64, error)
 	MarkConversationBulkOpReverted(ctx context.Context, arg MarkConversationBulkOpRevertedParams) (int64, error)
 	MarkConversationMerged(ctx context.Context, arg MarkConversationMergedParams) (Conversation, error)
 	// The marker only moves forward.

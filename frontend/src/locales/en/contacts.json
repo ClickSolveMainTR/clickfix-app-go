@@ -184,5 +184,21 @@
   "account.no_conversations": "No conversations yet.",
   "account.all_contacts": "All ({{count}})",
   "account.no_contacts": "No contacts linked to this company.",
-  "account.custom_fields": "Custom fields"
+  "account.custom_fields": "Custom fields",
+  "columns.external_id": "External ID",
+  "fields.external_id": "External ID",
+  "external_id.hint": "The user id in your own system (widget identify user_id). Unique in the organization.",
+  "external_id.contact": "Contact external ID",
+  "external_id.company": "Company external ID",
+  "companies.fields.external_id": "External ID",
+  "companies.external_id_hint": "The external ID is the company's id in your system (widget company.id), separate from contact IDs.",
+  "identity.verified": "Verified",
+  "identity.anonymous": "Anonymous",
+  "identity.self_named": "Self-named",
+  "identity.verified_hint": "The contact proved your user id with widget identity verification (user_hash).",
+  "identity.anonymous_hint": "No name, e-mail or phone is known.",
+  "identity.self_named_hint": "The contact or its channel gave a name, e-mail or phone; not verified.",
+  "identity.verified_at": "Last verified: {{date}}",
+  "custom_fields.contact": "Contact fields",
+  "custom_fields.company": "Company fields"
 }

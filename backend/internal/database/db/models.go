@@ -1644,6 +1644,8 @@ type Contact struct {
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 	JobTitle       string             `json:"job_title"`
 	ErasedAt       pgtype.Timestamptz `json:"erased_at"`
+	ExternalID     pgtype.Text        `json:"external_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
 }
 
 type ContactConsent struct {

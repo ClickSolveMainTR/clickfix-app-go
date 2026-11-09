@@ -74,6 +74,8 @@ export const routes = {
     inbox: "/inbox",
     /** Channel management (CF-61); Meta logins return to connect/{type}. */
     channels: "/channels",
+    /** ClickFix Asistan as a full page (CF-200). */
+    assistant: "/assistant",
     /** Customer billing portal (CF-33); gateway success/fail URL. */
     billing: "/billing",
     /** Video rooms (CF-139). */

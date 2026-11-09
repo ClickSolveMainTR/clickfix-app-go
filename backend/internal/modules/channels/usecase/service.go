@@ -16,6 +16,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/email"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -402,6 +403,9 @@ func (s *Service) view(row db.ChannelInstance, stats map[int64]outboundStats) (I
 		}
 		if creds, err := s.vault.Open(row.OrganizationID, row.Uuid, row.CredentialsEnc); err == nil {
 			v.CredentialHints = channels.Hint(a, creds)
+			if row.ChannelType == channels.TypeWidget && stats != nil {
+				widgetIdentityHealth(&v.Health, creds[widget.IdentitySecretField] != "", stats[row.ID].identityRejection)
+			}
 		}
 	}
 	if s.publicAPIURL != "" {

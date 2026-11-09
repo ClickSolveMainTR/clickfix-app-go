@@ -12348,7 +12348,8 @@ paths:
         Requires `tenant.conversations.read`. Newest activity first by default.
         `assignee` is `me`, `unassigned` or an agent uuid; list filters take
         comma-separated values. `q` matches subject, last message, contact
-        name / e-mail / phone, or the conversation number. When search is
+        name / e-mail / phone, the contact's external id (exact, CF-195), or
+        the conversation number. When search is
         enabled `q` also matches message texts and internal notes through
         the organization's search index (CF-45); such rows carry
         `search_match` with the matched text. The other filters still apply.
@@ -12369,6 +12370,7 @@ paths:
         - { name: tag, in: query, schema: { type: string }, description: Tag uuids }
         - { name: contact, in: query, schema: { type: string, format: uuid } }
         - { name: company, in: query, schema: { type: string, format: uuid } }
+        - { name: identity, in: query, description: "CF-195: the contact's identity state.", schema: { $ref: "#/components/schemas/ContactIdentityState" } }
         - { name: mentioned, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: unread, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: sla_breached, in: query, schema: { type: string, enum: ["1", "true", "0", "false"] } }
@@ -26137,6 +26139,8 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
         - { name: company, in: query, schema: { type: string, format: uuid } }
+        - { name: external_id, in: query, description: "CF-195: the customer's own user id, exact match. `q` also matches external ids.", schema: { type: string, maxLength: 200 } }
+        - { name: identity, in: query, description: "CF-195: verified (proved with user_hash), anonymous or self_named.", schema: { $ref: "#/components/schemas/ContactIdentityState" } }
         - { name: sort, in: query, schema: { type: string, enum: [created_at, -created_at, name, -name, last_seen_at, -last_seen_at] } }
       responses:
         "200":
@@ -26171,6 +26175,49 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/contacts/by-external-id:
+    put:
+      tags: [Tenant]
+      operationId: upsertTenantContactByExternalId
+      summary: Create or update a contact by its external id
+      description: |
+        CF-195. Requires `tenant.contacts.write`. `external_id` is required: the
+        customer's own user id, the same value the widget sends as `user_id`.
+        The contact with that id is updated (200), else a new one is created
+        (201). Calling it twice with the same id edits one contact. It never
+        matches by e-mail or phone, so a visitor who only typed an address is
+        not taken over. The contact stays unverified until the user signs in
+        through widget identify.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - type: object
+                  required: [external_id]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/contacts/{uuid}:
@@ -26633,6 +26680,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/XOrganization"
         - { name: q, in: query, schema: { type: string } }
+        - { name: external_id, in: query, description: "CF-195: the company's own id in the customer's system, exact match.", schema: { type: string, maxLength: 200 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
       responses:
@@ -36488,6 +36536,7 @@ paths:
             "default": 0
           }
         },
+        {"name": "external_id", "in": "query", "description": "CF-195: exact external id.", "schema": {"type": "string", "maxLength": 200}},
         {
           "name": "X-Organization",
           "in": "header",
@@ -36552,6 +36601,7 @@ paths:
             "default": 0
           }
         },
+        {"name": "external_id", "in": "query", "description": "CF-195: exact external id.", "schema": {"type": "string", "maxLength": 200}},
         {
           "name": "X-Organization",
           "in": "header",
@@ -36863,130 +36913,117 @@ paths:
       }
     }
   }
-  "/v1/public-api/contacts": {
-    "get": {
-      "tags": [
-        "Developer platform"
-      ],
-      "operationId": "getV1PublicApiContacts",
-      "x-public": true,
-      "summary": "Public API: get contacts",
-      "security": [
-        {
-          "integrationKey": []
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IntegrationEnvelope"
-              }
-            }
-          }
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthenticated"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        }
-      },
-      "description": "API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.",
-      "parameters": [
-        {
-          "name": "limit",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 20
-          }
-        },
-        {
-          "name": "offset",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0
-          }
-        },
-        {
-          "name": "q",
-          "in": "query",
-          "description": "Case-insensitive match on the contact name.",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ]
-    }
-  }
-  "/v1/public-api/companies": {
-    "get": {
-      "tags": [
-        "Developer platform"
-      ],
-      "operationId": "getV1PublicApiCompanies",
-      "x-public": true,
-      "summary": "Public API: get companies",
-      "security": [
-        {
-          "integrationKey": []
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IntegrationEnvelope"
-              }
-            }
-          }
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthenticated"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        }
-      },
-      "description": "API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.",
-      "parameters": [
-        {
-          "name": "limit",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 20
-          }
-        },
-        {
-          "name": "offset",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0
-          }
-        }
-      ]
-    }
-  }
+  /v1/public-api/contacts:
+    get:
+      tags: ["Developer platform"]
+      operationId: getV1PublicApiContacts
+      x-public: true
+      summary: "Public API: get contacts"
+      description: "API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195)."
+      security:
+        - integrationKey: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: q, in: query, description: "Case-insensitive match on the contact name or e-mail.", schema: { type: string } }
+        - { name: external_id, in: query, description: "CF-195: the customer's own user id, exact match.", schema: { type: string, maxLength: 200 } }
+    post:
+      tags: ["Developer platform"]
+      operationId: postV1PublicApiContacts
+      x-public: true
+      summary: "Public API: create a contact (CF-195)"
+      description: "Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/public-api/contacts/by-external-id:
+    put:
+      tags: ["Developer platform"]
+      operationId: putV1PublicApiContactByExternalId
+      x-public: true
+      summary: "Public API: create or update a contact by your user id (CF-195)"
+      description: "Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer)."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - type: object
+                  required: [external_id]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/public-api/companies:
+    get:
+      tags: ["Developer platform"]
+      operationId: getV1PublicApiCompanies
+      x-public: true
+      summary: "Public API: get companies"
+      description: "API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids)."
+      security:
+        - integrationKey: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: external_id, in: query, description: "CF-195: the company's id in your system, exact match.", schema: { type: string, maxLength: 200 } }
   /v1/public-api/company-usage:
     put:
       tags: ["Developer platform"]
@@ -41661,7 +41698,7 @@ components:
     UptimeMonitor: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "url": {"type": "string"}, "interval_seconds": {"type": "integer"}, "expected_status": {"type": "integer"}, "keyword": {"type": "string"}, "component_uuid": {"type": "string", "format": "uuid"}, "policy_uuid": {"type": ["string", "null"], "format": "uuid"}, "enabled": {"type": "boolean"}, "next_check_at": {"type": "string", "format": "date-time"}, "last_checked_at": {"type": ["string", "null"], "format": "date-time"}, "last_up": {"type": ["boolean", "null"]}, "last_status": {"type": "integer"}}, "required": ["uuid", "name", "url", "interval_seconds", "expected_status", "keyword", "component_uuid", "policy_uuid", "enabled", "next_check_at", "last_checked_at", "last_up", "last_status"], "additionalProperties": false}
     OncallAlert: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "policy_uuid": {"type": "string", "format": "uuid"}, "incident_uuid": {"type": ["string", "null"], "format": "uuid"}, "conversation_uuid": {"type": ["string", "null"], "format": "uuid"}, "next_step": {"type": "integer"}, "next_notify_at": {"type": "string", "format": "date-time"}, "acknowledged_at": {"type": ["string", "null"], "format": "date-time"}, "resolved_at": {"type": ["string", "null"], "format": "date-time"}, "created_at": {"type": "string", "format": "date-time"}}, "required": ["uuid", "policy_uuid", "incident_uuid", "conversation_uuid", "next_step", "next_notify_at", "acknowledged_at", "resolved_at", "created_at"], "additionalProperties": false}
     UptimeResult: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "up": {"type": "boolean"}, "status_code": {"type": "integer"}, "latency_ms": {"type": "integer"}, "checked_at": {"type": "string", "format": "date-time"}}, "required": ["uuid", "up", "status_code", "latency_ms", "checked_at"], "additionalProperties": false}
-    IntegrationCreateConversation: {"type": "object", "properties": {"contact_uuid": {"type": "string", "format": "uuid"}, "inbox_uuid": {"type": "string", "format": "uuid"}, "subject": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["contact_uuid", "inbox_uuid", "subject"], "additionalProperties": false}
+    IntegrationCreateConversation: {"type": "object", "description": "Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.", "properties": {"contact_uuid": {"type": "string", "format": "uuid"}, "contact_external_id": {"type": "string", "maxLength": 200}, "inbox_uuid": {"type": "string", "format": "uuid"}, "subject": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["inbox_uuid", "subject"], "additionalProperties": false}
     IntegrationSubscription: {"type": "object", "properties": {"name": {"type": "string"}, "url": {"type": "string", "format": "uri"}, "events": {"type": "array", "items": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "minItems": 1}, "enabled": {"type": "boolean"}}, "required": ["name", "url", "events", "enabled"], "additionalProperties": false}
     IntegrationTrigger: {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "event": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "entity_uuid": {"type": ["string", "null"], "format": "uuid"}, "occurred_at": {"type": "string", "format": "date-time"}}, "required": ["id", "event", "entity_uuid", "occurred_at"], "additionalProperties": false}
     IntegrationTriggerPage: {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/IntegrationTrigger"}}, "next_cursor": {"type": "string"}, "has_more": {"type": "boolean"}, "retention_days": {"type": "integer"}}, "required": ["items", "next_cursor", "has_more", "retention_days"], "additionalProperties": false}
@@ -52681,7 +52718,14 @@ components:
       required: [state, detail, checked_at, token_expires_at, last_webhook_at, sent_24h, failed_24h, error_rate, reconnect]
       properties:
         state: { type: string, enum: [ok, warning, error, paused, unknown] }
-        detail: { type: string }
+        detail:
+          type: string
+          description: |
+            Provider message or a fixed code: token_expiring, send_failures;
+            for widgets (CF-195) identity_secret_missing (no identity secret,
+            signed-in users stay anonymous) and identity_rejected:<code>
+            (identify calls were rejected in the last week; code is
+            WIDGET_IDENTITY_DISABLED or WIDGET_IDENTITY_INVALID).
         checked_at: { type: [string, "null"], format: date-time }
         token_expires_at: { type: [string, "null"], format: date-time }
         last_webhook_at: { type: [string, "null"], format: date-time }
@@ -52967,12 +53011,24 @@ components:
 
     ConversationContact:
       type: object
-      required: [uuid, name, email, phone]
+      required: [uuid, name, email, phone, external_id, identity_state, verified_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
+        external_id: { type: [string, "null"], description: "CF-195: the customer's own user id." }
+        identity_state: { $ref: "#/components/schemas/ContactIdentityState" }
+        verified_at: { type: [string, "null"], format: date-time }
+
+    ConversationCompany:
+      type: object
+      description: "CF-195: the conversation's company with its own external id (separate from the contact's)."
+      required: [uuid, name, external_id]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        external_id: { type: [string, "null"] }
 
     ConversationStatus:
       type: string
@@ -52992,7 +53048,7 @@ components:
         channel_type: { type: string }
         inbox: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         contact: { $ref: "#/components/schemas/ConversationContact" }
-        company: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
+        company: { oneOf: [{ $ref: "#/components/schemas/ConversationCompany" }, { type: "null" }] }
         subject: { type: string }
         status: { $ref: "#/components/schemas/ConversationStatus" }
         custom_status: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
@@ -55640,12 +55696,15 @@ components:
 
     Contact:
       type: object
-      required: [uuid, name, email, phone, job_title, company, locale, timezone, notes, custom_fields, blocked, channel_types, conversation_count, last_seen_at, created_at, updated_at]
+      required: [uuid, name, email, phone, external_id, identity_state, verified_at, job_title, company, locale, timezone, notes, custom_fields, blocked, channel_types, conversation_count, last_seen_at, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
+        external_id: { type: [string, "null"], description: "CF-195: the customer's own user id, unique in the organization." }
+        identity_state: { $ref: "#/components/schemas/ContactIdentityState" }
+        verified_at: { type: [string, "null"], format: date-time, description: "Last widget identify that proved the id with user_hash." }
         job_title: { type: string }
         company: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         locale: { type: [string, "null"] }
@@ -55674,6 +55733,16 @@ components:
         notes: { type: string }
         custom_fields: { type: object, additionalProperties: true }
         blocked: { type: boolean }
+        external_id: { type: string, maxLength: 200, description: "CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it." }
+
+    ContactIdentityState:
+      type: string
+      enum: [verified, anonymous, self_named]
+      description: |
+        CF-195. verified: the contact proved the customer's user id with
+        user_hash (widget identify). anonymous: no name, e-mail or phone.
+        self_named: a name, e-mail or phone the contact or its channel gave,
+        not proved.
 
     ContactMerge:
       type: object
