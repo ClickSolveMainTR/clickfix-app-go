@@ -12,6 +12,189 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assistantDocumentCreate = `-- name: AssistantDocumentCreate :one
+INSERT INTO assistant_documents (organization_id, thread_id, kind, name, source_url, content_type, size_bytes, content, truncated, masked)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10)
+RETURNING id, uuid, organization_id, thread_id, kind, name, source_url, content_type, size_bytes, content, truncated, masked, created_at, expires_at
+`
+
+type AssistantDocumentCreateParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	ThreadID       int64  `json:"thread_id"`
+	Kind           string `json:"kind"`
+	Name           string `json:"name"`
+	SourceUrl      string `json:"source_url"`
+	ContentType    string `json:"content_type"`
+	SizeBytes      int32  `json:"size_bytes"`
+	Content        string `json:"content"`
+	Truncated      bool   `json:"truncated"`
+	Masked         bool   `json:"masked"`
+}
+
+func (q *Queries) AssistantDocumentCreate(ctx context.Context, arg AssistantDocumentCreateParams) (AssistantDocument, error) {
+	row := q.db.QueryRow(ctx, assistantDocumentCreate,
+		arg.OrganizationID,
+		arg.ThreadID,
+		arg.Kind,
+		arg.Name,
+		arg.SourceUrl,
+		arg.ContentType,
+		arg.SizeBytes,
+		arg.Content,
+		arg.Truncated,
+		arg.Masked,
+	)
+	var i AssistantDocument
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ThreadID,
+		&i.Kind,
+		&i.Name,
+		&i.SourceUrl,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.Content,
+		&i.Truncated,
+		&i.Masked,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
+const assistantDocumentDelete = `-- name: AssistantDocumentDelete :execrows
+DELETE FROM assistant_documents
+WHERE organization_id = $1 AND thread_id = $2 AND uuid = $3
+`
+
+type AssistantDocumentDeleteParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	ThreadID       int64     `json:"thread_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) AssistantDocumentDelete(ctx context.Context, arg AssistantDocumentDeleteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, assistantDocumentDelete, arg.OrganizationID, arg.ThreadID, arg.Uuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const assistantDocumentGet = `-- name: AssistantDocumentGet :one
+SELECT id, uuid, organization_id, thread_id, kind, name, source_url, content_type, size_bytes, content, truncated, masked, created_at, expires_at FROM assistant_documents
+WHERE organization_id = $1 AND thread_id = $2 AND uuid = $3 AND expires_at > NOW()
+`
+
+type AssistantDocumentGetParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	ThreadID       int64     `json:"thread_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) AssistantDocumentGet(ctx context.Context, arg AssistantDocumentGetParams) (AssistantDocument, error) {
+	row := q.db.QueryRow(ctx, assistantDocumentGet, arg.OrganizationID, arg.ThreadID, arg.Uuid)
+	var i AssistantDocument
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ThreadID,
+		&i.Kind,
+		&i.Name,
+		&i.SourceUrl,
+		&i.ContentType,
+		&i.SizeBytes,
+		&i.Content,
+		&i.Truncated,
+		&i.Masked,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
+const assistantDocumentsList = `-- name: AssistantDocumentsList :many
+SELECT id, uuid, organization_id, thread_id, kind, name, source_url, content_type, size_bytes,
+       char_length(content)::int AS chars, truncated, masked, created_at, expires_at
+FROM assistant_documents
+WHERE organization_id = $1 AND thread_id = $2 AND expires_at > NOW()
+ORDER BY created_at
+LIMIT 20
+`
+
+type AssistantDocumentsListParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ThreadID       int64 `json:"thread_id"`
+}
+
+type AssistantDocumentsListRow struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ThreadID       int64              `json:"thread_id"`
+	Kind           string             `json:"kind"`
+	Name           string             `json:"name"`
+	SourceUrl      string             `json:"source_url"`
+	ContentType    string             `json:"content_type"`
+	SizeBytes      int32              `json:"size_bytes"`
+	Chars          int32              `json:"chars"`
+	Truncated      bool               `json:"truncated"`
+	Masked         bool               `json:"masked"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) AssistantDocumentsList(ctx context.Context, arg AssistantDocumentsListParams) ([]AssistantDocumentsListRow, error) {
+	rows, err := q.db.Query(ctx, assistantDocumentsList, arg.OrganizationID, arg.ThreadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssistantDocumentsListRow{}
+	for rows.Next() {
+		var i AssistantDocumentsListRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.ThreadID,
+			&i.Kind,
+			&i.Name,
+			&i.SourceUrl,
+			&i.ContentType,
+			&i.SizeBytes,
+			&i.Chars,
+			&i.Truncated,
+			&i.Masked,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const assistantDocumentsPurgeExpired = `-- name: AssistantDocumentsPurgeExpired :execrows
+DELETE FROM assistant_documents WHERE expires_at <= NOW()
+`
+
+func (q *Queries) AssistantDocumentsPurgeExpired(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, assistantDocumentsPurgeExpired)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const assistantEnableAI = `-- name: AssistantEnableAI :exec
 INSERT INTO ai_policies (organization_id, enabled) VALUES ($1, TRUE)
 ON CONFLICT (organization_id) DO UPDATE SET enabled = TRUE

@@ -240,5 +240,7 @@
   "resources.outbound_webhooks": "Outbound webhooks",
   "actions.assistant.action_dry_run": "Assistant proposal dry run",
   "actions.assistant.action_rejected": "Assistant proposal rejected",
-  "actions.assistant.action_forbidden": "Assistant proposal refused: missing permission"
+  "actions.assistant.action_forbidden": "Assistant proposal refused: missing permission",
+  "actions.assistant.document_added": "Document shared with the assistant",
+  "actions.assistant.document_removed": "Document removed from the assistant"
 }

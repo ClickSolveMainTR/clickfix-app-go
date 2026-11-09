@@ -69,6 +69,7 @@ type toolRun struct {
 	suggestions []string
 	surface     string
 	thread      uuid.UUID
+	threadID    int64
 	// caps are the capabilities offered in this reply, by tool name.
 	caps map[string]*capability.Capability
 }
@@ -120,6 +121,9 @@ func (r *toolRun) run(ctx context.Context, call ai.ToolCall) (ai.ToolResult, err
 		a := r.svc.escalateAction(r.locale, clipRunes(strings.TrimSpace(in.Note), 2000))
 		r.actions = append(r.actions, a)
 		return toolJSON(map[string]any{"status": "proposed", "id": a.ID, "note": "Shown to the user as a confirmation card."}), nil
+	}
+	if call.Name == ToolReadDocument {
+		return r.readDocument(ctx, call.Input), nil
 	}
 	if cp, ok := r.caps[call.Name]; ok {
 		return r.runCapability(ctx, cp, call.Input), nil

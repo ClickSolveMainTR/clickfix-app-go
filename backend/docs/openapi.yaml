@@ -40550,6 +40550,184 @@ paths:
         '404': *id007
         '409':
           $ref: '#/components/responses/Conflict'
+  /v1/tenant/assistant/threads/{uuid}/documents:
+    get:
+      tags:
+      - Assistant
+      operationId: listTenantAssistantDocuments
+      summary: Documents shared in a thread
+      description: "CF-191: the thread's documents that have not expired (7 days). Content is never returned."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocumentList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+      - Assistant
+      operationId: uploadTenantAssistantDocument
+      summary: Share a file with the assistant
+      description: "CF-191: multipart upload (field `file`, at most 2 MB): text, Markdown, CSV, JSON, YAML or HTML; binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE; PDF is not supported yet). Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocument'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE)
+        '415':
+          description: Not a readable text document (ASSISTANT_DOCUMENT_TYPE)
+        '422':
+          description: No readable text (ASSISTANT_DOCUMENT_EMPTY)
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/tenant/assistant/threads/{uuid}/documents/link:
+    post:
+      tags:
+      - Assistant
+      operationId: linkTenantAssistantDocument
+      summary: Share a link with the assistant
+      description: "CF-191: fetches a public https page (no credentials, no internal host or private address, checked again at connection time and on each of at most 3 redirects; 10 s; 2 MB) and stores its text like an upload. The query string is not stored. 422 ASSISTANT_DOCUMENT_FETCH with a safe reason when it cannot be read."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2048
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocument'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE)
+        '415':
+          description: Not a readable text document (ASSISTANT_DOCUMENT_TYPE)
+        '422':
+          description: The link could not be read (ASSISTANT_DOCUMENT_FETCH) or has no text
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}:
+    delete:
+      tags:
+      - Assistant
+      operationId: deleteTenantAssistantDocument
+      summary: Remove a shared document
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: document_uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/tenant/assistant/threads/{uuid}/escalate:
     post:
       tags:
@@ -58707,6 +58885,88 @@ components:
             $ref: '#/components/schemas/AssistantActionDetail'
         focus:
           $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantDocument:
+      type: object
+      required:
+      - uuid
+      - kind
+      - name
+      - content_type
+      - size_bytes
+      - chars
+      - truncated
+      - masked
+      - created_at
+      - expires_at
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - file
+          - link
+        name:
+          type: string
+        source_url:
+          type: string
+          description: The link without its query string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        chars:
+          type: integer
+        truncated:
+          type: boolean
+          description: Longer than 60 000 characters; the rest was dropped
+        masked:
+          type: boolean
+          description: Personal data or secret-looking values were removed
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    EnvelopeAssistantDocument:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantDocument'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EnvelopeAssistantDocumentList:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          type: object
+          required:
+          - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssistantDocument'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     AssistantActionField:
       type: object
       required:

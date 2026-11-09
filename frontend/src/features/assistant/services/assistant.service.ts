@@ -2,7 +2,7 @@ import { readSSE } from "./sse";
 import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/generated/api";
 import { platformRequest } from "@/lib/api/platform-request";
-import { tenantRequest } from "@/lib/api/tenant-request";
+import { tenantFormRequest, tenantRequest } from "@/lib/api/tenant-request";
 
 export type AssistantStatus = components["schemas"]["AssistantStatus"];
 export type AssistantThread = components["schemas"]["AssistantThread"];
@@ -12,6 +12,7 @@ export type AssistantActionField =
   components["schemas"]["AssistantActionField"];
 export type AssistantActionDetail =
   components["schemas"]["AssistantActionDetail"];
+export type AssistantDocument = components["schemas"]["AssistantDocument"];
 export type AssistantConfirmResult =
   components["schemas"]["AssistantConfirmResult"];
 export type AssistantContext = components["schemas"]["AssistantContext"];
@@ -154,6 +155,42 @@ export const assistantService = {
       slug,
       "POST",
       `${A}/threads/${thread}/actions/${encodeURIComponent(action)}/reject`,
+      { silent: true },
+    );
+  },
+  /** Documents shared in a thread (CF-191); text only, kept 7 days. */
+  documents(slug: string, thread: string) {
+    return tenantRequest<{ items: AssistantDocument[] }>(
+      slug,
+      "GET",
+      `${A}/threads/${thread}/documents`,
+      { silent: true },
+    );
+  },
+  uploadDocument(slug: string, thread: string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return tenantFormRequest<AssistantDocument>(
+      slug,
+      "POST",
+      `${A}/threads/${thread}/documents`,
+      form,
+      { silent: true },
+    );
+  },
+  linkDocument(slug: string, thread: string, url: string) {
+    return tenantRequest<AssistantDocument>(
+      slug,
+      "POST",
+      `${A}/threads/${thread}/documents/link`,
+      { body: { url }, silent: true },
+    );
+  },
+  removeDocument(slug: string, thread: string, document: string) {
+    return tenantRequest<void>(
+      slug,
+      "DELETE",
+      `${A}/threads/${thread}/documents/${encodeURIComponent(document)}`,
       { silent: true },
     );
   },

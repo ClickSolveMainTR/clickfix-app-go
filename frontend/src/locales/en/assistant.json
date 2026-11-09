@@ -85,5 +85,19 @@
   "fields.name": "Name",
   "fields.route": "Page",
   "fields.target": "Field to highlight",
-  "fields.type": "Channel type"
+  "fields.type": "Channel type",
+  "documents.title": "Shared documents",
+  "documents.add": "Add a document or link",
+  "documents.hint": "Share your API docs or a sample request: text, Markdown, CSV, JSON, YAML or HTML, up to 2 MB. Only the text is kept for 7 days; personal data and keys are masked.",
+  "documents.file": "Choose a file",
+  "documents.link": "Document link",
+  "documents.add_link": "Add",
+  "documents.remove": "Remove {{name}}",
+  "documents.masked": "Personal data and keys in the document were masked",
+  "documents.errors.type": "This file cannot be read. Share text, Markdown, CSV, JSON, YAML or HTML (PDF is not supported yet).",
+  "documents.errors.size": "The document is larger than 2 MB.",
+  "documents.errors.limit": "A chat can hold 5 documents; remove one first.",
+  "documents.errors.empty": "The document has no readable text.",
+  "documents.errors.fetch": "The link could not be read. It must be a public https address.",
+  "documents.errors.generic": "The document could not be added; try again."
 }
