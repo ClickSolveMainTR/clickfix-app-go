@@ -70,6 +70,10 @@ func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, cp *capa
 	if s.API != nil && e.UserUUID != uuid.Nil {
 		e.API = s.API(e.UserUUID, c.Scope.UUID)
 	}
+	if e.API == nil {
+		// Never nil: a capability gets an error instead of a panic.
+		e.API = unavailableAPI{}
+	}
 	if readOnly {
 		var sims []string
 		if cp != nil {
@@ -78,6 +82,24 @@ func (s *Service) exec(ctx context.Context, c Caller, thread uuid.UUID, cp *capa
 		e.API = capability.ReadOnly(e.API, sims...)
 	}
 	return e
+}
+
+type unavailableAPI struct{}
+
+func (unavailableAPI) Call(context.Context, string, string, any) (capability.Response, error) {
+	return capability.Response{}, ErrAPIUnavailable
+}
+
+// apiReady reports whether the panel API can be reached as the caller;
+// checked before an action is marked confirmed.
+func (s *Service) apiReady(ctx context.Context, c Caller) error {
+	if s.API == nil {
+		return ErrAPIUnavailable
+	}
+	if u, err := s.Q.GetUserByID(ctx, c.UserID); err != nil || u.Uuid == uuid.Nil {
+		return ErrAPIUnavailable
+	}
+	return nil
 }
 
 // runCapability runs a read tool or records a write proposal. A write is
@@ -267,6 +289,9 @@ func (s *Service) prepareCapability(ctx context.Context, q *db.Queries, c Caller
 	if err := cp.FillSecrets(secrets); err != nil {
 		return nil, err
 	}
+	if err := s.apiReady(ctx, c); err != nil {
+		return nil, err
+	}
 	a.Params, a.Capability, a.Status = params, cp.Name, ActionConfirmed
 	if err := q.AssistantMessageSetActions(ctx, db.AssistantMessageSetActionsParams{OrganizationID: t.OrganizationID, ID: msg.ID, Actions: encodeActions(actions)}); err != nil {
 		return nil, err
@@ -279,12 +304,11 @@ func (s *Service) prepareCapability(ctx context.Context, q *db.Queries, c Caller
 func (s *Service) applyCapability(ctx context.Context, c Caller, t db.AssistantThread, actionID string, p *pendingApply) (ConfirmResult, error) {
 	e := s.exec(ctx, c, t.Uuid, p.cp, false)
 	e.Secrets = p.secrets
-	res, runErr := p.cp.Apply(ctx, e, p.params)
+	res, runErr := safeApply(ctx, p.cp, e, p.params)
 	var check *capability.Check
 	if runErr == nil && p.cp.Verify != nil {
 		e.Secrets = nil
-		v := p.cp.Verify(ctx, e, p.params, res)
-		check = &v
+		check = safeVerify(ctx, p.cp, e, p.params, res)
 	}
 	// The outcome is stored even if the request was cancelled meanwhile.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
@@ -366,4 +390,25 @@ func (s *Service) PageState(ctx context.Context, c Caller, pc Context) (capabili
 	}
 	st.Module = page.Module
 	return s.Caps.Finish(st, capability.Filter{Surface: pc.Surface, Has: c.Scope.Has}), true, nil
+}
+
+// safeApply runs Apply; a panic becomes an error, so the card is stored
+// as failed instead of staying confirmed.
+func safeApply(ctx context.Context, cp *capability.Capability, e capability.Exec, p capability.Params) (res capability.Result, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			res, err = capability.Result{}, fmt.Errorf("capability %s: panic: %v", cp.Name, r)
+		}
+	}()
+	return cp.Apply(ctx, e, p)
+}
+
+func safeVerify(ctx context.Context, cp *capability.Capability, e capability.Exec, p capability.Params, res capability.Result) (check *capability.Check) {
+	defer func() {
+		if r := recover(); r != nil {
+			check = &capability.Check{Status: capability.VerifyFailed, Message: "verification failed"}
+		}
+	}()
+	v := cp.Verify(ctx, e, p, res)
+	return &v
 }
