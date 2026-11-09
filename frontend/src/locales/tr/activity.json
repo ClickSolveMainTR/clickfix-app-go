@@ -242,5 +242,7 @@
   "actions.assistant.action_rejected": "Asistan önerisi reddedildi",
   "actions.assistant.action_forbidden": "Asistan önerisi yetki yüzünden reddedildi",
   "actions.channels.test_delivery": "Kanala test olayı gönderildi",
-  "actions.webhooks.test_queued": "Webhook test olayı kuyruğa alındı"
+  "actions.webhooks.test_queued": "Webhook test olayı kuyruğa alındı",
+  "actions.assistant.document_added": "Asistana belge paylaşıldı",
+  "actions.assistant.document_removed": "Asistandan belge kaldırıldı"
 }

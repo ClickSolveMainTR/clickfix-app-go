@@ -15994,6 +15994,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/assistant/threads/{uuid}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents shared in a thread
+         * @description CF-191: the thread's documents that have not expired (7 days). Content is never returned.
+         */
+        get: operations["listTenantAssistantDocuments"];
+        put?: never;
+        /**
+         * Share a file with the assistant
+         * @description CF-191: multipart upload (field `file`, at most 2 MB): PDF, text, Markdown, CSV, JSON, YAML or HTML; other binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE). PDF text is read within limits (200 pages, 5 s); an encrypted, damaged or scanned PDF answers 422 ASSISTANT_DOCUMENT_PDF. Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data.
+         */
+        post: operations["uploadTenantAssistantDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/documents/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share a link with the assistant
+         * @description CF-191: fetches a public https page (no credentials, no internal host or private address, checked again at connection time and on each of at most 3 redirects; 10 s; 2 MB) and stores its text like an upload. The query string is not stored. 422 ASSISTANT_DOCUMENT_FETCH with a safe reason when it cannot be read.
+         */
+        post: operations["linkTenantAssistantDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a shared document */
+        delete: operations["deleteTenantAssistantDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/assistant/threads/{uuid}/escalate": {
         parameters: {
             query?: never;
@@ -26925,6 +26986,40 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["WebhookTestQueued"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        AssistantDocument: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "file" | "link";
+            name: string;
+            /** @description The link without its query string */
+            source_url?: string;
+            content_type: string;
+            size_bytes: number;
+            chars: number;
+            /** @description Longer than 60 000 characters; the rest was dropped */
+            truncated: boolean;
+            /** @description Personal data or secret-looking values were removed */
+            masked: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EnvelopeAssistantDocument: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantDocument"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeAssistantDocumentList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["AssistantDocument"][];
+            };
             meta: components["schemas"]["ResponseMeta"];
         };
         AssistantActionField: {
@@ -64577,6 +64672,195 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantAssistantDocuments: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Documents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocumentList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocument"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a readable text document (ASSISTANT_DOCUMENT_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No readable text (ASSISTANT_DOCUMENT_EMPTY, ASSISTANT_DOCUMENT_PDF) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    linkTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uri */
+                    url: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocument"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a readable text document (ASSISTANT_DOCUMENT_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link could not be read (ASSISTANT_DOCUMENT_FETCH) or has no text */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                document_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

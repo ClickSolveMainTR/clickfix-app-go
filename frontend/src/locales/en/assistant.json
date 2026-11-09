@@ -101,5 +101,20 @@
   "page_state.tests": "Tests you can run from here",
   "fields.webhook_uuid": "Webhook",
   "fields.rule_uuid": "Rule",
-  "fields.conversation_uuid": "Conversation"
+  "fields.conversation_uuid": "Conversation",
+  "documents.title": "Shared documents",
+  "documents.add": "Add a document or link",
+  "documents.hint": "Share your API docs or a sample request: PDF, text, Markdown, CSV, JSON, YAML or HTML, up to 2 MB. Only the text is kept for 7 days; personal data and keys are masked.",
+  "documents.file": "Choose a file",
+  "documents.link": "Document link",
+  "documents.add_link": "Add",
+  "documents.remove": "Remove {{name}}",
+  "documents.masked": "Personal data and keys in the document were masked",
+  "documents.errors.type": "This file cannot be read. Share a PDF, text, Markdown, CSV, JSON, YAML or HTML file.",
+  "documents.errors.size": "The document is larger than 2 MB.",
+  "documents.errors.limit": "A chat can hold 5 documents; remove one first.",
+  "documents.errors.empty": "The document has no readable text.",
+  "documents.errors.fetch": "The link could not be read. It must be a public https address.",
+  "documents.errors.generic": "The document could not be added; try again.",
+  "documents.errors.pdf": "The PDF text could not be read (it may be encrypted, damaged or a scanned image)."
 }

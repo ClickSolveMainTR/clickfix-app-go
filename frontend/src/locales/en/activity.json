@@ -242,5 +242,7 @@
   "actions.assistant.action_rejected": "Assistant proposal rejected",
   "actions.assistant.action_forbidden": "Assistant proposal refused: missing permission",
   "actions.channels.test_delivery": "Test event sent to the channel",
-  "actions.webhooks.test_queued": "Webhook test event queued"
+  "actions.webhooks.test_queued": "Webhook test event queued",
+  "actions.assistant.document_added": "Document shared with the assistant",
+  "actions.assistant.document_removed": "Document removed from the assistant"
 }

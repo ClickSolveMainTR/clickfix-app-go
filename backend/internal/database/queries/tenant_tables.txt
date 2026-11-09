@@ -292,6 +292,7 @@ recording_transcripts
 # Module guides and ClickFix Asistan (CF-141)
 guide_progress
 assistant_threads
+assistant_documents
 assistant_messages
 product_feedback
 # Mobile widget tokens (CF-152)

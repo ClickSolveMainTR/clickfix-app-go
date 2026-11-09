@@ -400,6 +400,23 @@ type AppointmentTypeHost struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type AssistantDocument struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ThreadID       int64              `json:"thread_id"`
+	Kind           string             `json:"kind"`
+	Name           string             `json:"name"`
+	SourceUrl      string             `json:"source_url"`
+	ContentType    string             `json:"content_type"`
+	SizeBytes      int32              `json:"size_bytes"`
+	Content        string             `json:"content"`
+	Truncated      bool               `json:"truncated"`
+	Masked         bool               `json:"masked"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+}
+
 type AssistantMessage struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

@@ -131,3 +131,6 @@ ProductFeedbackSetStatus   platform staff update by uuid (platform.product_feedb
 TouchWidgetToken           update of a row already resolved by GetValidWidgetToken
 RevokeWidgetTokensForDevice the caller's own tokens on one device (logout, re-issue)
 RebindWidgetTokensSession  the caller's own tokens follow a rotated refresh session
+# Assistant documents (CF-191): retention cleanup, it only deletes rows
+# whose 7 days are over, whichever organization they belong to.
+AssistantDocumentsPurgeExpired retention: deletes only expired rows of every organization

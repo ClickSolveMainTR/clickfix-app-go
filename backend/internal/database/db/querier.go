@@ -174,6 +174,11 @@ type Querier interface {
 	AppointmentVideoFinish(ctx context.Context, arg AppointmentVideoFinishParams) (int64, error)
 	AssignArticleBrand(ctx context.Context, arg AssignArticleBrandParams) (int64, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
+	AssistantDocumentCreate(ctx context.Context, arg AssistantDocumentCreateParams) (AssistantDocument, error)
+	AssistantDocumentDelete(ctx context.Context, arg AssistantDocumentDeleteParams) (int64, error)
+	AssistantDocumentGet(ctx context.Context, arg AssistantDocumentGetParams) (AssistantDocument, error)
+	AssistantDocumentsList(ctx context.Context, arg AssistantDocumentsListParams) ([]AssistantDocumentsListRow, error)
+	AssistantDocumentsPurgeExpired(ctx context.Context) (int64, error)
 	AssistantEnableAI(ctx context.Context, organizationID int64) error
 	AssistantEscalatedConversation(ctx context.Context, arg AssistantEscalatedConversationParams) (AssistantEscalatedConversationRow, error)
 	AssistantMessageCreate(ctx context.Context, arg AssistantMessageCreateParams) (AssistantMessage, error)

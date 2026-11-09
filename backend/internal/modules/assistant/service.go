@@ -137,8 +137,10 @@ type Service struct {
 	Guides  *guides.Service
 	Actions Registry
 	// Caps is the capability registry (CF-184); API reaches /v1 as the user.
-	Caps      *capability.Registry
-	API       APIFactory
+	Caps *capability.Registry
+	API  APIFactory
+	// Fetcher reads shared links (CF-191); zero value = netguard client.
+	Fetcher   Fetcher
 	Escalator Escalator
 	Help      HelpSearcher
 	Now       func() time.Time
@@ -445,12 +447,17 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 	wg.Wait()
 
 	caps := s.offered(c, pc)
-	run := &toolRun{svc: s, caller: c, settings: settings, locale: locale, surface: pc.Surface, thread: t.Uuid, caps: map[string]*capability.Capability{}}
+	docs, _ := s.documents(ctx, t)
+	run := &toolRun{svc: s, caller: c, settings: settings, locale: locale, surface: pc.Surface, thread: t.Uuid, threadID: t.ID, caps: map[string]*capability.Capability{}}
 	for _, cp := range caps {
 		run.caps[cp.ToolName()] = cp
 	}
-	req := ai.Request{Instructions: s.instructions(c, settings, pc, page, setup, locale, caps, pageState),
-		Turns: turns, Tools: append(s.tools(), capabilityTools(caps)...), Schema: replySchema(), MaxTokens: 2048}
+	tools := append(s.tools(), capabilityTools(caps)...)
+	if len(docs) > 0 {
+		tools = append(tools, readDocumentTool())
+	}
+	req := ai.Request{Instructions: s.instructions(c, settings, pc, page, setup, locale, caps, pageState) + documentsPrompt(docs),
+		Turns: turns, Tools: tools, Schema: replySchema(), MaxTokens: 2048}
 	// Cache only stable instructions; changing page/setup data is a separate data turn.
 	if stable, dynamic, ok := strings.Cut(req.Instructions, "Current context:\n"); ok {
 		req.Instructions = stable + "Use the context data to choose the reply language and explain the current page.\n"

@@ -136,3 +136,28 @@ UPDATE assistant_messages SET interrupted = TRUE WHERE organization_id = sqlc.ar
 
 -- name: AssistantThreadTitle :exec
 UPDATE assistant_threads SET title = sqlc.arg(title) WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id);
+
+-- name: AssistantDocumentCreate :one
+INSERT INTO assistant_documents (organization_id, thread_id, kind, name, source_url, content_type, size_bytes, content, truncated, masked)
+VALUES (sqlc.arg(organization_id), sqlc.arg(thread_id), sqlc.arg(kind), sqlc.arg(name), sqlc.arg(source_url),
+        sqlc.arg(content_type), sqlc.arg(size_bytes), sqlc.arg(content), sqlc.arg(truncated), sqlc.arg(masked))
+RETURNING *;
+
+-- name: AssistantDocumentsList :many
+SELECT id, uuid, organization_id, thread_id, kind, name, source_url, content_type, size_bytes,
+       char_length(content)::int AS chars, truncated, masked, created_at, expires_at
+FROM assistant_documents
+WHERE organization_id = sqlc.arg(organization_id) AND thread_id = sqlc.arg(thread_id) AND expires_at > NOW()
+ORDER BY created_at
+LIMIT 20;
+
+-- name: AssistantDocumentGet :one
+SELECT * FROM assistant_documents
+WHERE organization_id = sqlc.arg(organization_id) AND thread_id = sqlc.arg(thread_id) AND uuid = sqlc.arg(uuid) AND expires_at > NOW();
+
+-- name: AssistantDocumentDelete :execrows
+DELETE FROM assistant_documents
+WHERE organization_id = sqlc.arg(organization_id) AND thread_id = sqlc.arg(thread_id) AND uuid = sqlc.arg(uuid);
+
+-- name: AssistantDocumentsPurgeExpired :execrows
+DELETE FROM assistant_documents WHERE expires_at <= NOW();

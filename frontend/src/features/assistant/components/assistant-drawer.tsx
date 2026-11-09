@@ -48,6 +48,7 @@ import {
 } from "./action-card";
 import { AssistantMarkdown } from "./assistant-markdown";
 import { PageStateCard } from "./page-state-card";
+import { DocumentAttach } from "./document-attach";
 
 type Pending = { prompt?: string; guideKey?: string; nonce: number };
 
@@ -386,6 +387,14 @@ export function AssistantDrawer({
     if (follow.current) endRef.current?.scrollIntoView({ block: "end" });
   }, [items.length, live?.content, send.isPending]);
 
+  // Documents need a thread: the first one opens it.
+  const ensureThread = async () => {
+    if (thread) return thread;
+    const id = (await assistantService.createThread(slug, context)).uuid;
+    setThread(id);
+    return id;
+  };
+
   const submit = (text: string) => {
     const content = text.trim();
     if (!content || send.isPending) return;
@@ -692,6 +701,12 @@ export function AssistantDrawer({
               </div>
             </div>
           ) : null}
+          <DocumentAttach
+            slug={slug}
+            thread={thread}
+            ensureThread={ensureThread}
+            disabled={Boolean(disabled) || send.isPending}
+          />
           <form
             className="flex items-end gap-2"
             onSubmit={(e) => {
