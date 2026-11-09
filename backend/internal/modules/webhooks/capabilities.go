@@ -204,20 +204,60 @@ func validURL(p capability.Params) error {
 	return nil
 }
 
+// hookByID finds a subscription; there is no single GET route, so it pages
+// through the list (100 per page, at most hookPages pages).
 func hookByID(ctx context.Context, api capability.API, id string) (hookView, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		return hookView{}, capability.Invalid("webhook_uuid must be a UUID")
 	}
-	hooks, err := listHooks(ctx, api)
+	h, ok, err := findHook(ctx, api, func(h hookView) bool { return h.UUID.String() == id })
 	if err != nil {
 		return hookView{}, err
 	}
-	for _, h := range hooks {
-		if h.UUID.String() == id {
-			return h, nil
+	if !ok {
+		return hookView{}, capability.Invalid("webhook %s not found", id)
+	}
+	return h, nil
+}
+
+const hookPages = 20
+
+// findHook pages through every subscription until match is true.
+func findHook(ctx context.Context, api capability.API, match func(hookView) bool) (hookView, bool, error) {
+	for page := 0; page < hookPages; page++ {
+		r, err := api.Call(ctx, http.MethodGet, fmt.Sprintf("%s?limit=100&offset=%d", hooksPath, page*100), nil)
+		if err != nil {
+			return hookView{}, false, err
+		}
+		var out struct {
+			Items []hookView `json:"items"`
+			Total int        `json:"total"`
+		}
+		if err := r.Decode(&out); err != nil {
+			return hookView{}, false, err
+		}
+		for _, h := range out.Items {
+			if match(h) {
+				return h, true, nil
+			}
+		}
+		if len(out.Items) < 100 || (page+1)*100 >= out.Total {
+			break
 		}
 	}
-	return hookView{}, capability.Invalid("webhook %s not found", id)
+	return hookView{}, false, nil
+}
+
+// hookDuplicate refuses a second subscription to the same URL.
+func hookDuplicate(ctx context.Context, e capability.Exec, url string) error {
+	h, ok, err := findHook(ctx, e.API, func(h hookView) bool { return h.URL == url })
+	if err != nil {
+		return err
+	}
+	if ok {
+		return capability.Invalid("%s", tr(e, "Bu adrese giden bir abonelik zaten var (%s); güncellemeyi öneririm.", "A webhook to this URL already exists (%s); update it instead.", h.Name))
+	}
+	return nil
 }
 
 func strList(v any) []string {
@@ -257,20 +297,17 @@ func WriteCapabilities() []*capability.Capability {
 			Input:    map[string]any{"type": "object", "additionalProperties": false, "required": []string{"name", "url", "events"}, "properties": props},
 			Validate: validURL,
 			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
-				hooks, err := listHooks(ctx, e.API)
-				if err != nil {
+				if err := hookDuplicate(ctx, e, str(p, "url")); err != nil {
 					return capability.Result{}, err
-				}
-				for _, h := range hooks {
-					if h.URL == str(p, "url") {
-						return capability.Result{}, capability.Invalid("%s", tr(e, "Bu adrese giden bir abonelik zaten var (%s); güncellemeyi öneririm.", "A webhook to this URL already exists (%s); update it instead.", h.Name))
-					}
 				}
 				return capability.Result{Summary: tr(e, "“%s” aboneliği %s adresine %d olay gönderecek; imza anahtarı bir kez gösterilecek.",
 					"“%s” will post to %s (%d events); the signing secret is shown once.", str(p, "name"), str(p, "url"), len(strList(p["events"]))),
 					Details: []capability.Detail{{Label: tr(e, "Olaylar", "Events"), Value: strings.Join(strList(p["events"]), ", ")}}}, nil
 			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				if err := hookDuplicate(ctx, e, str(p, "url")); err != nil {
+					return capability.Result{}, err
+				}
 				enabled := true
 				if v, ok := p["enabled"].(bool); ok {
 					enabled = v

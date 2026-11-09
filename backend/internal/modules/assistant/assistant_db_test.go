@@ -132,6 +132,8 @@ func setup(t *testing.T) *fixture {
 	}
 	svc.Actions = assistant.DefaultActions(assistant.ActionDeps{Q: q, Escalate: svc.EscalateFromAction})
 	svc.Caps = capability.NewRegistry().Register(assistant.CoreCapabilities(q)...)
+	// Production always wires the panel API; tests override it as needed.
+	svc.API = func(uuid.UUID, uuid.UUID) capability.API { return &fakeAPI{} }
 	scope := orgctx.Scope{ID: org.ID, UUID: org.UUID, Slug: org.Slug, Name: org.Name, MemberRole: "agent",
 		Permissions: []string{rbac.PermTenantAssistantUse}}
 	return &fixture{pool: pool, q: q, svc: svc, prov: prov, esc: esc, scope: scope, user: userID}

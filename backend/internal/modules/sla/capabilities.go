@@ -1,6 +1,7 @@
 package sla
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -228,6 +229,9 @@ func validTargets(p capability.Params) error {
 }
 
 func duration(e capability.Exec, v any) string {
+	if n, ok := v.(json.Number); ok {
+		v, _ = n.Float64()
+	}
 	m, ok := v.(float64)
 	if !ok {
 		return "—"
@@ -311,7 +315,7 @@ func WriteCapabilities() []*capability.Capability {
 		body := map[string]any{"name": name, "timezone": tz, "working_hours": p["days"], "is_default": def}
 		if v, ok := p["use_public_holidays"].(bool); ok {
 			body["use_public_holidays"] = v
-			body["holiday_country"] = "TR"
+			body["holiday_country"] = holidayCountry(p)
 		}
 		return body
 	}
@@ -337,7 +341,9 @@ func WriteCapabilities() []*capability.Capability {
 		"timezone":            map[string]any{"type": "string", "title": "Time zone", "maxLength": 64, "description": "IANA, default Europe/Istanbul"},
 		"days":                weekProp(),
 		"is_default":          map[string]any{"type": "boolean", "title": "Default schedule"},
-		"use_public_holidays": map[string]any{"type": "boolean", "title": "Close on Turkish public holidays"},
+		"use_public_holidays": map[string]any{"type": "boolean", "title": "Close on public holidays"},
+		"holiday_country": map[string]any{"type": "string", "title": "Holiday country", "pattern": "^[A-Z]{2}$",
+			"description": "ISO 3166 country code of the public holidays (default TR)"},
 	}
 	policyProps := map[string]any{
 		"name":                map[string]any{"type": "string", "title": "Name", "minLength": 1, "maxLength": 120},
@@ -388,7 +394,11 @@ func WriteCapabilities() []*capability.Capability {
 				return capability.Result{Summary: tr(e, "“%s” çalışma saatleri oluşturulacak.", "Business hours “%s” will be created.", body["name"]), Details: details}, nil
 			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
-				r, err := e.API.Call(ctx, http.MethodPost, hoursPath, hoursInput(p))
+				body := hoursInput(p)
+				if err := duplicate(ctx, e, hoursPath, body["name"].(string)); err != nil {
+					return capability.Result{}, err
+				}
+				r, err := e.API.Call(ctx, http.MethodPost, hoursPath, body)
 				if err != nil {
 					return capability.Result{}, err
 				}
@@ -400,9 +410,10 @@ func WriteCapabilities() []*capability.Capability {
 		},
 		{
 			Name: "sla.business_hours.update", Module: "sla", Kind: capability.Write, Permission: rbac.PermTenantSlaWrite, Routes: routes,
-			Title:       map[string]string{"tr": "Çalışma saatlerini güncelle", "en": "Update business hours"},
-			Description: "Replace the days and hours (and name, time zone, default flag) of an existing schedule (business_hours_uuid from sla_check or the SLA page).",
-			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"business_hours_uuid", "days"},
+			Title: map[string]string{"tr": "Çalışma saatlerini güncelle", "en": "Update business hours"},
+			Description: "Change an existing schedule (business_hours_uuid from sla_check or the SLA page). Send only what changes: " +
+				"days lists only the days to change; other days, the name, time zone, default flag, team and holidays are kept.",
+			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"business_hours_uuid"},
 				"properties": withID(hoursProps, "business_hours_uuid", "Business hours")},
 			Validate: func(p capability.Params) error {
 				if err := validWeek(p); err != nil {
@@ -410,12 +421,29 @@ func WriteCapabilities() []*capability.Capability {
 				}
 				return validTimezone(p)
 			},
+			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				body, err := mergedHours(ctx, e, str(p, "business_hours_uuid"), p)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				details := []capability.Detail{{Label: tr(e, "Saat dilimi", "Time zone"), Value: fmt.Sprint(body["timezone"])}}
+				days, _ := body["working_hours"].(map[string]any)
+				for _, k := range dayKeys {
+					details = append(details, capability.Detail{Label: k, Value: dayText(e, days[k])})
+				}
+				return capability.Result{Summary: tr(e, "“%s” çalışma saatleri güncellenecek; verilmeyen alanlar korunur.",
+					"Business hours “%v” will be updated; fields not given are kept.", body["name"]), Details: details}, nil
+			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
 				id := str(p, "business_hours_uuid")
 				if _, err := uuid.Parse(id); err != nil {
 					return capability.Result{}, capability.Invalid("business_hours_uuid must be a UUID")
 				}
-				r, err := e.API.Call(ctx, http.MethodPatch, hoursPath+"/"+id, hoursInput(p))
+				body, err := mergedHours(ctx, e, id, p)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				r, err := e.API.Call(ctx, http.MethodPatch, hoursPath+"/"+id, body)
 				if err != nil {
 					return capability.Result{}, err
 				}
@@ -441,6 +469,9 @@ func WriteCapabilities() []*capability.Capability {
 				return capability.Result{Summary: tr(e, "“%s” SLA politikası oluşturulacak.", "SLA policy “%s” will be created.", str(p, "name")), Details: describeTargets(e, p)}, nil
 			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				if err := duplicate(ctx, e, policiesPath, str(p, "name")); err != nil {
+					return capability.Result{}, err
+				}
 				r, err := e.API.Call(ctx, http.MethodPost, policiesPath, policyInput(p))
 				if err != nil {
 					return capability.Result{}, err
@@ -455,25 +486,35 @@ func WriteCapabilities() []*capability.Capability {
 		},
 		{
 			Name: "sla.policies.update", Module: "sla", Kind: capability.Write, Permission: rbac.PermTenantSlaWrite, Routes: routes,
-			Title:       map[string]string{"tr": "SLA politikasını güncelle", "en": "Update an SLA policy"},
-			Description: "Replace the name, targets and settings of an existing SLA policy (policy_uuid from the SLA page or sla_check).",
-			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"policy_uuid", "name", "targets"},
+			Title: map[string]string{"tr": "SLA politikasını güncelle", "en": "Update an SLA policy"},
+			Description: "Change an existing SLA policy (policy_uuid from the SLA page or sla_check). Send only what changes: a target " +
+				"changes only the times it gives for its priority; the name, description, schedule, conditions, other times and other targets are kept.",
+			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"policy_uuid"},
 				"properties": withID(policyProps, "policy_uuid", "Policy")},
 			Validate: validTargets,
-			DryRun: func(_ context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
-				return capability.Result{Summary: tr(e, "“%s” SLA politikası güncellenecek.", "SLA policy “%s” will be updated.", str(p, "name")), Details: describeTargets(e, p)}, nil
+			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
+				body, err := mergedPolicy(ctx, e, str(p, "policy_uuid"), p)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				return capability.Result{Summary: tr(e, "“%v” SLA politikası güncellenecek; verilmeyen alanlar korunur.",
+					"SLA policy “%v” will be updated; fields not given are kept.", body["name"]), Details: describeTargets(e, capability.Params{"targets": body["targets"]})}, nil
 			},
 			Apply: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
 				id := str(p, "policy_uuid")
 				if _, err := uuid.Parse(id); err != nil {
 					return capability.Result{}, capability.Invalid("policy_uuid must be a UUID")
 				}
-				r, err := e.API.Call(ctx, http.MethodPatch, policiesPath+"/"+id, policyInput(p))
+				body, err := mergedPolicy(ctx, e, id, p)
+				if err != nil {
+					return capability.Result{}, err
+				}
+				r, err := e.API.Call(ctx, http.MethodPatch, policiesPath+"/"+id, body)
 				if err != nil {
 					return capability.Result{}, err
 				}
 				res, err := created(r, "/settings/sla")
-				res.Details = describeTargets(e, p)
+				res.Details = describeTargets(e, capability.Params{"targets": body["targets"]})
 				return res, err
 			},
 			Verify: func(ctx context.Context, e capability.Exec, _ capability.Params, res capability.Result) capability.Check {
@@ -499,4 +540,152 @@ func WriteCapabilities() []*capability.Capability {
 			},
 		},
 	}
+}
+
+func holidayCountry(p capability.Params) string {
+	if c := str(p, "holiday_country"); c != "" {
+		return c
+	}
+	return "TR"
+}
+
+func dayText(e capability.Exec, v any) string {
+	d, ok := v.(map[string]any)
+	if !ok {
+		return tr(e, "kapalı", "closed")
+	}
+	if closed, _ := d["closed"].(bool); closed {
+		return tr(e, "kapalı", "closed")
+	}
+	return fmt.Sprintf("%v–%v", d["open"], d["close"])
+}
+
+// current reads a record as a JSON object (fetch-then-merge: an update
+// sends the full record with only the given fields changed, because the
+// SLA routes replace the whole record).
+func current(ctx context.Context, e capability.Exec, path string) (map[string]any, error) {
+	r, err := e.API.Call(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+	// Numbers stay exact (team_id, position) when the record is sent back.
+	dec := json.NewDecoder(bytes.NewReader(r.Data))
+	dec.UseNumber()
+	var v map[string]any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// mergedHours is the stored schedule with the given fields changed; days
+// change only the days they list.
+func mergedHours(ctx context.Context, e capability.Exec, id string, p capability.Params) (map[string]any, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, capability.Invalid("business_hours_uuid must be a UUID")
+	}
+	cur, err := current(ctx, e, hoursPath+"/"+id)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{}
+	for _, k := range []string{"name", "timezone", "working_hours", "use_public_holidays", "holiday_country", "team_id", "is_default"} {
+		if v, ok := cur[k]; ok {
+			body[k] = v
+		}
+	}
+	for _, k := range []string{"name", "timezone", "is_default", "use_public_holidays", "holiday_country"} {
+		if v, ok := p[k]; ok {
+			body[k] = v
+		}
+	}
+	if _, ok := p["use_public_holidays"]; ok && p["holiday_country"] == nil && body["holiday_country"] == "" {
+		body["holiday_country"] = holidayCountry(p)
+	}
+	if days, ok := p["days"].(map[string]any); ok {
+		week := map[string]any{}
+		if old, ok := body["working_hours"].(map[string]any); ok {
+			for k, v := range old {
+				week[k] = v
+			}
+		}
+		for k, v := range days {
+			week[k] = v
+		}
+		body["working_hours"] = week
+	}
+	return body, nil
+}
+
+// mergedPolicy is the stored policy with the given fields changed; a target
+// changes only the times it gives for its priority, priorities only that
+// condition.
+func mergedPolicy(ctx context.Context, e capability.Exec, id string, p capability.Params) (map[string]any, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, capability.Invalid("policy_uuid must be a UUID")
+	}
+	cur, err := current(ctx, e, policiesPath+"/"+id)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{}
+	for _, k := range []string{"name", "description", "is_active", "position", "business_hours_uuid", "conditions", "warning_percent", "targets"} {
+		if v, ok := cur[k]; ok {
+			body[k] = v
+		}
+	}
+	for _, k := range []string{"name", "description", "is_active", "business_hours_uuid"} {
+		if v, ok := p[k]; ok {
+			body[k] = v
+		}
+	}
+	if pr, ok := p["priorities"].([]any); ok {
+		cond := map[string]any{}
+		if old, ok := body["conditions"].(map[string]any); ok {
+			for k, v := range old {
+				cond[k] = v
+			}
+		}
+		cond["priorities"] = pr
+		body["conditions"] = cond
+	}
+	if given, ok := p["targets"].([]any); ok {
+		byPriority := map[string]any{}
+		order := []string{}
+		if old, ok := body["targets"].([]any); ok {
+			for _, t := range old {
+				m, _ := t.(map[string]any)
+				pr, _ := m["priority"].(string)
+				if _, seen := byPriority[pr]; !seen {
+					order = append(order, pr)
+				}
+				byPriority[pr] = t
+			}
+		}
+		for _, t := range given {
+			m, _ := t.(map[string]any)
+			pr, _ := m["priority"].(string)
+			merged := map[string]any{}
+			if old, seen := byPriority[pr].(map[string]any); seen {
+				for k, v := range old {
+					merged[k] = v
+				}
+			} else {
+				order = append(order, pr)
+			}
+			for k, v := range m {
+				merged[k] = v
+			}
+			byPriority[pr] = merged
+		}
+		targets := make([]any, 0, len(order))
+		for _, pr := range order {
+			targets = append(targets, byPriority[pr])
+		}
+		body["targets"] = targets
+	}
+	return body, nil
 }
