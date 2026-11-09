@@ -646,6 +646,16 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	seedCancel()
 	assistantAI := &assistantmodule.PlatformAI{Routes: aiCore.AI.Routes, Q: deps.Queries}
+	// End-to-end suite only (CF-194): a scripted provider plays the
+	// assistant scenarios. Refused outside development and test.
+	if os.Getenv("ASSISTANT_E2E_FAKE_AI") == "1" {
+		if cfg.App.Env == "development" || cfg.App.Env == "test" {
+			assistantAI.Routes = assistantmodule.E2ERoutes()
+			log.Warn("assistant_scripted_ai_enabled", "env", cfg.App.Env)
+		} else {
+			log.Error("assistant_scripted_ai_refused", "env", cfg.App.Env)
+		}
+	}
 	assistantSvc := &assistantmodule.Service{
 		Pool: deps.DB, Q: deps.Queries, AI: assistantAI, Guides: guidesSvc,
 		Escalator: &assistantmodule.SupportEscalator{Q: deps.Queries, Instances: inboxCore.Channels, Receiver: inboxCore.Conversations},
