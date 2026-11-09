@@ -314,7 +314,7 @@
   "shortcuts.fit": "Tümünü sığdır",
   "shortcuts.layout": "Otomatik yerleşim",
   "actions.run_system_action": "Bağlı sistemde iş yap",
-  "action_help.run_system_action": "Bağlı sistemindeki bir işi konuşmanın müşterisi için çalıştırır. Yalnız iş akışına açık ve onay gerektirmeyen işler kullanılabilir.",
+  "action_help.run_system_action": "Bağlı sistemindeki bir işi konuşmanın müşterisi için çalıştırır. Yalnız iş akışına açık, onay ve zorunlu parametre gerektirmeyen işler kullanılabilir.",
   "fields.screen_page_url": "Ekran: sayfa adresi",
   "fields.screen_page_path": "Ekran: sayfa yolu",
   "fields.screen_last_event": "Ekran: son olay",

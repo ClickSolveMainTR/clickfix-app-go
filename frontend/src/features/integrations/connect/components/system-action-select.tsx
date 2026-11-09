@@ -18,8 +18,8 @@ import { connectKeys, connectService } from "../services/connect.service";
 
 /**
  * Picks a connected system action for a workflow step (CF-197). Only
- * actions open to workflows that need no approval are listed: the API
- * refuses the others for workflows.
+ * actions open to workflows that need no approval and no required params
+ * are listed: the API refuses the others for workflows.
  */
 export function SystemActionSelect({
   value,
@@ -42,7 +42,11 @@ export function SystemActionSelect({
   });
   const actions = (overview.data?.actions ?? []).filter(
     (a) =>
-      a.enabled && !a.requires_approval && a.allowed_for.includes("workflow"),
+      a.enabled &&
+      !a.requires_approval &&
+      a.allowed_for.includes("workflow") &&
+      // A workflow step sends no params.
+      !a.params.some((p) => p.required),
   );
   const options =
     value && !actions.some((a) => a.key === value)

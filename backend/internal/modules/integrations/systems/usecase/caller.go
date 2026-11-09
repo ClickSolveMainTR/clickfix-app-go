@@ -180,6 +180,12 @@ func BuildURL(base, tmpl string, vars map[string]string) (string, error) {
 			missing = append(missing, name)
 			return ""
 		}
+		// PathEscape keeps "." and ".."; as a whole segment they would move
+		// the path, so they are refused like a missing value.
+		if v == "." || v == ".." {
+			missing = append(missing, name)
+			return ""
+		}
 		idx := strings.Index(tmpl, m)
 		if q >= 0 && idx > q {
 			return url.QueryEscape(v)

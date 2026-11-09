@@ -37,7 +37,7 @@ var DraftActions = map[string]string{
 	"remove_tag":        "target_uuid: tag uuid (workflows_reference.tags)",
 	"assign_user":       "target_uuid: member user uuid (workflows_reference.members)",
 	"notify":            "target_uuid: member user uuid; content: notification text",
-	"run_system_action": "value: connected system action key (integrations_system_describe); the action must allow workflows and need no approval",
+	"run_system_action": "value: connected system action key (integrations_system_describe); the action must allow workflows, need no approval and have no required params",
 }
 
 func draftActionTypes() []string {

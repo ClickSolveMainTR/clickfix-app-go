@@ -314,7 +314,7 @@
   "shortcuts.fit": "Fit view",
   "shortcuts.layout": "Auto layout",
   "actions.run_system_action": "Run a connected system action",
-  "action_help.run_system_action": "Runs an action of your connected system for the conversation's customer. Only actions open to workflows that need no approval can be used.",
+  "action_help.run_system_action": "Runs an action of your connected system for the conversation's customer. Only actions open to workflows that need no approval and no required params can be used.",
   "fields.screen_page_url": "Screen: page URL",
   "fields.screen_page_path": "Screen: page path",
   "fields.screen_last_event": "Screen: last event",

@@ -30,6 +30,9 @@ func TestBuildURLEscapesValuesAndKeepsHost(t *testing.T) {
 	if _, err := BuildURL("https://api.example.com", "/x/{external_id}", map[string]string{}); CodeOf(err) != CodeIdentityMissing {
 		t.Fatalf("missing value: %v", err)
 	}
+	if _, err := BuildURL("https://api.example.com", "/x/{external_id}/y", map[string]string{"external_id": ".."}); err == nil {
+		t.Fatal("dot-dot value accepted")
+	}
 	if _, err := BuildURL("https://u:p@api.example.com", "/x", nil); err == nil {
 		t.Fatal("user info in base accepted")
 	}
