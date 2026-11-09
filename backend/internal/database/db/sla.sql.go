@@ -13,12 +13,14 @@ import (
 )
 
 const claimDueSLAMetrics = `-- name: ClaimDueSLAMetrics :many
-SELECT organization_id, conversation_id, metric, policy_id, target_seconds, cycle, started_at, resumed_at, consumed_seconds, paused_at, warn_at, due_at, warned_at, breached_at, completed_at, updated_at FROM conversation_sla_metrics
-WHERE completed_at IS NULL AND paused_at IS NULL AND breached_at IS NULL
-  AND (due_at <= $1::timestamptz OR (warned_at IS NULL AND warn_at <= $1::timestamptz))
-ORDER BY COALESCE(LEAST(due_at, warn_at), due_at)
+SELECT m.organization_id, m.conversation_id, m.metric, m.policy_id, m.target_seconds, m.cycle, m.started_at, m.resumed_at, m.consumed_seconds, m.paused_at, m.warn_at, m.due_at, m.warned_at, m.breached_at, m.completed_at, m.updated_at, c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id FROM conversation_sla_metrics m
+JOIN conversations c ON c.organization_id = m.organization_id AND c.id = m.conversation_id
+WHERE m.completed_at IS NULL AND m.paused_at IS NULL AND m.breached_at IS NULL
+  AND c.deleted_at IS NULL
+  AND (m.due_at <= $1::timestamptz OR (m.warned_at IS NULL AND m.warn_at <= $1::timestamptz))
+ORDER BY COALESCE(LEAST(m.due_at, m.warn_at), m.due_at)
 LIMIT $2
-FOR UPDATE SKIP LOCKED
+FOR UPDATE OF m, c SKIP LOCKED
 `
 
 type ClaimDueSLAMetricsParams struct {
@@ -26,33 +28,85 @@ type ClaimDueSLAMetricsParams struct {
 	MaxRows int32              `json:"max_rows"`
 }
 
-// Running clocks whose warning or due time has come, locked for the sweep.
-func (q *Queries) ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ConversationSlaMetric, error) {
+type ClaimDueSLAMetricsRow struct {
+	ConversationSlaMetric ConversationSlaMetric `json:"conversation_sla_metric"`
+	Conversation          Conversation          `json:"conversation"`
+}
+
+// Running clocks whose warning or due time has come, locked for the sweep
+// together with their conversation. Sync locks the conversation first and
+// writes the metrics second; a sweep that locked the metric first and then
+// updated the conversation deadlocked against it (and against a cascading
+// organization delete). Claiming both rows here, skipping any that is held,
+// means the sweep never waits on a conversation. Platform-wide sweep by
+// design: the organization is taken from each row for the follow-up writes.
+func (q *Queries) ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ClaimDueSLAMetricsRow, error) {
 	rows, err := q.db.Query(ctx, claimDueSLAMetrics, arg.Now, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ConversationSlaMetric{}
+	items := []ClaimDueSLAMetricsRow{}
 	for rows.Next() {
-		var i ConversationSlaMetric
+		var i ClaimDueSLAMetricsRow
 		if err := rows.Scan(
-			&i.OrganizationID,
-			&i.ConversationID,
-			&i.Metric,
-			&i.PolicyID,
-			&i.TargetSeconds,
-			&i.Cycle,
-			&i.StartedAt,
-			&i.ResumedAt,
-			&i.ConsumedSeconds,
-			&i.PausedAt,
-			&i.WarnAt,
-			&i.DueAt,
-			&i.WarnedAt,
-			&i.BreachedAt,
-			&i.CompletedAt,
-			&i.UpdatedAt,
+			&i.ConversationSlaMetric.OrganizationID,
+			&i.ConversationSlaMetric.ConversationID,
+			&i.ConversationSlaMetric.Metric,
+			&i.ConversationSlaMetric.PolicyID,
+			&i.ConversationSlaMetric.TargetSeconds,
+			&i.ConversationSlaMetric.Cycle,
+			&i.ConversationSlaMetric.StartedAt,
+			&i.ConversationSlaMetric.ResumedAt,
+			&i.ConversationSlaMetric.ConsumedSeconds,
+			&i.ConversationSlaMetric.PausedAt,
+			&i.ConversationSlaMetric.WarnAt,
+			&i.ConversationSlaMetric.DueAt,
+			&i.ConversationSlaMetric.WarnedAt,
+			&i.ConversationSlaMetric.BreachedAt,
+			&i.ConversationSlaMetric.CompletedAt,
+			&i.ConversationSlaMetric.UpdatedAt,
+			&i.Conversation.ID,
+			&i.Conversation.Uuid,
+			&i.Conversation.OrganizationID,
+			&i.Conversation.Number,
+			&i.Conversation.ChannelType,
+			&i.Conversation.ChannelInstanceID,
+			&i.Conversation.ContactID,
+			&i.Conversation.CompanyID,
+			&i.Conversation.Subject,
+			&i.Conversation.Status,
+			&i.Conversation.StatusID,
+			&i.Conversation.Priority,
+			&i.Conversation.Source,
+			&i.Conversation.AssigneeUserID,
+			&i.Conversation.AssigneeTeamID,
+			&i.Conversation.CustomFields,
+			&i.Conversation.ExternalThreadID,
+			&i.Conversation.SlaPolicyID,
+			&i.Conversation.FirstResponseDueAt,
+			&i.Conversation.NextResponseDueAt,
+			&i.Conversation.ResolutionDueAt,
+			&i.Conversation.SlaBreachedAt,
+			&i.Conversation.FirstResponseAt,
+			&i.Conversation.WaitingSince,
+			&i.Conversation.SnoozedUntil,
+			&i.Conversation.ResolvedAt,
+			&i.Conversation.ClosedAt,
+			&i.Conversation.LastMessageAt,
+			&i.Conversation.LastInboundAt,
+			&i.Conversation.LastOutboundAt,
+			&i.Conversation.LastMessagePreview,
+			&i.Conversation.LastMessageDirection,
+			&i.Conversation.MessageCount,
+			&i.Conversation.Meta,
+			&i.Conversation.CreatedAt,
+			&i.Conversation.UpdatedAt,
+			&i.Conversation.DeletedAt,
+			&i.Conversation.MergedIntoID,
+			&i.Conversation.MergedAt,
+			&i.Conversation.AnonymizedAt,
+			&i.Conversation.BrandID,
 		); err != nil {
 			return nil, err
 		}

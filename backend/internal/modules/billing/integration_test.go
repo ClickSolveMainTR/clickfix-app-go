@@ -262,20 +262,26 @@ func TestScheduledCancellationAndOutboxTenant(t *testing.T) {
 	if err != nil || len(history) != 2 || history[0].To != "canceled" {
 		t.Fatalf("history %+v %v", history, err)
 	}
+	// The outbox is platform-wide: another package's publisher may drain
+	// this event before ours runs, so read the stored row's tenant scope
+	// instead of waiting to see it on the bus.
+	var scoped int64
+	if err := f.pool.QueryRow(f.ctx, "SELECT COUNT(*) FROM outbox_events WHERE organization_id = $1 AND event_name = 'subscription.canceled'", f.org).Scan(&scoped); err != nil {
+		t.Fatal(err)
+	}
+	if scoped != 1 {
+		t.Fatalf("outbox lost tenant scope: %d scoped rows", scoped)
+	}
 	bus := events.NewBus(nil)
-	var seen bool
 	bus.Subscribe("subscription.canceled", func(_ context.Context, e events.Event) error {
-		if e.Payload["organization_id"] == f.org {
-			seen = e.TenantID != nil && *e.TenantID == f.org
+		if e.Payload["organization_id"] == f.org && (e.TenantID == nil || *e.TenantID != f.org) {
+			t.Errorf("published event lost tenant scope: %+v", e.TenantID)
 		}
 		return nil
 	})
 	pub := outbox.NewPublisher(outbox.NewStore(f.pool, f.q), bus, nil, outbox.WithBatchSize(1000))
 	if _, err = pub.Drain(f.ctx); err != nil {
 		t.Fatal(err)
-	}
-	if !seen {
-		t.Fatal("outbox lost tenant scope")
 	}
 }
 func TestBillingRoutesAuthorizationAndPublicFiltering(t *testing.T) {
