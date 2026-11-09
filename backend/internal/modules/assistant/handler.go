@@ -1,6 +1,7 @@
 package assistant
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -110,6 +111,8 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 		response.Error(w, r, http.StatusTooManyRequests, CodeDailyLimit, "Daily assistant limit reached")
 	case errors.Is(err, ErrActionState):
 		response.Conflict(w, r, CodeActionState, "This action is no longer pending")
+	case errors.Is(err, ErrAPIUnavailable):
+		response.Error(w, r, http.StatusServiceUnavailable, CodeActionFailed, "The action cannot run right now; try again")
 	case errors.Is(err, ErrSupportUnavailable):
 		response.Conflict(w, r, CodeSupportUnavailable, "Support escalation is not configured")
 	case errors.Is(err, ErrUnsafe):
@@ -275,11 +278,20 @@ type actionRequest struct {
 
 // actionInput reads the optional {params} body of confirm / dry-run.
 func actionInput(w http.ResponseWriter, r *http.Request) (capability.Params, bool) {
-	var in actionRequest
-	if r.ContentLength == 0 {
+	// An empty body (any transfer encoding) means "as proposed".
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<10))
+	if err != nil {
+		response.BadRequest(w, r, response.CodeValidationError, "Invalid JSON body")
+		return nil, false
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
 		return nil, true
 	}
-	if !decode(w, r, &in, 32<<10) {
+	var in actionRequest
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&in); err != nil || dec.Decode(&struct{}{}) != io.EOF {
+		response.BadRequest(w, r, response.CodeValidationError, "Invalid JSON body")
 		return nil, false
 	}
 	return in.Params, true
@@ -305,6 +317,9 @@ func (h *Handler) auditAction(r *http.Request, c Caller, event string, id uuid.U
 			if cp, ok := h.svc.Caps.Get(a.Capability); ok {
 				meta["params"] = map[string]any(cp.WithoutSecrets(a.Params))
 			}
+		} else if len(a.Params) > 0 {
+			// Older actions: secret-looking values are masked.
+			meta["params"] = redactParams(a.Params)
 		}
 		if a.Verification != nil {
 			meta["verification"] = a.Verification.Status
@@ -458,4 +473,16 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, r, http.StatusOK, out)
+}
+
+// redactParams masks secret-looking strings of older actions' params.
+func redactParams(p map[string]any) map[string]any {
+	out := make(map[string]any, len(p))
+	for k, v := range p {
+		if str, ok := v.(string); ok {
+			v = capability.RedactSecrets(str)
+		}
+		out[k] = v
+	}
+	return out
 }
