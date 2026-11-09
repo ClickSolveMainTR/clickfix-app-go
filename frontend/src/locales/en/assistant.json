@@ -70,5 +70,20 @@
   "edit": "Edit and resend",
   "latest": "Jump to latest",
   "interrupted": "Response interrupted",
-  "starters.context": "What can I do on {{title}}?"
+  "starters.context": "What can I do on {{title}}?",
+  "action.open_and_show": "Open the page and show me",
+  "action.dry_run": "Dry run",
+  "action.preview_ok": "Dry run: no problems",
+  "action.preview_failed": "Dry run: something needs fixing",
+  "action.verified": "Applied and verified",
+  "action.not_verified": "Applied but could not be verified",
+  "action.secret_once": "This value is shown only now. Copy it and keep it somewhere safe; it will not be shown again.",
+  "action.secret_generated": "Leave empty to generate a secure value",
+  "action.destructive": "This may not be reversible. Check the details before you confirm.",
+  "action.invalid_json": "{{field}} is not valid JSON.",
+  "action.undo": "To undo: {{how}}",
+  "fields.name": "Name",
+  "fields.route": "Page",
+  "fields.target": "Field to highlight",
+  "fields.type": "Channel type"
 }

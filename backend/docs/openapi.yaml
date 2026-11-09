@@ -40435,7 +40435,7 @@ paths:
       - Assistant
       operationId: confirmTenantAssistantAction
       summary: Confirm a proposed action
-      description: Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for enable_ai); missing permission answers 403 and the action stays proposed. Returns the result as a `tool` message. `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
+      description: Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for ai.enable); missing permission answers 403 and the action stays proposed. The optional body carries fields edited in the card; they are validated again against the capability schema (400 VALIDATION_ERROR with the reason). Registry capabilities call the panel's own /v1 routes as the user, then verify the result. Returns the result as a `tool` message plus `secret_once` (generated secrets, this response only). `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
       security: *id001
       parameters:
       - *id002
@@ -40447,13 +40447,19 @@ paths:
         in: path
         required: true
         schema: *id009
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantActionRequest'
       responses:
         '200':
           description: Result message
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeAssistantMessage'
+                $ref: '#/components/schemas/EnvelopeAssistantConfirmResult'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '500':
@@ -40466,6 +40472,53 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '422': *id005
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run:
+    post:
+      tags:
+      - Assistant
+      operationId: dryRunTenantAssistantAction
+      summary: Preview a proposed action
+      description: Runs the capability's dry run with the (optionally edited) params and stores the preview on the card. It never changes data or leaves the server (the capability only gets GET access to the API). 404 when the action has no dry run; 403 without the capability's permission; 400 VALIDATION_ERROR for invalid params.
+      security: *id001
+      parameters:
+      - *id002
+      - name: uuid
+        in: path
+        required: true
+        schema: *id008
+      - name: action_id
+        in: path
+        required: true
+        schema: *id009
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantActionRequest'
+      responses:
+        '200':
+          description: The action with its preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantProposedAction'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '400':
+          $ref: '#/components/responses/OrganizationRequired'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404': *id007
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422': *id005
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/reject:
     post:
       tags:
@@ -58607,7 +58660,7 @@ components:
         id: *id001
         kind:
           type: string
-          description: open_route, invite_member, create_channel_email, connect_channel, install_widget, set_business_hours, create_sla, enable_ai, escalate_to_support
+          description: A registry capability name (navigation.open_route, channels.connect, ai.enable, ...) or an older action kind (invite_member, create_channel_email, install_widget, set_business_hours, create_sla, escalate_to_support). Stored cards may carry the old names open_route, connect_channel, enable_ai, which still confirm.
         title: *id001
         summary: *id001
         params:
@@ -58624,7 +58677,167 @@ components:
         route: *id001
         result:
           type: string
-          description: Short result after execution (e.g. invited e-mail, ticket reference)
+          description: Short result after execution (e.g. invited e-mail, ticket reference); on failure the API's own validation message
+        capability:
+          type: string
+          description: Registry capability name (CF-184), e.g. channels.api.create; empty for older actions. kind carries the same value.
+        risk:
+          type: string
+          enum:
+          - write
+          - destructive
+        form:
+          type: array
+          description: Editable fields of the confirmation card. Secret fields are never prefilled.
+          items:
+            $ref: '#/components/schemas/AssistantActionField'
+        dry_run:
+          type: boolean
+          description: The action can be previewed with the dry-run endpoint (no data changes).
+        undo:
+          type: string
+          description: How to revert the change (text or a page path)
+        preview:
+          $ref: '#/components/schemas/AssistantActionPreview'
+        verification:
+          $ref: '#/components/schemas/AssistantActionVerification'
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionDetail'
+        focus:
+          $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantActionField:
+      type: object
+      required:
+      - key
+      - label
+      - type
+      - required
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum:
+          - string
+          - url
+          - number
+          - boolean
+          - enum
+          - json
+          - secret
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: string
+        help:
+          type: string
+        generated:
+          type: boolean
+          description: A secret the server generates when left empty
+    AssistantActionDetail:
+      type: object
+      required:
+      - label
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        code:
+          type: string
+          description: Copyable code block (an example request); secrets appear as placeholders
+    AssistantActionPreview:
+      type: object
+      required:
+      - ok
+      - summary
+      properties:
+        ok:
+          type: boolean
+        summary:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionDetail'
+    AssistantActionVerification:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - failed
+          - skipped
+        message:
+          type: string
+    AssistantActionFocus:
+      type: object
+      required:
+      - route
+      properties:
+        route:
+          type: string
+          description: Internal path (never a URL)
+        target:
+          type: string
+          description: data-guide key to highlight (?focus=)
+    AssistantActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+          description: Fields edited in the card; merged over the proposed params and validated again. A null value removes a field.
+    AssistantConfirmResult:
+      allOf:
+      - $ref: '#/components/schemas/AssistantMessage'
+      - type: object
+        properties:
+          secret_once:
+            type: object
+            additionalProperties:
+              type: string
+            description: Secrets the action generated (e.g. a signing secret). Returned only in this response; never stored or shown again.
+    EnvelopeAssistantConfirmResult:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantConfirmResult'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EnvelopeAssistantProposedAction:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantProposedAction'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     AssistantMessage:
       type: object
       required:
@@ -58910,21 +59123,6 @@ components:
           - true
         data:
           $ref: '#/components/schemas/AssistantThreadList'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    EnvelopeAssistantMessage:
-      type: object
-      required:
-      - success
-      - data
-      - meta
-      properties:
-        success:
-          type: boolean
-          enum:
-          - true
-        data:
-          $ref: '#/components/schemas/AssistantMessage'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     EnvelopeAssistantMessageList:

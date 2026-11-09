@@ -70,5 +70,20 @@
   "edit": "Düzenle ve gönder",
   "latest": "En son yanıta git",
   "interrupted": "Yanıt durduruldu",
-  "starters.context": "{{title}} sayfasında neler yapabilirim?"
+  "starters.context": "{{title}} sayfasında neler yapabilirim?",
+  "action.open_and_show": "Sayfayı aç ve göster",
+  "action.dry_run": "Kuru çalıştır",
+  "action.preview_ok": "Kuru çalıştırma: sorun yok",
+  "action.preview_failed": "Kuru çalıştırma: düzeltilmesi gereken bir şey var",
+  "action.verified": "Uygulandı ve doğrulandı",
+  "action.not_verified": "Uygulandı ama doğrulanamadı",
+  "action.secret_once": "Bu değer yalnız şimdi gösteriliyor. Kopyalayıp güvenli bir yerde saklayın; bir daha gösterilmez.",
+  "action.secret_generated": "Boş bırakırsanız güvenli bir değer üretilir",
+  "action.destructive": "Bu işlem geri alınamayabilir. Onaylamadan önce ayrıntıları kontrol edin.",
+  "action.invalid_json": "{{field}} alanı geçerli JSON değil.",
+  "action.undo": "Geri almak için: {{how}}",
+  "fields.name": "Ad",
+  "fields.route": "Sayfa",
+  "fields.target": "Vurgulanacak alan",
+  "fields.type": "Kanal türü"
 }

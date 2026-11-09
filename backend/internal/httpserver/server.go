@@ -8,6 +8,9 @@ import (
 	forumhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/handler"
 	forumuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/apibridge"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
+	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -642,6 +645,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	assistantSvc.Actions = assistantmodule.DefaultActions(assistantmodule.ActionDeps{
 		Q: deps.Queries, Inviter: orgMgmt, SLA: slaSvc, Escalate: assistantSvc.EscalateFromAction,
 	})
+	// Capability registry (CF-183): every capability calls the panel's /v1
+	// routes as the confirming user, so the routes re-check permissions.
+	assistantBridge := &apibridge.Bridge{Handler: mux, Tokens: tokens}
+	assistantSvc.Caps = capability.NewRegistry().Register(assistantmodule.CoreCapabilities(deps.Queries)...)
+	assistantSvc.API = func(user, org uuid.UUID) capability.API {
+		return capability.Bridge{API: assistantBridge, User: user, Org: org}
+	}
 	guidesSvc.Draft = &assistantmodule.Drafter{AI: assistantAI, Settings: assistantSvc.GetSettings}
 	guidesmodule.RegisterRoutes(mux, guidesmodule.NewHandler(guidesSvc, activityRec), tokens, loader, tenantResolver)
 	assistantLimiter := ratelimit.New(deps.Redis, cfg.App.Env)

@@ -8,6 +8,12 @@ export type AssistantStatus = components["schemas"]["AssistantStatus"];
 export type AssistantThread = components["schemas"]["AssistantThread"];
 export type AssistantMessage = components["schemas"]["AssistantMessage"];
 export type AssistantAction = components["schemas"]["AssistantProposedAction"];
+export type AssistantActionField =
+  components["schemas"]["AssistantActionField"];
+export type AssistantActionDetail =
+  components["schemas"]["AssistantActionDetail"];
+export type AssistantConfirmResult =
+  components["schemas"]["AssistantConfirmResult"];
 export type AssistantContext = components["schemas"]["AssistantContext"];
 export type AssistantSendResult = components["schemas"]["AssistantSendResult"];
 export type AssistantSettings = components["schemas"]["AssistantSettings"];
@@ -105,12 +111,42 @@ export const assistantService = {
       { body: { content, context }, query: { locale }, silent: true },
     );
   },
-  confirm(slug: string, thread: string, action: string, locale: string) {
-    return tenantRequest<AssistantMessage>(
+  /** Edited card fields are validated again by the server. */
+  confirm(
+    slug: string,
+    thread: string,
+    action: string,
+    locale: string,
+    params?: Record<string, unknown>,
+  ) {
+    return tenantRequest<AssistantConfirmResult>(
       slug,
       "POST",
       `${A}/threads/${thread}/actions/${encodeURIComponent(action)}/confirm`,
-      { query: { locale }, silent: true },
+      {
+        query: { locale },
+        silent: true,
+        ...(params ? { body: { params } } : {}),
+      },
+    );
+  },
+  /** Preview without changing data (the card's "Dry run"). */
+  dryRun(
+    slug: string,
+    thread: string,
+    action: string,
+    locale: string,
+    params?: Record<string, unknown>,
+  ) {
+    return tenantRequest<AssistantAction>(
+      slug,
+      "POST",
+      `${A}/threads/${thread}/actions/${encodeURIComponent(action)}/dry-run`,
+      {
+        query: { locale },
+        silent: true,
+        ...(params ? { body: { params } } : {}),
+      },
     );
   },
   reject(slug: string, thread: string, action: string) {

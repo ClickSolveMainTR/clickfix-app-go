@@ -8,20 +8,16 @@ import {
   RefreshCw,
   Square,
   ArrowDown,
-  Check,
   History,
   LifeBuoy,
   Loader2,
   Plus,
   SendHorizontal,
-  X,
 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { MarkdownContent } from "@/components/markdown/markdown-content";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -44,6 +40,12 @@ import {
   type AssistantMessage,
 } from "../services/assistant.service";
 
+import {
+  ActionCard,
+  RouteLink,
+  type ActionDecision,
+  type EditedParams,
+} from "./action-card";
 import { AssistantMarkdown } from "./assistant-markdown";
 
 type Pending = { prompt?: string; guideKey?: string; nonce: number };
@@ -287,20 +289,46 @@ export function AssistantDrawer({
     },
   });
 
+  // Secrets an action generated: shown once on its card, never stored.
+  const [secrets, setSecrets] = useState<
+    Record<string, Record<string, string>>
+  >({});
+
   const decide = useMutation({
-    mutationFn: async ({
-      action,
-      confirm,
-    }: {
-      action: AssistantAction;
-      confirm: boolean;
-    }) => {
+    mutationFn: async ({ action, confirm, params }: ActionDecision) => {
       if (!thread) return;
       if (confirm) {
-        await assistantService.confirm(slug, thread, action.id, locale);
+        const out = await assistantService.confirm(
+          slug,
+          thread,
+          action.id,
+          locale,
+          params,
+        );
+        const once = out.secret_once;
+        if (once && Object.keys(once).length) {
+          setSecrets((s) => ({ ...s, [action.id]: once }));
+        }
       } else {
         await assistantService.reject(slug, thread, action.id);
       }
+    },
+    onMutate: () => setError(null),
+    onError: (err) => setError(errorKey(err)),
+    onSettled: () =>
+      qc.invalidateQueries({ queryKey: keys.messages(slug, thread ?? "") }),
+  });
+
+  const dryRun = useMutation({
+    mutationFn: async ({
+      action,
+      params,
+    }: {
+      action: AssistantAction;
+      params?: EditedParams;
+    }) => {
+      if (!thread) return;
+      await assistantService.dryRun(slug, thread, action.id, locale, params);
     },
     onMutate: () => setError(null),
     onError: (err) => setError(errorKey(err)),
@@ -511,7 +539,8 @@ export function AssistantDrawer({
                 <MessageBubble
                   key={m.uuid}
                   message={m}
-                  busy={decide.isPending}
+                  busy={decide.isPending || dryRun.isPending}
+                  secrets={secrets}
                   onEdit={
                     !send.isPending &&
                     m.uuid ===
@@ -522,8 +551,9 @@ export function AssistantDrawer({
                         }
                       : undefined
                   }
-                  onDecide={(action, confirm) =>
-                    decide.mutate({ action, confirm })
+                  onDecide={(d) => decide.mutate(d)}
+                  onDryRun={(action, params) =>
+                    dryRun.mutate({ action, params })
                   }
                 />
               ))}
@@ -725,13 +755,17 @@ export function AssistantDrawer({
 function MessageBubble({
   message,
   busy,
+  secrets,
   onDecide,
+  onDryRun,
   onEdit,
 }: {
   onEdit?: () => void;
   message: AssistantMessage;
   busy: boolean;
-  onDecide: (action: AssistantAction, confirm: boolean) => void;
+  secrets: Record<string, Record<string, string>>;
+  onDecide: (d: ActionDecision) => void;
+  onDryRun: (action: AssistantAction, params?: EditedParams) => void;
 }) {
   const { t } = useLocale();
   const [copied, setCopied] = useState(false);
@@ -740,7 +774,15 @@ function MessageBubble({
       <div className="text-muted-foreground bg-muted/40 rounded-md px-3 py-2 text-xs">
         <MarkdownContent markdown={message.content} className="[&_p]:my-0" />
         {message.actions?.map((a) =>
-          a.route ? <RouteLink key={a.id} route={a.route} /> : null,
+          a.focus ? (
+            <RouteLink
+              key={a.id}
+              route={a.focus.route}
+              target={a.focus.target}
+            />
+          ) : a.route ? (
+            <RouteLink key={a.id} route={a.route} />
+          ) : null,
         )}
       </div>
     );
@@ -788,80 +830,15 @@ function MessageBubble({
         ) : null}
       </div>
       {message.actions?.map((a) => (
-        <ActionCard key={a.id} action={a} busy={busy} onDecide={onDecide} />
+        <ActionCard
+          key={a.id}
+          action={a}
+          busy={busy}
+          secrets={secrets[a.id]}
+          onDecide={onDecide}
+          onDryRun={onDryRun}
+        />
       ))}
-    </div>
-  );
-}
-
-function RouteLink({ route }: { route: string }) {
-  const { t } = useLocale();
-  if (!route.startsWith("/") || route.startsWith("//")) return null;
-  return (
-    <Link href={route} className="text-primary mt-1 inline-block underline">
-      {t("assistant.action.open_page")}
-    </Link>
-  );
-}
-
-function ActionCard({
-  action,
-  busy,
-  onDecide,
-}: {
-  action: AssistantAction;
-  busy: boolean;
-  onDecide: (action: AssistantAction, confirm: boolean) => void;
-}) {
-  const { t } = useLocale();
-  const params = Object.entries(action.params ?? {}).filter(
-    ([, v]) => v !== "" && v !== null && typeof v !== "object",
-  );
-  return (
-    <div className="bg-card mt-2 w-[90%] rounded-xl border p-3 text-sm shadow-xs">
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-medium">{action.title}</p>
-        <Badge variant={action.status === "failed" ? "danger" : "secondary"}>
-          {t(`assistant.action.status.${action.status}`)}
-        </Badge>
-      </div>
-      {action.summary ? (
-        <p className="text-muted-foreground mt-1">{action.summary}</p>
-      ) : null}
-      {params.length ? (
-        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-          {params.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd className="truncate">{String(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-      {action.status === "proposed" ? (
-        <div className="mt-3 flex gap-2">
-          <Button
-            size="sm"
-            disabled={busy}
-            onClick={() => onDecide(action, true)}
-          >
-            <Check className="size-4" />
-            {t("assistant.action.confirm")}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => onDecide(action, false)}
-          >
-            <X className="size-4" />
-            {t("assistant.action.reject")}
-          </Button>
-        </div>
-      ) : null}
-      {action.status === "done" && action.route ? (
-        <RouteLink route={action.route} />
-      ) : null}
     </div>
   );
 }

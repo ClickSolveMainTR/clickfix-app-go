@@ -24,6 +24,7 @@ import (
 	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 )
@@ -130,6 +131,9 @@ func setup(t *testing.T) *fixture {
 		AI: &assistant.PlatformAI{Q: q, Routes: map[string]ai.Route{"reply": {Provider: prov, ProviderName: "anthropic", Model: "test-model", InputPrice: 3, OutputPrice: 15}}},
 	}
 	svc.Actions = assistant.DefaultActions(assistant.ActionDeps{Q: q, Escalate: svc.EscalateFromAction})
+	svc.Caps = capability.NewRegistry().Register(assistant.CoreCapabilities(q)...)
+	// Production always wires the panel API; tests override it as needed.
+	svc.API = func(uuid.UUID, uuid.UUID) capability.API { return &fakeAPI{} }
 	scope := orgctx.Scope{ID: org.ID, UUID: org.UUID, Slug: org.Slug, Name: org.Name, MemberRole: "agent",
 		Permissions: []string{rbac.PermTenantAssistantUse}}
 	return &fixture{pool: pool, q: q, svc: svc, prov: prov, esc: esc, scope: scope, user: userID}
@@ -214,7 +218,7 @@ func TestProgressAPI(t *testing.T) {
 func proposeEnableAI() []ai.Result {
 	return []ai.Result{
 		{Calls: []ai.ToolCall{{ID: "c1", Name: "get_setup_state", Input: json.RawMessage(`{}`)}}},
-		{Calls: []ai.ToolCall{{ID: "c2", Name: "propose_action", Input: json.RawMessage(`{"kind":"enable_ai","title":"Yapay zekâyı aç","summary":"AI önerileri açılır","params":{}}`)}}},
+		{Calls: []ai.ToolCall{{ID: "c2", Name: "ai_enable", Input: json.RawMessage(`{"summary":"AI önerileri açılır","params":{}}`)}}},
 		{Text: `{"reply":"Yapay zekâyı açmayı onayınıza sundum.","suggestions":["Onayla","Başka ne yapmalıyım?"]}`},
 	}
 }
@@ -228,7 +232,9 @@ func TestConfirmEnforcesRBAC(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.prov.steps = proposeEnableAI()
-	res, err := f.svc.Send(ctx, c, th.UUID, "AI'ı nasıl açarım? Bana ali@example.com yazdı.", assistant.Context{Surface: "web", Route: "/settings/ai"})
+	// The tool is offered only to a caller holding tenant.ai.write; the
+	// permission is checked again at confirm (here: it was revoked).
+	res, err := f.svc.Send(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, "AI'ı nasıl açarım? Bana ali@example.com yazdı.", assistant.Context{Surface: "web", Route: "/settings/ai"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,13 +250,13 @@ func TestConfirmEnforcesRBAC(t *testing.T) {
 			t.Fatal("page guide missing from context data")
 		}
 	}
-	if len(res.Reply.Actions) != 1 || res.Reply.Actions[0].Kind != "enable_ai" || res.Reply.Actions[0].Status != "proposed" || len(res.Reply.Suggestions) != 2 {
+	if len(res.Reply.Actions) != 1 || res.Reply.Actions[0].Kind != "ai.enable" || res.Reply.Actions[0].Status != "proposed" || len(res.Reply.Suggestions) != 2 {
 		t.Fatalf("reply %+v", res.Reply)
 	}
 	id := res.Reply.Actions[0].ID
 
 	// An agent without tenant.ai.write cannot run it, whatever the model proposed.
-	if _, err := f.svc.Confirm(ctx, c, th.UUID, id); !errors.Is(err, assistant.ErrForbidden) {
+	if _, err := f.svc.Confirm(ctx, c, th.UUID, id, nil); !errors.Is(err, assistant.ErrForbidden) {
 		t.Fatalf("confirm without permission: %v", err)
 	}
 	if p, _ := f.q.AIPolicy(ctx, f.scope.ID); p.Enabled {
@@ -259,10 +265,10 @@ func TestConfirmEnforcesRBAC(t *testing.T) {
 	// Another user's caller cannot see the thread.
 	other := c
 	other.UserID = f.user + 1_000_000
-	if _, err := f.svc.Confirm(ctx, other, th.UUID, id); !errors.Is(err, assistant.ErrNotFound) {
+	if _, err := f.svc.Confirm(ctx, other, th.UUID, id, nil); !errors.Is(err, assistant.ErrNotFound) {
 		t.Fatalf("foreign confirm: %v", err)
 	}
-	msg, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id)
+	msg, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +278,7 @@ func TestConfirmEnforcesRBAC(t *testing.T) {
 	if p, err := f.q.AIPolicy(ctx, f.scope.ID); err != nil || !p.Enabled {
 		t.Fatalf("ai not enabled: %v %+v", err, p)
 	}
-	if _, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id); !errors.Is(err, assistant.ErrActionState) {
+	if _, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id, nil); !errors.Is(err, assistant.ErrActionState) {
 		t.Fatalf("double confirm: %v", err)
 	}
 	msgs, _ := f.svc.Messages(ctx, f.scope.ID, f.user, th.UUID)
@@ -296,7 +302,7 @@ func TestRejectAction(t *testing.T) {
 	ctx := context.Background()
 	th, _ := f.svc.CreateThread(ctx, f.scope.ID, f.user, assistant.Context{Route: "/"})
 	f.prov.steps = proposeEnableAI()
-	res, err := f.svc.Send(ctx, f.caller(), th.UUID, "AI açalım", assistant.Context{Route: "/"})
+	res, err := f.svc.Send(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, "AI açalım", assistant.Context{Route: "/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +310,7 @@ func TestRejectAction(t *testing.T) {
 	if err := f.svc.Reject(ctx, f.caller(), th.UUID, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id); !errors.Is(err, assistant.ErrActionState) {
+	if _, err := f.svc.Confirm(ctx, f.caller(rbac.PermTenantAiWrite), th.UUID, id, nil); !errors.Is(err, assistant.ErrActionState) {
 		t.Fatalf("confirm after reject: %v", err)
 	}
 }
@@ -372,7 +378,7 @@ func TestEscalate(t *testing.T) {
 	if len(res.Reply.Actions) != 1 || res.Reply.Actions[0].Kind != assistant.KindEscalate {
 		t.Fatalf("fallback reply %+v", res.Reply)
 	}
-	msg, err := f.svc.Confirm(ctx, f.caller(), th2.UUID, res.Reply.Actions[0].ID)
+	msg, err := f.svc.Confirm(ctx, f.caller(), th2.UUID, res.Reply.Actions[0].ID, nil)
 	if err != nil || msg.Actions[0].Status != "done" || msg.Actions[0].Result != "#42" {
 		t.Fatalf("confirm escalate %+v %v", msg, err)
 	}
