@@ -25,11 +25,11 @@ func TestTestDeliverySignsAndRefusesPrivateTargets(t *testing.T) {
 	defer srv.Close()
 	// A private target is refused before any request.
 	a := New(nil)
-	if _, err := a.TestDelivery(context.Background(), channels.Instance{Credentials: channels.Credentials{"signing_secret": secret, "webhook_url": srv.URL}}); err == nil {
+	if _, err := a.TestDelivery(context.Background(), channels.Instance{Credentials: channels.Credentials{"signing_secret": secret, "webhook_url": srv.URL}}, ""); err == nil {
 		t.Fatal("private target accepted")
 	}
 	// The public-client transport refuses at dial time too.
-	out, err := a.TestDelivery(context.Background(), channels.Instance{Credentials: channels.Credentials{"signing_secret": secret, "webhook_url": "https://localtest.me/x"}})
+	out, err := a.TestDelivery(context.Background(), channels.Instance{Credentials: channels.Credentials{"signing_secret": secret, "webhook_url": "https://localtest.me/x"}}, "")
 	if err != nil || out.OK {
 		t.Fatalf("dial guard: %+v %v", out, err)
 	}
@@ -37,7 +37,7 @@ func TestTestDeliverySignsAndRefusesPrivateTargets(t *testing.T) {
 	// passing the public-address rules).
 	inst := channels.Instance{Credentials: channels.Credentials{"signing_secret": secret, "webhook_url": "https://example.com/hook"}}
 	a = New(rewrite{c: srv.Client(), to: srv.URL})
-	out, err = a.TestDelivery(context.Background(), inst)
+	out, err = a.TestDelivery(context.Background(), inst, "")
 	if err != nil || !out.OK || out.StatusCode != 202 || got == nil || got.Header.Get("X-ClickFix-Event") != "test" {
 		t.Fatalf("%+v %v", out, err)
 	}

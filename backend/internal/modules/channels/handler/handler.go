@@ -202,7 +202,8 @@ func (h *Handler) TestDelivery(w http.ResponseWriter, r *http.Request) {
 		response.TooManyRequests(w, r, "Too many test deliveries, try again later")
 		return
 	}
-	out, err := h.svc.TestDelivery(r.Context(), scope.ID, id)
+	// A test e-mail only ever goes to the confirming member's own address.
+	out, err := h.svc.TestDelivery(r.Context(), scope.ID, id, authctx.MustPrincipal(r.Context()).Email)
 	if err != nil {
 		writeError(w, r, err)
 		return
