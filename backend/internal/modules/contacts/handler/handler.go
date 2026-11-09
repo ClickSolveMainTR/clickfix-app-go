@@ -21,7 +21,9 @@ import (
 // Error codes.
 const (
 	CodeDomainExists = "COMPANY_DOMAIN_EXISTS"
-	maxBodyBytes     = 64 << 10
+	// CodeExternalIDExists: another contact / company has the external id (CF-195).
+	CodeExternalIDExists = "EXTERNAL_ID_EXISTS"
+	maxBodyBytes         = 64 << 10
 )
 
 // Handler serves contacts and companies.
@@ -43,7 +45,10 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	}
 	v := r.URL.Query()
 	limit, offset := apiquery.Clamp(atoi(v.Get("limit")), atoi(v.Get("offset")), 50, 100)
-	f := usecase.ContactFilter{Q: v.Get("q"), Limit: limit, Offset: offset, Sort: "created_at", Desc: true}
+	f := usecase.ContactFilter{
+		Q: v.Get("q"), ExternalID: v.Get("external_id"), IdentityState: v.Get("identity"),
+		Limit: limit, Offset: offset, Sort: "created_at", Desc: true,
+	}
 	if raw := strings.TrimSpace(v.Get("sort")); raw != "" {
 		f.Desc = strings.HasPrefix(raw, "-")
 		f.Sort = strings.TrimPrefix(raw, "-")
@@ -89,12 +94,14 @@ type contactRequest struct {
 	Notes        *string          `json:"notes"`
 	CustomFields map[string]any   `json:"custom_fields"`
 	Blocked      *bool            `json:"blocked"`
+	ExternalID   *string          `json:"external_id"`
 }
 
 func (req contactRequest) input() (usecase.ContactInput, error) {
 	in := usecase.ContactInput{
 		Name: req.Name, Email: req.Email, Phone: req.Phone, JobTitle: req.JobTitle, Locale: req.Locale,
 		Timezone: req.Timezone, Notes: req.Notes, CustomFields: req.CustomFields, Blocked: req.Blocked,
+		ExternalID: req.ExternalID,
 	}
 	ref, err := optionalRef(req.Company)
 	if err != nil {
@@ -126,6 +133,35 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	}
 	h.record(r, scope, "contacts.created", "contacts", c.UUID, map[string]any{"name": c.Name})
 	response.JSON(w, r, http.StatusCreated, c)
+}
+
+// UpsertContact creates or updates the contact with the request's
+// external_id (CF-195): 201 when created, 200 when it existed.
+func (h *Handler) UpsertContact(w http.ResponseWriter, r *http.Request) {
+	scope, ok := scopeOf(w, r)
+	if !ok {
+		return
+	}
+	var req contactRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	in, err := req.input()
+	if err != nil {
+		invalid(w, r, "company must be a uuid or null")
+		return
+	}
+	c, created, err := h.svc.UpsertContact(r.Context(), scope.ID, in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	status, action := http.StatusOK, "contacts.updated"
+	if created {
+		status, action = http.StatusCreated, "contacts.created"
+	}
+	h.record(r, scope, action, "contacts", c.UUID, map[string]any{"name": c.Name, "external_id": c.ExternalID, "upsert": true})
+	response.JSON(w, r, status, c)
 }
 
 // UpdateContact edits a contact.
@@ -197,7 +233,7 @@ func (h *Handler) ListCompanies(w http.ResponseWriter, r *http.Request) {
 	}
 	v := r.URL.Query()
 	limit, offset := apiquery.Clamp(atoi(v.Get("limit")), atoi(v.Get("offset")), 50, 100)
-	items, total, err := h.svc.ListCompanies(r.Context(), scope.ID, v.Get("q"), limit, offset)
+	items, total, err := h.svc.ListCompaniesByExternalID(r.Context(), scope.ID, v.Get("q"), v.Get("external_id"), limit, offset)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -362,6 +398,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, usecase.ErrNotFound):
 		response.NotFound(w, r, "Not found")
+	case errors.Is(err, usecase.ErrExternalIDExists):
+		response.Conflict(w, r, CodeExternalIDExists, "Another record already uses this external id")
 	case errors.Is(err, usecase.ErrDomainExists):
 		response.Conflict(w, r, CodeDomainExists, "Another company already uses this domain")
 	case errors.Is(err, usecase.ErrInvalid):

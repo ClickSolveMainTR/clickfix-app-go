@@ -16,16 +16,19 @@ const countCompanies = `-- name: CountCompanies :one
 SELECT COUNT(*)::bigint FROM companies
 WHERE organization_id = $1
   AND deleted_at IS NULL
-  AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR domain ILIKE '%' || $2 || '%')
+  AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR domain ILIKE '%' || $2 || '%'
+       OR external_id ILIKE '%' || $2 || '%')
+  AND ($3::text IS NULL OR external_id = $3::text)
 `
 
 type CountCompaniesParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	Q              pgtype.Text `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
 }
 
 func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countCompanies, arg.OrganizationID, arg.Q)
+	row := q.db.QueryRow(ctx, countCompanies, arg.OrganizationID, arg.Q, arg.ExternalID)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -39,17 +42,33 @@ WHERE c.organization_id = $1
   AND ($3::text IS NULL
        OR c.name ILIKE '%' || $3 || '%'
        OR c.email ILIKE '%' || $3 || '%'
-       OR c.phone ILIKE '%' || $3 || '%')
+       OR c.phone ILIKE '%' || $3 || '%'
+       OR c.external_id ILIKE '%' || $3 || '%')
+  -- CF-195: exact external id and identity state (verified / anonymous /
+  -- self_named, see contactIdentityState).
+  AND ($4::text IS NULL OR c.external_id = $4::text)
+  AND ($5::text IS NULL
+       OR ($5::text = 'verified' AND c.verified_at IS NOT NULL)
+       OR ($5::text = 'anonymous' AND c.verified_at IS NULL AND c.name = '' AND c.email IS NULL AND c.phone IS NULL)
+       OR ($5::text = 'self_named' AND c.verified_at IS NULL AND (c.name <> '' OR c.email IS NOT NULL OR c.phone IS NOT NULL)))
 `
 
 type CountContactsParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	CompanyID      pgtype.Int8 `json:"company_id"`
 	Q              pgtype.Text `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
+	IdentityState  pgtype.Text `json:"identity_state"`
 }
 
 func (q *Queries) CountContacts(ctx context.Context, arg CountContactsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countContacts, arg.OrganizationID, arg.CompanyID, arg.Q)
+	row := q.db.QueryRow(ctx, countContacts,
+		arg.OrganizationID,
+		arg.CompanyID,
+		arg.Q,
+		arg.ExternalID,
+		arg.IdentityState,
+	)
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -155,7 +174,7 @@ func (q *Queries) FindCompanyByName(ctx context.Context, arg FindCompanyByNamePa
 }
 
 const findContactByEmail = `-- name: FindContactByEmail :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
 WHERE organization_id = $1 AND lower(email) = lower($2::text) AND deleted_at IS NULL
 ORDER BY id
 LIMIT 1
@@ -189,12 +208,14 @@ func (q *Queries) FindContactByEmail(ctx context.Context, arg FindContactByEmail
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const findContactByPhone = `-- name: FindContactByPhone :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
 WHERE organization_id = $1 AND phone = $2::text AND deleted_at IS NULL
 ORDER BY id
 LIMIT 1
@@ -228,12 +249,14 @@ func (q *Queries) FindContactByPhone(ctx context.Context, arg FindContactByPhone
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const findContactByPhoneLast10 = `-- name: FindContactByPhoneLast10 :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL
  AND length(regexp_replace($2::text,'[^0-9]','','g'))>=10
  AND right(regexp_replace(phone,'[^0-9]','','g'),10)=right(regexp_replace($2::text,'[^0-9]','','g'),10)
 ORDER BY id LIMIT 1
@@ -267,6 +290,8 @@ func (q *Queries) FindContactByPhoneLast10(ctx context.Context, arg FindContactB
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -407,8 +432,78 @@ func (q *Queries) GetCompanyByUUID(ctx context.Context, arg GetCompanyByUUIDPara
 	return i, err
 }
 
+const getCompanyForAIContext = `-- name: GetCompanyForAIContext :one
+SELECT name, external_id, tier, custom_fields FROM companies
+WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type GetCompanyForAIContextParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetCompanyForAIContextRow struct {
+	Name         string      `json:"name"`
+	ExternalID   pgtype.Text `json:"external_id"`
+	Tier         string      `json:"tier"`
+	CustomFields []byte      `json:"custom_fields"`
+}
+
+// CF-195: the company the AI sees next to the contact.
+func (q *Queries) GetCompanyForAIContext(ctx context.Context, arg GetCompanyForAIContextParams) (GetCompanyForAIContextRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyForAIContext, arg.OrganizationID, arg.ID)
+	var i GetCompanyForAIContextRow
+	err := row.Scan(
+		&i.Name,
+		&i.ExternalID,
+		&i.Tier,
+		&i.CustomFields,
+	)
+	return i, err
+}
+
+const getContactByExternalID = `-- name: GetContactByExternalID :one
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
+WHERE organization_id = $1 AND external_id = $2::text AND deleted_at IS NULL
+`
+
+type GetContactByExternalIDParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	ExternalID     string `json:"external_id"`
+}
+
+// CF-195: the customer's own user id (unique per organization).
+func (q *Queries) GetContactByExternalID(ctx context.Context, arg GetContactByExternalIDParams) (Contact, error) {
+	row := q.db.QueryRow(ctx, getContactByExternalID, arg.OrganizationID, arg.ExternalID)
+	var i Contact
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.CompanyID,
+		&i.Name,
+		&i.Email,
+		&i.Phone,
+		&i.Locale,
+		&i.Timezone,
+		&i.Notes,
+		&i.CustomFields,
+		&i.Blocked,
+		&i.LastSeenAt,
+		&i.MergedIntoID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.JobTitle,
+		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
+	)
+	return i, err
+}
+
 const getContactByID = `-- name: GetContactByID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts WHERE organization_id = $1 AND id = $2
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id = $1 AND id = $2
 `
 
 type GetContactByIDParams struct {
@@ -439,12 +534,14 @@ func (q *Queries) GetContactByID(ctx context.Context, arg GetContactByIDParams) 
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const getContactByUUID = `-- name: GetContactByUUID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
 `
 
 type GetContactByUUIDParams struct {
@@ -475,6 +572,8 @@ func (q *Queries) GetContactByUUID(ctx context.Context, arg GetContactByUUIDPara
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -556,10 +655,10 @@ func (q *Queries) InsertCompany(ctx context.Context, arg InsertCompanyParams) (C
 }
 
 const insertContact = `-- name: InsertContact :one
-INSERT INTO contacts (organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, job_title)
+INSERT INTO contacts (organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, job_title, external_id)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10)
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at
+        $6, $7, $8, $9, $10, $11)
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
 `
 
 type InsertContactParams struct {
@@ -573,6 +672,7 @@ type InsertContactParams struct {
 	Notes          string      `json:"notes"`
 	CustomFields   []byte      `json:"custom_fields"`
 	JobTitle       string      `json:"job_title"`
+	ExternalID     pgtype.Text `json:"external_id"`
 }
 
 func (q *Queries) InsertContact(ctx context.Context, arg InsertContactParams) (Contact, error) {
@@ -587,6 +687,7 @@ func (q *Queries) InsertContact(ctx context.Context, arg InsertContactParams) (C
 		arg.Notes,
 		arg.CustomFields,
 		arg.JobTitle,
+		arg.ExternalID,
 	)
 	var i Contact
 	err := row.Scan(
@@ -609,6 +710,8 @@ func (q *Queries) InsertContact(ctx context.Context, arg InsertContactParams) (C
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -644,14 +747,17 @@ FROM companies co
 LEFT JOIN users u ON u.id = co.account_owner_id
 WHERE co.organization_id = $1
   AND co.deleted_at IS NULL
-  AND ($2::text IS NULL OR co.name ILIKE '%' || $2 || '%' OR co.domain ILIKE '%' || $2 || '%')
+  AND ($2::text IS NULL OR co.name ILIKE '%' || $2 || '%' OR co.domain ILIKE '%' || $2 || '%'
+       OR co.external_id ILIKE '%' || $2 || '%')
+  AND ($3::text IS NULL OR co.external_id = $3::text)
 ORDER BY lower(co.name), co.id
-LIMIT $4 OFFSET $3
+LIMIT $5 OFFSET $4
 `
 
 type ListCompaniesParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	Q              pgtype.Text `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
 	RowOffset      int32       `json:"row_offset"`
 	RowLimit       int32       `json:"row_limit"`
 }
@@ -682,6 +788,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 	rows, err := q.db.Query(ctx, listCompanies,
 		arg.OrganizationID,
 		arg.Q,
+		arg.ExternalID,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -785,7 +892,7 @@ func (q *Queries) ListContactIdentities(ctx context.Context, arg ListContactIden
 }
 
 const listContacts = `-- name: ListContacts :many
-SELECT c.id, c.uuid, c.organization_id, c.company_id, c.name, c.email, c.phone, c.locale, c.timezone, c.notes, c.custom_fields, c.blocked, c.last_seen_at, c.merged_into_id, c.created_at, c.updated_at, c.deleted_at, c.job_title, c.erased_at, co.uuid AS company_uuid, co.name AS company_name,
+SELECT c.id, c.uuid, c.organization_id, c.company_id, c.name, c.email, c.phone, c.locale, c.timezone, c.notes, c.custom_fields, c.blocked, c.last_seen_at, c.merged_into_id, c.created_at, c.updated_at, c.deleted_at, c.job_title, c.erased_at, c.external_id, c.verified_at, co.uuid AS company_uuid, co.name AS company_name,
        (SELECT COUNT(*) FROM conversations v WHERE v.organization_id = c.organization_id AND v.contact_id = c.id AND v.deleted_at IS NULL)::bigint AS conversation_count,
        (SELECT array_agg(DISTINCT ci.channel_type) FROM contact_identities ci WHERE ci.organization_id = c.organization_id AND ci.contact_id = c.id)::text[] AS channel_types
 FROM contacts c
@@ -796,22 +903,32 @@ WHERE c.organization_id = $1
   AND ($3::text IS NULL
        OR c.name ILIKE '%' || $3 || '%'
        OR c.email ILIKE '%' || $3 || '%'
-       OR c.phone ILIKE '%' || $3 || '%')
+       OR c.phone ILIKE '%' || $3 || '%'
+       OR c.external_id ILIKE '%' || $3 || '%')
+  -- CF-195: exact external id and identity state (verified / anonymous /
+  -- self_named, see contactIdentityState).
+  AND ($4::text IS NULL OR c.external_id = $4::text)
+  AND ($5::text IS NULL
+       OR ($5::text = 'verified' AND c.verified_at IS NOT NULL)
+       OR ($5::text = 'anonymous' AND c.verified_at IS NULL AND c.name = '' AND c.email IS NULL AND c.phone IS NULL)
+       OR ($5::text = 'self_named' AND c.verified_at IS NULL AND (c.name <> '' OR c.email IS NOT NULL OR c.phone IS NOT NULL)))
 ORDER BY
-  CASE WHEN $4::text = 'name' AND NOT $5::boolean THEN lower(c.name) END ASC,
-  CASE WHEN $4::text = 'name' AND $5::boolean THEN lower(c.name) END DESC,
-  CASE WHEN $4::text = 'last_seen_at' AND NOT $5::boolean THEN c.last_seen_at END ASC NULLS FIRST,
-  CASE WHEN $4::text = 'last_seen_at' AND $5::boolean THEN c.last_seen_at END DESC NULLS LAST,
-  CASE WHEN $4::text = 'created_at' AND NOT $5::boolean THEN c.created_at END ASC,
-  CASE WHEN $4::text = 'created_at' AND $5::boolean THEN c.created_at END DESC,
+  CASE WHEN $6::text = 'name' AND NOT $7::boolean THEN lower(c.name) END ASC,
+  CASE WHEN $6::text = 'name' AND $7::boolean THEN lower(c.name) END DESC,
+  CASE WHEN $6::text = 'last_seen_at' AND NOT $7::boolean THEN c.last_seen_at END ASC NULLS FIRST,
+  CASE WHEN $6::text = 'last_seen_at' AND $7::boolean THEN c.last_seen_at END DESC NULLS LAST,
+  CASE WHEN $6::text = 'created_at' AND NOT $7::boolean THEN c.created_at END ASC,
+  CASE WHEN $6::text = 'created_at' AND $7::boolean THEN c.created_at END DESC,
   c.id DESC
-LIMIT $7 OFFSET $6
+LIMIT $9 OFFSET $8
 `
 
 type ListContactsParams struct {
 	OrganizationID int64       `json:"organization_id"`
 	CompanyID      pgtype.Int8 `json:"company_id"`
 	Q              pgtype.Text `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
+	IdentityState  pgtype.Text `json:"identity_state"`
 	SortField      string      `json:"sort_field"`
 	SortDesc       bool        `json:"sort_desc"`
 	RowOffset      int32       `json:"row_offset"`
@@ -838,6 +955,8 @@ type ListContactsRow struct {
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 	JobTitle          string             `json:"job_title"`
 	ErasedAt          pgtype.Timestamptz `json:"erased_at"`
+	ExternalID        pgtype.Text        `json:"external_id"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
 	CompanyUuid       pgtype.UUID        `json:"company_uuid"`
 	CompanyName       pgtype.Text        `json:"company_name"`
 	ConversationCount int64              `json:"conversation_count"`
@@ -849,6 +968,8 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]L
 		arg.OrganizationID,
 		arg.CompanyID,
 		arg.Q,
+		arg.ExternalID,
+		arg.IdentityState,
 		arg.SortField,
 		arg.SortDesc,
 		arg.RowOffset,
@@ -881,6 +1002,8 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]L
 			&i.DeletedAt,
 			&i.JobTitle,
 			&i.ErasedAt,
+			&i.ExternalID,
+			&i.VerifiedAt,
 			&i.CompanyUuid,
 			&i.CompanyName,
 			&i.ConversationCount,
@@ -910,6 +1033,44 @@ type MarkContactMergedParams struct {
 func (q *Queries) MarkContactMerged(ctx context.Context, arg MarkContactMergedParams) error {
 	_, err := q.db.Exec(ctx, markContactMerged, arg.IntoID, arg.OrganizationID, arg.ID)
 	return err
+}
+
+const markContactVerified = `-- name: MarkContactVerified :execrows
+UPDATE contacts c SET
+    verified_at = $1,
+    external_id = COALESCE(c.external_id, $2::text)
+WHERE c.organization_id = $3 AND c.id = $4 AND c.deleted_at IS NULL
+  AND (c.external_id = $2::text
+       OR (c.external_id IS NULL AND NOT EXISTS (
+            SELECT 1 FROM contacts o
+            WHERE o.organization_id = c.organization_id AND o.external_id = $2::text
+              AND o.deleted_at IS NULL AND o.id <> c.id)))
+`
+
+type MarkContactVerifiedParams struct {
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	ExternalID     string             `json:"external_id"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// CF-195: a user_hash check succeeded. The external id is taken only when
+// the contact has none and no other live contact holds it, so a contact
+// matched by e-mail never steals another user's id; and the contact is
+// marked verified only when its external id is the proved user id (a
+// contact of another user never gets the badge). Returns 0 rows when it
+// was not verified.
+func (q *Queries) MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markContactVerified,
+		arg.VerifiedAt,
+		arg.ExternalID,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const moveContactConversations = `-- name: MoveContactConversations :execrows
@@ -1015,7 +1176,7 @@ func (q *Queries) SoftDeleteCompany(ctx context.Context, arg SoftDeleteCompanyPa
 const softDeleteContact = `-- name: SoftDeleteContact :one
 UPDATE contacts SET deleted_at = NOW()
 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
 `
 
 type SoftDeleteContactParams struct {
@@ -1046,6 +1207,8 @@ func (q *Queries) SoftDeleteContact(ctx context.Context, arg SoftDeleteContactPa
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -1121,9 +1284,10 @@ UPDATE contacts SET
     notes = $7,
     custom_fields = $8,
     blocked = $9,
-    job_title = $10
-WHERE organization_id = $11 AND id = $12 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at
+    job_title = $10,
+    external_id = $11
+WHERE organization_id = $12 AND id = $13 AND deleted_at IS NULL
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
 `
 
 type UpdateContactParams struct {
@@ -1137,6 +1301,7 @@ type UpdateContactParams struct {
 	CustomFields   []byte      `json:"custom_fields"`
 	Blocked        bool        `json:"blocked"`
 	JobTitle       string      `json:"job_title"`
+	ExternalID     pgtype.Text `json:"external_id"`
 	OrganizationID int64       `json:"organization_id"`
 	ID             int64       `json:"id"`
 }
@@ -1153,6 +1318,7 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 		arg.CustomFields,
 		arg.Blocked,
 		arg.JobTitle,
+		arg.ExternalID,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -1177,6 +1343,8 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }

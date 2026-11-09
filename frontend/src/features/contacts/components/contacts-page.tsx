@@ -50,6 +50,7 @@ import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { ChannelGlyph } from "@/features/inbox/components/channel-glyph";
 import { initials, shortAgo } from "@/features/inbox/lib/format";
+import { datetime } from "@/lib/utils";
 import { SidebarAppsPanel } from "@/features/sidebar-apps/components/sidebar-apps-panel";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
@@ -64,6 +65,8 @@ import {
 import type { Contact, ContactSort } from "../services/contacts.service";
 
 import { ContactsIOToolbar } from "./contacts-io-toolbar";
+import { CustomFieldValuesList } from "./customer-fields";
+import { IdentityBadge } from "./identity-badge";
 
 const SORTS: readonly ContactSort[] = [
   "created_at",
@@ -121,8 +124,11 @@ export function ContactsPage() {
                   {initials(c.name || c.email)}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {c.name || c.email || c.phone || "—"}
+                  <p className="flex min-w-0 items-center gap-1.5 font-medium">
+                    <span className="truncate">
+                      {c.name || c.email || c.phone || "—"}
+                    </span>
+                    <IdentityBadge state={c.identity_state} compact />
                   </p>
                   {c.job_title && (
                     <p className="text-muted-foreground truncate text-xs font-normal">
@@ -147,6 +153,20 @@ export function ContactsPage() {
               )}
             </div>
           ),
+        }),
+        createColumn<Contact>({
+          id: "external_id",
+          accessorFn: (row) => row.external_id ?? "",
+          labelKey: "contacts.columns.external_id",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.external_id ? (
+              <span className="font-mono text-xs">
+                {row.original.external_id}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
         }),
         createColumn<Contact>({
           id: "company",
@@ -330,6 +350,7 @@ function ContactForm({
     phone: contact.phone ?? "",
     job_title: contact.job_title,
     notes: contact.notes,
+    external_id: contact.external_id ?? "",
   });
   const [company, setCompany] = useState(contact.company);
   const [merging, setMerging] = useState(false);
@@ -340,6 +361,7 @@ function ContactForm({
     form.phone !== (contact.phone ?? "") ||
     form.job_title !== contact.job_title ||
     form.notes !== contact.notes ||
+    form.external_id !== (contact.external_id ?? "") ||
     company?.uuid !== contact.company?.uuid;
   const field = (key: keyof typeof form, label: string, type = "text") => (
     <div className="grid gap-1.5">
@@ -355,11 +377,25 @@ function ContactForm({
   );
   return (
     <div className="flex flex-col gap-5 px-4 pb-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <IdentityBadge state={contact.identity_state} />
+        {contact.verified_at && (
+          <span className="text-muted-foreground text-xs">
+            {t("contacts.identity.verified_at", {
+              date: datetime(contact.verified_at, "dd.MM.yyyy HH:mm"),
+            })}
+          </span>
+        )}
+      </div>
       <div className="grid gap-3">
         {field("name", t("contacts.fields.name"))}
         {field("email", t("contacts.fields.email"), "email")}
         {field("phone", t("contacts.fields.phone"), "tel")}
         {field("job_title", t("contacts.fields.job_title"))}
+        {field("external_id", t("contacts.fields.external_id"))}
+        <p className="text-muted-foreground -mt-1.5 text-xs">
+          {t("contacts.external_id.hint")}
+        </p>
         <div className="grid gap-1.5">
           <Label>{t("contacts.fields.company")}</Label>
           <CompanyPicker
@@ -392,6 +428,12 @@ function ContactForm({
           </Button>
         )}
       </div>
+
+      <CustomFieldValuesList
+        entityType="contact"
+        values={contact.custom_fields as Record<string, unknown>}
+        title={t("contacts.custom_fields.contact")}
+      />
 
       <section>
         <h3 className="text-muted-foreground mb-2 text-[11px] font-semibold tracking-wide uppercase">

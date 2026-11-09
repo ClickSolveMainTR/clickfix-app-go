@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Hash, Mail, Phone } from "lucide-react";
 
+import { CustomerFieldsPanel } from "@/features/contacts/components/customer-fields";
+import { IdentityBadge } from "@/features/contacts/components/identity-badge";
 import { ConversationIssuesPanel } from "@/features/engineering";
 import { ConversationToTopic } from "@/features/forum/components/conversation-to-topic";
 import { ConversationFormPanel } from "@/features/request-forms/components/conversation-form-panel";
@@ -50,12 +52,15 @@ export function ContextPanel({
             {initials(name)}
           </div>
           <div className="min-w-0">
-            <Link
-              href={`/contacts?c=${c.contact.uuid}`}
-              className="block truncate font-semibold hover:underline"
-            >
-              {name}
-            </Link>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Link
+                href={`/contacts?c=${c.contact.uuid}`}
+                className="block truncate font-semibold hover:underline"
+              >
+                {name}
+              </Link>
+              <IdentityBadge state={c.contact.identity_state} compact />
+            </div>
             {c.company && (
               <p className="text-muted-foreground truncate text-xs">
                 {c.company.name}
@@ -79,6 +84,17 @@ export function ContextPanel({
               {c.contact.phone}
             </span>
           )}
+          {c.contact.external_id && (
+            <span
+              className="text-muted-foreground flex min-w-0 items-center gap-2"
+              title={t("contacts.external_id.contact")}
+            >
+              <Hash className="size-3.5 shrink-0" />
+              <span className="truncate font-mono">
+                {c.contact.external_id}
+              </span>
+            </span>
+          )}
           <span className="text-muted-foreground flex min-w-0 items-center gap-2">
             <ChannelGlyph type={c.channel_type} className="size-3.5 shrink-0" />
             <span className="truncate">
@@ -86,6 +102,13 @@ export function ContextPanel({
             </span>
           </span>
         </div>
+      </section>
+
+      <section className="[&:not(:has(dt,p))]:hidden">
+        <CustomerFieldsPanel
+          contactUuid={c.contact.uuid}
+          companyUuid={c.company?.uuid}
+        />
       </section>
 
       <section>

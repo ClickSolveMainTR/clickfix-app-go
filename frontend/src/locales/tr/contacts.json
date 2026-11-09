@@ -184,5 +184,21 @@
   "account.no_conversations": "Henüz konuşma yok.",
   "account.all_contacts": "Tümü ({{count}})",
   "account.no_contacts": "Bu şirkete bağlı kişi yok.",
-  "account.custom_fields": "Özel alanlar"
+  "account.custom_fields": "Özel alanlar",
+  "columns.external_id": "Dış kimlik",
+  "fields.external_id": "Dış kimlik",
+  "external_id.hint": "Sizin sisteminizdeki kullanıcı numarası (widget identify user_id). Organizasyon içinde tekildir.",
+  "external_id.contact": "Kişi dış kimliği",
+  "external_id.company": "Firma dış kimliği",
+  "companies.fields.external_id": "Dış kimlik",
+  "companies.external_id_hint": "Dış kimlik, firmanın sizin sisteminizdeki numarasıdır (widget company.id); kişi dış kimliğinden ayrıdır.",
+  "identity.verified": "Doğrulanmış",
+  "identity.anonymous": "Anonim",
+  "identity.self_named": "Adını kendisi yazdı",
+  "identity.verified_hint": "Kişi, widget kimlik doğrulamasında (user_hash) sizin kullanıcı numaranızı kanıtladı.",
+  "identity.anonymous_hint": "Ad, e-posta veya telefon bilinmiyor.",
+  "identity.self_named_hint": "Ad, e-posta veya telefonu kişi ya da kanalı verdi; doğrulanmadı.",
+  "identity.verified_at": "Son doğrulama: {{date}}",
+  "custom_fields.contact": "Kişi alanları",
+  "custom_fields.company": "Firma alanları"
 }

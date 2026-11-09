@@ -23,6 +23,13 @@ func TestPublicRouteAllowlist(t *testing.T) {
 		{"PATCH", "conversations/" + id, "conversations:write", true},
 		{"POST", "conversations/" + id + "/messages", "conversations:write", true},
 		{"GET", "contacts", "contacts:read", true},
+		// CF-195: contacts by the customer's own user id.
+		{"POST", "contacts", "contacts:write", true},
+		{"PUT", "contacts/by-external-id", "contacts:write", true},
+		{"PUT", "contacts/" + id, "", false},
+		{"DELETE", "contacts/" + id, "", false},
+		{"POST", "companies", "", false},
+		{"GET", "companies", "companies:read", true},
 		{"PUT", "company-revenue", "revenue:write", true},
 		{"PUT", "company-usage", "health:write", true},
 		{"POST", "company-events", "events:write", true},

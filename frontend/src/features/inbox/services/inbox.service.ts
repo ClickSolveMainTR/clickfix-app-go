@@ -114,6 +114,7 @@ export const inboxService = {
               : {}),
             ...(p.tags?.length ? { tag: p.tags.join(",") } : {}),
             ...(p.brand ? { brand_id: p.brand } : {}),
+            ...(p.identity ? { identity: p.identity } : {}),
             ...(p.saved ? savedQuery(p.saved) : {}),
             sort: p.sort,
             limit: p.limit,
