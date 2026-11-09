@@ -648,7 +648,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Capability registry (CF-183): every capability calls the panel's /v1
 	// routes as the confirming user, so the routes re-check permissions.
 	assistantBridge := &apibridge.Bridge{Handler: mux, Tokens: tokens}
-	assistantSvc.Caps = capability.NewRegistry().Register(assistantmodule.CoreCapabilities(deps.Queries)...)
+	assistantSvc.Caps = capability.NewRegistry().
+		Register(assistantmodule.CoreCapabilities(deps.Queries)...).
+		Register(conversationsmodule.Capabilities()...)
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}
@@ -822,7 +824,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if !ok {
 		return nil, fmt.Errorf("httpserver: billing requires reliable event subscriptions")
 	}
-	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus})
+	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus, Capabilities: assistantSvc.Caps})
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: developer platform: %w", err)
 	}

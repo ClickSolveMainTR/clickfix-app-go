@@ -56,6 +56,11 @@ func (r *Registry) add(c *Capability) error {
 			}
 		}
 	}
+	if c.OnSurface(SurfaceMCP) && len(c.Secrets) > 0 {
+		// A generated secret is shown once in the confirmation card; MCP
+		// has no such card, so these capabilities stay off it.
+		return fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name)
+	}
 	schema, err := compile(c.Name, c.Input)
 	if err != nil {
 		return fmt.Errorf("capability %s: schema: %w", c.Name, err)

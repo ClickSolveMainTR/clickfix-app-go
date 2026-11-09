@@ -47,6 +47,8 @@ const (
 	SurfaceMobile   = "mobile"
 	SurfacePlatform = "platform"
 	SurfaceWidget   = "widget"
+	// SurfaceMCP is the MCP server: the client confirms writes itself.
+	SurfaceMCP = "mcp"
 )
 
 // DefaultSurfaces are used when a capability names none: the member apps.
@@ -131,6 +133,9 @@ type Capability struct {
 	Name string
 	// Aliases are older action kinds stored in threads (open_route).
 	Aliases []string
+	// MCPName is the MCP tool name ("" = ToolName); kept stable for
+	// connected clients.
+	MCPName string
 	Module  string
 	// Title is the card title (tr/en).
 	Title map[string]string
@@ -185,6 +190,14 @@ var nameRxp = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){0,3}$`)
 
 // ToolName is the model/MCP tool name (dots are not allowed there).
 func (c *Capability) ToolName() string { return strings.ReplaceAll(c.Name, ".", "_") }
+
+// MCPToolName is the tool name on the MCP surface.
+func (c *Capability) MCPToolName() string {
+	if c.MCPName != "" {
+		return c.MCPName
+	}
+	return c.ToolName()
+}
 
 // Writes reports whether the capability changes data.
 func (c *Capability) Writes() bool { return c.Kind == Write || c.Kind == Destructive }

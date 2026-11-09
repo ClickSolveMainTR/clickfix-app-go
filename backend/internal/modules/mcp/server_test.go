@@ -36,7 +36,7 @@ func (c *countingTokens) ResourceMetadataURL(resource string) string {
 // up without bound.
 func TestAddressLimitRunsBeforeAuthentication(t *testing.T) {
 	post := func(l *addressLimiter, tokens *countingTokens, auth string) *httptest.ResponseRecorder {
-		s := New(Config{Tokens: tokens, Catalog: NewCatalog(), Limiter: l})
+		s := New(Config{Tokens: tokens, Catalog: testCatalog(), Limiter: l})
 		r := httptest.NewRequest(http.MethodPost, model.ResourceBusiness, strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/list"}`))
 		r.Header.Set("X-Forwarded-For", "203.0.113.20")
 		if auth != "" {
