@@ -128,7 +128,7 @@ func (a *Adapter) Send(ctx context.Context,
 // URL (event type "test", header X-ClickFix-Event: test) through the
 // SSRF-guarded client, so the integration can be verified before real
 // traffic. The receiver should answer 2xx and must not create a message.
-func (a *Adapter) TestDelivery(ctx context.Context, inst channels.Instance) (channels.DeliveryTest, error) {
+func (a *Adapter) TestDelivery(ctx context.Context, inst channels.Instance, _ string) (channels.DeliveryTest, error) {
 	if _, err := a.Connect(ctx, inst); err != nil {
 		return channels.DeliveryTest{}, err
 	}

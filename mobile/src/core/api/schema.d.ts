@@ -4866,8 +4866,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a signed test event to the channel's own endpoint
-         * @description REST API channels only (CF-185): posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. It makes an outbound request (at most 6 per channel in 10 minutes, then 429) but changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`.
+         * Send a test message through the channel
+         * @description REST API channels: posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. E-mail channels: sends a real test e-mail through the channel's provider to the caller's own e-mail address only (`recipient`); it opens no conversation (CF-185). It makes an outbound request (at most 6 per channel in 10 minutes, then 429) but changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`.
          */
         post: operations["testDeliveryTenantChannel"];
         delete?: never;
@@ -22343,6 +22343,8 @@ export interface components {
             detail?: string;
             /** @description id of the test event (also its Idempotency-Key) */
             event_id: string;
+            /** @description Where the test e-mail went (the caller's own address) */
+            recipient?: string;
         };
         EnvelopeChannelDeliveryTest: {
             /** @enum {boolean} */

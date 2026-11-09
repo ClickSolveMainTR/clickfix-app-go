@@ -160,7 +160,7 @@ func (s *Service) CheckHealth(ctx context.Context, orgID int64, id uuid.UUID) (I
 // TestDelivery sends a test event to the instance's own endpoint (only
 // channels implementing channels.DeliveryTester, e.g. the REST API
 // channel). It changes no data; the result is not stored as health.
-func (s *Service) TestDelivery(ctx context.Context, orgID int64, id uuid.UUID) (channels.DeliveryTest, error) {
+func (s *Service) TestDelivery(ctx context.Context, orgID int64, id uuid.UUID, to string) (channels.DeliveryTest, error) {
 	row, err := s.q.GetChannelInstanceByUUID(ctx, db.GetChannelInstanceByUUIDParams{OrganizationID: orgID, Uuid: id})
 	if err != nil {
 		return channels.DeliveryTest{}, notFound(err)
@@ -173,7 +173,7 @@ func (s *Service) TestDelivery(ctx context.Context, orgID int64, id uuid.UUID) (
 	if !ok {
 		return channels.DeliveryTest{}, fmt.Errorf("%w: this channel type has no test delivery", ErrInvalid)
 	}
-	out, err := tester.TestDelivery(ctx, inst)
+	out, err := tester.TestDelivery(ctx, inst, to)
 	if err != nil {
 		return channels.DeliveryTest{}, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
 	}

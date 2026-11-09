@@ -396,7 +396,7 @@ func Capabilities() []*capability.Capability {
 		{
 			Name: "channels.test", Module: "channels", Kind: capability.Write, Permission: rbac.PermTenantChannelsManage, Routes: routes,
 			Title:       map[string]string{"tr": "Kanalı test et", "en": "Test the channel"},
-			Description: "Test a channel: check its connection and, for a REST API channel, post a signed test event (X-ClickFix-Event: test) to the organization's webhook and report the HTTP result. Contacts an external system, so it is confirmed.",
+			Description: "Test a channel: check its connection; for a REST API channel also post a signed test event (X-ClickFix-Event: test) to the organization's webhook, for an e-mail channel send a real test e-mail to the confirming user's own address. Reports the result. Contacts an external system, so it is confirmed.",
 			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"channel_uuid"},
 				"properties": map[string]any{"channel_uuid": uuidProp}},
 			DryRun: func(ctx context.Context, e capability.Exec, p capability.Params) (capability.Result, error) {
@@ -405,8 +405,11 @@ func Capabilities() []*capability.Capability {
 					return capability.Result{}, err
 				}
 				target := t(e, "bağlantı denetimi", "connection check")
-				if v.Type == platformchannels.TypeAPI {
+				switch v.Type {
+				case platformchannels.TypeAPI:
 					target = t(e, "%s adresine imzalı test olayı", "signed test event to %s", firstNonEmpty(v.outbound(), "webhook_url"))
+				case platformchannels.TypeEmail:
+					target = t(e, "bağlantı denetimi ve kendi e-posta adresinize gerçek bir test e-postası", "a connection check and a real test e-mail to your own address")
 				}
 				return capability.Result{Summary: t(e, "“%s”: %s gönderilecek; veri değişmez.", "“%s”: %s will be sent; no data changes.", v.Name, target)}, nil
 			},
@@ -418,7 +421,7 @@ func Capabilities() []*capability.Capability {
 				}
 				check := healthCheck(ctx, e, id)
 				details := []capability.Detail{{Label: t(e, "Bağlantı denetimi", "Connection check"), Value: firstNonEmpty(check.Message, check.Status)}}
-				if v.Type == platformchannels.TypeAPI {
+				if v.Type == platformchannels.TypeAPI || v.Type == platformchannels.TypeEmail {
 					r, err := e.API.Call(ctx, http.MethodPost, capChannelsPath+"/"+id+"/test-delivery", nil)
 					if err != nil {
 						return capability.Result{}, err
@@ -428,6 +431,9 @@ func Capabilities() []*capability.Capability {
 						return capability.Result{}, err
 					}
 					res := t(e, "Başarılı (HTTP %d)", "Delivered (HTTP %d)", out.StatusCode)
+					if out.Recipient != "" {
+						res = t(e, "Test e-postası %s adresine gönderildi; gelen kutunuzu kontrol edin", "Test e-mail sent to %s; check your inbox", out.Recipient)
+					}
 					if !out.OK {
 						res = t(e, "Başarısız: %s", "Failed: %s", out.Detail)
 						check = capability.Check{Status: capability.VerifyFailed, Message: out.Detail}
