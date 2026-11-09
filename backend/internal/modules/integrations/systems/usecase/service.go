@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"slices"
@@ -528,7 +529,7 @@ func (s *Service) log(ctx context.Context, org, actor int64, kind, target, chann
 	}
 	// Logging is best effort; it must not turn a successful call into a failure.
 	_ = s.Q.IntegrationLogCall(context.WithoutCancel(ctx), db.IntegrationLogCallParams{OrganizationID: org, Kind: kind, Target: clipText(target, 100), Channel: channel,
-		Method: method, MaskedPath: masked, StatusCode: int32(resp.Status), Ok: err == nil, ErrorCode: CodeOf(err), DurationMs: int32(resp.Duration / time.Millisecond),
+		Method: method, MaskedPath: masked, StatusCode: clampInt32(int64(resp.Status)), Ok: err == nil, ErrorCode: CodeOf(err), DurationMs: clampInt32(int64(resp.Duration / time.Millisecond)),
 		ActorUserID: pgtype.Int8{Int64: actor, Valid: actor > 0}})
 }
 
@@ -761,4 +762,15 @@ func (s *Service) Run(ctx context.Context, org, actor int64, key, channel string
 		out.Summary = a.Title + " done"
 	}
 	return out, nil
+}
+
+// clampInt32 narrows a counter for the call log without overflowing.
+func clampInt32(v int64) int32 {
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if v < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(v)
 }
