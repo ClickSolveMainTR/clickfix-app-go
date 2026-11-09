@@ -89,7 +89,8 @@ func listChannels(ctx context.Context, api capability.API, typ string) ([]channe
 	var out struct {
 		Items []channelView `json:"items"`
 	}
-	return out.Items, r.Decode(&out)
+	decErr := r.Decode(&out)
+	return out.Items, decErr
 }
 
 func getChannel(ctx context.Context, api capability.API, id string) (channelView, error) {
@@ -101,7 +102,8 @@ func getChannel(ctx context.Context, api capability.API, id string) (channelView
 	if err != nil {
 		return v, err
 	}
-	return v, r.Decode(&v)
+	decErr := r.Decode(&v)
+	return v, decErr
 }
 
 func getAPIChannel(ctx context.Context, api capability.API, id string) (channelView, error) {
