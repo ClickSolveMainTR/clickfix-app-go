@@ -467,6 +467,9 @@ func (s *Service) CreatePolicy(ctx context.Context, orgID int64, in model.Policy
 	if err := normalizePolicy(&in); err != nil {
 		return model.Policy{}, err
 	}
+	if err := s.normalizeFieldMatches(ctx, orgID, &in.Conditions); err != nil {
+		return model.Policy{}, err
+	}
 	var id uuid.UUID
 	err := s.inTx(ctx, func(ctx context.Context, _ pgx.Tx, q *db.Queries) error {
 		hours, cond, err := s.policyParams(ctx, q, orgID, in)
@@ -499,6 +502,9 @@ func (s *Service) CreatePolicy(ctx context.Context, orgID int64, in model.Policy
 // UpdatePolicy replaces a policy; open conversations are recomputed.
 func (s *Service) UpdatePolicy(ctx context.Context, orgID int64, id uuid.UUID, in model.PolicyInput) (model.Policy, error) {
 	if err := normalizePolicy(&in); err != nil {
+		return model.Policy{}, err
+	}
+	if err := s.normalizeFieldMatches(ctx, orgID, &in.Conditions); err != nil {
 		return model.Policy{}, err
 	}
 	err := s.inTx(ctx, func(ctx context.Context, _ pgx.Tx, q *db.Queries) error {
@@ -556,6 +562,7 @@ func toPolicy(r db.SlaPolicy, targets []db.SlaPolicyTarget, hours map[int64]uuid
 	c.Priorities, c.ChannelTypes = nonNil(c.Priorities), nonNil(c.ChannelTypes)
 	c.TagUUIDs, c.CompanyUUIDs = nonNil(c.TagUUIDs), nonNil(c.CompanyUUIDs)
 	c.CompanyTiers, c.CompanyPlans = nonNil(c.CompanyTiers), nonNil(c.CompanyPlans)
+	c.CustomFields = nonNil(c.CustomFields)
 	if r.BusinessHoursID.Valid {
 		if u, ok := hours[r.BusinessHoursID.Int64]; ok {
 			p.BusinessHoursUUID = &u

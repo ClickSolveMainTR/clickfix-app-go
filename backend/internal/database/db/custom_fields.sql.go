@@ -12,6 +12,153 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const companyCustomFieldsByID = `-- name: CompanyCustomFieldsByID :one
+SELECT custom_fields FROM companies WHERE organization_id = $1 AND id = $2
+`
+
+type CompanyCustomFieldsByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) CompanyCustomFieldsByID(ctx context.Context, arg CompanyCustomFieldsByIDParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, companyCustomFieldsByID, arg.OrganizationID, arg.ID)
+	var custom_fields []byte
+	err := row.Scan(&custom_fields)
+	return custom_fields, err
+}
+
+const contactAndCompanyCustomFields = `-- name: ContactAndCompanyCustomFields :one
+SELECT ct.custom_fields AS contact_fields,
+       COALESCE(co.custom_fields, '{}'::jsonb)::jsonb AS company_fields
+FROM contacts ct
+LEFT JOIN companies co ON co.id = ct.company_id AND co.organization_id = ct.organization_id
+WHERE ct.organization_id = $1 AND ct.id = $2
+`
+
+type ContactAndCompanyCustomFieldsParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type ContactAndCompanyCustomFieldsRow struct {
+	ContactFields []byte `json:"contact_fields"`
+	CompanyFields []byte `json:"company_fields"`
+}
+
+func (q *Queries) ContactAndCompanyCustomFields(ctx context.Context, arg ContactAndCompanyCustomFieldsParams) (ContactAndCompanyCustomFieldsRow, error) {
+	row := q.db.QueryRow(ctx, contactAndCompanyCustomFields, arg.OrganizationID, arg.ID)
+	var i ContactAndCompanyCustomFieldsRow
+	err := row.Scan(&i.ContactFields, &i.CompanyFields)
+	return i, err
+}
+
+const contactCustomFieldsByID = `-- name: ContactCustomFieldsByID :one
+SELECT custom_fields FROM contacts WHERE organization_id = $1 AND id = $2
+`
+
+type ContactCustomFieldsByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) ContactCustomFieldsByID(ctx context.Context, arg ContactCustomFieldsByIDParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, contactCustomFieldsByID, arg.OrganizationID, arg.ID)
+	var custom_fields []byte
+	err := row.Scan(&custom_fields)
+	return custom_fields, err
+}
+
+const contactUnknownValues = `-- name: ContactUnknownValues :many
+SELECT key, value, verified, received_at
+FROM custom_field_unknown_values
+WHERE organization_id = $1 AND contact_id = $2
+ORDER BY key
+`
+
+type ContactUnknownValuesParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ContactID      int64 `json:"contact_id"`
+}
+
+type ContactUnknownValuesRow struct {
+	Key        string             `json:"key"`
+	Value      []byte             `json:"value"`
+	Verified   bool               `json:"verified"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+}
+
+func (q *Queries) ContactUnknownValues(ctx context.Context, arg ContactUnknownValuesParams) ([]ContactUnknownValuesRow, error) {
+	rows, err := q.db.Query(ctx, contactUnknownValues, arg.OrganizationID, arg.ContactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactUnknownValuesRow{}
+	for rows.Next() {
+		var i ContactUnknownValuesRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.Value,
+			&i.Verified,
+			&i.ReceivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const contactsWithUnknownField = `-- name: ContactsWithUnknownField :many
+SELECT u.contact_id, ct.custom_fields, u.value, u.verified
+FROM custom_field_unknown_values u
+JOIN contacts ct ON ct.id = u.contact_id AND ct.organization_id = u.organization_id
+WHERE u.organization_id = $1 AND u.key = $2::text
+ORDER BY u.contact_id
+LIMIT 5000
+`
+
+type ContactsWithUnknownFieldParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	Key            string `json:"key"`
+}
+
+type ContactsWithUnknownFieldRow struct {
+	ContactID    int64  `json:"contact_id"`
+	CustomFields []byte `json:"custom_fields"`
+	Value        []byte `json:"value"`
+	Verified     bool   `json:"verified"`
+}
+
+func (q *Queries) ContactsWithUnknownField(ctx context.Context, arg ContactsWithUnknownFieldParams) ([]ContactsWithUnknownFieldRow, error) {
+	rows, err := q.db.Query(ctx, contactsWithUnknownField, arg.OrganizationID, arg.Key)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactsWithUnknownFieldRow{}
+	for rows.Next() {
+		var i ContactsWithUnknownFieldRow
+		if err := rows.Scan(
+			&i.ContactID,
+			&i.CustomFields,
+			&i.Value,
+			&i.Verified,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countCustomFieldDefinitions = `-- name: CountCustomFieldDefinitions :one
 SELECT COUNT(*)::bigint
 FROM custom_field_definitions
@@ -47,11 +194,12 @@ func (q *Queries) CountCustomObjectTypes(ctx context.Context, organizationID int
 const createCustomFieldDefinition = `-- name: CreateCustomFieldDefinition :one
 INSERT INTO custom_field_definitions (
     organization_id, entity_type, object_type_id, key, label, description, field_type,
-    required, options, config, default_value, condition, position
+    required, options, config, default_value, condition, visibility, sensitive, widget_access, position
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10, $11, $12,
+    $13, $14, $15,
     COALESCE((
         SELECT MAX(position) + 1 FROM custom_field_definitions
         WHERE organization_id = $1
@@ -59,7 +207,7 @@ INSERT INTO custom_field_definitions (
           AND object_type_id IS NOT DISTINCT FROM $3::bigint
     ), 0)
 )
-RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at
+RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access
 `
 
 type CreateCustomFieldDefinitionParams struct {
@@ -75,6 +223,9 @@ type CreateCustomFieldDefinitionParams struct {
 	Config         []byte      `json:"config"`
 	DefaultValue   []byte      `json:"default_value"`
 	Condition      []byte      `json:"condition"`
+	Visibility     []byte      `json:"visibility"`
+	Sensitive      bool        `json:"sensitive"`
+	WidgetAccess   string      `json:"widget_access"`
 }
 
 func (q *Queries) CreateCustomFieldDefinition(ctx context.Context, arg CreateCustomFieldDefinitionParams) (CustomFieldDefinition, error) {
@@ -91,6 +242,9 @@ func (q *Queries) CreateCustomFieldDefinition(ctx context.Context, arg CreateCus
 		arg.Config,
 		arg.DefaultValue,
 		arg.Condition,
+		arg.Visibility,
+		arg.Sensitive,
+		arg.WidgetAccess,
 	)
 	var i CustomFieldDefinition
 	err := row.Scan(
@@ -112,6 +266,9 @@ func (q *Queries) CreateCustomFieldDefinition(ctx context.Context, arg CreateCus
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.Sensitive,
+		&i.WidgetAccess,
 	)
 	return i, err
 }
@@ -194,6 +351,68 @@ func (q *Queries) CreateCustomObjectType(ctx context.Context, arg CreateCustomOb
 	return i, err
 }
 
+const customFieldsOfCompany = `-- name: CustomFieldsOfCompany :one
+SELECT id, custom_fields
+FROM companies
+WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+`
+
+type CustomFieldsOfCompanyParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type CustomFieldsOfCompanyRow struct {
+	ID           int64  `json:"id"`
+	CustomFields []byte `json:"custom_fields"`
+}
+
+func (q *Queries) CustomFieldsOfCompany(ctx context.Context, arg CustomFieldsOfCompanyParams) (CustomFieldsOfCompanyRow, error) {
+	row := q.db.QueryRow(ctx, customFieldsOfCompany, arg.OrganizationID, arg.Uuid)
+	var i CustomFieldsOfCompanyRow
+	err := row.Scan(&i.ID, &i.CustomFields)
+	return i, err
+}
+
+const customFieldsOfContact = `-- name: CustomFieldsOfContact :one
+SELECT id, custom_fields
+FROM contacts
+WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+`
+
+type CustomFieldsOfContactParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type CustomFieldsOfContactRow struct {
+	ID           int64  `json:"id"`
+	CustomFields []byte `json:"custom_fields"`
+}
+
+func (q *Queries) CustomFieldsOfContact(ctx context.Context, arg CustomFieldsOfContactParams) (CustomFieldsOfContactRow, error) {
+	row := q.db.QueryRow(ctx, customFieldsOfContact, arg.OrganizationID, arg.Uuid)
+	var i CustomFieldsOfContactRow
+	err := row.Scan(&i.ID, &i.CustomFields)
+	return i, err
+}
+
+const deleteContactUnknownField = `-- name: DeleteContactUnknownField :exec
+DELETE FROM custom_field_unknown_values
+WHERE organization_id = $1 AND contact_id = $2 AND key = $3::text
+`
+
+type DeleteContactUnknownFieldParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	ContactID      int64  `json:"contact_id"`
+	Key            string `json:"key"`
+}
+
+func (q *Queries) DeleteContactUnknownField(ctx context.Context, arg DeleteContactUnknownFieldParams) error {
+	_, err := q.db.Exec(ctx, deleteContactUnknownField, arg.OrganizationID, arg.ContactID, arg.Key)
+	return err
+}
+
 const deleteCustomObjectRecord = `-- name: DeleteCustomObjectRecord :execrows
 DELETE FROM custom_object_records
 WHERE organization_id = $1 AND id = $2
@@ -212,8 +431,27 @@ func (q *Queries) DeleteCustomObjectRecord(ctx context.Context, arg DeleteCustom
 	return result.RowsAffected(), nil
 }
 
+const dismissUnknownCustomFieldKey = `-- name: DismissUnknownCustomFieldKey :execrows
+UPDATE custom_field_unknown_keys
+SET dismissed_at = NOW()
+WHERE organization_id = $1 AND uuid = $2 AND dismissed_at IS NULL
+`
+
+type DismissUnknownCustomFieldKeyParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) DismissUnknownCustomFieldKey(ctx context.Context, arg DismissUnknownCustomFieldKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, dismissUnknownCustomFieldKey, arg.OrganizationID, arg.Uuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCustomFieldDefinition = `-- name: GetCustomFieldDefinition :one
-SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at
+SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access
 FROM custom_field_definitions
 WHERE organization_id = $1 AND uuid = $2
 `
@@ -245,6 +483,9 @@ func (q *Queries) GetCustomFieldDefinition(ctx context.Context, arg GetCustomFie
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.Sensitive,
+		&i.WidgetAccess,
 	)
 	return i, err
 }
@@ -310,8 +551,71 @@ func (q *Queries) GetCustomObjectType(ctx context.Context, arg GetCustomObjectTy
 	return i, err
 }
 
+const knowledgeArticleAudience = `-- name: KnowledgeArticleAudience :one
+SELECT a.id, COALESCE(au.conditions, '[]'::jsonb)::jsonb AS conditions
+FROM knowledge_articles a
+LEFT JOIN knowledge_article_audiences au ON au.article_id = a.id
+WHERE a.organization_id = $1 AND a.uuid = $2 AND a.deleted_at IS NULL
+`
+
+type KnowledgeArticleAudienceParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+type KnowledgeArticleAudienceRow struct {
+	ID         int64  `json:"id"`
+	Conditions []byte `json:"conditions"`
+}
+
+// CF-196: article audiences (catalog conditions by option id).
+func (q *Queries) KnowledgeArticleAudience(ctx context.Context, arg KnowledgeArticleAudienceParams) (KnowledgeArticleAudienceRow, error) {
+	row := q.db.QueryRow(ctx, knowledgeArticleAudience, arg.OrganizationID, arg.Uuid)
+	var i KnowledgeArticleAudienceRow
+	err := row.Scan(&i.ID, &i.Conditions)
+	return i, err
+}
+
+const knowledgeAudiencesByUUID = `-- name: KnowledgeAudiencesByUUID :many
+SELECT a.uuid, au.conditions
+FROM knowledge_article_audiences au
+JOIN knowledge_articles a ON a.id = au.article_id
+WHERE au.organization_id = $1 AND a.uuid = ANY($2::uuid[])
+  AND au.conditions <> '[]'::jsonb
+`
+
+type KnowledgeAudiencesByUUIDParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	Uuids          []uuid.UUID `json:"uuids"`
+}
+
+type KnowledgeAudiencesByUUIDRow struct {
+	Uuid       uuid.UUID `json:"uuid"`
+	Conditions []byte    `json:"conditions"`
+}
+
+func (q *Queries) KnowledgeAudiencesByUUID(ctx context.Context, arg KnowledgeAudiencesByUUIDParams) ([]KnowledgeAudiencesByUUIDRow, error) {
+	rows, err := q.db.Query(ctx, knowledgeAudiencesByUUID, arg.OrganizationID, arg.Uuids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []KnowledgeAudiencesByUUIDRow{}
+	for rows.Next() {
+		var i KnowledgeAudiencesByUUIDRow
+		if err := rows.Scan(&i.Uuid, &i.Conditions); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCustomFieldDefinitions = `-- name: ListCustomFieldDefinitions :many
-SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at
+SELECT id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access
 FROM custom_field_definitions
 WHERE organization_id = $1
   AND entity_type = $2
@@ -360,6 +664,9 @@ func (q *Queries) ListCustomFieldDefinitions(ctx context.Context, arg ListCustom
 			&i.ArchivedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Visibility,
+			&i.Sensitive,
+			&i.WidgetAccess,
 		); err != nil {
 			return nil, err
 		}
@@ -416,6 +723,70 @@ func (q *Queries) ListCustomObjectTypes(ctx context.Context, arg ListCustomObjec
 	return items, nil
 }
 
+const listUnknownCustomFieldKeys = `-- name: ListUnknownCustomFieldKeys :many
+SELECT k.uuid, k.entity_type, k.key, k.source, k.value_kind, k.hits, k.first_seen_at, k.last_seen_at,
+       ci.uuid AS channel_uuid, ci.name AS channel_name, ct.uuid AS last_contact_uuid
+FROM custom_field_unknown_keys k
+LEFT JOIN channel_instances ci ON ci.id = k.channel_instance_id
+LEFT JOIN contacts ct ON ct.id = k.last_contact_id
+WHERE k.organization_id = $1
+  AND k.dismissed_at IS NULL AND k.resolved_at IS NULL
+  AND ($2::uuid IS NULL OR ci.uuid = $2::uuid)
+ORDER BY k.last_seen_at DESC
+LIMIT 100
+`
+
+type ListUnknownCustomFieldKeysParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	ChannelUuid    pgtype.UUID `json:"channel_uuid"`
+}
+
+type ListUnknownCustomFieldKeysRow struct {
+	Uuid            uuid.UUID          `json:"uuid"`
+	EntityType      string             `json:"entity_type"`
+	Key             string             `json:"key"`
+	Source          string             `json:"source"`
+	ValueKind       string             `json:"value_kind"`
+	Hits            int64              `json:"hits"`
+	FirstSeenAt     pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt      pgtype.Timestamptz `json:"last_seen_at"`
+	ChannelUuid     pgtype.UUID        `json:"channel_uuid"`
+	ChannelName     pgtype.Text        `json:"channel_name"`
+	LastContactUuid pgtype.UUID        `json:"last_contact_uuid"`
+}
+
+func (q *Queries) ListUnknownCustomFieldKeys(ctx context.Context, arg ListUnknownCustomFieldKeysParams) ([]ListUnknownCustomFieldKeysRow, error) {
+	rows, err := q.db.Query(ctx, listUnknownCustomFieldKeys, arg.OrganizationID, arg.ChannelUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnknownCustomFieldKeysRow{}
+	for rows.Next() {
+		var i ListUnknownCustomFieldKeysRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.EntityType,
+			&i.Key,
+			&i.Source,
+			&i.ValueKind,
+			&i.Hits,
+			&i.FirstSeenAt,
+			&i.LastSeenAt,
+			&i.ChannelUuid,
+			&i.ChannelName,
+			&i.LastContactUuid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const organizationMemberUserUUIDs = `-- name: OrganizationMemberUserUUIDs :many
 SELECT u.uuid
 FROM organization_members m
@@ -449,11 +820,112 @@ func (q *Queries) OrganizationMemberUserUUIDs(ctx context.Context, arg Organizat
 	return items, nil
 }
 
+const recordUnknownCustomFieldKey = `-- name: RecordUnknownCustomFieldKey :exec
+INSERT INTO custom_field_unknown_keys (
+    organization_id, entity_type, key, source, channel_instance_id, value_kind, last_contact_id
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7
+)
+ON CONFLICT (organization_id, entity_type, key) DO UPDATE
+SET hits = custom_field_unknown_keys.hits + 1,
+    source = EXCLUDED.source,
+    channel_instance_id = COALESCE(EXCLUDED.channel_instance_id, custom_field_unknown_keys.channel_instance_id),
+    value_kind = EXCLUDED.value_kind,
+    last_contact_id = COALESCE(EXCLUDED.last_contact_id, custom_field_unknown_keys.last_contact_id),
+    last_seen_at = NOW(),
+    resolved_at = NULL
+`
+
+type RecordUnknownCustomFieldKeyParams struct {
+	OrganizationID    int64       `json:"organization_id"`
+	EntityType        string      `json:"entity_type"`
+	Key               string      `json:"key"`
+	Source            string      `json:"source"`
+	ChannelInstanceID pgtype.Int8 `json:"channel_instance_id"`
+	ValueKind         string      `json:"value_kind"`
+	LastContactID     pgtype.Int8 `json:"last_contact_id"`
+}
+
+// CF-196: keys the widget sent that no field defines. One row per key; hits
+// and the last contact move on every sighting; a dismissed or resolved key
+// opens again when it is seen after that.
+func (q *Queries) RecordUnknownCustomFieldKey(ctx context.Context, arg RecordUnknownCustomFieldKeyParams) error {
+	_, err := q.db.Exec(ctx, recordUnknownCustomFieldKey,
+		arg.OrganizationID,
+		arg.EntityType,
+		arg.Key,
+		arg.Source,
+		arg.ChannelInstanceID,
+		arg.ValueKind,
+		arg.LastContactID,
+	)
+	return err
+}
+
+const resolveUnknownCustomFieldKey = `-- name: ResolveUnknownCustomFieldKey :exec
+UPDATE custom_field_unknown_keys
+SET resolved_at = NOW()
+WHERE organization_id = $1 AND entity_type = $2
+  AND key = $3 AND resolved_at IS NULL
+`
+
+type ResolveUnknownCustomFieldKeyParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	EntityType     string `json:"entity_type"`
+	Key            string `json:"key"`
+}
+
+func (q *Queries) ResolveUnknownCustomFieldKey(ctx context.Context, arg ResolveUnknownCustomFieldKeyParams) error {
+	_, err := q.db.Exec(ctx, resolveUnknownCustomFieldKey, arg.OrganizationID, arg.EntityType, arg.Key)
+	return err
+}
+
+const saveKnowledgeArticleAudience = `-- name: SaveKnowledgeArticleAudience :exec
+INSERT INTO knowledge_article_audiences (organization_id, article_id, conditions)
+VALUES ($1, $2, $3)
+ON CONFLICT (article_id) DO UPDATE SET conditions = EXCLUDED.conditions, updated_at = NOW()
+`
+
+type SaveKnowledgeArticleAudienceParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	ArticleID      int64  `json:"article_id"`
+	Conditions     []byte `json:"conditions"`
+}
+
+func (q *Queries) SaveKnowledgeArticleAudience(ctx context.Context, arg SaveKnowledgeArticleAudienceParams) error {
+	_, err := q.db.Exec(ctx, saveKnowledgeArticleAudience, arg.OrganizationID, arg.ArticleID, arg.Conditions)
+	return err
+}
+
+const setContactCustomField = `-- name: SetContactCustomField :exec
+UPDATE contacts
+SET custom_fields = custom_fields || jsonb_build_object($1::text, $2::jsonb)
+WHERE organization_id = $3 AND id = $4
+`
+
+type SetContactCustomFieldParams struct {
+	Key            string `json:"key"`
+	Value          []byte `json:"value"`
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+}
+
+func (q *Queries) SetContactCustomField(ctx context.Context, arg SetContactCustomFieldParams) error {
+	_, err := q.db.Exec(ctx, setContactCustomField,
+		arg.Key,
+		arg.Value,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	return err
+}
+
 const setCustomFieldDefinitionArchived = `-- name: SetCustomFieldDefinitionArchived :one
 UPDATE custom_field_definitions
 SET archived_at = CASE WHEN $1::boolean THEN COALESCE(archived_at, NOW()) ELSE NULL END
 WHERE organization_id = $2 AND id = $3
-RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at
+RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access
 `
 
 type SetCustomFieldDefinitionArchivedParams struct {
@@ -484,6 +956,9 @@ func (q *Queries) SetCustomFieldDefinitionArchived(ctx context.Context, arg SetC
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.Sensitive,
+		&i.WidgetAccess,
 	)
 	return i, err
 }
@@ -505,6 +980,34 @@ func (q *Queries) SetCustomFieldDefinitionPosition(ctx context.Context, arg SetC
 	return err
 }
 
+const storeContactUnknownField = `-- name: StoreContactUnknownField :exec
+INSERT INTO custom_field_unknown_values (organization_id, contact_id, key, value, verified)
+SELECT $1, $2, $3::text, $4::jsonb, $5
+WHERE EXISTS (SELECT 1 FROM custom_field_unknown_values WHERE contact_id = $2 AND key = $3::text)
+   OR (SELECT COUNT(*) FROM custom_field_unknown_values WHERE contact_id = $2) < 50
+ON CONFLICT (contact_id, key) DO UPDATE
+SET value = EXCLUDED.value, verified = EXCLUDED.verified, received_at = NOW()
+`
+
+type StoreContactUnknownFieldParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	ContactID      int64  `json:"contact_id"`
+	Key            string `json:"key"`
+	Value          []byte `json:"value"`
+	Verified       bool   `json:"verified"`
+}
+
+func (q *Queries) StoreContactUnknownField(ctx context.Context, arg StoreContactUnknownFieldParams) error {
+	_, err := q.db.Exec(ctx, storeContactUnknownField,
+		arg.OrganizationID,
+		arg.ContactID,
+		arg.Key,
+		arg.Value,
+		arg.Verified,
+	)
+	return err
+}
+
 const updateCustomFieldDefinition = `-- name: UpdateCustomFieldDefinition :one
 UPDATE custom_field_definitions
 SET label = $1,
@@ -513,9 +1016,12 @@ SET label = $1,
     options = $4,
     config = $5,
     default_value = $6,
-    condition = $7
-WHERE organization_id = $8 AND id = $9
-RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at
+    condition = $7,
+    visibility = $8,
+    sensitive = $9,
+    widget_access = $10
+WHERE organization_id = $11 AND id = $12
+RETURNING id, uuid, organization_id, entity_type, object_type_id, key, label, description, field_type, required, options, config, default_value, condition, position, archived_at, created_at, updated_at, visibility, sensitive, widget_access
 `
 
 type UpdateCustomFieldDefinitionParams struct {
@@ -526,6 +1032,9 @@ type UpdateCustomFieldDefinitionParams struct {
 	Config         []byte `json:"config"`
 	DefaultValue   []byte `json:"default_value"`
 	Condition      []byte `json:"condition"`
+	Visibility     []byte `json:"visibility"`
+	Sensitive      bool   `json:"sensitive"`
+	WidgetAccess   string `json:"widget_access"`
 	OrganizationID int64  `json:"organization_id"`
 	ID             int64  `json:"id"`
 }
@@ -539,6 +1048,9 @@ func (q *Queries) UpdateCustomFieldDefinition(ctx context.Context, arg UpdateCus
 		arg.Config,
 		arg.DefaultValue,
 		arg.Condition,
+		arg.Visibility,
+		arg.Sensitive,
+		arg.WidgetAccess,
 		arg.OrganizationID,
 		arg.ID,
 	)
@@ -562,6 +1074,9 @@ func (q *Queries) UpdateCustomFieldDefinition(ctx context.Context, arg UpdateCus
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.Sensitive,
+		&i.WidgetAccess,
 	)
 	return i, err
 }

@@ -25,8 +25,14 @@ type FieldDefinition struct {
 	Condition      *customfields.Condition `json:"condition"`
 	Position       int32                   `json:"position"`
 	Archived       bool                    `json:"archived"`
-	CreatedAt      time.Time               `json:"created_at"`
-	UpdatedAt      time.Time               `json:"updated_at"`
+	// Visibility, Sensitive and WidgetAccess are CF-196: who reads the
+	// value, whether it is masked and kept out of AI/exports, and whether
+	// the widget SDK writes it by key without a mapping.
+	Visibility   customfields.Visibility `json:"visibility"`
+	Sensitive    bool                    `json:"sensitive"`
+	WidgetAccess string                  `json:"widget_access"`
+	CreatedAt    time.Time               `json:"created_at"`
+	UpdatedAt    time.Time               `json:"updated_at"`
 }
 
 // Engine converts the API shape to the engine definition.
@@ -34,6 +40,7 @@ func (f FieldDefinition) Engine() customfields.Definition {
 	return customfields.Definition{
 		Key: f.Key, Label: f.Label, Type: f.Type, Required: f.Required, Options: f.Options,
 		Config: f.Config, Default: f.Default, Condition: f.Condition, Archived: f.Archived,
+		Visibility: f.Visibility, Sensitive: f.Sensitive, WidgetAccess: f.WidgetAccess,
 	}
 }
 
@@ -56,18 +63,81 @@ type CreateDefinitionInput struct {
 	Config         customfields.Config     `json:"config"`
 	Default        any                     `json:"default"`
 	Condition      *customfields.Condition `json:"condition"`
+	// Visibility defaults to every surface; WidgetAccess to verified.
+	Visibility   *customfields.Visibility `json:"visibility"`
+	Sensitive    bool                     `json:"sensitive"`
+	WidgetAccess string                   `json:"widget_access"`
+	// FromUnknownKey is the received key a "tanımsız alan" warning was
+	// created from (e.g. "Lisans Bitiş"); its warning closes and the values
+	// contacts received under it are applied to the new field.
+	FromUnknownKey string `json:"from_unknown_key"`
 }
 
 // UpdateDefinitionInput is the PATCH body. Key, type and entity never change;
 // omitted fields stay as they are, an explicit null clears default/condition.
 type UpdateDefinitionInput struct {
-	Label       *string                `json:"label"`
-	Description *string                `json:"description"`
-	Required    *bool                  `json:"required"`
-	Options     *[]customfields.Option `json:"options"`
-	Config      *customfields.Config   `json:"config"`
-	Default     json.RawMessage        `json:"default"`
-	Condition   json.RawMessage        `json:"condition"`
+	Label       *string                  `json:"label"`
+	Description *string                  `json:"description"`
+	Required    *bool                    `json:"required"`
+	Options     *[]customfields.Option   `json:"options"`
+	Config      *customfields.Config     `json:"config"`
+	Default     json.RawMessage          `json:"default"`
+	Condition   json.RawMessage          `json:"condition"`
+	Visibility  *customfields.Visibility `json:"visibility"`
+	Sensitive   *bool                    `json:"sensitive"`
+	// WidgetAccess: none, verified or anonymous.
+	WidgetAccess *string `json:"widget_access"`
+}
+
+// UnknownKey is a key the widget sent that no field defines (CF-196).
+type UnknownKey struct {
+	UUID            uuid.UUID  `json:"uuid"`
+	EntityType      string     `json:"entity_type"`
+	Key             string     `json:"key"`
+	SuggestedKey    string     `json:"suggested_key"`
+	Source          string     `json:"source"`
+	ValueKind       string     `json:"value_kind"`
+	Hits            int64      `json:"hits"`
+	ChannelUUID     *uuid.UUID `json:"channel_uuid"`
+	ChannelName     *string    `json:"channel_name"`
+	LastContactUUID *uuid.UUID `json:"last_contact_uuid"`
+	FirstSeenAt     time.Time  `json:"first_seen_at"`
+	LastSeenAt      time.Time  `json:"last_seen_at"`
+}
+
+// EntityFieldValue is one field of a contact or company as an agent screen
+// shows it: the definition, its visibility switches and the stored value.
+type EntityFieldValue struct {
+	UUID       uuid.UUID               `json:"uuid"`
+	Key        string                  `json:"key"`
+	Label      string                  `json:"label"`
+	Type       customfields.FieldType  `json:"type"`
+	Options    []customfields.Option   `json:"options"`
+	Visibility customfields.Visibility `json:"visibility"`
+	Sensitive  bool                    `json:"sensitive"`
+	// Value is the stored value (option id for list fields); null when unset
+	// or masked. Display is the text to show (option label, "Evet", ...).
+	Value   any    `json:"value"`
+	Display string `json:"display"`
+	Masked  bool   `json:"masked"`
+}
+
+// UnknownValue is a value the widget sent for a key no field defines yet.
+type UnknownValue struct {
+	Key          string    `json:"key"`
+	SuggestedKey string    `json:"suggested_key"`
+	Value        any       `json:"value"`
+	Verified     bool      `json:"verified"`
+	ReceivedAt   time.Time `json:"received_at"`
+}
+
+// EntityValues is GET /v1/tenant/custom-fields/values: every agent-visible
+// field of one contact or company plus the undefined keys it received.
+type EntityValues struct {
+	EntityType string             `json:"entity_type"`
+	EntityUUID uuid.UUID          `json:"entity_uuid"`
+	Fields     []EntityFieldValue `json:"fields"`
+	Unknown    []UnknownValue     `json:"unknown"`
 }
 
 // ReorderInput sets the display order of one entity's fields.

@@ -547,13 +547,14 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Custom fields and custom objects (CF-7).
 	customFieldsSvc := customfieldsusecase.New(customfieldsrepository.New(deps.DB, deps.Queries))
 	widgetService.WithFields(customFieldsSvc)
+	slaSvc.WithFields(customFieldsSvc)
 	customfieldsmodule.RegisterRoutes(mux, customfieldshandler.New(customFieldsSvc, activityRec), tokens, loader, tenantResolver)
 	// Customer health score and churn-risk alerts (CF-87).
 	healthmodule.RegisterRoutes(mux, healthhandler.New(healthusecase.New(deps.DB, deps.Queries, activityRec, log), activityRec), tokens, loader, tenantResolver)
 	contactsSvc := contactsusecase.New(convrepository.New(deps.DB, deps.Queries))
 	contactsmodule.RegisterRoutes(mux, contactshandler.New(contactsSvc, activityRec), tokens, loader, tenantResolver)
-	contactsIO, companiesIO := contactsio.NewContacts(contactsSvc, deps.Queries), contactsio.NewCompanies(contactsSvc, deps.Queries)
-	macrosmodule.RegisterRoutes(mux, macroshandler.New(macrosusecase.New(deps.Queries, inboxCore.Conversations)), tokens, loader, tenantResolver)
+	contactsIO, companiesIO := contactsio.NewContacts(contactsSvc, deps.Queries).WithFields(customFieldsSvc), contactsio.NewCompanies(contactsSvc, deps.Queries).WithFields(customFieldsSvc)
+	macrosmodule.RegisterRoutes(mux, macroshandler.New(macrosusecase.New(deps.Queries, inboxCore.Conversations).WithFields(customFieldsSvc)), tokens, loader, tenantResolver)
 	inboxCore.Channels.WithEntitlements(entitlementService).WithLogger(log)
 	channelsHandler, err := inbox.ChannelsHandler(cfg, inboxCore, activityRec, log)
 	if err != nil {
@@ -566,9 +567,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
+	aiCore.KB.Fields = customFieldsSvc
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
+	agentSvc.Fields = customFieldsSvc
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)

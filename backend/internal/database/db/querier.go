@@ -555,6 +555,7 @@ type Querier interface {
 	CoachingCreate(ctx context.Context, arg CoachingCreateParams) (CoachingCreateRow, error)
 	CoachingList(ctx context.Context, arg CoachingListParams) ([]CoachingListRow, error)
 	CoachingParent(ctx context.Context, arg CoachingParentParams) (int64, error)
+	CompanyCustomFieldsByID(ctx context.Context, arg CompanyCustomFieldsByIDParams) ([]byte, error)
 	// Signal inputs of a page of companies (keyset on id), or of one company.
 	CompanyHealthStats(ctx context.Context, arg CompanyHealthStatsParams) ([]CompanyHealthStatsRow, error)
 	CompleteScheduledAutomationRule(ctx context.Context, arg CompleteScheduledAutomationRuleParams) error
@@ -601,6 +602,10 @@ type Querier interface {
 	ConfirmUserTOTP(ctx context.Context, arg ConfirmUserTOTPParams) (UserTotp, error)
 	ConsolidateNetgsmClientCall(ctx context.Context, arg ConsolidateNetgsmClientCallParams) error
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
+	ContactAndCompanyCustomFields(ctx context.Context, arg ContactAndCompanyCustomFieldsParams) (ContactAndCompanyCustomFieldsRow, error)
+	ContactCustomFieldsByID(ctx context.Context, arg ContactCustomFieldsByIDParams) ([]byte, error)
+	ContactUnknownValues(ctx context.Context, arg ContactUnknownValuesParams) ([]ContactUnknownValuesRow, error)
+	ContactsWithUnknownField(ctx context.Context, arg ContactsWithUnknownFieldParams) ([]ContactsWithUnknownFieldRow, error)
 	ConversationHasParent(ctx context.Context, arg ConversationHasParentParams) (bool, error)
 	// Sidebar badges of the inbox for one agent (open work only).
 	ConversationInboxCounts(ctx context.Context, arg ConversationInboxCountsParams) (ConversationInboxCountsRow, error)
@@ -710,6 +715,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
 	CreateWidgetToken(ctx context.Context, arg CreateWidgetTokenParams) (WidgetToken, error)
+	CustomFieldsOfCompany(ctx context.Context, arg CustomFieldsOfCompanyParams) (CustomFieldsOfCompanyRow, error)
+	CustomFieldsOfContact(ctx context.Context, arg CustomFieldsOfContactParams) (CustomFieldsOfContactRow, error)
 	// Self-service account deletion: keep every row, mark the user disabled.
 	DeactivateUser(ctx context.Context, arg DeactivateUserParams) (User, error)
 	DeleteAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (int64, error)
@@ -725,6 +732,7 @@ type Querier interface {
 	DeleteCompanyRevenue(ctx context.Context, arg DeleteCompanyRevenueParams) (int64, error)
 	DeleteContactIdentities(ctx context.Context, arg DeleteContactIdentitiesParams) error
 	DeleteContactIdentity(ctx context.Context, arg DeleteContactIdentityParams) (int64, error)
+	DeleteContactUnknownField(ctx context.Context, arg DeleteContactUnknownFieldParams) error
 	DeleteConversationLink(ctx context.Context, arg DeleteConversationLinkParams) (int64, error)
 	DeleteConversationSLAMetric(ctx context.Context, arg DeleteConversationSLAMetricParams) error
 	DeleteConversationView(ctx context.Context, arg DeleteConversationViewParams) (int64, error)
@@ -766,6 +774,7 @@ type Querier interface {
 	// iOS hands out one push-to-start token per activity type and device; a new
 	// one replaces the previous token.
 	DisableSupersededPushToStartTokens(ctx context.Context, arg DisableSupersededPushToStartTokensParams) error
+	DismissUnknownCustomFieldKey(ctx context.Context, arg DismissUnknownCustomFieldKeyParams) (int64, error)
 	// E-mail notification delivery since $1: sent, retrying (failed with attempts
 	// left), dead-lettered (failed, no attempts left) and still waiting.
 	EmailDeliveryHealth(ctx context.Context, since pgtype.Timestamptz) (EmailDeliveryHealthRow, error)
@@ -1185,9 +1194,12 @@ type Querier interface {
 	IntegrationTriggerOldest(ctx context.Context, organizationID int64) (int64, error)
 	InvalidateActiveOTPs(ctx context.Context, arg InvalidateActiveOTPsParams) error
 	KnowledgeArticle(ctx context.Context, arg KnowledgeArticleParams) (KnowledgeArticle, error)
+	// CF-196: article audiences (catalog conditions by option id).
+	KnowledgeArticleAudience(ctx context.Context, arg KnowledgeArticleAudienceParams) (KnowledgeArticleAudienceRow, error)
 	KnowledgeArticleCount(ctx context.Context, arg KnowledgeArticleCountParams) (int64, error)
 	// Admin list (CF-73): current drafts with filters and help center votes (CF-74).
 	KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesParams) ([]KnowledgeArticlesRow, error)
+	KnowledgeAudiencesByUUID(ctx context.Context, arg KnowledgeAudiencesByUUIDParams) ([]KnowledgeAudiencesByUUIDRow, error)
 	KnowledgeClearIndexState(ctx context.Context, arg KnowledgeClearIndexStateParams) error
 	KnowledgeCollection(ctx context.Context, arg KnowledgeCollectionParams) (KnowledgeCollection, error)
 	KnowledgeCollections(ctx context.Context, arg KnowledgeCollectionsParams) ([]KnowledgeCollection, error)
@@ -1441,6 +1453,7 @@ type Querier interface {
 	// Routed conversations still waiting on their assignee past the limit; a
 	// later manual reassignment (latest routing event to someone else) wins.
 	ListUnansweredRouted(ctx context.Context, arg ListUnansweredRoutedParams) ([]ListUnansweredRoutedRow, error)
+	ListUnknownCustomFieldKeys(ctx context.Context, arg ListUnknownCustomFieldKeysParams) ([]ListUnknownCustomFieldKeysRow, error)
 	ListUnreadOutboundExternalIDs(ctx context.Context, arg ListUnreadOutboundExternalIDsParams) ([]string, error)
 	// Every running activity about ref, whoever holds it (an ended conversation
 	// ends the activity on each device that shows it).
@@ -1731,6 +1744,10 @@ type Querier interface {
 	QuoteSend(ctx context.Context, arg QuoteSendParams) (EnterpriseQuote, error)
 	// Refresh rotation replaces the refresh row; widget tokens follow it.
 	RebindWidgetTokensSession(ctx context.Context, arg RebindWidgetTokensSessionParams) (int64, error)
+	// CF-196: keys the widget sent that no field defines. One row per key; hits
+	// and the last contact move on every sighting; a dismissed or resolved key
+	// opens again when it is seen after that.
+	RecordUnknownCustomFieldKey(ctx context.Context, arg RecordUnknownCustomFieldKeyParams) error
 	// Rebuilds the counters a message move changes from the messages left.
 	RecountConversation(ctx context.Context, arg RecountConversationParams) (Conversation, error)
 	ReleaseMessageClaim(ctx context.Context, arg ReleaseMessageClaimParams) error
@@ -1765,6 +1782,7 @@ type Querier interface {
 	ResolvePublicBrand(ctx context.Context, arg ResolvePublicBrandParams) (Brand, error)
 	// public help endpoint resolves active organization and brand by configured subdomain or organization slug plus brand help path
 	ResolvePublicBrandIdentity(ctx context.Context, arg ResolvePublicBrandIdentityParams) (Brand, error)
+	ResolveUnknownCustomFieldKey(ctx context.Context, arg ResolveUnknownCustomFieldKeyParams) error
 	// A row left in processing (worker crash, lost status write) is resumed as a
 	// new attempt, so a delivery that keeps hanging cannot loop forever.
 	ResumeNotificationProcessing(ctx context.Context, id int64) (Notification, error)
@@ -1839,6 +1857,7 @@ type Querier interface {
 	SSOUser(ctx context.Context, arg SSOUserParams) (SSOUserRow, error)
 	SaveBrandEmailTemplate(ctx context.Context, arg SaveBrandEmailTemplateParams) (BrandEmailTemplate, error)
 	SaveEmailIMAPCursor(ctx context.Context, arg SaveEmailIMAPCursorParams) error
+	SaveKnowledgeArticleAudience(ctx context.Context, arg SaveKnowledgeArticleAudienceParams) error
 	ScheduleAvailable(ctx context.Context, arg ScheduleAvailableParams) (bool, error)
 	ScheduleCancelLeave(ctx context.Context, arg ScheduleCancelLeaveParams) (int64, error)
 	ScheduleCreateShift(ctx context.Context, arg ScheduleCreateShiftParams) (AgentShift, error)
@@ -1881,6 +1900,7 @@ type Querier interface {
 	SetCompanySLAPolicy(ctx context.Context, arg SetCompanySLAPolicyParams) (int64, error)
 	SetCompanyUsageScore(ctx context.Context, arg SetCompanyUsageScoreParams) (CompanyHealth, error)
 	SetContactCompanyIfEmpty(ctx context.Context, arg SetContactCompanyIfEmptyParams) error
+	SetContactCustomField(ctx context.Context, arg SetContactCustomFieldParams) error
 	SetContactFormData(ctx context.Context, arg SetContactFormDataParams) error
 	SetConversationCustomFields(ctx context.Context, arg SetConversationCustomFieldsParams) error
 	// Writes a form submission onto the conversation it started.
@@ -1939,6 +1959,7 @@ type Querier interface {
 	StatusUpdateComponent(ctx context.Context, arg StatusUpdateComponentParams) (StatusComponent, error)
 	// Calendar-day UTC availability; union outage ranges prevents double counting overlapping incidents.
 	StatusUptime(ctx context.Context, arg StatusUptimeParams) ([]byte, error)
+	StoreContactUnknownField(ctx context.Context, arg StoreContactUnknownFieldParams) error
 	SumAttachmentUsage(ctx context.Context, organizationID int64) (SumAttachmentUsageRow, error)
 	SurveyAnswer(ctx context.Context, arg SurveyAnswerParams) (SurveyAnswerRow, error)
 	SurveyCreateTemplate(ctx context.Context, arg SurveyCreateTemplateParams) (SurveyTemplate, error)
