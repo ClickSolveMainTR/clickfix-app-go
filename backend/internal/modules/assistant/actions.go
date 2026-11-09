@@ -6,15 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/mail"
 	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
-	orgmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/model"
-	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
@@ -109,15 +106,9 @@ func navigate(perm, route, describe string) Executor {
 	}
 }
 
-// Inviter invites members (organizations Management).
-type Inviter interface {
-	CreateInvitation(ctx context.Context, scope orgctx.Scope, actor orgusecase.Actor, in orgmodel.CreateInvitationInput) (orgmodel.Invitation, error)
-}
-
 // ActionDeps are the services the default actions call.
 type ActionDeps struct {
-	Q       *db.Queries
-	Inviter Inviter
+	Q *db.Queries
 	// Escalate runs the support escalation (escalate_to_support).
 	Escalate func(ctx context.Context, ac ActionContext, note string) (string, error)
 }
@@ -142,38 +133,6 @@ func DefaultActions(d ActionDeps) Registry {
 			"Start connecting a support e-mail address (opens the e-mail channel form). params: {}"),
 		"install_widget": navigate(rbac.PermTenantChannelsManage, "/widget",
 			"Open the web widget set-up (snippet, colors, greeting). params: {}"),
-	}
-	if d.Inviter != nil {
-		r["invite_member"] = Executor{
-			Permission: rbac.PermTenantMembersWrite,
-			Route:      "/settings/members",
-			Describe:   "Invite a teammate by e-mail. params: {email, role: admin|supervisor|agent|light_agent|member|viewer|billing}",
-			Validate: func(p map[string]any) error {
-				if _, err := mail.ParseAddress(str(p, "email")); err != nil {
-					return ErrActionInvalid
-				}
-				if role := str(p, "role"); role != "" && !inList(role, tenantRoles) {
-					return ErrActionInvalid
-				}
-				return nil
-			},
-			Run: func(ctx context.Context, ac ActionContext, p map[string]any) (string, error) {
-				role := str(p, "role")
-				if role == "" {
-					role = orgctx.RoleAgent
-				}
-				roleUUID, err := d.Q.AssistantTenantRoleUUID(ctx, db.AssistantTenantRoleUUIDParams{Slug: role, OrganizationID: i8(ac.Scope.ID)})
-				if err != nil {
-					return "", ErrActionInvalid
-				}
-				inv, err := d.Inviter.CreateInvitation(ctx, ac.Scope, orgusecase.Actor{UserID: ac.UserID, Name: ac.UserName},
-					orgmodel.CreateInvitationInput{Email: str(p, "email"), RoleUUIDs: []uuid.UUID{roleUUID}})
-				if err != nil {
-					return "", err
-				}
-				return inv.Email, nil
-			},
-		}
 	}
 	if d.Escalate != nil {
 		r[KindEscalate] = Executor{

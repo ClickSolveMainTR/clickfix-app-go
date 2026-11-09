@@ -128,5 +128,15 @@
   "fields.is_active": "Active",
   "fields.policy_uuid": "SLA policy",
   "fields.conditions": "Conditions",
-  "fields.stop_on_match": "Stop other rules"
+  "fields.stop_on_match": "Stop other rules",
+  "fields.email": "E-mail",
+  "fields.role": "Role",
+  "fields.team_uuid": "Team",
+  "fields.user_uuid": "Member",
+  "fields.widget_uuid": "Widget",
+  "fields.color": "Colour",
+  "fields.greeting_title": "Greeting title",
+  "fields.greeting_text": "Greeting text",
+  "fields.allowed_domains": "Allowed domains",
+  "fields.publish": "Publish now"
 }

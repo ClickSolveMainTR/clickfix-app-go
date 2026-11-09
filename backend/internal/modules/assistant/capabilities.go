@@ -138,7 +138,7 @@ func CorePages(q *db.Queries) []*capability.Page {
 			Module: "members", Routes: []string{"/settings/members"},
 			State: state("members", "Ekip", "Team", func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step {
 				if r.Members <= 1 && r.PendingInvitations == 0 {
-					return []capability.Step{{Key: "invite_team", Title: say(e, "Ekipte yalnız sizsiniz", "You are the only member"),
+					return []capability.Step{{Key: "invite_team", Capability: "members.invite", Title: say(e, "Ekipte yalnız sizsiniz", "You are the only member"),
 						Prompt: say(e, "Ekip arkadaşımı davet etmeme yardım et", "Help me invite a teammate")}}
 				}
 				return []capability.Step{}
@@ -148,7 +148,7 @@ func CorePages(q *db.Queries) []*capability.Page {
 			Module: "widget", Routes: []string{"/widget"},
 			State: state("widget", "Web widget", "Web widget", func(e capability.Exec, r db.AssistantSetupStateRow) []capability.Step {
 				if r.Widgets == 0 {
-					return []capability.Step{{Key: "web_widget", Title: say(e, "Web widget kurulmadı", "The web widget is not set up"),
+					return []capability.Step{{Key: "web_widget", Capability: "widget.create", Title: say(e, "Web widget kurulmadı", "The web widget is not set up"),
 						Prompt: say(e, "Web widget'ını siteme kurmama yardım et", "Help me add the web widget to my site")}}
 				}
 				return []capability.Step{}
