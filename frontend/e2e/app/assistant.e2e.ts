@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { OWNER_STATE, expect, runId, test } from "./fixtures";
+import { DEMO_ORG_SLUG, OWNER_STATE, expect, runId, test } from "./fixtures";
 
 /**
  * ClickFix Asistan scenarios of CF-183 (issue #81) through the drawer. The API runs with
@@ -37,6 +37,17 @@ test("scenario 1: REST API channel is set up, shown once and tested", async ({
   page,
 }) => {
   const url = `https://shop-${runId()}.example.com/clickfix`;
+  // Reruns: start without a REST API channel, so the assistant proposes a new one.
+  const headers = { "X-Organization": DEMO_ORG_SLUG };
+  const list = await page.request.get("/api/v1/tenant/channels?type=api", {
+    headers,
+  });
+  for (const ch of ((await list.json()).data?.items ?? []) as {
+    uuid: string;
+  }[])
+    await page.request.delete(`/api/v1/tenant/channels/${ch.uuid}`, {
+      headers,
+    });
   await openAssistant(page, "/channels");
   await ask(
     page,
@@ -96,7 +107,7 @@ test("scenario 2: a workflow is drafted from a sentence, dry-run and saved", asy
   );
 
   const res = await page.request.get("/api/v1/tenant/workflows?limit=100", {
-    headers: { "X-Organization": "demo-anadolu-yazilim" },
+    headers: { "X-Organization": DEMO_ORG_SLUG },
   });
   expect(JSON.stringify(await res.json())).toContain("İade talepleri (e2e)");
 });

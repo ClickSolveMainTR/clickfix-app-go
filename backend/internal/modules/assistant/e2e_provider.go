@@ -57,6 +57,16 @@ func (ScriptedProvider) next(req ai.Request) ai.Result {
 	user, results := turnState(req)
 	step := len(results)
 	switch {
+	case strings.Contains(user, "test et"):
+		switch step {
+		case 0:
+			return call("channels_list", map[string]any{"type": "api"})
+		case 1:
+			if id := firstUUID(results[0], "uuid"); id != "" {
+				return call("channels_test", map[string]any{"summary": "Kanal test edilir", "params": map[string]any{"channel_uuid": id}})
+			}
+		}
+		return ai.Result{Text: "Testi onayınıza sundum."}
 	case strings.Contains(user, "rest api"):
 		url := urlRxp.FindString(user)
 		if url == "" {
@@ -74,16 +84,6 @@ func (ScriptedProvider) next(req ai.Request) ai.Result {
 				"params": map[string]any{"name": "Sipariş sistemi", "webhook_url": url}})
 		}
 		return ai.Result{Text: "REST API kanalını onayınıza sundum. Onaylayınca imza anahtarı bir kez gösterilecek."}
-	case strings.Contains(user, "test et"):
-		switch step {
-		case 0:
-			return call("channels_list", map[string]any{"type": "api"})
-		case 1:
-			if id := firstUUID(results[0], "uuid"); id != "" {
-				return call("channels_test", map[string]any{"summary": "Kanal test edilir", "params": map[string]any{"channel_uuid": id}})
-			}
-		}
-		return ai.Result{Text: "Testi onayınıza sundum."}
 	case strings.Contains(user, "iş akışı"):
 		if step == 0 {
 			return call("workflows_create", map[string]any{"summary": "İade içeren yeni mesajlarda öncelik yükselir",
