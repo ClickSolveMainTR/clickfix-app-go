@@ -666,6 +666,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		RegisterPages(channelsmodule.Pages()...).
 		RegisterPages(automationmodule.Pages()...).
 		RegisterPages(slamodule.Pages()...).
+		Register(conversationsmodule.Capabilities()...).
 		RegisterPages(webhooksmodule.Pages()...)
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
@@ -840,7 +841,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	if !ok {
 		return nil, fmt.Errorf("httpserver: billing requires reliable event subscriptions")
 	}
-	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus})
+	developerRuntime, err := developerplatform.Mount(developerplatform.Deps{Routing: routingSvc, AI: aiCore.AI, Config: cfg, DB: deps.DB, Q: deps.Queries, Redis: deps.Redis, Log: log, Router: mux, Tokens: tokens, Loader: loader, Resolver: tenantResolver, Conversations: inboxCore.Conversations, Notifications: notifSvc, Activity: activityRec, Bus: reliableBus, Capabilities: assistantSvc.Caps})
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: developer platform: %w", err)
 	}

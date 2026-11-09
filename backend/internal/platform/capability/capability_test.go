@@ -122,6 +122,8 @@ func TestRegisterRejectsBadDefinitions(t *testing.T) {
 		{Name: "x.kind", Kind: "maybe", Run: run},
 		{Name: "x.open", Kind: Read, Run: run, Input: map[string]any{"type": "object"}},
 		{Name: "x.secret", Kind: Write, Apply: run, Secrets: []Secret{{Key: "k"}}},
+		{Name: "x.mcp", Kind: Write, Apply: run, Surfaces: []string{SurfaceMCP}, Secrets: []Secret{{Key: "k"}},
+			Input: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"k": map[string]any{"type": "string"}}}},
 	}
 	for _, c := range bad {
 		func() {

@@ -8,6 +8,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
+
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mcpauth/model"
 )
 
@@ -105,29 +107,48 @@ func (s *Server) run(ctx context.Context, sess *session, t *Tool, raw json.RawMe
 	if err := t.Validate(args); err != nil {
 		return errorResult(CodeInvalidArguments, err.Error()), OutcomeInvalid, CodeInvalidArguments
 	}
-	call, err := t.Request(args)
-	var ae *ArgumentError
-	if errors.As(err, &ae) {
-		return errorResult(CodeInvalidArguments, ae.Message), OutcomeInvalid, CodeInvalidArguments
-	}
-	if err != nil {
-		s.cfg.Log.ErrorContext(ctx, "mcp_tool_failed", "tool", t.Name, "error", err)
-		return errorResult(CodeToolFailed, "the tool failed because of an internal error"), OutcomeError, CodeToolFailed
-	}
-	resp, err := s.cfg.Bridge.Do(ctx, sess.principal, call, sess.req)
-	if err != nil {
-		s.cfg.Log.ErrorContext(ctx, "mcp_tool_failed", "tool", t.Name, "error", err)
-		return errorResult(CodeToolFailed, "the tool failed because of an internal error"), OutcomeError, CodeToolFailed
-	}
-	out := resp.Read()
-	if !out.OK {
+	res, err := s.execute(ctx, sess, t, args)
+	var api *capability.APIError
+	var pe *capability.ParamError
+	switch {
+	case errors.As(err, &pe):
+		return errorResult(CodeInvalidArguments, pe.Message), OutcomeInvalid, CodeInvalidArguments
+	case errors.As(err, &api):
 		outcome := OutcomeError
-		if out.Code == "FORBIDDEN" {
+		if api.Code == "FORBIDDEN" {
 			outcome = OutcomeNotAllowed
 		}
-		return errorResult(out.Code, out.Message), outcome, out.Code
+		return errorResult(api.Code, api.Message), outcome, api.Code
+	case err != nil:
+		s.cfg.Log.ErrorContext(ctx, "mcp_tool_failed", "tool", t.Name, "error", err)
+		return errorResult(CodeToolFailed, "the tool failed because of an internal error"), OutcomeError, CodeToolFailed
 	}
-	return okResult(t.Name, out.Data), OutcomeOK, ""
+	data, ok := res.Data.(json.RawMessage)
+	if !ok {
+		data, _ = json.Marshal(res.Data)
+	}
+	if len(data) == 0 || string(data) == "null" {
+		data = json.RawMessage(`{"ok":true}`)
+	}
+	return okResult(t.Name, data), OutcomeOK, ""
+}
+
+// execute runs the capability as the principal: the /v1 routes check the
+// permission again. The MCP client confirmed a write tool itself (tools
+// carry readOnly/destructive hints), so Apply runs directly.
+func (s *Server) execute(ctx context.Context, sess *session, t *Tool, args Args) (capability.Result, error) {
+	p := sess.principal
+	e := capability.Exec{OrgID: p.Scope.ID, OrgUUID: p.Scope.UUID, UserID: p.UserID, UserUUID: p.UserUUID, Locale: "en"}
+	if s.cfg.Bridge != nil && s.cfg.Bridge.API != nil {
+		e.API = capability.Bridge{API: s.cfg.Bridge.API, User: p.UserUUID, Org: p.Scope.UUID}
+	}
+	cp := t.Capability
+	params := capability.Params(args)
+	if !cp.Writes() {
+		e.API = capability.ReadOnly(e.API)
+		return cp.Run(ctx, e, params)
+	}
+	return cp.Apply(ctx, e, params)
 }
 
 func errorResult(code, msg string) *mcpsdk.CallToolResult {
