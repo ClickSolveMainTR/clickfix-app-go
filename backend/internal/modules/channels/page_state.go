@@ -49,9 +49,14 @@ func Pages() []*capability.Page {
 						Prompt: t(e, "“%s” kanalı için örnek istek ver", "Give me an example request for the “%s” channel", v.Name)})
 				}
 				if i < 3 {
-					st.Tests = append(st.Tests, capability.Test{Capability: "channels.test",
+					test := capability.Test{Capability: "channels.test",
 						Title:  t(e, "“%s” kanalını test et", "Test “%s”", v.Name),
-						Prompt: t(e, "“%s” kanalını test et", "Test the “%s” channel", v.Name)})
+						Prompt: t(e, "“%s” kanalını test et", "Test the “%s” channel", v.Name)}
+					if v.Type == platformchannels.TypeEmail {
+						test.Title = t(e, "“%s” ile kendime test e-postası gönder", "Send myself a test e-mail from “%s”", v.Name)
+						test.Prompt = t(e, "“%s” kanalından bana bir test e-postası gönder", "Send me a test e-mail from the “%s” channel", v.Name)
+					}
+					st.Tests = append(st.Tests, test)
 				}
 			}
 			return st, nil
