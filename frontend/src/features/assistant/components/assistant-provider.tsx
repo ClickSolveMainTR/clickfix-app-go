@@ -14,6 +14,8 @@ import { permissions } from "@/config/permissions";
 import { usePermission } from "@/providers/permission-provider";
 
 import { AssistantDrawer } from "./assistant-drawer";
+import { FocusHighlighter } from "./focus-highlighter";
+import { SupportWidget } from "./support-widget";
 
 type Pending = { prompt?: string; guideKey?: string; nonce: number };
 
@@ -64,6 +66,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   return (
     <AssistantContext.Provider value={value}>
       {children}
+      <FocusHighlighter />
+      <SupportWidget />
       <AssistantDrawer
         open={open}
         onOpenChange={setOpen}

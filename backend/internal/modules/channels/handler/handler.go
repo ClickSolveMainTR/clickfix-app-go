@@ -42,7 +42,10 @@ type Handler struct {
 	svc      *usecase.Service
 	receiver func(ctx context.Context, inst channels.Instance, res channels.WebhookResult) error
 	activity *activity.Recorder
-	log      *slog.Logger
+	// TestDeliveryAllowed limits test deliveries per channel (each one is
+	// an outbound request); nil = no limit.
+	TestDeliveryAllowed func(r *http.Request, channel uuid.UUID) bool
+	log                 *slog.Logger
 	// providers and oauthKey serve the connect wizards (providers.go).
 	providers Providers
 	oauthKey  []byte
@@ -187,6 +190,30 @@ func (h *Handler) Check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, r, http.StatusOK, v)
+}
+
+// TestDelivery sends a test event to the channel's own endpoint.
+func (h *Handler) TestDelivery(w http.ResponseWriter, r *http.Request) {
+	scope, id, ok := scopeAndID(w, r)
+	if !ok {
+		return
+	}
+	if h.TestDeliveryAllowed != nil && !h.TestDeliveryAllowed(r, id) {
+		response.TooManyRequests(w, r, "Too many test deliveries, try again later")
+		return
+	}
+	// A test e-mail only ever goes to the confirming member's own address.
+	out, err := h.svc.TestDelivery(r.Context(), scope.ID, id, authctx.MustPrincipal(r.Context()).Email)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if h.activity != nil {
+		actor := authctx.MustPrincipal(r.Context()).UserInternal
+		h.activity.Record(r.Context(), &actor, "channels.test_delivery", Resource, &id,
+			map[string]any{"organization_uuid": scope.UUID, "ok": out.OK, "status_code": out.StatusCode}, r)
+	}
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 // Reconnect runs the provider connection again with the stored credentials.

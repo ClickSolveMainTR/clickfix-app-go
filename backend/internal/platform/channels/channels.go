@@ -325,6 +325,27 @@ type HealthChecker interface {
 	CheckHealth(ctx context.Context, inst Instance) (Health, error)
 }
 
+// DeliveryTester is implemented by channels that can send a harmless test
+// message: a signed event to the organization's own endpoint (REST API
+// channel, CF-185) or a real e-mail to the confirming member's own address
+// (e-mail channel). It runs only on an explicit request, never from the
+// health monitor. to is the member's address; channels that do not
+// deliver to people ignore it.
+type DeliveryTester interface {
+	TestDelivery(ctx context.Context, inst Instance, to string) (DeliveryTest, error)
+}
+
+// DeliveryTest is the outcome of a test delivery. Detail never carries a
+// credential.
+type DeliveryTest struct {
+	OK         bool   `json:"ok"`
+	StatusCode int    `json:"status_code,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	EventID    string `json:"event_id"`
+	// Recipient is where a test e-mail went (the member's own address).
+	Recipient string `json:"recipient,omitempty"`
+}
+
 // Errors.
 var (
 	// ErrUnknownType: no adapter registered for the type.

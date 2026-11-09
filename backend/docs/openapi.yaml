@@ -8995,6 +8995,31 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/channels/{uuid}/test-delivery:
+    post:
+      tags: [Tenant]
+      operationId: testDeliveryTenantChannel
+      summary: Send a test message through the channel
+      description: "REST API channels: posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. E-mail channels: sends a real test e-mail through the channel's provider to the caller's own e-mail address only (`recipient`); it opens no conversation (CF-185). It makes an outbound request (at most 6 per channel in 10 minutes, then 429) but changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeChannelDeliveryTest"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/channels/{uuid}/reconnect:
     post:
       tags: [Tenant]
@@ -35865,6 +35890,64 @@ paths:
       }
     }
   }
+  "/v1/tenant/webhooks/{uuid}/test": {
+    "post": {
+      "tags": [
+        "Developer platform"
+      ],
+      "operationId": "testTenantWebhook",
+      "summary": "Queue a signed test event for a webhook subscription",
+      "description": "CF-187: queues a `webhook.test` event (`{id, event, test: true, sent_at}`) for this subscription. It is delivered by the worker like any event (signature, retries, delivery log); find it in /v1/tenant/webhook-deliveries by `event_id`. Receivers should answer 2xx and ignore it. Requires `tenant.webhooks.write`.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "responses": {
+        "202": {
+          "description": "Queued",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvelopeWebhookTestQueued"
+              }
+            }
+          }
+        },
+        "400": {
+          "$ref": "#/components/responses/BadRequest"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "$ref": "#/components/responses/NotFound"
+        }
+      },
+      "parameters": [
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  }
   "/v1/tenant/webhooks/events": {
     "get": {
       "tags": [
@@ -40296,6 +40379,72 @@ paths:
           $ref: '#/components/responses/OrganizationRequired'
         '403':
           $ref: '#/components/responses/TenantForbidden'
+  /v1/tenant/assistant/support-widget:
+    get:
+      tags:
+      - Assistant
+      operationId: getTenantAssistantSupportWidget
+      summary: ClickFix support widget for the panel
+      description: "CF-193: the widget of ClickFix's own support organization and the member's identity signature (user_id + user_hash, HMAC of the widget's identity secret, computed server-side). The panel embeds the widget with it; inside the widget the member also gets the assistant on the `widget` surface (allowlisted capabilities only). `available` is false without a support organization, an active widget or identity verification."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      responses:
+        '200':
+          description: Support widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantSupportWidget'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/tenant/assistant/page-state:
+    get:
+      tags:
+      - Assistant
+      operationId: getTenantAssistantPageState
+      summary: What is missing and what can be tested on a page
+      description: "CF-187: the state of the page the user is on (missing steps, warnings, tests the assistant can run there, the page's actions), from the module that owns the route. Read-only; steps and tests the caller cannot act on are dropped. 204 when no module describes the page."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: route
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      - name: surface
+        in: query
+        schema:
+          type: string
+          enum:
+          - web
+          - mobile
+          - widget
+      responses:
+        '200':
+          description: Page state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantPageState'
+        '204':
+          description: No module describes this page
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/tenant/assistant/threads:
     get:
       tags:
@@ -40435,7 +40584,7 @@ paths:
       - Assistant
       operationId: confirmTenantAssistantAction
       summary: Confirm a proposed action
-      description: Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for enable_ai); missing permission answers 403 and the action stays proposed. Returns the result as a `tool` message. `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
+      description: Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for ai.enable); missing permission answers 403 and the action stays proposed. The optional body carries fields edited in the card; they are validated again against the capability schema (400 VALIDATION_ERROR with the reason). Registry capabilities call the panel's own /v1 routes as the user, then verify the result. Returns the result as a `tool` message plus `secret_once` (generated secrets, this response only). `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
       security: *id001
       parameters:
       - *id002
@@ -40447,13 +40596,19 @@ paths:
         in: path
         required: true
         schema: *id009
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantActionRequest'
       responses:
         '200':
           description: Result message
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeAssistantMessage'
+                $ref: '#/components/schemas/EnvelopeAssistantConfirmResult'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '500':
@@ -40466,6 +40621,53 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
         '422': *id005
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run:
+    post:
+      tags:
+      - Assistant
+      operationId: dryRunTenantAssistantAction
+      summary: Preview a proposed action
+      description: Runs the capability's dry run with the (optionally edited) params and stores the preview on the card. It never changes data or leaves the server (the capability only gets GET access to the API). 404 when the action has no dry run; 403 without the capability's permission; 400 VALIDATION_ERROR for invalid params.
+      security: *id001
+      parameters:
+      - *id002
+      - name: uuid
+        in: path
+        required: true
+        schema: *id008
+      - name: action_id
+        in: path
+        required: true
+        schema: *id009
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantActionRequest'
+      responses:
+        '200':
+          description: The action with its preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantProposedAction'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '400':
+          $ref: '#/components/responses/OrganizationRequired'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404': *id007
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422': *id005
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/reject:
     post:
       tags:
@@ -40497,6 +40699,184 @@ paths:
         '404': *id007
         '409':
           $ref: '#/components/responses/Conflict'
+  /v1/tenant/assistant/threads/{uuid}/documents:
+    get:
+      tags:
+      - Assistant
+      operationId: listTenantAssistantDocuments
+      summary: Documents shared in a thread
+      description: "CF-191: the thread's documents that have not expired (7 days). Content is never returned."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocumentList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+      - Assistant
+      operationId: uploadTenantAssistantDocument
+      summary: Share a file with the assistant
+      description: "CF-191: multipart upload (field `file`, at most 2 MB): PDF, text, Markdown, CSV, JSON, YAML or HTML; other binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE). PDF text is read within limits (200 pages, 5 s); an encrypted, damaged or scanned PDF answers 422 ASSISTANT_DOCUMENT_PDF. Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocument'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE)
+        '415':
+          description: Not a readable text document (ASSISTANT_DOCUMENT_TYPE)
+        '422':
+          description: No readable text (ASSISTANT_DOCUMENT_EMPTY, ASSISTANT_DOCUMENT_PDF)
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/tenant/assistant/threads/{uuid}/documents/link:
+    post:
+      tags:
+      - Assistant
+      operationId: linkTenantAssistantDocument
+      summary: Share a link with the assistant
+      description: "CF-191: fetches a public https page (no credentials, no internal host or private address, checked again at connection time and on each of at most 3 redirects; 10 s; 2 MB) and stores its text like an upload. The query string is not stored. 422 ASSISTANT_DOCUMENT_FETCH with a safe reason when it cannot be read."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2048
+      responses:
+        '201':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantDocument'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE)
+        '415':
+          description: Not a readable text document (ASSISTANT_DOCUMENT_TYPE)
+        '422':
+          description: The link could not be read (ASSISTANT_DOCUMENT_FETCH) or has no text
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}:
+    delete:
+      tags:
+      - Assistant
+      operationId: deleteTenantAssistantDocument
+      summary: Remove a shared document
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: document_uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/tenant/assistant/threads/{uuid}/escalate:
     post:
       tags:
@@ -52380,6 +52760,31 @@ components:
         data: { $ref: "#/components/schemas/MessengerPages" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    ChannelDeliveryTest:
+      type: object
+      required: [ok, event_id]
+      properties:
+        ok:
+          type: boolean
+          description: The endpoint answered 2xx
+        status_code:
+          type: integer
+        detail:
+          type: string
+          description: Why it failed (never a credential)
+        event_id:
+          type: string
+          description: id of the test event (also its Idempotency-Key)
+        recipient:
+          type: string
+          description: Where the test e-mail went (the caller's own address)
+    EnvelopeChannelDeliveryTest:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ChannelDeliveryTest" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     EnvelopeChannelInstance:
       type: object
       required: [success, data, meta]
@@ -58561,6 +58966,7 @@ components:
           enum:
           - web
           - mobile
+          - widget
         route:
           type: string
           maxLength: 200
@@ -58607,7 +59013,7 @@ components:
         id: *id001
         kind:
           type: string
-          description: open_route, invite_member, create_channel_email, connect_channel, install_widget, set_business_hours, create_sla, enable_ai, escalate_to_support
+          description: A registry capability name (navigation.open_route, channels.connect, ai.enable, ...) or an older action kind (invite_member, create_channel_email, install_widget, set_business_hours, create_sla, escalate_to_support). Stored cards may carry the old names open_route, connect_channel, enable_ai, which still confirm.
         title: *id001
         summary: *id001
         params:
@@ -58624,7 +59030,383 @@ components:
         route: *id001
         result:
           type: string
-          description: Short result after execution (e.g. invited e-mail, ticket reference)
+          description: Short result after execution (e.g. invited e-mail, ticket reference); on failure the API's own validation message
+        capability:
+          type: string
+          description: Registry capability name (CF-184), e.g. channels.api.create; empty for older actions. kind carries the same value.
+        risk:
+          type: string
+          enum:
+          - write
+          - destructive
+        form:
+          type: array
+          description: Editable fields of the confirmation card. Secret fields are never prefilled.
+          items:
+            $ref: '#/components/schemas/AssistantActionField'
+        dry_run:
+          type: boolean
+          description: The action can be previewed with the dry-run endpoint (no data changes).
+        undo:
+          type: string
+          description: How to revert the change (text or a page path)
+        preview:
+          $ref: '#/components/schemas/AssistantActionPreview'
+        verification:
+          $ref: '#/components/schemas/AssistantActionVerification'
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionDetail'
+        focus:
+          $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantPageStep:
+      type: object
+      required:
+      - key
+      - title
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        capability:
+          type: string
+          description: Capability that does it, when the caller may use one
+        prompt:
+          type: string
+          description: Message the drawer sends for "help me"
+        focus:
+          $ref: '#/components/schemas/AssistantActionFocus'
+    AssistantPageTest:
+      type: object
+      required:
+      - capability
+      - title
+      - prompt
+      properties:
+        capability:
+          type: string
+        title:
+          type: string
+        prompt:
+          type: string
+    AssistantPageState:
+      type: object
+      required:
+      - module
+      - title
+      - missing
+      - warnings
+      - tests
+      - actions
+      properties:
+        module:
+          type: string
+        title:
+          type: string
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageStep'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageStep'
+        tests:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantPageTest'
+        actions:
+          type: array
+          items:
+            type: string
+    AssistantSupportWidget:
+      type: object
+      additionalProperties: false
+      required:
+      - available
+      properties:
+        available:
+          type: boolean
+        widget_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        user_hash:
+          type: string
+    EnvelopeAssistantSupportWidget:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantSupportWidget'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EnvelopeAssistantPageState:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantPageState'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    WebhookTestQueued:
+      type: object
+      required:
+      - queued
+      - event_id
+      properties:
+        queued:
+          type: boolean
+        event_id:
+          type: string
+          format: uuid
+    EnvelopeWebhookTestQueued:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/WebhookTestQueued'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    AssistantDocument:
+      type: object
+      required:
+      - uuid
+      - kind
+      - name
+      - content_type
+      - size_bytes
+      - chars
+      - truncated
+      - masked
+      - created_at
+      - expires_at
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - file
+          - link
+        name:
+          type: string
+        source_url:
+          type: string
+          description: The link without its query string
+        content_type:
+          type: string
+        size_bytes:
+          type: integer
+        chars:
+          type: integer
+        truncated:
+          type: boolean
+          description: Longer than 60 000 characters; the rest was dropped
+        masked:
+          type: boolean
+          description: Personal data or secret-looking values were removed
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    EnvelopeAssistantDocument:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantDocument'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EnvelopeAssistantDocumentList:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          type: object
+          required:
+          - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssistantDocument'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    AssistantActionField:
+      type: object
+      required:
+      - key
+      - label
+      - type
+      - required
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        type:
+          type: string
+          enum:
+          - string
+          - url
+          - number
+          - boolean
+          - enum
+          - json
+          - secret
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: string
+        help:
+          type: string
+        generated:
+          type: boolean
+          description: A secret the server generates when left empty
+    AssistantActionDetail:
+      type: object
+      required:
+      - label
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+        code:
+          type: string
+          description: Copyable code block (an example request); secrets appear as placeholders
+    AssistantActionPreview:
+      type: object
+      required:
+      - ok
+      - summary
+      properties:
+        ok:
+          type: boolean
+        summary:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionDetail'
+    AssistantActionVerification:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - failed
+          - skipped
+        message:
+          type: string
+    AssistantActionFocus:
+      type: object
+      required:
+      - route
+      properties:
+        route:
+          type: string
+          description: Internal path (never a URL)
+        target:
+          type: string
+          description: data-guide key to highlight (?focus=)
+    AssistantActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+          description: Fields edited in the card; merged over the proposed params and validated again. A null value removes a field.
+    AssistantConfirmResult:
+      allOf:
+      - $ref: '#/components/schemas/AssistantMessage'
+      - type: object
+        properties:
+          secret_once:
+            type: object
+            additionalProperties:
+              type: string
+            description: Secrets the action generated (e.g. a signing secret). Returned only in this response; never stored or shown again.
+    EnvelopeAssistantConfirmResult:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantConfirmResult'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EnvelopeAssistantProposedAction:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantProposedAction'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     AssistantMessage:
       type: object
       required:
@@ -58910,21 +59692,6 @@ components:
           - true
         data:
           $ref: '#/components/schemas/AssistantThreadList'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    EnvelopeAssistantMessage:
-      type: object
-      required:
-      - success
-      - data
-      - meta
-      properties:
-        success:
-          type: boolean
-          enum:
-          - true
-        data:
-          $ref: '#/components/schemas/AssistantMessage'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     EnvelopeAssistantMessageList:

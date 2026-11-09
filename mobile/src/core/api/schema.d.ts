@@ -4856,6 +4856,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/channels/{uuid}/test-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test message through the channel
+         * @description REST API channels: posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. E-mail channels: sends a real test e-mail through the channel's provider to the caller's own e-mail address only (`recipient`); it opens no conversation (CF-185). It makes an outbound request (at most 6 per channel in 10 minutes, then 429) but changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`.
+         */
+        post: operations["testDeliveryTenantChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/channels/{uuid}/reconnect": {
         parameters: {
             query?: never;
@@ -13222,6 +13242,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/webhooks/{uuid}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a signed test event for a webhook subscription
+         * @description CF-187: queues a `webhook.test` event (`{id, event, test: true, sent_at}`) for this subscription. It is delivered by the worker like any event (signature, retries, delivery log); find it in /v1/tenant/webhook-deliveries by `event_id`. Receivers should answer 2xx and ignore it. Requires `tenant.webhooks.write`.
+         */
+        post: operations["testTenantWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/webhooks/events": {
         parameters: {
             query?: never;
@@ -15806,6 +15846,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/assistant/support-widget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ClickFix support widget for the panel
+         * @description CF-193: the widget of ClickFix's own support organization and the member's identity signature (user_id + user_hash, HMAC of the widget's identity secret, computed server-side). The panel embeds the widget with it; inside the widget the member also gets the assistant on the `widget` surface (allowlisted capabilities only). `available` is false without a support organization, an active widget or identity verification.
+         */
+        get: operations["getTenantAssistantSupportWidget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/page-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What is missing and what can be tested on a page
+         * @description CF-187: the state of the page the user is on (missing steps, warnings, tests the assistant can run there, the page's actions), from the module that owns the route. Read-only; steps and tests the caller cannot act on are dropped. 204 when no module describes the page.
+         */
+        get: operations["getTenantAssistantPageState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/assistant/threads": {
         parameters: {
             query?: never;
@@ -15885,9 +15965,29 @@ export interface paths {
         put?: never;
         /**
          * Confirm a proposed action
-         * @description Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for enable_ai); missing permission answers 403 and the action stays proposed. Returns the result as a `tool` message. `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
+         * @description Executes the action with the caller's own permissions (e.g. `tenant.members.write` for invite_member, `tenant.sla.write` for create_sla, `tenant.ai.write` for ai.enable); missing permission answers 403 and the action stays proposed. The optional body carries fields edited in the card; they are validated again against the capability schema (400 VALIDATION_ERROR with the reason). Registry capabilities call the panel's own /v1 routes as the user, then verify the result. Returns the result as a `tool` message plus `secret_once` (generated secrets, this response only). `ASSISTANT_ACTION_NOT_PENDING` (409) when already confirmed or rejected.
          */
         post: operations["confirmTenantAssistantAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a proposed action
+         * @description Runs the capability's dry run with the (optionally edited) params and stores the preview on the card. It never changes data or leaves the server (the capability only gets GET access to the API). 404 when the action has no dry run; 403 without the capability's permission; 400 VALIDATION_ERROR for invalid params.
+         */
+        post: operations["dryRunTenantAssistantAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15909,6 +16009,67 @@ export interface paths {
          */
         post: operations["rejectTenantAssistantAction"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents shared in a thread
+         * @description CF-191: the thread's documents that have not expired (7 days). Content is never returned.
+         */
+        get: operations["listTenantAssistantDocuments"];
+        put?: never;
+        /**
+         * Share a file with the assistant
+         * @description CF-191: multipart upload (field `file`, at most 2 MB): PDF, text, Markdown, CSV, JSON, YAML or HTML; other binary content is refused whatever its name (415 ASSISTANT_DOCUMENT_TYPE). PDF text is read within limits (200 pages, 5 s); an encrypted, damaged or scanned PDF answers 422 ASSISTANT_DOCUMENT_PDF. Only the extracted text is kept, with personal data and secret-looking values masked (`masked`), for 7 days; at most 5 per thread (409 ASSISTANT_DOCUMENT_LIMIT). The assistant reads it as data.
+         */
+        post: operations["uploadTenantAssistantDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/documents/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share a link with the assistant
+         * @description CF-191: fetches a public https page (no credentials, no internal host or private address, checked again at connection time and on each of at most 3 redirects; 10 s; 2 MB) and stores its text like an upload. The query string is not stored. 422 ASSISTANT_DOCUMENT_FETCH with a safe reason when it cannot be read.
+         */
+        post: operations["linkTenantAssistantDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/assistant/threads/{uuid}/documents/{document_uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a shared document */
+        delete: operations["deleteTenantAssistantDocument"];
         options?: never;
         head?: never;
         patch?: never;
@@ -22255,6 +22416,23 @@ export interface components {
             data: components["schemas"]["MessengerPages"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        ChannelDeliveryTest: {
+            /** @description The endpoint answered 2xx */
+            ok: boolean;
+            status_code?: number;
+            /** @description Why it failed (never a credential) */
+            detail?: string;
+            /** @description id of the test event (also its Idempotency-Key) */
+            event_id: string;
+            /** @description Where the test e-mail went (the caller's own address) */
+            recipient?: string;
+        };
+        EnvelopeChannelDeliveryTest: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ChannelDeliveryTest"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeChannelInstance: {
             /** @enum {boolean} */
             success: true;
@@ -26742,7 +26920,7 @@ export interface components {
         };
         AssistantContext: {
             /** @enum {string} */
-            surface?: "web" | "mobile";
+            surface?: "web" | "mobile" | "widget";
             route?: string;
             guide_key?: string;
         };
@@ -26763,7 +26941,7 @@ export interface components {
         };
         AssistantProposedAction: {
             id: string;
-            /** @description open_route, invite_member, create_channel_email, connect_channel, install_widget, set_business_hours, create_sla, enable_ai, escalate_to_support */
+            /** @description A registry capability name (navigation.open_route, channels.connect, ai.enable, ...) or an older action kind (invite_member, create_channel_email, install_widget, set_business_hours, create_sla, escalate_to_support). Stored cards may carry the old names open_route, connect_channel, enable_ai, which still confirm. */
             kind: string;
             title: string;
             summary: string;
@@ -26773,8 +26951,166 @@ export interface components {
             /** @enum {string} */
             status: "proposed" | "confirmed" | "rejected" | "done" | "failed";
             route?: string;
-            /** @description Short result after execution (e.g. invited e-mail, ticket reference) */
+            /** @description Short result after execution (e.g. invited e-mail, ticket reference); on failure the API's own validation message */
             result?: string;
+            /** @description Registry capability name (CF-184), e.g. channels.api.create; empty for older actions. kind carries the same value. */
+            capability?: string;
+            /** @enum {string} */
+            risk?: "write" | "destructive";
+            /** @description Editable fields of the confirmation card. Secret fields are never prefilled. */
+            form?: components["schemas"]["AssistantActionField"][];
+            /** @description The action can be previewed with the dry-run endpoint (no data changes). */
+            dry_run?: boolean;
+            /** @description How to revert the change (text or a page path) */
+            undo?: string;
+            preview?: components["schemas"]["AssistantActionPreview"];
+            verification?: components["schemas"]["AssistantActionVerification"];
+            details?: components["schemas"]["AssistantActionDetail"][];
+            focus?: components["schemas"]["AssistantActionFocus"];
+        };
+        AssistantPageStep: {
+            key: string;
+            title: string;
+            detail?: string;
+            /** @description Capability that does it, when the caller may use one */
+            capability?: string;
+            /** @description Message the drawer sends for "help me" */
+            prompt?: string;
+            focus?: components["schemas"]["AssistantActionFocus"];
+        };
+        AssistantPageTest: {
+            capability: string;
+            title: string;
+            prompt: string;
+        };
+        AssistantPageState: {
+            module: string;
+            title: string;
+            missing: components["schemas"]["AssistantPageStep"][];
+            warnings: components["schemas"]["AssistantPageStep"][];
+            tests: components["schemas"]["AssistantPageTest"][];
+            actions: string[];
+        };
+        AssistantSupportWidget: {
+            available: boolean;
+            /** Format: uuid */
+            widget_id?: string;
+            user_id?: string;
+            user_hash?: string;
+        };
+        EnvelopeAssistantSupportWidget: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantSupportWidget"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeAssistantPageState: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantPageState"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        WebhookTestQueued: {
+            queued: boolean;
+            /** Format: uuid */
+            event_id: string;
+        };
+        EnvelopeWebhookTestQueued: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["WebhookTestQueued"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        AssistantDocument: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "file" | "link";
+            name: string;
+            /** @description The link without its query string */
+            source_url?: string;
+            content_type: string;
+            size_bytes: number;
+            chars: number;
+            /** @description Longer than 60 000 characters; the rest was dropped */
+            truncated: boolean;
+            /** @description Personal data or secret-looking values were removed */
+            masked: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EnvelopeAssistantDocument: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantDocument"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeAssistantDocumentList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["AssistantDocument"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        AssistantActionField: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "url" | "number" | "boolean" | "enum" | "json" | "secret";
+            required: boolean;
+            options?: string[];
+            help?: string;
+            /** @description A secret the server generates when left empty */
+            generated?: boolean;
+        };
+        AssistantActionDetail: {
+            label: string;
+            value?: string;
+            /** @description Copyable code block (an example request); secrets appear as placeholders */
+            code?: string;
+        };
+        AssistantActionPreview: {
+            ok: boolean;
+            summary: string;
+            details?: components["schemas"]["AssistantActionDetail"][];
+        };
+        AssistantActionVerification: {
+            /** @enum {string} */
+            status: "ok" | "failed" | "skipped";
+            message?: string;
+        };
+        AssistantActionFocus: {
+            /** @description Internal path (never a URL) */
+            route: string;
+            /** @description data-guide key to highlight (?focus=) */
+            target?: string;
+        };
+        AssistantActionRequest: {
+            /** @description Fields edited in the card; merged over the proposed params and validated again. A null value removes a field. */
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        AssistantConfirmResult: components["schemas"]["AssistantMessage"] & {
+            /** @description Secrets the action generated (e.g. a signing secret). Returned only in this response; never stored or shown again. */
+            secret_once?: {
+                [key: string]: string;
+            };
+        };
+        EnvelopeAssistantConfirmResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantConfirmResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeAssistantProposedAction: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantProposedAction"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         AssistantMessage: {
             /** @description Generation stopped or connection lost; content is a saved partial reply. */
@@ -26917,12 +27253,6 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["AssistantThreadList"];
-            meta: components["schemas"]["ResponseMeta"];
-        };
-        EnvelopeAssistantMessage: {
-            /** @enum {boolean} */
-            success: true;
-            data: components["schemas"]["AssistantMessage"];
             meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeAssistantMessageList: {
@@ -36457,6 +36787,41 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    testDeliveryTenantChannel: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeChannelDeliveryTest"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -57594,6 +57959,34 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    testTenantWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeWebhookTestQueued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getV1TenantWebhooksEvents: {
         parameters: {
             query?: never;
@@ -63978,6 +64371,75 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getTenantAssistantSupportWidget: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Support widget */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantSupportWidget"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantAssistantPageState: {
+        parameters: {
+            query: {
+                route: string;
+                surface?: "web" | "mobile" | "widget";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantPageState"];
+                };
+            };
+            /** @description No module describes this page */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTenantAssistantThreads: {
         parameters: {
             query?: never;
@@ -64176,7 +64638,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssistantActionRequest"];
+            };
+        };
         responses: {
             /** @description Result message */
             200: {
@@ -64184,7 +64650,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvelopeAssistantMessage"];
+                    "application/json": components["schemas"]["EnvelopeAssistantConfirmResult"];
                 };
             };
             400: components["responses"]["OrganizationRequired"];
@@ -64193,6 +64659,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    dryRunTenantAssistantAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AssistantActionRequest"];
+            };
+        };
+        responses: {
+            /** @description The action with its preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantProposedAction"];
+                };
+            };
+            400: components["responses"]["OrganizationRequired"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -64226,6 +64734,195 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantAssistantDocuments: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Documents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocumentList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocument"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a readable text document (ASSISTANT_DOCUMENT_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No readable text (ASSISTANT_DOCUMENT_EMPTY, ASSISTANT_DOCUMENT_PDF) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    linkTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uri */
+                    url: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantDocument"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Larger than 2 MB (ASSISTANT_DOCUMENT_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a readable text document (ASSISTANT_DOCUMENT_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link could not be read (ASSISTANT_DOCUMENT_FETCH) or has no text */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantAssistantDocument: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                document_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -167,3 +167,10 @@ func decodeRule(conditions, actions []byte) (model.Condition, []model.Action, er
 	err := json.Unmarshal(actions, &a)
 	return c, a, err
 }
+
+// ConditionFields lists the conversation fields a condition may test
+// (custom_fields.<key> is accepted too).
+func ConditionFields() []string { return slices.Clone(fields) }
+
+// ConditionOperators lists the condition operators.
+func ConditionOperators() []string { return slices.Clone(operators) }

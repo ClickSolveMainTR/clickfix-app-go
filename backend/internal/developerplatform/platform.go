@@ -10,6 +10,7 @@ import (
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	routinguc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/routing/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 
 	"context"
 	"fmt"
@@ -74,6 +75,8 @@ type Deps struct {
 	Notifications *notify.Service
 	Activity      *activity.Recorder
 	Bus           events.ReliableBus
+	// Capabilities is the shared capability registry (assistant + MCP).
+	Capabilities *capability.Registry
 }
 type Runtime struct {
 	Engineering *enguc.Service
@@ -132,7 +135,9 @@ func Mount(d Deps) (*Runtime, error) {
 	}
 	appmodule.RegisterRoutes(d.Router, &apph.Handler{Service: apps, Activity: d.Activity}, d.Tokens, d.Loader, d.Resolver)
 	oauth := mcpauthuc.New(d.DB, limiter, d.Config.Auth.FrontendURL, d.Log)
-	catalog := mcp.NewCatalog()
+	// MCP tools are the capabilities on the "mcp" surface of the shared
+	// registry (CF-192): one definition for the assistant and MCP.
+	catalog := mcp.NewCatalog(d.Capabilities)
 	resolver := mcp.Resolver{Q: d.Q, Orgs: d.Resolver, Tools: catalog}
 	oauth.SetGate(resolver)
 	oauth.SetActivity(d.Activity)

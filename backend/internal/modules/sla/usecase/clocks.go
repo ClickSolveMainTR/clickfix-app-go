@@ -414,18 +414,8 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 				return err
 			}
 			n = len(rows)
-			convs := map[int64]db.Conversation{}
-			for _, r := range rows {
-				conv, ok := convs[r.ConversationID]
-				if !ok {
-					if conv, err = q.GetConversationByID(ctx, db.GetConversationByIDParams{OrganizationID: r.OrganizationID, ID: r.ConversationID}); err != nil {
-						if isNoRows(err) {
-							continue
-						}
-						return err
-					}
-					convs[r.ConversationID] = conv
-				}
+			for _, row := range rows {
+				r, conv := row.ConversationSlaMetric, row.Conversation
 				clock := toClock(r)
 				if r.DueAt.Valid && !r.DueAt.Time.After(now) {
 					at := r.DueAt.Time.UTC()

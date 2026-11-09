@@ -24,6 +24,7 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, t *jwt.Manager, l mi
 	route("POST /v1/tenant/webhooks", h.CRUD, rbac.PermTenantWebhooksWrite)
 	route("PUT /v1/tenant/webhooks/{uuid}", h.CRUD, rbac.PermTenantWebhooksWrite)
 	route("DELETE /v1/tenant/webhooks/{uuid}", h.CRUD, rbac.PermTenantWebhooksWrite)
+	route("POST /v1/tenant/webhooks/{uuid}/test", h.Test, rbac.PermTenantWebhooksWrite)
 	route("GET /v1/tenant/webhook-deliveries", h.Deliveries, rbac.PermTenantWebhooksRead)
 	route("POST /v1/tenant/webhook-deliveries/{uuid}/replay", h.Deliveries, rbac.PermTenantWebhooksWrite)
 }

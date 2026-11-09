@@ -21,7 +21,7 @@ func guideTools(g Guide) map[string]GuideTool {
 }
 
 func TestGuideListsEveryToolWithTheMembersAccess(t *testing.T) {
-	c := NewCatalog()
+	c := testCatalog()
 	scope := orgctx.Scope{Permissions: []string{rbac.PermTenantMCPConnect, rbac.PermTenantConversationsRead, rbac.PermTenantConversationsReply}}
 	g := c.Guide(scope, fakeAddresses{})
 
@@ -50,7 +50,7 @@ func TestGuideListsEveryToolWithTheMembersAccess(t *testing.T) {
 }
 
 func TestGuideOffersWriteToolsOnlyWithTheWritePermission(t *testing.T) {
-	c := NewCatalog()
+	c := testCatalog()
 	scope := orgctx.Scope{Permissions: []string{rbac.PermTenantMCPConnect, rbac.PermTenantMCPWrite, rbac.PermTenantConversationsReply}}
 	g := c.Guide(scope, fakeAddresses{})
 	if !g.CanWrite {
@@ -68,7 +68,7 @@ func TestGuideOffersWriteToolsOnlyWithTheWritePermission(t *testing.T) {
 // The guide must agree with what tools/list would answer for the same member
 // once write was granted on consent.
 func TestGuideAgreesWithToolsList(t *testing.T) {
-	c := NewCatalog()
+	c := testCatalog()
 	scope := orgctx.Scope{Permissions: []string{rbac.PermTenantMCPConnect, rbac.PermTenantMCPWrite, rbac.PermTenantConversationsRead, rbac.PermTenantConversationsManage, rbac.PermTenantContactsRead}}
 	g := c.Guide(scope, fakeAddresses{})
 	live := map[string]bool{}

@@ -10,6 +10,7 @@ import (
 	coremodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
 	core "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/billingtest"
 	billingmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	billingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
@@ -71,31 +72,8 @@ func agentCoreFixture(t *testing.T) (*core.Service, *agentFakeAI, int64, int64) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	enabled := true
-	limit := int64(1000000)
-	features, err := billing.Features(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	grants := []billingmodel.Grant{}
-	for _, feature := range features {
-		g := billingmodel.Grant{Feature: feature.Key, Enforcement: "hard", WarnPercent: 80}
-		if feature.Kind == "boolean" {
-			g.Enabled = &enabled
-		} else {
-			g.Limit = &limit
-			if feature.Key == "ai.credits" {
-				credits := int64(1000)
-				g.Limit = &credits
-			}
-		}
-		grants = append(grants, g)
-	}
-	version, err := billing.SaveVersion(ctx, plan.UUID, uuid.Nil, billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}, Entitlements: grants})
-	if err != nil {
-		t.Fatal(err)
-	}
-	version, err = billing.Publish(ctx, plan.UUID, version.UUID, actor)
+	prices := billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}}
+	version, err := billingtest.PublishVersion(ctx, billing, plan.UUID, actor, prices, billingtest.Grant(1000000, map[string]int64{"ai.credits": 1000}))
 	if err != nil {
 		t.Fatal(err)
 	}

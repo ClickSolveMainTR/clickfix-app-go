@@ -15,6 +15,11 @@ var (
 	ErrInvalid  = errors.New("billing: invalid input")
 	ErrConflict = errors.New("billing: conflict")
 	ErrNotFound = errors.New("billing: not found")
+	// A version draft and the feature catalog disagree: the catalog has a
+	// feature the draft lacks, or the draft names one the catalog lacks.
+	// Both wrap ErrInvalid.
+	ErrMissingFeature = fmt.Errorf("%w: missing feature", ErrInvalid)
+	ErrUnknownFeature = fmt.Errorf("%w: unknown/duplicate feature", ErrInvalid)
 )
 
 type PlanInput struct {
@@ -143,7 +148,7 @@ func (v *VersionInput) Validate(features map[string]string) error {
 		g := &v.Entitlements[i]
 		kind, ok := features[g.Feature]
 		if !ok || seen[g.Feature] {
-			return fmt.Errorf("%w: unknown/duplicate feature %s", ErrInvalid, g.Feature)
+			return fmt.Errorf("%w %s", ErrUnknownFeature, g.Feature)
 		}
 		seen[g.Feature] = true
 		if err := ValidateGrant(*g, kind); err != nil {
@@ -161,7 +166,7 @@ func (v *VersionInput) Validate(features map[string]string) error {
 	}
 	for k := range features {
 		if !seen[k] {
-			return fmt.Errorf("%w: missing feature %s", ErrInvalid, k)
+			return fmt.Errorf("%w %s", ErrMissingFeature, k)
 		}
 	}
 	seen = map[string]bool{}
