@@ -92,5 +92,8 @@
   "fields.actions": "Eylemler",
   "fields.enable": "Yayınla ve etkinleştir",
   "fields.workflow_uuid": "İş akışı",
-  "fields.enabled": "Etkin"
+  "fields.enabled": "Etkin",
+  "fields.webhook_url": "Webhook adresi",
+  "fields.channel_uuid": "Kanal",
+  "fields.signing_secret": "İmza anahtarı"
 }

@@ -240,5 +240,6 @@
   "resources.outbound_webhooks": "Giden webhook'lar",
   "actions.assistant.action_dry_run": "Asistan önerisi kuru çalıştırıldı",
   "actions.assistant.action_rejected": "Asistan önerisi reddedildi",
-  "actions.assistant.action_forbidden": "Asistan önerisi yetki yüzünden reddedildi"
+  "actions.assistant.action_forbidden": "Asistan önerisi yetki yüzünden reddedildi",
+  "actions.channels.test_delivery": "Kanala test olayı gönderildi"
 }

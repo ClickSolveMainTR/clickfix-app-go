@@ -8995,6 +8995,31 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/channels/{uuid}/test-delivery:
+    post:
+      tags: [Tenant]
+      operationId: testDeliveryTenantChannel
+      summary: Send a signed test event to the channel's own endpoint
+      description: "REST API channels only (CF-185): posts `{id, type: test, text, sent_at}` signed like replies (`X-ClickFix-Signature`, `X-ClickFix-Timestamp`) plus `X-ClickFix-Event: test` to the organization's `webhook_url` through the SSRF-guarded client, and reports the HTTP result. It makes an outbound request (at most 6 per channel in 10 minutes, then 429) but changes no data and does not touch `health`. Other channel types answer 400 VALIDATION_ERROR. Requires `tenant.channels.manage`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeChannelDeliveryTest"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/channels/{uuid}/reconnect:
     post:
       tags: [Tenant]
@@ -52433,6 +52458,28 @@ components:
         data: { $ref: "#/components/schemas/MessengerPages" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    ChannelDeliveryTest:
+      type: object
+      required: [ok, event_id]
+      properties:
+        ok:
+          type: boolean
+          description: The endpoint answered 2xx
+        status_code:
+          type: integer
+        detail:
+          type: string
+          description: Why it failed (never a credential)
+        event_id:
+          type: string
+          description: id of the test event (also its Idempotency-Key)
+    EnvelopeChannelDeliveryTest:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ChannelDeliveryTest" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     EnvelopeChannelInstance:
       type: object
       required: [success, data, meta]

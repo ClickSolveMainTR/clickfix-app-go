@@ -92,5 +92,8 @@
   "fields.actions": "Actions",
   "fields.enable": "Publish and enable",
   "fields.workflow_uuid": "Workflow",
-  "fields.enabled": "Enabled"
+  "fields.enabled": "Enabled",
+  "fields.webhook_url": "Webhook URL",
+  "fields.channel_uuid": "Channel",
+  "fields.signing_secret": "Signing secret"
 }
