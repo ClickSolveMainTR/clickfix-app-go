@@ -42,10 +42,13 @@ var widgetID = map[string]any{"type": "string", "title": "Widget", "pattern": "^
 
 func appearance() map[string]any {
 	return map[string]any{
-		"color":           map[string]any{"type": "string", "title": "Colour", "pattern": "^#[0-9a-fA-F]{6}$"},
-		"greeting_title":  map[string]any{"type": "string", "title": "Greeting title", "maxLength": 80},
-		"greeting_text":   map[string]any{"type": "string", "title": "Greeting text", "maxLength": 500},
-		"allowed_domains": map[string]any{"type": "array", "title": "Allowed domains", "maxItems": 50, "items": map[string]any{"type": "string", "maxLength": 255}},
+		"color":          map[string]any{"type": "string", "title": "Colour", "pattern": "^#[0-9a-fA-F]{6}$"},
+		"greeting_title": map[string]any{"type": "string", "title": "Greeting title", "maxLength": 80},
+		"greeting_text":  map[string]any{"type": "string", "title": "Greeting text", "maxLength": 500},
+		// An empty list would allow every site: at least one domain (removing
+		// the restriction stays a panel decision).
+		"allowed_domains": map[string]any{"type": "array", "title": "Allowed domains", "minItems": 1, "maxItems": 50,
+			"items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}},
 	}
 }
 

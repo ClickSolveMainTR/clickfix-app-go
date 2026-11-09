@@ -98,7 +98,7 @@ func TestRulesAndSLAFromTheChat(t *testing.T) {
 
 	// 1. "Note every new urgent conversation": a rule with a condition.
 	card := propose("Acil yeni konuşmalara not düş", ai.ToolCall{ID: "r1", Name: "automations_create", Input: json.RawMessage(
-		`{"summary":"Acil konuşmalara not","params":{"name":"Acil not","trigger":"conversation.created",` +
+		`{"summary":"Acil konuşmalara not","params":{"name":"Acil not","trigger":"conversation.created","enabled":true,` +
 			`"conditions":{"all":[{"field":"priority","operator":"eq","value":"urgent"}]},"actions":[{"type":"add_note","content":"Acil: hemen ilgilenin."}]}}`)})
 	if pv, err := f.svc.DryRun(ctx, c, th.UUID, card.ID, nil); err != nil || !pv.Preview.OK {
 		t.Fatalf("dry run %+v %v", pv.Preview, err)
@@ -140,7 +140,7 @@ func TestRulesAndSLAFromTheChat(t *testing.T) {
 	confirm(propose("Hafta içi 9-18 çalışıyoruz", ai.ToolCall{ID: "h1", Name: "sla_business_hours_create", Input: json.RawMessage(
 		`{"params":{"name":"Mesai","timezone":"Europe/Istanbul","is_default":true,"days":{"mon":{"open":"09:00","close":"18:00"},"tue":{"open":"09:00","close":"18:00"},"sat":{"closed":true}}}}`)}))
 	pol := propose("Acil talepler 30 dakikada yanıtlansın", ai.ToolCall{ID: "p1", Name: "sla_policies_create", Input: json.RawMessage(
-		`{"params":{"name":"Standart","targets":[{"priority":"urgent","first_response_minutes":30,"resolution_minutes":240},{"priority":"normal","first_response_minutes":240}]}}`)})
+		`{"params":{"name":"Standart","description":"Ana politika","priorities":["urgent","normal"],"targets":[{"priority":"urgent","first_response_minutes":30,"resolution_minutes":240},{"priority":"normal","first_response_minutes":240}]}}`)})
 	if pv, err := f.svc.DryRun(ctx, c, th.UUID, pol.ID, nil); err != nil || len(pv.Preview.Details) != 2 || !strings.Contains(pv.Preview.Details[0].Value, "30 dk") {
 		t.Fatalf("policy preview %+v %v", pv.Preview, err)
 	}
@@ -149,6 +149,35 @@ func TestRulesAndSLAFromTheChat(t *testing.T) {
 	}
 	if st, _, _ := f.svc.PageState(ctx, c, pc); len(st.Missing) != 0 || len(st.Tests) != 1 {
 		t.Fatalf("sla page after %+v", st)
+	}
+	// Updates change only what they give (fetch-then-merge).
+	var hoursID, policyID string
+	_ = f.pool.QueryRow(ctx, "SELECT uuid::text FROM business_hours WHERE organization_id = $1", f.scope.ID).Scan(&hoursID)
+	_ = f.pool.QueryRow(ctx, "SELECT uuid::text FROM sla_policies WHERE organization_id = $1", f.scope.ID).Scan(&policyID)
+	hu := propose("Cumartesi 10-14 açık olsun", ai.ToolCall{ID: "hu", Name: "sla_business_hours_update", Input: json.RawMessage(
+		`{"params":{"business_hours_uuid":"` + hoursID + `","days":{"sat":{"open":"10:00","close":"14:00"}}}}`)})
+	if pv, err := f.svc.DryRun(ctx, c, th.UUID, hu.ID, nil); err != nil || !pv.Preview.OK || !strings.Contains(pv.Preview.Summary, "Mesai") {
+		t.Fatalf("hours update preview %+v %v", pv.Preview, err)
+	}
+	confirm(hu)
+	var hName, tz, week string
+	var def bool
+	if err := f.pool.QueryRow(ctx, "SELECT name, timezone, is_default, working_hours::text FROM business_hours WHERE organization_id = $1", f.scope.ID).
+		Scan(&hName, &tz, &def, &week); err != nil || hName != "Mesai" || tz != "Europe/Istanbul" || !def ||
+		!strings.Contains(week, "10:00") || !strings.Contains(week, "09:00") {
+		t.Fatalf("hours lost fields: %s %s %v %s %v", hName, tz, def, week, err)
+	}
+	confirm(propose("Acil çözüm süresi 2 saat olsun", ai.ToolCall{ID: "pu", Name: "sla_policies_update", Input: json.RawMessage(
+		`{"params":{"policy_uuid":"` + policyID + `","targets":[{"priority":"urgent","resolution_minutes":120}]}}`)}))
+	var desc, cond, targets string
+	if err := f.pool.QueryRow(ctx, "SELECT description, conditions::text FROM sla_policies WHERE organization_id = $1", f.scope.ID).Scan(&desc, &cond); err != nil ||
+		desc != "Ana politika" || !strings.Contains(cond, "urgent") {
+		t.Fatalf("policy lost fields: %q %s %v", desc, cond, err)
+	}
+	_ = f.pool.QueryRow(ctx, `SELECT string_agg(priority||':'||coalesce(first_response_minutes,0)||'/'||coalesce(resolution_minutes,0), ',' ORDER BY priority)
+		FROM sla_policy_targets t JOIN sla_policies p ON p.id = t.policy_id WHERE p.organization_id = $1`, f.scope.ID).Scan(&targets)
+	if targets != "normal:240/0,urgent:30/120" {
+		t.Fatalf("targets %q", targets)
 	}
 	// A duplicate name is caught by the dry run.
 	dup := propose("Bir Standart daha", ai.ToolCall{ID: "p2", Name: "sla_policies_create", Input: json.RawMessage(
