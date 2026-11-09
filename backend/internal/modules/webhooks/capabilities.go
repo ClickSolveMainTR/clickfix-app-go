@@ -70,7 +70,7 @@ func Capabilities() []*capability.Capability {
 	routes := []string{"/settings/integrations"}
 	return []*capability.Capability{
 		{
-			Name: "webhooks.list", Module: "webhooks", Kind: capability.Read, Permission: rbac.PermTenantWebhooksRead, Routes: routes,
+			Name: "webhooks.list", Surfaces: capability.ReadSurfaces, Module: "webhooks", Kind: capability.Read, Permission: rbac.PermTenantWebhooksRead, Routes: routes,
 			Title:       map[string]string{"tr": "Webhook aboneliklerini listele", "en": "List webhooks"},
 			Description: "List the organization's outbound webhook subscriptions (uuid, name, URL, events, enabled) and the status of the latest deliveries.",
 			Run: func(ctx context.Context, e capability.Exec, _ capability.Params) (capability.Result, error) {

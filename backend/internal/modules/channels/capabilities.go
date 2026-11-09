@@ -208,7 +208,7 @@ func Capabilities() []*capability.Capability {
 	routes := []string{"/channels"}
 	return []*capability.Capability{
 		{
-			Name: "channels.list", Module: "channels", Kind: capability.Read, Permission: rbac.PermTenantChannelsRead, Routes: routes,
+			Name: "channels.list", Surfaces: capability.ReadSurfaces, Module: "channels", Kind: capability.Read, Permission: rbac.PermTenantChannelsRead, Routes: routes,
 			Title:       map[string]string{"tr": "Kanalları listele", "en": "List channels"},
 			Description: "List the organization's connected channels (inboxes): uuid, type, name, status, health, inbound URL and, for REST API channels, the outbound webhook URL. Call this before proposing to create a channel.",
 			Input: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{
@@ -230,7 +230,7 @@ func Capabilities() []*capability.Capability {
 			},
 		},
 		{
-			Name: "channels.api.sample_request", Module: "channels", Kind: capability.Read, Permission: rbac.PermTenantChannelsRead, Routes: routes,
+			Name: "channels.api.sample_request", Surfaces: capability.ReadSurfaces, Module: "channels", Kind: capability.Read, Permission: rbac.PermTenantChannelsRead, Routes: routes,
 			Title:       map[string]string{"tr": "Örnek istek üret", "en": "Example requests"},
 			Description: "Example requests of a REST API channel: a signed curl call that sends a customer message into ClickFix, the JSON ClickFix posts back to the organization's webhook, and how to verify the signature. The signing secret is a placeholder; never ask for it. Paste the examples to the user as code blocks.",
 			Input: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"channel_uuid"},

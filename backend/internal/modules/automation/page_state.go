@@ -52,7 +52,7 @@ func RuleCapabilities() []*capability.Capability {
 	routes := []string{"/rules"}
 	return []*capability.Capability{
 		{
-			Name: "automations.list", Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
+			Name: "automations.list", Surfaces: capability.ReadSurfaces, Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
 			Title:       map[string]string{"tr": "Otomasyon kurallarını listele", "en": "List automation rules"},
 			Description: "List the organization's automation rules: uuid, name, trigger (sla.breached rules are SLA rules) and whether it is enabled.",
 			Run: func(ctx context.Context, e capability.Exec, _ capability.Params) (capability.Result, error) {
@@ -64,7 +64,7 @@ func RuleCapabilities() []*capability.Capability {
 			},
 		},
 		{
-			Name: "automations.dry_run", Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationWrite, Routes: routes,
+			Name: "automations.dry_run", Surfaces: capability.ReadSurfaces, Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationWrite, Routes: routes,
 			Title:       map[string]string{"tr": "Kuralı kuru çalıştır", "en": "Dry-run a rule"},
 			Description: "Check whether an automation rule's conditions match a conversation (default: the latest) and which actions it would run, without running them.",
 			Simulations: []string{"POST " + rulesPath + "/{uuid}/test"},

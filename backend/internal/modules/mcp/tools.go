@@ -145,7 +145,7 @@ func (s *Server) execute(ctx context.Context, sess *session, t *Tool, args Args)
 	cp := t.Capability
 	params := capability.Params(args)
 	if !cp.Writes() {
-		e.API = capability.ReadOnly(e.API)
+		e.API = capability.ReadOnly(e.API, cp.Simulations...)
 		return cp.Run(ctx, e, params)
 	}
 	return cp.Apply(ctx, e, params)

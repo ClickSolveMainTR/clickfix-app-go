@@ -5,8 +5,12 @@ import (
 	"slices"
 
 	"encoding/json"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mcpauth/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/sla"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
@@ -129,6 +133,28 @@ func TestToolsCallTheSameRoutes(t *testing.T) {
 	for _, tool := range c.tools {
 		if tool.Name == "set_status" && tool.Validate(Args{"conversation_uuid": id, "status": "deleted"}) == nil {
 			t.Fatal("invalid status accepted")
+		}
+	}
+}
+
+// Module read capabilities are on MCP too; their writes are not.
+func TestModuleReadsReachMCP(t *testing.T) {
+	reg := capability.NewRegistry().Register(conversations.Capabilities()...).
+		Register(channels.Capabilities()...).Register(automation.Capabilities()...).Register(automation.RuleCapabilities()...).
+		Register(sla.Capabilities()...).Register(webhooks.Capabilities()...)
+	got := map[string]*Tool{}
+	for _, tool := range NewCatalog(reg).tools {
+		got[tool.Name] = tool
+	}
+	for _, name := range []string{"channels_list", "channels_api_sample_request", "workflows_list", "workflows_reference", "workflows_dry_run",
+		"automations_list", "automations_dry_run", "sla_check", "webhooks_list"} {
+		if tool := got[name]; tool == nil || tool.Write {
+			t.Fatalf("%s missing or writable: %v", name, tool)
+		}
+	}
+	for _, name := range []string{"channels_api_create", "channels_test", "workflows_create", "webhooks_test", "channels_api_rotate_secret"} {
+		if got[name] != nil {
+			t.Fatalf("write %s reached MCP", name)
 		}
 	}
 }

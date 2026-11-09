@@ -282,7 +282,7 @@ func Capabilities() []*capability.Capability {
 		}}
 	return []*capability.Capability{
 		{
-			Name: "workflows.list", Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
+			Name: "workflows.list", Surfaces: capability.ReadSurfaces, Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
 			Title:       map[string]string{"tr": "İş akışlarını listele", "en": "List workflows"},
 			Description: "List the organization's workflows: uuid, name, revision, published version and whether it is enabled.",
 			Run: func(ctx context.Context, e capability.Exec, _ capability.Params) (capability.Result, error) {
@@ -301,7 +301,7 @@ func Capabilities() []*capability.Capability {
 			},
 		},
 		{
-			Name: "workflows.reference", Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
+			Name: "workflows.reference", Surfaces: capability.ReadSurfaces, Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationRead, Routes: routes,
 			Title:       map[string]string{"tr": "İş akışı başvurusu", "en": "Workflow reference"},
 			Description: "What a workflow draft may use: triggers, condition fields and operators, action types with their required value, conversation statuses and priorities, and the organization's tags and members (uuid + name) for target_uuid. Call it before drafting.",
 			Run: func(ctx context.Context, e capability.Exec, _ capability.Params) (capability.Result, error) {
@@ -429,7 +429,7 @@ func Capabilities() []*capability.Capability {
 			},
 		},
 		{
-			Name: "workflows.dry_run", Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationWrite, Routes: routes,
+			Name: "workflows.dry_run", Surfaces: capability.ReadSurfaces, Module: "automation", Kind: capability.Read, Permission: rbac.PermTenantAutomationWrite, Routes: routes,
 			Title:       map[string]string{"tr": "İş akışını kuru çalıştır", "en": "Dry-run a workflow"},
 			Description: "Simulate a saved workflow on a conversation (default: the latest) without changing anything: which branch is taken and which actions would run.",
 			Simulations: []string{"POST " + workflowsPath + "/{uuid}/test"},

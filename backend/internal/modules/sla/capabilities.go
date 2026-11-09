@@ -39,7 +39,7 @@ func count(ctx context.Context, api capability.API, path string) (int, error) {
 // Capabilities are the SLA capabilities.
 func Capabilities() []*capability.Capability {
 	return []*capability.Capability{{
-		Name: "sla.check", Module: "sla", Kind: capability.Read, Permission: rbac.PermTenantSlaRead, Routes: []string{"/settings/sla"},
+		Name: "sla.check", Surfaces: capability.ReadSurfaces, Module: "sla", Kind: capability.Read, Permission: rbac.PermTenantSlaRead, Routes: []string{"/settings/sla"},
 		Title:       map[string]string{"tr": "SLA durumunu kontrol et", "en": "Check SLA status"},
 		Description: "Show which SLA policy applies to a conversation (default: the latest) and each clock's status (running, paused, met, breached) with the time left. Use it to test an SLA set-up.",
 		Input: map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{

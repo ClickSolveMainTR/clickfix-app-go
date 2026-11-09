@@ -54,6 +54,11 @@ const (
 // DefaultSurfaces are used when a capability names none: the member apps.
 var DefaultSurfaces = []string{SurfaceWeb, SurfaceMobile}
 
+// ReadSurfaces are the member apps plus MCP: read capabilities that are
+// useful to an MCP client too (CF-192). Writes stay off MCP unless a
+// capability opts in explicitly.
+var ReadSurfaces = []string{SurfaceWeb, SurfaceMobile, SurfaceMCP}
+
 // Params are the arguments of one call (decoded JSON).
 type Params map[string]any
 
