@@ -33,6 +33,7 @@
   "status.daily_limit": "Your organization reached today's assistant limit; you can use it again tomorrow.",
   "errors.disabled": "ClickFix Assistant is turned off right now.",
   "errors.daily_limit": "Today's assistant limit is reached.",
+  "errors.internal": "Something went wrong while preparing the reply; try again. If it keeps happening, contact support.",
   "errors.ai_unavailable": "AI is not available right now, try again shortly.",
   "errors.support_unavailable": "Hand-over to support is not configured yet.",
   "errors.rejected": "The message was blocked by the safety filter. Rephrase it and send it again.",

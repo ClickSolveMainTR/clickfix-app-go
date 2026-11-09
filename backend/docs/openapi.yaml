@@ -59450,7 +59450,7 @@ components:
     AssistantStreamDelta: {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}
     AssistantStreamUsage: {"type": "object", "required": ["input_tokens", "output_tokens", "provider", "model"], "properties": {"input_tokens": {"type": "integer"}, "output_tokens": {"type": "integer"}, "provider": {"type": "string"}, "model": {"type": "string"}}}
     AssistantStreamDone: {"type": "object", "required": ["reply", "usage"], "properties": {"reply": {"$ref": "#/components/schemas/AssistantMessage"}, "usage": {"$ref": "#/components/schemas/AssistantStreamUsage"}}}
-    AssistantStreamError: {"type": "object", "required": ["code"], "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE"]}}}
+    AssistantStreamError: {"type": "object", "required": ["code"], "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}, "description": "ASSISTANT_AI_UNAVAILABLE: the AI provider or route is unavailable. ASSISTANT_INTERNAL: the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED: the panel API could not be reached as the user."}}}
     AssistantSendInput:
       type: object
       additionalProperties: false

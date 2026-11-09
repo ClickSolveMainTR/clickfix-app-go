@@ -33,6 +33,7 @@
   "status.daily_limit": "Organizasyonunuz bugünkü asistan sınırına ulaştı; yarın yeniden kullanabilirsiniz.",
   "errors.disabled": "ClickFix Asistan şu anda kapalı.",
   "errors.daily_limit": "Bugünkü asistan sınırına ulaşıldı.",
+  "errors.internal": "Yanıt oluşturulurken teknik bir sorun oluştu; tekrar deneyin. Sorun sürerse destek ekibine yazın.",
   "errors.ai_unavailable": "Yapay zekâ şu anda kullanılamıyor, birazdan tekrar deneyin.",
   "errors.support_unavailable": "Destek aktarımı henüz yapılandırılmamış.",
   "errors.rejected": "Mesaj güvenlik filtresine takıldı. Farklı bir şekilde yazıp tekrar gönderin.",

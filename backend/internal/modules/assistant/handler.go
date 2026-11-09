@@ -26,9 +26,12 @@ import (
 
 // API error codes.
 const (
-	CodeNotFound           = "ASSISTANT_NOT_FOUND"
-	CodeDisabled           = "ASSISTANT_DISABLED"
-	CodeAIUnavailable      = "ASSISTANT_AI_UNAVAILABLE"
+	CodeNotFound      = "ASSISTANT_NOT_FOUND"
+	CodeDisabled      = "ASSISTANT_DISABLED"
+	CodeAIUnavailable = "ASSISTANT_AI_UNAVAILABLE"
+	// CodeInternal: the reply failed after the model answered (storage, action
+	// card, stream); the cause is in the server log, not an AI outage.
+	CodeInternal           = "ASSISTANT_INTERNAL"
 	CodeDailyLimit         = "ASSISTANT_DAILY_LIMIT"
 	CodeActionState        = "ASSISTANT_ACTION_NOT_PENDING"
 	CodeSupportUnavailable = "ASSISTANT_SUPPORT_UNAVAILABLE"

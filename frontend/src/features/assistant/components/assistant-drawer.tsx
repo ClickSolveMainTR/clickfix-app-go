@@ -71,6 +71,8 @@ function errorKey(err: unknown): string {
         return "assistant.errors.daily_limit";
       case "ASSISTANT_AI_UNAVAILABLE":
         return "assistant.errors.ai_unavailable";
+      case "ASSISTANT_INTERNAL":
+        return "assistant.errors.internal";
       case "ASSISTANT_SUPPORT_UNAVAILABLE":
         return "assistant.errors.support_unavailable";
       case "ASSISTANT_MESSAGE_REJECTED":
