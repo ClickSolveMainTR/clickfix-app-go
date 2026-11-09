@@ -2,12 +2,15 @@ package assistant
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jung-kurt/gofpdf/v2"
 )
@@ -44,7 +47,7 @@ func TestExtractMasksAndStrips(t *testing.T) {
 	page := `<html><head><title>x</title><script>steal()</script></head><body><h1>Sipariş API</h1>
 <p>Webhook: https://shop.example.com/clickfix</p><p>api_key=sk_live_ABCDEFGHIJKLMNOPQRSTUVWX ve destek@shop.example.com</p>
 <style>.a{}</style></body></html>`
-	text, truncated, masked, err := extract("text/html", []byte(page))
+	text, truncated, masked, err := extract(context.Background(), "text/html", []byte(page))
 	if err != nil || truncated || !masked {
 		t.Fatalf("%v %v %v", err, truncated, masked)
 	}
@@ -57,11 +60,11 @@ func TestExtractMasksAndStrips(t *testing.T) {
 		t.Fatalf("lost content: %q", text)
 	}
 	long := strings.Repeat("abc ", MaxDocumentChars)
-	text, truncated, _, _ = extract("text/plain", []byte(long))
+	text, truncated, _, _ = extract(context.Background(), "text/plain", []byte(long))
 	if !truncated || len([]rune(text)) != MaxDocumentChars {
 		t.Fatal("not truncated")
 	}
-	if _, _, _, err := extract("text/html", []byte("<script>x()</script>")); !errors.Is(err, ErrDocumentEmpty) {
+	if _, _, _, err := extract(context.Background(), "text/html", []byte("<script>x()</script>")); !errors.Is(err, ErrDocumentEmpty) {
 		t.Fatal("empty page accepted")
 	}
 }
@@ -150,13 +153,92 @@ func TestPDFDocuments(t *testing.T) {
 	if err != nil || typ != "application/pdf" {
 		t.Fatalf("%q %v", typ, err)
 	}
-	text, _, masked, err := extract(typ, data)
+	text, _, masked, err := extract(context.Background(), typ, data)
 	if err != nil || !masked || !strings.Contains(text, "shop.example.com/clickfix") || strings.Contains(text, "sk_live_") {
 		t.Fatalf("%q %v %v", text, masked, err)
 	}
 	for _, bad := range [][]byte{[]byte("%PDF-1.7\ngarbage"), append([]byte("%PDF-1.4\n"), bytes.Repeat([]byte{0xff, 0x00}, 500)...)} {
-		if _, _, _, err := extract("application/pdf", bad); !errors.Is(err, ErrDocumentPDF) {
+		if _, _, _, err := extract(context.Background(), "application/pdf", bad); !errors.Is(err, ErrDocumentPDF) {
 			t.Fatalf("damaged pdf: %v", err)
 		}
+	}
+}
+
+// bombPDF is a one-page PDF whose content stream inflates to n bytes of
+// text operators (a compression bomb).
+func bombPDF(t *testing.T, n int) []byte {
+	t.Helper()
+	var z bytes.Buffer
+	w := zlib.NewWriter(&z)
+	chunk := bytes.Repeat([]byte("BT /F1 12 Tf (aaaaaaaa) Tj ET\n"), 4096)
+	for written := 0; written < n; written += len(chunk) {
+		if _, err := w.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = w.Close()
+	var b bytes.Buffer
+	offsets := []int{}
+	obj := func(body string, stream []byte) {
+		offsets = append(offsets, b.Len())
+		fmt.Fprintf(&b, "%d 0 obj\n%s", len(offsets), body)
+		if stream != nil {
+			b.WriteString("\nstream\n")
+			b.Write(stream)
+			b.WriteString("\nendstream")
+		}
+		b.WriteString("\nendobj\n")
+	}
+	b.WriteString("%PDF-1.4\n")
+	obj("<< /Type /Catalog /Pages 2 0 R >>", nil)
+	obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>", nil)
+	obj("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>", nil)
+	obj(fmt.Sprintf("<< /Length %d /Filter /FlateDecode >>", z.Len()), z.Bytes())
+	obj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", nil)
+	xref := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(offsets)+1)
+	for _, o := range offsets {
+		fmt.Fprintf(&b, "%010d 00000 n \n", o)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(offsets)+1, xref)
+	return b.Bytes()
+}
+
+// A compression bomb cannot hold the request past the budget.
+func TestPDFBombStopsAtTheBudget(t *testing.T) {
+	data := bombPDF(t, 64<<20)
+	if len(data) > MaxDocumentBytes {
+		t.Fatalf("bomb too large for the test: %d", len(data))
+	}
+	prev := pdfBudget
+	pdfBudget = 100 * time.Millisecond
+	t.Cleanup(func() { pdfBudget = prev })
+	start := time.Now()
+	_, err := pdfText(context.Background(), data)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("took %v", took)
+	}
+	if err != nil && !errors.Is(err, ErrDocumentPDF) {
+		t.Fatalf("error %v", err)
+	}
+	if got := clipBytes("çağ", 4); got != "ça" {
+		t.Fatalf("clip %q", got)
+	}
+}
+
+// A self-closing skipped tag does not swallow the rest of the page.
+func TestHTMLSelfClosingSkippedTag(t *testing.T) {
+	text := htmlText([]byte(`<p>Önce</p><svg/><p>Sonra</p><object/><p>Orta</p><script>gizli()</script><p>Son</p>`))
+	for _, want := range []string{"Önce", "Sonra", "Orta", "Son"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("lost %q: %q", want, text)
+		}
+	}
+	if strings.Contains(text, "gizli") {
+		t.Fatalf("script kept: %q", text)
+	}
+	// <iframe/> is raw text up to </iframe> (as in browsers): no markup leaks.
+	if text := htmlText([]byte(`<p>A</p><iframe src="x"/><p>B</p>`)); strings.Contains(text, "<p>") {
+		t.Fatalf("markup leaked: %q", text)
 	}
 }
