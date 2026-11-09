@@ -27147,9 +27147,10 @@ export interface components {
             reply: components["schemas"]["AssistantMessage"];
             usage: components["schemas"]["AssistantStreamUsage"];
         };
+        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
         AssistantStreamError: {
             /** @enum {string} */
-            code: "VALIDATION_ERROR" | "ASSISTANT_NOT_FOUND" | "ASSISTANT_DISABLED" | "ASSISTANT_DAILY_LIMIT" | "ASSISTANT_MESSAGE_REJECTED" | "ASSISTANT_AI_UNAVAILABLE";
+            code: "VALIDATION_ERROR" | "ASSISTANT_NOT_FOUND" | "ASSISTANT_DISABLED" | "ASSISTANT_DAILY_LIMIT" | "ASSISTANT_MESSAGE_REJECTED" | "ASSISTANT_AI_UNAVAILABLE" | "ASSISTANT_ACTION_FAILED" | "ASSISTANT_INTERNAL";
         };
         AssistantSendInput: {
             content: string;

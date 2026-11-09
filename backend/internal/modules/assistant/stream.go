@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -206,7 +207,11 @@ func serveStream(w http.ResponseWriter, r *http.Request, run func(context.Contex
 			}
 		case err := <-finished:
 			if err != nil && ctx.Err() == nil {
-				_ = write("error", map[string]string{"code": streamErrorCode(err)})
+				code := streamErrorCode(err)
+				// The user only sees the code; the cause goes to the log (no
+				// message content, no secrets: errors here carry neither).
+				slog.WarnContext(ctx, "assistant_stream_failed", "code", code, "error", err.Error(), "route", r.URL.Path, "request_id", r.Header.Get("X-Request-Id"))
+				_ = write("error", map[string]string{"code": code})
 			}
 			return
 		case <-ticker.C:
@@ -232,8 +237,14 @@ func streamErrorCode(err error) string {
 		return CodeDailyLimit
 	case errors.Is(err, ErrUnsafe), errors.Is(err, ai.ErrInjection):
 		return CodeUnsafe
-	default:
+	case errors.Is(err, ErrAIUnavailable), errors.Is(err, ai.ErrUnavailable), errors.Is(err, ai.ErrNotConfigured):
 		return CodeAIUnavailable
+	case errors.Is(err, ErrAPIUnavailable):
+		return CodeActionFailed
+	default:
+		// Anything else is a server-side failure after the model answered,
+		// not an AI outage; say so instead of blaming the provider.
+		return CodeInternal
 	}
 }
 
