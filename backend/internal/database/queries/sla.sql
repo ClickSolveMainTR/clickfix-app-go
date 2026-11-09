@@ -175,7 +175,8 @@ DELETE FROM conversation_sla_metrics WHERE organization_id = $1 AND conversation
 -- writes the metrics second; a sweep that locked the metric first and then
 -- updated the conversation deadlocked against it (and against a cascading
 -- organization delete). Claiming both rows here, skipping any that is held,
--- means the sweep never waits on a conversation.
+-- means the sweep never waits on a conversation. Platform-wide sweep by
+-- design: the organization is taken from each row for the follow-up writes.
 SELECT sqlc.embed(m), sqlc.embed(c) FROM conversation_sla_metrics m
 JOIN conversations c ON c.organization_id = m.organization_id AND c.id = m.conversation_id
 WHERE m.completed_at IS NULL AND m.paused_at IS NULL AND m.breached_at IS NULL

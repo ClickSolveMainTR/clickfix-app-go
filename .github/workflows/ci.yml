@@ -180,12 +180,14 @@ jobs:
       # Several self-hosted runners share one machine and one home directory.
       # The action's cache restore and golangci-lint's default cache directory
       # (~/.cache/golangci-lint) then collide between parallel jobs, which
-      # failed a run on the cache lock. Each runner gets its own directory
-      # next to its work tree (kept between runs) and skips the action cache.
+      # failed a run on the cache lock. Each runner gets its own directory,
+      # named after the runner (runners installed with a shared --work
+      # directory would otherwise still collide), kept between runs, and
+      # skips the action cache.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         env:
-          GOLANGCI_LINT_CACHE: ${{ runner.environment != 'github-hosted' && format('{0}/../golangci-lint-cache', runner.temp) || '' }}
+          GOLANGCI_LINT_CACHE: ${{ runner.environment != 'github-hosted' && format('{0}/../golangci-lint-cache-{1}', runner.temp, runner.name) || '' }}
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           working-directory: backend

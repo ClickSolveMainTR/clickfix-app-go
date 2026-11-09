@@ -38,7 +38,8 @@ type ClaimDueSLAMetricsRow struct {
 // writes the metrics second; a sweep that locked the metric first and then
 // updated the conversation deadlocked against it (and against a cascading
 // organization delete). Claiming both rows here, skipping any that is held,
-// means the sweep never waits on a conversation.
+// means the sweep never waits on a conversation. Platform-wide sweep by
+// design: the organization is taken from each row for the follow-up writes.
 func (q *Queries) ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ClaimDueSLAMetricsRow, error) {
 	rows, err := q.db.Query(ctx, claimDueSLAMetrics, arg.Now, arg.MaxRows)
 	if err != nil {

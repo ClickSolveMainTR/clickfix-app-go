@@ -514,7 +514,8 @@ type Querier interface {
 	// writes the metrics second; a sweep that locked the metric first and then
 	// updated the conversation deadlocked against it (and against a cascading
 	// organization delete). Claiming both rows here, skipping any that is held,
-	// means the sweep never waits on a conversation.
+	// means the sweep never waits on a conversation. Platform-wide sweep by
+	// design: the organization is taken from each row for the follow-up writes.
 	ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetricsParams) ([]ClaimDueSLAMetricsRow, error)
 	// Registers a sender domain for an organization; a domain already owned by
 	// another organization returns no row.

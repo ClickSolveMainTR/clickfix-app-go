@@ -15,7 +15,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
@@ -70,11 +69,7 @@ func IsCatalogConflict(err error) bool {
 	if errors.Is(err, model.ErrConflict) {
 		return true
 	}
-	if !errors.Is(err, model.ErrInvalid) {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "missing feature") || strings.Contains(msg, "unknown/duplicate feature")
+	return errors.Is(err, model.ErrMissingFeature) || errors.Is(err, model.ErrUnknownFeature)
 }
 
 // Grant returns a GrantFunc that enables every boolean feature and gives every
