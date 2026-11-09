@@ -105,6 +105,14 @@ export function AccountPage({ uuid }: { uuid: string }) {
           <p className="text-muted-foreground truncate text-sm">
             {[company.domain, company.tier].filter(Boolean).join(" · ") || "—"}
           </p>
+          {company.external_id && (
+            <p className="text-muted-foreground truncate text-xs">
+              {t("contacts.external_id.company")}:{" "}
+              <span className="text-foreground font-mono">
+                {company.external_id}
+              </span>
+            </p>
+          )}
         </div>
         <div className="ml-auto flex items-center gap-2">
           <CompanyHealthBadge health={company.health} />

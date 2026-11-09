@@ -14,9 +14,11 @@ import (
 	core "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/access"
+	convmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	conv "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/rbac"
 	"github.com/google/uuid"
@@ -259,7 +261,10 @@ func (s *ToolService) execute(ctx context.Context, org, actor int64, c db.Conver
 		if err != nil {
 			return "", err
 		}
-		output = map[string]any{"uuid": contact.Uuid, "name": contact.Name, "email": contact.Email, "phone": contact.Phone}
+		output, err = s.contactContext(ctx, org, contact)
+		if err != nil {
+			return "", err
+		}
 	case "conversation_history":
 		rows, err := s.Repo.Q.AIAgentMessages(ctx, db.AIAgentMessagesParams{OrganizationID: org, ConversationID: c.ID})
 		if err != nil {
@@ -381,4 +386,70 @@ func issueTools() []ai.Tool {
 }
 func statusTool() ai.Tool {
 	return ai.Tool{Name: "status_page_query", Description: "Read organization service status", Schema: objectSchema(map[string]any{})}
+}
+
+// contactContext is what lookup_contact tells the model about the customer
+// (CF-195): who it is (identity state, the customer's own ids, kept apart
+// for the person and the company) and the accepted custom field values of
+// the contact and its company. Only fields with a live definition are
+// shown, by label; values of removed or unknown keys never reach the
+// model. The result is masked by the caller like every tool output.
+func (s *ToolService) contactContext(ctx context.Context, org int64, contact db.Contact) (map[string]any, error) {
+	var verifiedAt *time.Time
+	if contact.VerifiedAt.Valid {
+		t := contact.VerifiedAt.Time
+		verifiedAt = &t
+	}
+	email, phone := nullableText(contact.Email), nullableText(contact.Phone)
+	out := map[string]any{
+		"uuid": contact.Uuid, "name": contact.Name, "email": contact.Email, "phone": contact.Phone,
+		"external_id":    contact.ExternalID,
+		"identity_state": convmodel.IdentityState(verifiedAt, contact.Name, email, phone),
+	}
+	fields, err := s.acceptedFields(ctx, org, customfields.EntityContact, contact.CustomFields)
+	if err != nil {
+		return nil, err
+	}
+	out["custom_fields"] = fields
+	if contact.CompanyID.Valid {
+		co, err := s.Repo.Q.GetCompanyForAIContext(ctx, db.GetCompanyForAIContextParams{OrganizationID: org, ID: contact.CompanyID.Int64})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		if err == nil {
+			cf, err := s.acceptedFields(ctx, org, customfields.EntityCompany, co.CustomFields)
+			if err != nil {
+				return nil, err
+			}
+			out["company"] = map[string]any{"name": co.Name, "external_id": co.ExternalID, "tier": co.Tier, "custom_fields": cf}
+		}
+	}
+	return out, nil
+}
+
+// acceptedFields keeps the values whose key has a live definition of the
+// entity, labelled for the model.
+func (s *ToolService) acceptedFields(ctx context.Context, org int64, entity string, raw []byte) (map[string]any, error) {
+	out := map[string]any{}
+	values := map[string]any{}
+	if len(raw) == 0 || json.Unmarshal(raw, &values) != nil || len(values) == 0 {
+		return out, nil
+	}
+	defs, err := s.Repo.Q.ListCustomFieldDefinitions(ctx, db.ListCustomFieldDefinitionsParams{OrganizationID: org, EntityType: entity})
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range defs {
+		if v, ok := values[d.Key]; ok && v != nil {
+			out[d.Label] = v
+		}
+	}
+	return out, nil
+}
+
+func nullableText(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
 }

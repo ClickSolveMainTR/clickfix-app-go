@@ -332,26 +332,35 @@ func (q *Queries) CountAutomationRules(ctx context.Context, organizationID int64
 
 const countIntegrationCompanies = `-- name: CountIntegrationCompanies :one
 SELECT count(*) FROM companies WHERE organization_id=$1 AND deleted_at IS NULL
+  AND ($2::text IS NULL OR external_id=$2::text)
 `
 
-func (q *Queries) CountIntegrationCompanies(ctx context.Context, organizationID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countIntegrationCompanies, organizationID)
+type CountIntegrationCompaniesParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	ExternalID     pgtype.Text `json:"external_id"`
+}
+
+func (q *Queries) CountIntegrationCompanies(ctx context.Context, arg CountIntegrationCompaniesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countIntegrationCompanies, arg.OrganizationID, arg.ExternalID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const countIntegrationContacts = `-- name: CountIntegrationContacts :one
-SELECT count(*) FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL AND ($2::text='' OR name ILIKE '%'||$2::text||'%')
+SELECT count(*) FROM contacts c WHERE c.organization_id=$1 AND c.deleted_at IS NULL
+  AND ($2::text='' OR c.name ILIKE '%'||$2::text||'%' OR c.email ILIKE '%'||$2::text||'%')
+  AND ($3::text IS NULL OR c.external_id=$3::text)
 `
 
 type CountIntegrationContactsParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Q              string `json:"q"`
+	OrganizationID int64       `json:"organization_id"`
+	Q              string      `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
 }
 
 func (q *Queries) CountIntegrationContacts(ctx context.Context, arg CountIntegrationContactsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countIntegrationContacts, arg.OrganizationID, arg.Q)
+	row := q.db.QueryRow(ctx, countIntegrationContacts, arg.OrganizationID, arg.Q, arg.ExternalID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -968,23 +977,33 @@ func (q *Queries) ListAutomationRules(ctx context.Context, arg ListAutomationRul
 }
 
 const listIntegrationCompanies = `-- name: ListIntegrationCompanies :many
-SELECT uuid,name,created_at FROM companies WHERE organization_id=$1 AND deleted_at IS NULL ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT uuid,name,domain,external_id,created_at FROM companies WHERE organization_id=$1 AND deleted_at IS NULL
+  AND ($2::text IS NULL OR external_id=$2::text)
+ORDER BY id DESC LIMIT $4 OFFSET $3
 `
 
 type ListIntegrationCompaniesParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	Limit          int32 `json:"limit"`
-	Offset         int32 `json:"offset"`
+	OrganizationID int64       `json:"organization_id"`
+	ExternalID     pgtype.Text `json:"external_id"`
+	RowOffset      int32       `json:"row_offset"`
+	RowLimit       int32       `json:"row_limit"`
 }
 
 type ListIntegrationCompaniesRow struct {
-	Uuid      uuid.UUID          `json:"uuid"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Uuid       uuid.UUID          `json:"uuid"`
+	Name       string             `json:"name"`
+	Domain     pgtype.Text        `json:"domain"`
+	ExternalID pgtype.Text        `json:"external_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListIntegrationCompanies(ctx context.Context, arg ListIntegrationCompaniesParams) ([]ListIntegrationCompaniesRow, error) {
-	rows, err := q.db.Query(ctx, listIntegrationCompanies, arg.OrganizationID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listIntegrationCompanies,
+		arg.OrganizationID,
+		arg.ExternalID,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -992,7 +1011,13 @@ func (q *Queries) ListIntegrationCompanies(ctx context.Context, arg ListIntegrat
 	items := []ListIntegrationCompaniesRow{}
 	for rows.Next() {
 		var i ListIntegrationCompaniesRow
-		if err := rows.Scan(&i.Uuid, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Name,
+			&i.Domain,
+			&i.ExternalID,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1004,29 +1029,43 @@ func (q *Queries) ListIntegrationCompanies(ctx context.Context, arg ListIntegrat
 }
 
 const listIntegrationContacts = `-- name: ListIntegrationContacts :many
-SELECT uuid,name,email,phone,custom_fields,created_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL AND ($2::text='' OR name ILIKE '%'||$2::text||'%') ORDER BY id DESC LIMIT $4 OFFSET $3
+SELECT c.uuid,c.name,c.email,c.phone,c.external_id,c.verified_at,c.custom_fields,c.created_at,
+       co.uuid AS company_uuid, co.external_id AS company_external_id
+FROM contacts c
+LEFT JOIN companies co ON co.organization_id=c.organization_id AND co.id=c.company_id AND co.deleted_at IS NULL
+WHERE c.organization_id=$1 AND c.deleted_at IS NULL
+  AND ($2::text='' OR c.name ILIKE '%'||$2::text||'%' OR c.email ILIKE '%'||$2::text||'%')
+  AND ($3::text IS NULL OR c.external_id=$3::text)
+ORDER BY c.id DESC LIMIT $5 OFFSET $4
 `
 
 type ListIntegrationContactsParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Q              string `json:"q"`
-	RowOffset      int32  `json:"row_offset"`
-	RowLimit       int32  `json:"row_limit"`
+	OrganizationID int64       `json:"organization_id"`
+	Q              string      `json:"q"`
+	ExternalID     pgtype.Text `json:"external_id"`
+	RowOffset      int32       `json:"row_offset"`
+	RowLimit       int32       `json:"row_limit"`
 }
 
 type ListIntegrationContactsRow struct {
-	Uuid         uuid.UUID          `json:"uuid"`
-	Name         string             `json:"name"`
-	Email        pgtype.Text        `json:"email"`
-	Phone        pgtype.Text        `json:"phone"`
-	CustomFields []byte             `json:"custom_fields"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	Name              string             `json:"name"`
+	Email             pgtype.Text        `json:"email"`
+	Phone             pgtype.Text        `json:"phone"`
+	ExternalID        pgtype.Text        `json:"external_id"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	CustomFields      []byte             `json:"custom_fields"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	CompanyUuid       pgtype.UUID        `json:"company_uuid"`
+	CompanyExternalID pgtype.Text        `json:"company_external_id"`
 }
 
+// CF-195: external_id finds the customer's own user id exactly.
 func (q *Queries) ListIntegrationContacts(ctx context.Context, arg ListIntegrationContactsParams) ([]ListIntegrationContactsRow, error) {
 	rows, err := q.db.Query(ctx, listIntegrationContacts,
 		arg.OrganizationID,
 		arg.Q,
+		arg.ExternalID,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -1042,8 +1081,12 @@ func (q *Queries) ListIntegrationContacts(ctx context.Context, arg ListIntegrati
 			&i.Name,
 			&i.Email,
 			&i.Phone,
+			&i.ExternalID,
+			&i.VerifiedAt,
 			&i.CustomFields,
 			&i.CreatedAt,
+			&i.CompanyUuid,
+			&i.CompanyExternalID,
 		); err != nil {
 			return nil, err
 		}

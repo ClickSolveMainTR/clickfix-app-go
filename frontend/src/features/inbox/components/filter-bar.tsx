@@ -68,7 +68,8 @@ export function FilterBar({ filters, savedView, setParams }: Props) {
     (filters.priorities?.length ?? 0) +
     (filters.channelTypes?.length ?? 0) +
     (filters.tags?.length ?? 0) +
-    (filters.brand ? 1 : 0);
+    (filters.brand ? 1 : 0) +
+    (filters.identity ? 1 : 0);
 
   const current = (): ConversationViewFilters => {
     const f: ConversationViewFilters = {};
@@ -129,6 +130,28 @@ export function FilterBar({ filters, savedView, setParams }: Props) {
                     {t(`inbox.priority.${p}`)}
                   </CommandItem>
                 ))}
+              </CommandGroup>
+              <CommandSeparator />
+              <CommandGroup heading={t("inbox.filters.identity")}>
+                {(["verified", "self_named", "anonymous"] as const).map(
+                  (st) => (
+                    <CommandItem
+                      key={st}
+                      value={`identity-${st}`}
+                      onSelect={() =>
+                        setParams({ id: filters.identity === st ? null : st })
+                      }
+                    >
+                      <Check
+                        className={cn(
+                          "size-3.5",
+                          filters.identity !== st && "opacity-0",
+                        )}
+                      />
+                      {t(`contacts.identity.${st}`)}
+                    </CommandItem>
+                  ),
+                )}
               </CommandGroup>
               <CommandSeparator />
               <CommandGroup heading={t("inbox.filters.channel")}>
@@ -212,7 +235,13 @@ export function FilterBar({ filters, savedView, setParams }: Props) {
                   <CommandGroup>
                     <CommandItem
                       onSelect={() =>
-                        setParams({ pr: null, ch: null, tg: null, br: null })
+                        setParams({
+                          pr: null,
+                          ch: null,
+                          tg: null,
+                          br: null,
+                          id: null,
+                        })
                       }
                     >
                       <X className="size-3.5" />

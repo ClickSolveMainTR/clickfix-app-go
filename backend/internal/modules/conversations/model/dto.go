@@ -18,40 +18,53 @@ type ContactRef struct {
 	Name  string    `json:"name"`
 	Email *string   `json:"email"`
 	Phone *string   `json:"phone"`
+	// ExternalID is the customer's own user id (CF-195); nil when unknown.
+	ExternalID *string `json:"external_id"`
+	// IdentityState: verified, anonymous or self_named (IdentityState).
+	IdentityState string     `json:"identity_state"`
+	VerifiedAt    *time.Time `json:"verified_at"`
+}
+
+// CompanyRef is the company of a conversation with its external id
+// (CF-195), kept separate from the contact's.
+type CompanyRef struct {
+	UUID       uuid.UUID `json:"uuid"`
+	Name       string    `json:"name"`
+	ExternalID *string   `json:"external_id"`
 }
 
 // Conversation is one inbox row / conversation header.
 type Conversation struct {
-	BrandID              *uuid.UUID `json:"brand_id"`
-	UUID                 uuid.UUID  `json:"uuid"`
-	Number               int64      `json:"number"`
-	ChannelType          string     `json:"channel_type"`
-	Inbox                *Ref       `json:"inbox"`
-	Contact              ContactRef `json:"contact"`
-	Company              *Ref       `json:"company"`
-	Subject              string     `json:"subject"`
-	Status               string     `json:"status"`
-	CustomStatus         *Ref       `json:"custom_status"`
-	Priority             string     `json:"priority"`
-	Source               string     `json:"source"`
-	Assignee             *Ref       `json:"assignee"`
-	Team                 *Ref       `json:"team"`
-	TagUUIDs             []string   `json:"tag_uuids"`
-	CustomFields         any        `json:"custom_fields"`
-	UnreadCount          int        `json:"unread_count"`
-	MessageCount         int        `json:"message_count"`
-	LastMessagePreview   string     `json:"last_message_preview"`
-	LastMessageDirection string     `json:"last_message_direction"`
-	LastMessageAt        time.Time  `json:"last_message_at"`
-	LastInboundAt        *time.Time `json:"last_inbound_at"`
-	WaitingSince         *time.Time `json:"waiting_since"`
-	FirstResponseAt      *time.Time `json:"first_response_at"`
-	FirstResponseDueAt   *time.Time `json:"first_response_due_at"`
-	NextResponseDueAt    *time.Time `json:"next_response_due_at"`
-	ResolutionDueAt      *time.Time `json:"resolution_due_at"`
-	SLABreachedAt        *time.Time `json:"sla_breached_at"`
-	SnoozedUntil         *time.Time `json:"snoozed_until"`
-	ResolvedAt           *time.Time `json:"resolved_at"`
+	BrandID              *uuid.UUID  `json:"brand_id"`
+	UUID                 uuid.UUID   `json:"uuid"`
+	Number               int64       `json:"number"`
+	ChannelType          string      `json:"channel_type"`
+	Inbox                *Ref        `json:"inbox"`
+	Contact              ContactRef  `json:"contact"`
+	Company              *CompanyRef `json:"company"`
+	Subject              string      `json:"subject"`
+	Status               string      `json:"status"`
+	CustomStatus         *Ref        `json:"custom_status"`
+	Priority             string      `json:"priority"`
+	Source               string      `json:"source"`
+	Assignee             *Ref        `json:"assignee"`
+	Team                 *Ref        `json:"team"`
+	TagUUIDs             []string    `json:"tag_uuids"`
+	CustomFields         any         `json:"custom_fields"`
+	UnreadCount          int         `json:"unread_count"`
+	MessageCount         int         `json:"message_count"`
+	LastMessagePreview   string      `json:"last_message_preview"`
+	LastMessageDirection string      `json:"last_message_direction"`
+	LastMessageAt        time.Time   `json:"last_message_at"`
+	LastInboundAt        *time.Time  `json:"last_inbound_at"`
+	WaitingSince         *time.Time  `json:"waiting_since"`
+	FirstResponseAt      *time.Time  `json:"first_response_at"`
+	FirstResponseDueAt   *time.Time  `json:"first_response_due_at"`
+	NextResponseDueAt    *time.Time  `json:"next_response_due_at"`
+	ResolutionDueAt      *time.Time  `json:"resolution_due_at"`
+	SLABreachedAt        *time.Time  `json:"sla_breached_at"`
+	SnoozedUntil         *time.Time  `json:"snoozed_until"`
+	ResolvedAt           *time.Time  `json:"resolved_at"`
 	// WindowOpen: a free-form reply is allowed now (channels with a reply
 	// window, e.g. 24 hours on WhatsApp); WindowEndsAt when it closes.
 	WindowOpen   bool       `json:"window_open"`

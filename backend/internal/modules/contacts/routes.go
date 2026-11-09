@@ -27,6 +27,8 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	}
 	route("GET /v1/tenant/contacts", h.ListContacts, read)
 	route("POST /v1/tenant/contacts", h.CreateContact, write)
+	// CF-195: create or update by the customer's own user id.
+	route("PUT /v1/tenant/contacts/by-external-id", h.UpsertContact, write)
 	route("GET /v1/tenant/contacts/{uuid}", h.GetContact, read)
 	route("PATCH /v1/tenant/contacts/{uuid}", h.UpdateContact, write)
 	route("DELETE /v1/tenant/contacts/{uuid}", h.DeleteContact, del)

@@ -83,6 +83,20 @@ export function CompaniesPage() {
             ),
         }),
         createColumn<Company>({
+          id: "external_id",
+          accessorFn: (row) => row.external_id ?? "",
+          labelKey: "contacts.companies.fields.external_id",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.external_id ? (
+              <span className="font-mono text-xs">
+                {row.original.external_id}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<Company>({
           accessorKey: "tier",
           labelKey: "contacts.companies.fields.tier",
           cell: ({ row }) =>
@@ -288,6 +302,7 @@ export function CompanyDialog({
     name: company?.name ?? "",
     domain: company?.domain ?? "",
     tier: company?.tier ?? "",
+    external_id: company?.external_id ?? "",
     notes: company?.notes ?? "",
   });
   const [owner, setOwner] = useState<string | null>(
@@ -315,7 +330,7 @@ export function CompanyDialog({
             else m.create.mutate(body, done);
           }}
         >
-          {(["name", "domain", "tier"] as const).map((k) => (
+          {(["name", "domain", "external_id", "tier"] as const).map((k) => (
             <div key={k} className="grid gap-1.5">
               <Label htmlFor={`co-${k}`}>
                 {t(`contacts.companies.fields.${k}`)}
@@ -330,7 +345,8 @@ export function CompanyDialog({
             </div>
           ))}
           <p className="text-muted-foreground -mt-1 text-xs">
-            {t("contacts.companies.domain_hint")}
+            {t("contacts.companies.domain_hint")}{" "}
+            {t("contacts.companies.external_id_hint")}
           </p>
           <div className="grid gap-1.5">
             <Label>{t("contacts.companies.fields.account_owner")}</Label>

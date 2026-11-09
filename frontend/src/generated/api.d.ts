@@ -5992,7 +5992,8 @@ export interface paths {
          * @description Requires `tenant.conversations.read`. Newest activity first by default.
          *     `assignee` is `me`, `unassigned` or an agent uuid; list filters take
          *     comma-separated values. `q` matches subject, last message, contact
-         *     name / e-mail / phone, or the conversation number. When search is
+         *     name / e-mail / phone, the contact's external id (exact, CF-195), or
+         *     the conversation number. When search is
          *     enabled `q` also matches message texts and internal notes through
          *     the organization's search index (CF-45); such rows carry
          *     `search_match` with the matched text. The other filters still apply.
@@ -10546,6 +10547,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/contacts/by-external-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update a contact by its external id
+         * @description CF-195. Requires `tenant.contacts.write`. `external_id` is required: the
+         *     customer's own user id, the same value the widget sends as `user_id`.
+         *     The contact with that id is updated (200), else a new one is created
+         *     (201). Calling it twice with the same id edits one contact. It never
+         *     matches by e-mail or phone, so a visitor who only typed an address is
+         *     not taken over. The contact stays unverified until the user signs in
+         *     through widget identify.
+         */
+        put: operations["upsertTenantContactByExternalId"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/contacts/{uuid}": {
         parameters: {
             query?: never;
@@ -13466,10 +13493,34 @@ export interface paths {
         };
         /**
          * Public API: get contacts
-         * @description API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+         * @description API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
          */
         get: operations["getV1PublicApiContacts"];
         put?: never;
+        /**
+         * Public API: create a contact (CF-195)
+         * @description Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+         */
+        post: operations["postV1PublicApiContacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public-api/contacts/by-external-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Public API: create or update a contact by your user id (CF-195)
+         * @description Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+         */
+        put: operations["putV1PublicApiContactByExternalId"];
         post?: never;
         delete?: never;
         options?: never;
@@ -13486,7 +13537,7 @@ export interface paths {
         };
         /**
          * Public API: get companies
-         * @description API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+         * @description API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
          */
         get: operations["getV1PublicApiCompanies"];
         put?: never;
@@ -16475,9 +16526,11 @@ export interface components {
             /** Format: date-time */
             checked_at: string;
         };
+        /** @description Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site. */
         IntegrationCreateConversation: {
             /** Format: uuid */
-            contact_uuid: string;
+            contact_uuid?: string;
+            contact_external_id?: string;
             /** Format: uuid */
             inbox_uuid: string;
             subject: string;
@@ -22223,6 +22276,13 @@ export interface components {
         ChannelHealth: {
             /** @enum {string} */
             state: "ok" | "warning" | "error" | "paused" | "unknown";
+            /**
+             * @description Provider message or a fixed code: token_expiring, send_failures;
+             *     for widgets (CF-195) identity_secret_missing (no identity secret,
+             *     signed-in users stay anonymous) and identity_rejected:<code>
+             *     (identify calls were rejected in the last week; code is
+             *     WIDGET_IDENTITY_DISABLED or WIDGET_IDENTITY_INVALID).
+             */
             detail: string;
             /** Format: date-time */
             checked_at: string | null;
@@ -22459,6 +22519,18 @@ export interface components {
             name: string;
             email: string | null;
             phone: string | null;
+            /** @description CF-195: the customer's own user id. */
+            external_id: string | null;
+            identity_state: components["schemas"]["ContactIdentityState"];
+            /** Format: date-time */
+            verified_at: string | null;
+        };
+        /** @description CF-195: the conversation's company with its own external id (separate from the contact's). */
+        ConversationCompany: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            external_id: string | null;
         };
         /** @enum {string} */
         ConversationStatus: "open" | "pending" | "snoozed" | "resolved" | "closed";
@@ -22474,7 +22546,7 @@ export interface components {
             channel_type: string;
             inbox: components["schemas"]["InboxRef"] | null;
             contact: components["schemas"]["ConversationContact"];
-            company: components["schemas"]["InboxRef"] | null;
+            company: components["schemas"]["ConversationCompany"] | null;
             subject: string;
             status: components["schemas"]["ConversationStatus"];
             custom_status: components["schemas"]["InboxRef"] | null;
@@ -24132,6 +24204,14 @@ export interface components {
             name: string;
             email: string | null;
             phone: string | null;
+            /** @description CF-195: the customer's own user id, unique in the organization. */
+            external_id: string | null;
+            identity_state: components["schemas"]["ContactIdentityState"];
+            /**
+             * Format: date-time
+             * @description Last widget identify that proved the id with user_hash.
+             */
+            verified_at: string | null;
             job_title: string;
             company: components["schemas"]["InboxRef"] | null;
             locale: string | null;
@@ -24166,7 +24246,17 @@ export interface components {
                 [key: string]: unknown;
             };
             blocked?: boolean;
+            /** @description CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it. */
+            external_id?: string;
         };
+        /**
+         * @description CF-195. verified: the contact proved the customer's user id with
+         *     user_hash (widget identify). anonymous: no name, e-mail or phone.
+         *     self_named: a name, e-mail or phone the contact or its channel gave,
+         *     not proved.
+         * @enum {string}
+         */
+        ContactIdentityState: "verified" | "anonymous" | "self_named";
         ContactMerge: {
             /** Format: uuid */
             from: string;
@@ -39815,6 +39905,8 @@ export interface operations {
                 tag?: string;
                 contact?: string;
                 company?: string;
+                /** @description CF-195: the contact's identity state. */
+                identity?: components["schemas"]["ContactIdentityState"];
                 mentioned?: "1" | "true";
                 unread?: "1" | "true";
                 sla_breached?: "1" | "true" | "0" | "false";
@@ -50494,6 +50586,10 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 company?: string;
+                /** @description CF-195: the customer's own user id, exact match. `q` also matches external ids. */
+                external_id?: string;
+                /** @description CF-195: verified (proved with user_hash), anonymous or self_named. */
+                identity?: components["schemas"]["ContactIdentityState"];
                 sort?: "created_at" | "-created_at" | "name" | "-name" | "last_seen_at" | "-last_seen_at";
             };
             header: {
@@ -50554,6 +50650,50 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    upsertTenantContactByExternalId: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"] & Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -51132,6 +51272,8 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                /** @description CF-195: the company's own id in the customer's system, exact match. */
+                external_id?: string;
                 limit?: number;
                 offset?: number;
             };
@@ -58157,6 +58299,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: exact external id. */
+                external_id?: string;
             };
             header: {
                 "X-Organization": string;
@@ -58185,6 +58329,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: exact external id. */
+                external_id?: string;
             };
             header: {
                 "X-Organization": string;
@@ -58404,8 +58550,10 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                /** @description Case-insensitive match on the contact name. */
+                /** @description Case-insensitive match on the contact name or e-mail. */
                 q?: string;
+                /** @description CF-195: the customer's own user id, exact match. */
+                external_id?: string;
             };
             header?: never;
             path?: never;
@@ -58427,11 +58575,82 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    postV1PublicApiContacts: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    putV1PublicApiContactByExternalId: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"] & Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getV1PublicApiCompanies: {
         parameters: {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: the company's id in your system, exact match. */
+                external_id?: string;
             };
             header?: never;
             path?: never;

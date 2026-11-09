@@ -22,7 +22,9 @@ FROM companies co
 LEFT JOIN users u ON u.id = co.account_owner_id
 WHERE co.organization_id = sqlc.arg(organization_id)
   AND co.deleted_at IS NULL
-  AND (sqlc.narg(q)::text IS NULL OR co.name ILIKE '%' || sqlc.narg(q) || '%' OR co.domain ILIKE '%' || sqlc.narg(q) || '%')
+  AND (sqlc.narg(q)::text IS NULL OR co.name ILIKE '%' || sqlc.narg(q) || '%' OR co.domain ILIKE '%' || sqlc.narg(q) || '%'
+       OR co.external_id ILIKE '%' || sqlc.narg(q) || '%')
+  AND (sqlc.narg(external_id)::text IS NULL OR co.external_id = sqlc.narg(external_id)::text)
 ORDER BY lower(co.name), co.id
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
@@ -30,7 +32,9 @@ LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 SELECT COUNT(*)::bigint FROM companies
 WHERE organization_id = sqlc.arg(organization_id)
   AND deleted_at IS NULL
-  AND (sqlc.narg(q)::text IS NULL OR name ILIKE '%' || sqlc.narg(q) || '%' OR domain ILIKE '%' || sqlc.narg(q) || '%');
+  AND (sqlc.narg(q)::text IS NULL OR name ILIKE '%' || sqlc.narg(q) || '%' OR domain ILIKE '%' || sqlc.narg(q) || '%'
+       OR external_id ILIKE '%' || sqlc.narg(q) || '%')
+  AND (sqlc.narg(external_id)::text IS NULL OR external_id = sqlc.narg(external_id)::text);
 
 -- name: UpdateCompany :one
 UPDATE companies SET
@@ -61,9 +65,9 @@ WHERE organization_id = sqlc.arg(organization_id) AND company_id IS NULL AND del
   AND lower(split_part(email, '@', 2)) = lower(sqlc.arg(domain)::text);
 
 -- name: InsertContact :one
-INSERT INTO contacts (organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, job_title)
+INSERT INTO contacts (organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, job_title, external_id)
 VALUES (sqlc.arg(organization_id), sqlc.narg(company_id), sqlc.arg(name), sqlc.narg(email), sqlc.narg(phone),
-        sqlc.narg(locale), sqlc.narg(timezone), sqlc.arg(notes), sqlc.arg(custom_fields), sqlc.arg(job_title))
+        sqlc.narg(locale), sqlc.narg(timezone), sqlc.arg(notes), sqlc.arg(custom_fields), sqlc.arg(job_title), sqlc.narg(external_id))
 RETURNING *;
 
 -- name: GetContactByID :one
@@ -71,6 +75,26 @@ SELECT * FROM contacts WHERE organization_id = $1 AND id = $2;
 
 -- name: GetContactByUUID :one
 SELECT * FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL;
+
+-- name: GetContactByExternalID :one
+-- CF-195: the customer's own user id (unique per organization).
+SELECT * FROM contacts
+WHERE organization_id = $1 AND external_id = sqlc.arg(external_id)::text AND deleted_at IS NULL;
+
+-- name: MarkContactVerified :exec
+-- CF-195: a user_hash check succeeded. The external id is taken only when
+-- the contact has none and no other live contact holds it, so a contact
+-- matched by e-mail never steals another user's id.
+UPDATE contacts c SET
+    verified_at = sqlc.arg(verified_at),
+    external_id = CASE
+        WHEN c.external_id IS NULL AND NOT EXISTS (
+            SELECT 1 FROM contacts o
+            WHERE o.organization_id = c.organization_id AND o.external_id = sqlc.arg(external_id)::text
+              AND o.deleted_at IS NULL AND o.id <> c.id)
+        THEN sqlc.arg(external_id)::text
+        ELSE c.external_id END
+WHERE c.organization_id = sqlc.arg(organization_id) AND c.id = sqlc.arg(id) AND c.deleted_at IS NULL;
 
 -- name: FindContactByEmail :one
 SELECT * FROM contacts
@@ -96,7 +120,15 @@ WHERE c.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(q)::text IS NULL
        OR c.name ILIKE '%' || sqlc.narg(q) || '%'
        OR c.email ILIKE '%' || sqlc.narg(q) || '%'
-       OR c.phone ILIKE '%' || sqlc.narg(q) || '%')
+       OR c.phone ILIKE '%' || sqlc.narg(q) || '%'
+       OR c.external_id ILIKE '%' || sqlc.narg(q) || '%')
+  -- CF-195: exact external id and identity state (verified / anonymous /
+  -- self_named, see contactIdentityState).
+  AND (sqlc.narg(external_id)::text IS NULL OR c.external_id = sqlc.narg(external_id)::text)
+  AND (sqlc.narg(identity_state)::text IS NULL
+       OR (sqlc.narg(identity_state)::text = 'verified' AND c.verified_at IS NOT NULL)
+       OR (sqlc.narg(identity_state)::text = 'anonymous' AND c.verified_at IS NULL AND c.name = '' AND c.email IS NULL AND c.phone IS NULL)
+       OR (sqlc.narg(identity_state)::text = 'self_named' AND c.verified_at IS NULL AND (c.name <> '' OR c.email IS NOT NULL OR c.phone IS NOT NULL)))
 ORDER BY
   CASE WHEN sqlc.arg(sort_field)::text = 'name' AND NOT sqlc.arg(sort_desc)::boolean THEN lower(c.name) END ASC,
   CASE WHEN sqlc.arg(sort_field)::text = 'name' AND sqlc.arg(sort_desc)::boolean THEN lower(c.name) END DESC,
@@ -115,7 +147,15 @@ WHERE c.organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(q)::text IS NULL
        OR c.name ILIKE '%' || sqlc.narg(q) || '%'
        OR c.email ILIKE '%' || sqlc.narg(q) || '%'
-       OR c.phone ILIKE '%' || sqlc.narg(q) || '%');
+       OR c.phone ILIKE '%' || sqlc.narg(q) || '%'
+       OR c.external_id ILIKE '%' || sqlc.narg(q) || '%')
+  -- CF-195: exact external id and identity state (verified / anonymous /
+  -- self_named, see contactIdentityState).
+  AND (sqlc.narg(external_id)::text IS NULL OR c.external_id = sqlc.narg(external_id)::text)
+  AND (sqlc.narg(identity_state)::text IS NULL
+       OR (sqlc.narg(identity_state)::text = 'verified' AND c.verified_at IS NOT NULL)
+       OR (sqlc.narg(identity_state)::text = 'anonymous' AND c.verified_at IS NULL AND c.name = '' AND c.email IS NULL AND c.phone IS NULL)
+       OR (sqlc.narg(identity_state)::text = 'self_named' AND c.verified_at IS NULL AND (c.name <> '' OR c.email IS NOT NULL OR c.phone IS NOT NULL)));
 
 -- name: UpdateContact :one
 UPDATE contacts SET
@@ -128,7 +168,8 @@ UPDATE contacts SET
     notes = sqlc.arg(notes),
     custom_fields = sqlc.arg(custom_fields),
     blocked = sqlc.arg(blocked),
-    job_title = sqlc.arg(job_title)
+    job_title = sqlc.arg(job_title),
+    external_id = sqlc.narg(external_id)
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
 RETURNING *;
 
@@ -225,3 +266,8 @@ SELECT * FROM contacts WHERE organization_id=sqlc.arg(organization_id) AND delet
  AND length(regexp_replace(sqlc.arg(phone)::text,'[^0-9]','','g'))>=10
  AND right(regexp_replace(phone,'[^0-9]','','g'),10)=right(regexp_replace(sqlc.arg(phone)::text,'[^0-9]','','g'),10)
 ORDER BY id LIMIT 1;
+
+-- name: GetCompanyForAIContext :one
+-- CF-195: the company the AI sees next to the contact.
+SELECT name, external_id, tier, custom_fields FROM companies
+WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL;

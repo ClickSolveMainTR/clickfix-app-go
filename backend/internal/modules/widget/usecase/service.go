@@ -557,12 +557,26 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 	next.User = in.UserID
 	org, inst := w.Instance.OrganizationID, w.Instance.ID
 	err := s.store.InTx(ctx, func(ctx context.Context, tx *convrepository.Tx) error {
+		// CF-195: a contact the customer created through the contacts API
+		// with this user id is the user's contact; bind the widget
+		// identity to it before resolving, so no second contact appears.
+		if err := s.bindExternalContact(ctx, tx, org, inst, in.UserID, next.ExternalID(), in.Name); err != nil {
+			return err
+		}
 		rc, err := tx.ResolveContact(ctx, convrepository.IdentityInput{
 			OrganizationID: org, ChannelType: channels.TypeWidget, InstanceID: inst,
 			ExternalID: next.ExternalID(), DisplayName: clip(strings.TrimSpace(in.Name), 255), Email: email, Phone: phone,
 			Meta: []byte(`{"verified":true}`), SeenAt: s.now(),
 		})
 		if err != nil {
+			return err
+		}
+		// The user id is the contact's external id from now on, and the
+		// contact is verified (the badge in the panel).
+		if err := tx.Q.MarkContactVerified(ctx, db.MarkContactVerifiedParams{
+			VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, ExternalID: in.UserID,
+			OrganizationID: org, ID: rc.Contact.ID,
+		}); err != nil {
 			return err
 		}
 		if in.Name = strings.TrimSpace(in.Name); in.Name != "" {
@@ -606,6 +620,32 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 		s.log.Warn("widget_identity_rejection_clear_failed", "instance", w.Instance.UUID, "error", err)
 	}
 	return s.visitor(ctx, w, next)
+}
+
+// bindExternalContact attaches the widget identity of a verified user to
+// the live contact that already has the user id as its external id, when
+// the identity does not exist yet (CF-195).
+func (s *Service) bindExternalContact(ctx context.Context, tx *convrepository.Tx, org, inst int64, userID, identityID, name string) error {
+	instance := pgtype.Int8{Int64: inst, Valid: true}
+	_, err := tx.Q.FindContactIdentity(ctx, db.FindContactIdentityParams{
+		OrganizationID: org, ChannelType: channels.TypeWidget, ChannelInstanceID: instance, ExternalID: identityID,
+	})
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	c, err := tx.Q.GetContactByExternalID(ctx, db.GetContactByExternalIDParams{OrganizationID: org, ExternalID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = tx.Q.UpsertContactIdentity(ctx, db.UpsertContactIdentityParams{
+		OrganizationID: org, ContactID: c.ID, ChannelType: channels.TypeWidget, ChannelInstanceID: instance,
+		ExternalID: identityID, DisplayName: clip(strings.TrimSpace(name), 255), Meta: []byte(`{"verified":true}`),
+		LastSeenAt: pgtype.Timestamptz{Time: s.now(), Valid: true},
+	})
+	return err
 }
 
 // Error codes of a rejected identify call, as the visitor API returns them

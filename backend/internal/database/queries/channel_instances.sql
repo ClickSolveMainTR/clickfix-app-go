@@ -110,3 +110,9 @@ RETURNING *;
 
 -- name: GetEmailDomain :one
 SELECT * FROM channel_email_domains WHERE organization_id = $1 AND domain = $2;
+
+-- name: ListWidgetIdentityRejections :many
+-- CF-195: rejected identify calls of the last week per widget (CF-176
+-- records them); channel health turns them into a warning.
+SELECT channel_instance_id, code, rejected_at FROM widget_identity_rejections
+WHERE organization_id = sqlc.arg(organization_id) AND rejected_at > now() - interval '7 days';
