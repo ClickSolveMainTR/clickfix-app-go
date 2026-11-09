@@ -17,6 +17,20 @@ export {
   type CustomFieldUserSource,
 } from "./components/user-source";
 
+export {
+  UnknownFieldsAlert,
+  ContactUnknownFields,
+} from "./components/unknown-fields-alert";
+export {
+  CatalogMatchEditor,
+  useCatalogListFields,
+} from "./components/catalog-match-editor";
+
+export {
+  TemplateVariableChips,
+  useTemplateVariables,
+} from "./components/template-variables";
+
 export { CustomFieldsSettingsPage } from "./components/settings/custom-fields-settings-page";
 export { CustomObjectsSettingsPage } from "./components/settings/custom-objects-settings-page";
 export { ObjectRecordsPage } from "./components/records/object-records-page";
@@ -27,6 +41,8 @@ export {
   useCustomObjectTypes,
   useCustomObjectType,
   useCustomObjectRecords,
+  useCustomFieldValues,
+  useUnknownCustomFieldKeys,
 } from "./hooks/use-custom-fields";
 export { customFieldsKeys } from "./hooks/query-keys";
 export {

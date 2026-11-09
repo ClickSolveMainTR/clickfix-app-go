@@ -34,6 +34,10 @@ func RegisterRoutes(
 	}
 
 	route("GET /v1/tenant/custom-fields/meta", h.Meta, read)
+	contactsRead := middleware.RequireTenantPermission(rbac.PermTenantContactsRead)
+	route("GET /v1/tenant/custom-fields/unknown-keys", h.ListUnknownKeys, read)
+	route("POST /v1/tenant/custom-fields/unknown-keys/{uuid}/dismiss", h.DismissUnknownKey, manage)
+	mux.Handle("GET /v1/tenant/custom-fields/values", middleware.Chain(http.HandlerFunc(h.Values), authn, org, read, contactsRead))
 	route("GET /v1/tenant/custom-fields", h.ListDefinitions, read)
 	route("POST /v1/tenant/custom-fields", h.CreateDefinition, manage)
 	route("PUT /v1/tenant/custom-fields/order", h.Reorder, manage)

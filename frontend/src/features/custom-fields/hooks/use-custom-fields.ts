@@ -79,3 +79,35 @@ export function useCustomObjectRecords(
     placeholderData: (previous) => previous,
   });
 }
+
+/** Open "tanımsız alan geldi" warnings, optionally of one widget (CF-196). */
+export function useUnknownCustomFieldKeys(
+  channelUuid?: string | null,
+  options: { enabled?: boolean } = {},
+) {
+  const org = useOrgKey();
+  return useQuery({
+    queryKey: customFieldsKeys.unknownKeys(org, channelUuid),
+    queryFn: () => customFieldsService.listUnknownKeys(channelUuid),
+    enabled: Boolean(org) && (options.enabled ?? true),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Agent view of a contact's or company's custom fields: definitions with
+ * visibility flags, values (sensitive ones masked) and undefined keys.
+ */
+export function useCustomFieldValues(
+  entityType: "contact" | "company",
+  entityUuid: string | null | undefined,
+  options: { enabled?: boolean } = {},
+) {
+  const org = useOrgKey();
+  return useQuery({
+    queryKey: customFieldsKeys.values(org, entityType, entityUuid ?? ""),
+    queryFn: () => customFieldsService.values(entityType, entityUuid ?? ""),
+    enabled: Boolean(org) && Boolean(entityUuid) && (options.enabled ?? true),
+    staleTime: 30_000,
+  });
+}

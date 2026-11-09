@@ -237,7 +237,7 @@
   "g.ai_hint": "AI asistanın bu widget'ın ziyaretçilerine yanıt verip vermeyeceğini ve ne zaman devredeceğini belirleyin.",
   "g.attachments": "Dosya ekleri",
   "g.attributes": "Öznitelik eşleme",
-  "g.attributes_hint": "Hangi SDK özniteliklerinin (setAttributes, identify, ön sohbet yanıtları) hangi kişi alanlarını dolduracağı. Yalnız eşlenen anahtarlar kaydedilir; doğrulanmamış ziyaretçiler yalnız anonim işaretli anahtarları yazabilir.",
+  "g.attributes_hint": "İsteğe bağlı takma adlar: farklı adla gelen bir SDK özniteliğini (setAttributes, identify, ön sohbet yanıtları) bir kişi alanına ya da ad/e-posta/telefona bağlar. Kişi alanının anahtarıyla gelen öznitelik eşleme gerektirmez.",
   "g.audience": "Kitle",
   "g.channels": "Kanallar",
   "g.channels_hint": "Ana ekranda gösterilen diğer iletişim yolları.",
@@ -500,5 +500,7 @@
   "identity_warning.invalid_body": "Son identify çağrısındaki user_hash, user_id ile eşleşmedi (401 WIDGET_IDENTITY_INVALID). Sunucunuzdaki anahtarın bu widget'ın güncel anahtarı olduğunu ve imzanın user_id üzerinden hesaplandığını kontrol edin. Anahtarı yenilediyseniz sunucunuzda da güncelleyin.",
   "identity_warning.last_attempt": "Son reddedilen deneme: {{time}}",
   "identity_warning.clears": "Geçerli bir user_hash ile ilk doğrulamada bu uyarı kalkar.",
-  "identity_warning.go_security": "Güvenlik bölümüne git"
+  "identity_warning.go_security": "Güvenlik bölümüne git",
+  "g.attributes_publish_notice": "Özel alanlar tanımlandığı anda geçerlidir ve widget onları anahtarıyla doğrudan kabul eder. Buradaki takma ad eşlemeleri ise widget ayarlarının parçasıdır: Yayınla'ya basana kadar ziyaretçilere ulaşmaz.",
+  "text.greeting_variables_hint": "Karşılama metnine değişken yazabilirsiniz: ziyaretçinin adı (contact.first_name) ve AI'ın görebildiği özel alanlar ziyaretçinin değeriyle doldurulur; liste alanları seçenek adını gösterir, hassas alanlar boş kalır. Aşağıdaki değişkene tıklayınca panoya kopyalanır."
 }

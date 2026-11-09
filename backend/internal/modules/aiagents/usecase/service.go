@@ -40,6 +40,9 @@ type Service struct {
 	Sender   BotSender
 	Now      func() time.Time
 	Tools    *ToolService
+	// Fields adds the AI-visible contact/company custom fields to the
+	// context (CF-196); nil leaves them out.
+	Fields FieldSource
 }
 
 func New(repo *repository.Store, engine Engine, sender BotSender) *Service {
@@ -73,7 +76,7 @@ func (s *Service) context(ctx context.Context, org int64, conv db.Conversation) 
 	}
 	// Retain the newest context within the core's 24 KB input limit.
 	parts := []string{}
-	size := 0
+	size := 0 // the fields header is capped at maxFieldsBlock on top
 	for i := len(rows) - 1; i >= 0; i-- {
 		line := fmt.Sprintf("%s: %s\n", rows[i].SenderType, rows[i].Content)
 		if len(line) > 16000 {
@@ -86,7 +89,11 @@ func (s *Service) context(ctx context.Context, org int64, conv db.Conversation) 
 		size += len(line)
 	}
 	slices.Reverse(parts)
-	return strings.Join(parts, ""), nil
+	fields, err := s.fieldsContext(ctx, org, conv)
+	if err != nil {
+		return "", err
+	}
+	return fields + strings.Join(parts, ""), nil
 }
 
 func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) error {

@@ -37,6 +37,8 @@ import (
 	contactsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/contacts/usecase"
 	convrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	healthusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customerhealth/usecase"
+	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
+	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
@@ -165,7 +167,8 @@ func main() {
 	statusSvc := statususecase.New(statusrepo.New(pool, queries), nil, notifSvc, cfg.Encryption.Key, cfg.Auth.FrontendURL)
 	surveysSvc := surveysusecase.New(surveysrepo.New(pool, queries), nil, cfg.Encryption.Key, cfg.Auth.FrontendURL)
 	analyticsSvc := analyticsusecase.New(analyticsrepo.New(pool, queries))
-	slaSvc := slausecase.New(pool, queries, outbox.NewStore(pool, queries), log).WithResyncer(queueClient)
+	slaSvc := slausecase.New(pool, queries, outbox.NewStore(pool, queries), log).WithResyncer(queueClient).
+		WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries)))
 	// Routing (CF-53) assigns through the inbox core built below.
 	routingAssign := &inbox.RoutingAssigner{}
 	routingSvc := routingusecase.New(pool, queries, routingAssign, log)
@@ -174,6 +177,7 @@ func main() {
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: aiBilling}, aiCore.AI, nil)
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
+	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(pool, queries), Resolver: orguc.New(orgrepo.NewPostgres(pool, queries), nil), Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
 	consumerReg, err := eventconsumers.New(eventconsumers.Deps{
@@ -208,8 +212,8 @@ func main() {
 		ioadapters.NewActivity(queries),
 		&workforce.TimesheetAdapter{Service: &workforce.Service{Repo: billingrepo.New(pool, queries)}},
 		// CF-84: tenant contact / company imports run here too.
-		contactsio.NewContacts(workerContacts, queries),
-		contactsio.NewCompanies(workerContacts, queries),
+		contactsio.NewContacts(workerContacts, queries).WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries))),
+		contactsio.NewCompanies(workerContacts, queries).WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries))),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
 	importSvc := importusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)

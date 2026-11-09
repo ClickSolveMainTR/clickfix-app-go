@@ -22,7 +22,11 @@ const (
 	ArticleUnpublished = "knowledge.article_unpublished"
 )
 
-type Service struct{ Repo *repository.Store }
+type Service struct {
+	Repo *repository.Store
+	// Fields checks article audiences against the custom field catalog.
+	Fields FieldSource
+}
 
 func New(repo *repository.Store) *Service { return &Service{Repo: repo} }
 func (s *Service) Collections(ctx context.Context, org int64, limit, offset int32) ([]db.KnowledgeCollection, int64, error) {

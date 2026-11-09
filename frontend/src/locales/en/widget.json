@@ -237,7 +237,7 @@
   "g.ai_hint": "Decide whether the AI agent answers visitors of this widget and when it hands over.",
   "g.attachments": "Attachments",
   "g.attributes": "Attribute mapping",
-  "g.attributes_hint": "Which SDK attributes (setAttributes, identify, pre-chat answers) fill which contact fields. Only mapped keys are stored; unverified visitors only set keys marked anonymous.",
+  "g.attributes_hint": "Optional aliases: connect an SDK attribute that arrives under another name (setAttributes, identify, pre-chat answers) to a contact field or to name/e-mail/phone. Attributes sent with a contact field's key need no mapping.",
   "g.audience": "Audience",
   "g.channels": "Channels",
   "g.channels_hint": "Other ways to reach you, shown on the home screen.",
@@ -500,5 +500,7 @@
   "identity_warning.invalid_body": "The user_hash of the last identify call did not match user_id (401 WIDGET_IDENTITY_INVALID). Check that your server uses this widget's current secret and signs the user_id. If you rotated the secret, update it on your server too.",
   "identity_warning.last_attempt": "Last rejected attempt: {{time}}",
   "identity_warning.clears": "This warning clears on the first verification with a valid user_hash.",
-  "identity_warning.go_security": "Go to Security"
+  "identity_warning.go_security": "Go to Security",
+  "g.attributes_publish_notice": "Custom fields apply as soon as they are defined and the widget accepts them by key. The aliases here are part of the widget settings: visitors get them only after you publish.",
+  "text.greeting_variables_hint": "You can use variables in the greeting: the visitor's name (contact.first_name) and the custom fields the AI may read are filled with the visitor's values; list fields show the option label and sensitive fields stay empty. Click a variable below to copy it."
 }

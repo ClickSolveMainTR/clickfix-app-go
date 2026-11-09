@@ -248,6 +248,10 @@ func (h *Handler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	if err := h.svc.PersonalizeGreeting(r.Context(), wd, &out); err != nil {
+		h.fail(w, r, err)
+		return
+	}
 	response.JSON(w, r, http.StatusOK, out)
 }
 
@@ -704,7 +708,19 @@ func (h *Handler) HelpSearch(w http.ResponseWriter, r *http.Request) {
 		base := h.helpOrigin + "/help/" + url.PathEscape(slug) + "/brands/" + wd.Instance.BrandID.String()
 		out.Available = true
 		out.HelpCenterURL = &base
+		ids := make([]uuid.UUID, 0, len(rows))
 		for _, a := range rows {
+			ids = append(ids, a.Uuid)
+		}
+		hidden, err := h.svc.HiddenArticles(r.Context(), wd, bearer(r), ids)
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		for _, a := range rows {
+			if hidden[a.Uuid] {
+				continue
+			}
 			out.Items = append(out.Items, HelpArticle{Title: a.Title, Excerpt: a.Excerpt, URL: base + "/article/" + url.PathEscape(a.Slug) + "?lang=" + a.Locale})
 		}
 		response.JSON(w, r, http.StatusOK, out)
@@ -751,7 +767,19 @@ func (h *Handler) HelpSearch(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	ids := make([]uuid.UUID, 0, len(items))
 	for _, a := range items {
+		ids = append(ids, a.UUID)
+	}
+	hidden, err := h.svc.HiddenArticles(r.Context(), wd, bearer(r), ids)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	for _, a := range items {
+		if hidden[a.UUID] {
+			continue
+		}
 		link := base + "/article/" + url.PathEscape(a.Slug)
 		if a.Locale != "tr" {
 			link += "?lang=" + a.Locale

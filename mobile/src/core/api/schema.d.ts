@@ -9415,10 +9415,16 @@ export interface paths {
         head?: never;
         /**
          * Store mapped visitor attributes
-         * @description `ClickFix('setAttributes', ...)`. Only keys of the widget's attribute
-         *     mapping are stored; keys not marked anonymous need an identified
-         *     visitor. Without a contact yet the result is `pending` and the SDK
-         *     sends the attributes with the first message.
+         * @description `ClickFix('setAttributes', ...)`. A key is stored when it is the key of
+         *     a contact custom field (CF-196: defining the field is the only step;
+         *     the field's `widget_access` decides whether anonymous visitors may
+         *     write it, default identified visitors only) or an entry of the
+         *     widget's attribute mapping (an alias; entries not marked anonymous
+         *     need an identified visitor). List fields accept the option id or its
+         *     label and store the id. A key no field defines is listed in `unknown`
+         *     (and `ignored`), recorded as a "tanımsız alan" warning and kept on the
+         *     contact until a field is defined. Without a contact yet the result is
+         *     `pending` and the SDK sends the attributes with the first message.
          */
         patch: operations["widgetSetAttributes"];
         trace?: never;
@@ -10228,6 +10234,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/custom-fields/unknown-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Undefined keys the widget sent ("tanımsız alan geldi")
+         * @description CF-196. Keys a widget sent that no contact field defines. They are not
+         *     dropped silently: each key is listed here (newest first, at most 100)
+         *     until a field with that key is created (`from_unknown_key`) or the
+         *     warning is dismissed. `channel_uuid` narrows the list to one widget for
+         *     the channel setup check. Requires `tenant.custom_fields.read`.
+         */
+        get: operations["getTenantCustomFieldUnknownKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/custom-fields/unknown-keys/{uuid}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss an undefined-key warning
+         * @description Hides the warning until the key is received again. Requires `tenant.custom_fields.manage`.
+         */
+        post: operations["postTenantCustomFieldUnknownKeyDismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/custom-fields/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Custom field values of one contact or company (agent view)
+         * @description CF-196 read model for the contact/company card and the conversation
+         *     panel. Every live field with `visibility.agent` on, in display order,
+         *     with its stored `value` (option id for list fields; null when unset)
+         *     and `display` text (option label, "Evet"/"Hayır", "12.50 TRY").
+         *     Sensitive fields come back with `masked: true`, `value: null` and a
+         *     masked `display`. `unknown` lists the undefined keys this contact
+         *     received (contacts only), each with a `suggested_key` for the one-click
+         *     definition. Requires `tenant.custom_fields.read` and `tenant.contacts.read`.
+         */
+        get: operations["getTenantCustomFieldValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/custom-fields": {
         parameters: {
             query?: never;
@@ -10245,6 +10322,11 @@ export interface paths {
         /**
          * Create a custom field
          * @description Requires `tenant.custom_fields.manage`. Key and type are permanent.
+         *     The field is live at once (CF-196: no mapping or publish step): the
+         *     widget SDK may send it by key (`widget_access`), and with
+         *     `from_unknown_key` the matching undefined-key warning closes and the
+         *     values contacts already sent under that key are applied. Every create
+         *     and update is written to the audit log (before → after).
          *     Errors: `400 VALIDATION_ERROR` (details per definition field),
          *     `409 CUSTOM_FIELD_KEY_TAKEN`, `409 CUSTOM_FIELD_LIMIT_REACHED`.
          */
@@ -11354,6 +11436,36 @@ export interface paths {
          */
         get: operations["knowledgeVersions"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/knowledge/articles/{uuid}/audience": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Who the widget offers an article to
+         * @description CF-196 catalog conditions by option id. Requires tenant.settings.read.
+         */
+        get: operations["knowledgeArticleAudience"];
+        /**
+         * Set who the widget offers an article to
+         * @description Replaces the audience; it applies at once. Each condition names a live
+         *     list field of the contact, company or conversation; options may be sent
+         *     as ids or labels and are stored as ids. An article with an audience is
+         *     only offered to widget visitors whose contact matches. Requires
+         *     tenant.settings.write.
+         */
+        put: operations["knowledgeSetArticleAudience"];
         post?: never;
         delete?: never;
         options?: never;
@@ -14022,7 +14134,7 @@ export interface paths {
         put?: never;
         /**
          * Create a canned response
-         * @description Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}.
+         * @description Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}, {{contact.<key>}}, {{company.<key>}} (CF-196: list fields render their option label; sensitive and agent-hidden fields render empty).
          */
         post: operations["createTenantCannedResponse"];
         delete?: never;
@@ -17340,6 +17452,8 @@ export interface components {
         WidgetAttributesResult: {
             applied: string[];
             ignored: string[];
+            /** @description Keys no field defines (CF-196); recorded as warnings, also in `ignored`. */
+            unknown: string[];
             /** @description No contact yet; send them with the first message */
             pending: boolean;
         };
@@ -24014,6 +24128,133 @@ export interface components {
          *     multiselect a list of option values; money `{amount_minor, currency}`.
          */
         CustomFieldValue: unknown;
+        /**
+         * @description Who reads the value (CF-196), one switch per surface. `sensitive` on
+         *     the definition overrides `ai` and `reports`.
+         */
+        CustomFieldVisibility: {
+            /** @description Agent screens (contact/company card, conversation panel) */
+            agent: boolean;
+            /** @description AI context and AI-written text such as the widget greeting */
+            ai: boolean;
+            /** @description Workflow and automation conditions */
+            workflow: boolean;
+            /** @description Exports and reports */
+            reports: boolean;
+        };
+        /**
+         * @description Whether the widget SDK may write the field by key: never, identified visitors (default) or anyone.
+         * @enum {string}
+         */
+        CustomFieldWidgetAccess: "none" | "verified" | "anonymous";
+        /**
+         * @description Catalog condition (CF-196): the entity's list field `key` holds one of
+         *     `options`. Options are option ids (`CustomFieldOption.value`); a label
+         *     sent by a client is resolved to its id on save, so renaming an option
+         *     label never breaks the condition. Used by SLA policies and article
+         *     audiences; workflow conditions use the same ids through
+         *     `contact.custom_fields.<key>` / `company.custom_fields.<key>`.
+         */
+        CustomFieldMatch: {
+            /** @enum {string} */
+            entity: "contact" | "company" | "conversation";
+            key: string;
+            options: string[];
+        };
+        CustomFieldUnknownKey: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            entity_type: "contact" | "company";
+            /** @description The key as received (e.g. `lisans_bitis` or `Lisans Bitiş`) */
+            key: string;
+            /** @description Valid field key derived from `key` (may be empty) */
+            suggested_key: string;
+            /** @enum {string} */
+            source: "widget" | "api";
+            /**
+             * @description Suggested field type
+             * @enum {string}
+             */
+            value_kind: "text" | "number" | "boolean" | "date";
+            /** Format: int64 */
+            hits: number;
+            /** Format: uuid */
+            channel_uuid: string | null;
+            channel_name: string | null;
+            /** Format: uuid */
+            last_contact_uuid: string | null;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+        };
+        CustomFieldEntityFieldValue: {
+            /** Format: uuid */
+            uuid: string;
+            key: string;
+            label: string;
+            type: components["schemas"]["CustomFieldType"];
+            options: components["schemas"]["CustomFieldOption"][];
+            visibility: components["schemas"]["CustomFieldVisibility"];
+            sensitive: boolean;
+            /** @description Stored value (see CustomFieldValue); null when unset or masked */
+            value: unknown;
+            /** @description Text to show; empty when unset */
+            display: string;
+            /** @description Sensitive value hidden from agent screens */
+            masked: boolean;
+        };
+        CustomFieldUnknownValue: {
+            key: string;
+            suggested_key: string;
+            /** @description The value as received */
+            value: unknown;
+            /** @description Sent by an identified visitor */
+            verified: boolean;
+            /** Format: date-time */
+            received_at: string;
+        };
+        CustomFieldEntityValues: {
+            /** @enum {string} */
+            entity_type: "contact" | "company";
+            /** Format: uuid */
+            entity_uuid: string;
+            fields: components["schemas"]["CustomFieldEntityFieldValue"][];
+            unknown: components["schemas"]["CustomFieldUnknownValue"][];
+        };
+        EnvelopeCustomFieldEntityValues: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomFieldEntityValues"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomFieldUnknownKeyList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["CustomFieldUnknownKey"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDismissed: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                dismissed: boolean;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description Who the widget offers the article to (CF-196). Every condition must hold; no conditions: everyone. */
+        KnowledgeArticleAudience: {
+            conditions: components["schemas"]["CustomFieldMatch"][];
+        };
+        EnvelopeKnowledgeArticleAudience: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["KnowledgeArticleAudience"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         CustomFieldDefinition: {
             /** Format: uuid */
             uuid: string;
@@ -24031,6 +24272,10 @@ export interface components {
             condition: components["schemas"]["CustomFieldCondition"] | null;
             position: number;
             archived: boolean;
+            visibility: components["schemas"]["CustomFieldVisibility"];
+            /** @description Masked on agent screens; never sent to AI context, exports, reports or template text */
+            sensitive: boolean;
+            widget_access: components["schemas"]["CustomFieldWidgetAccess"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -24049,7 +24294,14 @@ export interface components {
             config?: components["schemas"]["CustomFieldConfig"];
             default?: components["schemas"]["CustomFieldValue"];
             condition?: components["schemas"]["CustomFieldCondition"] | null;
+            visibility?: components["schemas"]["CustomFieldVisibility"];
+            /** @default false */
+            sensitive: boolean;
+            widget_access?: components["schemas"]["CustomFieldWidgetAccess"];
+            /** @description Received key of the undefined-key warning this field answers */
+            from_unknown_key?: string;
         };
+        /** @description Option `value`s are permanent ids: renaming changes `label` only; a removed option must be archived instead. */
         CustomFieldUpdateRequest: {
             label?: string;
             description?: string;
@@ -24058,6 +24310,9 @@ export interface components {
             config?: components["schemas"]["CustomFieldConfig"];
             default?: components["schemas"]["CustomFieldValue"];
             condition?: components["schemas"]["CustomFieldCondition"] | null;
+            visibility?: components["schemas"]["CustomFieldVisibility"];
+            sensitive?: boolean;
+            widget_access?: components["schemas"]["CustomFieldWidgetAccess"];
         };
         CustomFieldReorderRequest: {
             entity_type: components["schemas"]["CustomFieldEntityType"];
@@ -25047,6 +25302,8 @@ export interface components {
              * @description Customer MRR at least this amount, in minor units (CF-86).
              */
             min_company_mrr_minor?: number | null;
+            /** @description List custom fields of the contact, company or conversation by option id (CF-196). */
+            custom_fields?: components["schemas"]["CustomFieldMatch"][];
         };
         SLATarget: {
             /** @enum {string} */
@@ -25369,6 +25626,7 @@ export interface components {
         AutomationCondition: {
             all?: components["schemas"]["AutomationCondition"][];
             any?: components["schemas"]["AutomationCondition"][];
+            /** @description A conversation field, custom_fields.<key>, contact.custom_fields.<key> or company.custom_fields.<key> (CF-196). List fields compare by option id; fields hidden from workflows are absent. */
             field?: string;
             /** @enum {string} */
             operator?: "eq" | "neq" | "contains" | "not_contains" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "exists" | "not_exists";
@@ -49909,6 +50167,105 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getTenantCustomFieldUnknownKeys: {
+        parameters: {
+            query?: {
+                channel_uuid?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open warnings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomFieldUnknownKeyList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomFieldUnknownKeyDismiss: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDismissed"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomFieldValues: {
+        parameters: {
+            query: {
+                entity_type: "contact" | "company";
+                entity_uuid: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomFieldEntityValues"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getTenantCustomFields: {
         parameters: {
             query: {
@@ -52447,6 +52804,75 @@ export interface operations {
                 };
                 content?: never;
             };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    knowledgeArticleAudience: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audience */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeKnowledgeArticleAudience"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    knowledgeSetArticleAudience: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeArticleAudience"];
+            };
+        };
+        responses: {
+            /** @description Saved audience */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeKnowledgeArticleAudience"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

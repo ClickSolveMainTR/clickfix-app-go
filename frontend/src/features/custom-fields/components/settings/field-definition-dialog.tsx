@@ -52,6 +52,8 @@ import { fieldDefinitionSchema } from "../../schemas/field-definition";
 import type { CustomFieldScope } from "../../services/custom-fields.service";
 import {
   CUSTOM_FIELD_TYPES,
+  VISIBILITY_KEYS,
+  WIDGET_ACCESS_LEVELS,
   type CustomFieldDefinition,
   type CustomFieldType,
 } from "../../types";
@@ -68,6 +70,8 @@ type FieldDefinitionDialogProps = {
   /** Every field of the entity (for condition targets and key checks). */
   siblings: readonly CustomFieldDefinition[];
   maxOptions?: number;
+  /** Create only: prefilled values, e.g. from an undefined-key warning. */
+  initial?: Partial<DefinitionDraft>;
 };
 
 /** Fields whose condition chain leads back to `key` (would form a cycle). */
@@ -94,6 +98,7 @@ export function FieldDefinitionDialog({
   definition,
   siblings,
   maxOptions,
+  initial,
 }: FieldDefinitionDialogProps) {
   const { t } = useLocale();
   const isEdit = Boolean(definition);
@@ -109,7 +114,7 @@ export function FieldDefinitionDialog({
     resolver: zodResolver(fieldDefinitionSchema(t) as never),
     defaultValues: definition
       ? draftFromDefinition(definition, others)
-      : emptyDraft(),
+      : { ...emptyDraft(initial?.type), ...initial },
   });
   const {
     control,
@@ -123,12 +128,17 @@ export function FieldDefinitionDialog({
 
   useEffect(() => {
     if (!open) return;
-    reset(definition ? draftFromDefinition(definition, others) : emptyDraft());
+    reset(
+      definition
+        ? draftFromDefinition(definition, others)
+        : { ...emptyDraft(initial?.type), ...initial },
+    );
     // Reset only when the dialog opens or switches field.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, definition?.uuid]);
 
   const type = useWatch({ control, name: "type" });
+  const sensitive = useWatch({ control, name: "sensitive" });
   const options = useWatch({ control, name: "options" });
   const configDraft = useWatch({ control, name: "config" });
 
@@ -248,7 +258,8 @@ export function FieldDefinitionDialog({
               : t("custom_fields.dialog.create_title")}
           </DialogTitle>
           <DialogDescription>
-            {t("custom_fields.dialog.description")}
+            {t("custom_fields.dialog.description")}{" "}
+            {t("custom_fields.dialog.live_notice")}
           </DialogDescription>
         </DialogHeader>
 
@@ -432,6 +443,97 @@ export function FieldDefinitionDialog({
               </FormFieldShell>
             </Section>
           ) : null}
+
+          <Section
+            title={t("custom_fields.dialog.section_visibility")}
+            description={t("custom_fields.dialog.visibility_hint")}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {VISIBILITY_KEYS.map((key) => (
+                <Controller
+                  key={key}
+                  control={control}
+                  name={`visibility.${key}`}
+                  render={({ field }) => {
+                    const blocked =
+                      sensitive && (key === "ai" || key === "reports");
+                    return (
+                      <div className="flex items-start gap-2">
+                        <Switch
+                          id={`cf-def-visibility-${key}`}
+                          checked={field.value && !blocked}
+                          disabled={blocked}
+                          onCheckedChange={field.onChange}
+                        />
+                        <div className="space-y-0.5">
+                          <Label
+                            htmlFor={`cf-def-visibility-${key}`}
+                            className="font-normal"
+                          >
+                            {t(`custom_fields.visibility.${key}`)}
+                          </Label>
+                          <p className="text-muted-foreground text-xs">
+                            {blocked
+                              ? t("custom_fields.visibility.blocked_sensitive")
+                              : t(`custom_fields.visibility.${key}_hint`)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              ))}
+            </div>
+            <Controller
+              control={control}
+              name="sensitive"
+              render={({ field }) => (
+                <div className="flex items-start gap-2">
+                  <Switch
+                    id="cf-def-sensitive"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="cf-def-sensitive" className="font-normal">
+                      {t("custom_fields.fields.sensitive")}
+                    </Label>
+                    <p className="text-muted-foreground text-xs">
+                      {t("custom_fields.dialog.sensitive_hint")}
+                    </p>
+                  </div>
+                </div>
+              )}
+            />
+            {scope.entityType === "contact" ? (
+              <FormFieldShell
+                name="cf-def-widget-access"
+                label={t("custom_fields.fields.widget_access")}
+                description={t("custom_fields.dialog.widget_access_hint", {
+                  key: form.getValues("key") || "alan_anahtari",
+                })}
+              >
+                <Controller
+                  control={control}
+                  name="widgetAccess"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="cf-def-widget-access">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WIDGET_ACCESS_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {t(`custom_fields.widget_access.${level}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </FormFieldShell>
+            ) : null}
+          </Section>
 
           <Section
             title={t("custom_fields.dialog.section_condition")}

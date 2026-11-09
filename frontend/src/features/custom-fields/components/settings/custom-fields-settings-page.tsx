@@ -14,6 +14,7 @@ import { useLocale } from "@/providers/locale-provider";
 import { useCustomObjectTypes } from "../../hooks/use-custom-fields";
 import type { CustomFieldScope } from "../../services/custom-fields.service";
 import { BUILTIN_ENTITY_TYPES } from "../../types";
+import { UnknownFieldsAlert } from "../unknown-fields-alert";
 import { FieldList } from "./field-list";
 
 const OBJECT_TAB_PREFIX = "object:";
@@ -85,6 +86,7 @@ export function CustomFieldsSettingsPage() {
         { label: t("custom_fields.title") },
       ]}
     >
+      <UnknownFieldsAlert className="mb-4" />
       <Tabs value={tab} onValueChange={selectTab} className="gap-4">
         <div className="-mx-1 overflow-x-auto px-1 pb-1">
           <TabsList>

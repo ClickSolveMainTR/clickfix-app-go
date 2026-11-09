@@ -1866,6 +1866,37 @@ type CustomFieldDefinition struct {
 	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Visibility     []byte             `json:"visibility"`
+	Sensitive      bool               `json:"sensitive"`
+	WidgetAccess   string             `json:"widget_access"`
+}
+
+type CustomFieldUnknownKey struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	EntityType        string             `json:"entity_type"`
+	Key               string             `json:"key"`
+	Source            string             `json:"source"`
+	ChannelInstanceID pgtype.Int8        `json:"channel_instance_id"`
+	ValueKind         string             `json:"value_kind"`
+	Hits              int64              `json:"hits"`
+	LastContactID     pgtype.Int8        `json:"last_contact_id"`
+	FirstSeenAt       pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
+	DismissedAt       pgtype.Timestamptz `json:"dismissed_at"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomFieldUnknownValue struct {
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	Key            string             `json:"key"`
+	Value          []byte             `json:"value"`
+	Verified       bool               `json:"verified"`
+	ReceivedAt     pgtype.Timestamptz `json:"received_at"`
 }
 
 type CustomObjectRecord struct {
@@ -2457,6 +2488,13 @@ type KnowledgeArticle struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	BrandID             pgtype.UUID        `json:"brand_id"`
+}
+
+type KnowledgeArticleAudience struct {
+	OrganizationID int64              `json:"organization_id"`
+	ArticleID      int64              `json:"article_id"`
+	Conditions     []byte             `json:"conditions"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type KnowledgeArticleFeedback struct {

@@ -245,6 +245,15 @@ func (s *Service) match(ctx context.Context, q *db.Queries, conv db.Conversation
 		if c.MinCompanyMRRMinor != nil && (company == nil || company.MrrMinor < *c.MinCompanyMRRMinor) {
 			continue
 		}
+		if len(c.CustomFields) > 0 {
+			ok, err := s.fieldsMatch(ctx, q, conv, c.CustomFields)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				continue
+			}
+		}
 		out, err := s.policyFor(ctx, q, conv, p)
 		if err != nil || out != nil {
 			return out, err
