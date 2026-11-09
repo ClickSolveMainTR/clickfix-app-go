@@ -137,6 +137,28 @@ export const knowledgeService = {
   },
 };
 
+export type KnowledgeArticleAudience =
+  components["schemas"]["KnowledgeArticleAudience"];
+
+/** Who the widget offers an article to (CF-196 catalog conditions). */
+export const knowledgeAudienceService = {
+  async get(uuid: string) {
+    return unwrap<KnowledgeArticleAudience>(
+      await apiClient.GET("/v1/tenant/knowledge/articles/{uuid}/audience", {
+        params: { header: orgHeader(), path: { uuid } },
+      }),
+    );
+  },
+  async set(uuid: string, body: KnowledgeArticleAudience) {
+    return unwrap<KnowledgeArticleAudience>(
+      await apiClient.PUT("/v1/tenant/knowledge/articles/{uuid}/audience", {
+        params: { header: orgHeader(), path: { uuid } },
+        body,
+      }),
+    );
+  },
+};
+
 export const knowledgeKeys = {
   all: (org: string | undefined) => ["tenant", org, "knowledge"] as const,
   articles: (org: string | undefined, filters: KnowledgeArticleFilters) =>
@@ -147,4 +169,6 @@ export const knowledgeKeys = {
     ["tenant", org, "knowledge", "versions", uuid] as const,
   collections: (org: string | undefined) =>
     ["tenant", org, "knowledge", "collections"] as const,
+  audience: (org: string | undefined, uuid: string) =>
+    ["tenant", org, "knowledge", "audience", uuid] as const,
 };

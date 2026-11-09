@@ -312,5 +312,8 @@
   "shortcuts.save": "Taslağı kaydet",
   "shortcuts.zoom": "Yakınlaştır / uzaklaştır",
   "shortcuts.fit": "Tümünü sığdır",
-  "shortcuts.layout": "Otomatik yerleşim"
+  "shortcuts.layout": "Otomatik yerleşim",
+  "fields.catalog_contact": "Kişi",
+  "fields.catalog_company": "Şirket",
+  "fields.catalog_conversation": "Konuşma"
 }

@@ -312,5 +312,8 @@
   "shortcuts.save": "Save draft",
   "shortcuts.zoom": "Zoom in / out",
   "shortcuts.fit": "Fit view",
-  "shortcuts.layout": "Auto layout"
+  "shortcuts.layout": "Auto layout",
+  "fields.catalog_contact": "Contact",
+  "fields.catalog_company": "Company",
+  "fields.catalog_conversation": "Conversation"
 }

@@ -554,7 +554,7 @@ func (q *Queries) GetCustomObjectType(ctx context.Context, arg GetCustomObjectTy
 const knowledgeArticleAudience = `-- name: KnowledgeArticleAudience :one
 SELECT a.id, COALESCE(au.conditions, '[]'::jsonb)::jsonb AS conditions
 FROM knowledge_articles a
-LEFT JOIN knowledge_article_audiences au ON au.article_id = a.id
+LEFT JOIN knowledge_article_audiences au ON au.article_id = a.id AND au.organization_id = a.organization_id
 WHERE a.organization_id = $1 AND a.uuid = $2 AND a.deleted_at IS NULL
 `
 
@@ -579,7 +579,7 @@ func (q *Queries) KnowledgeArticleAudience(ctx context.Context, arg KnowledgeArt
 const knowledgeAudiencesByUUID = `-- name: KnowledgeAudiencesByUUID :many
 SELECT a.uuid, au.conditions
 FROM knowledge_article_audiences au
-JOIN knowledge_articles a ON a.id = au.article_id
+JOIN knowledge_articles a ON a.id = au.article_id AND a.organization_id = au.organization_id
 WHERE au.organization_id = $1 AND a.uuid = ANY($2::uuid[])
   AND au.conditions <> '[]'::jsonb
 `
@@ -727,8 +727,8 @@ const listUnknownCustomFieldKeys = `-- name: ListUnknownCustomFieldKeys :many
 SELECT k.uuid, k.entity_type, k.key, k.source, k.value_kind, k.hits, k.first_seen_at, k.last_seen_at,
        ci.uuid AS channel_uuid, ci.name AS channel_name, ct.uuid AS last_contact_uuid
 FROM custom_field_unknown_keys k
-LEFT JOIN channel_instances ci ON ci.id = k.channel_instance_id
-LEFT JOIN contacts ct ON ct.id = k.last_contact_id
+LEFT JOIN channel_instances ci ON ci.id = k.channel_instance_id AND ci.organization_id = k.organization_id
+LEFT JOIN contacts ct ON ct.id = k.last_contact_id AND ct.organization_id = k.organization_id
 WHERE k.organization_id = $1
   AND k.dismissed_at IS NULL AND k.resolved_at IS NULL
   AND ($2::uuid IS NULL OR ci.uuid = $2::uuid)
@@ -983,8 +983,10 @@ func (q *Queries) SetCustomFieldDefinitionPosition(ctx context.Context, arg SetC
 const storeContactUnknownField = `-- name: StoreContactUnknownField :exec
 INSERT INTO custom_field_unknown_values (organization_id, contact_id, key, value, verified)
 SELECT $1, $2, $3::text, $4::jsonb, $5
-WHERE EXISTS (SELECT 1 FROM custom_field_unknown_values WHERE contact_id = $2 AND key = $3::text)
-   OR (SELECT COUNT(*) FROM custom_field_unknown_values WHERE contact_id = $2) < 50
+WHERE EXISTS (SELECT 1 FROM custom_field_unknown_values
+              WHERE organization_id = $1 AND contact_id = $2 AND key = $3::text)
+   OR (SELECT COUNT(*) FROM custom_field_unknown_values
+       WHERE organization_id = $1 AND contact_id = $2) < 50
 ON CONFLICT (contact_id, key) DO UPDATE
 SET value = EXCLUDED.value, verified = EXCLUDED.verified, received_at = NOW()
 `

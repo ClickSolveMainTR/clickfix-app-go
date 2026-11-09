@@ -284,9 +284,7 @@ export function validateCondition(
   const field = c.field ?? "";
   const known =
     (CONDITION_FIELDS as readonly string[]).includes(field) ||
-    (field.startsWith("custom_fields.") &&
-      field.length <= 180 &&
-      field !== "custom_fields.");
+    isCustomFieldPath(field);
   if (!known)
     return { key: "workflows.issues.condition_field", params: { field } };
   if (!c.operator || !OPERATORS.includes(c.operator))
@@ -662,4 +660,23 @@ export function splitDelay(seconds: number): {
 /** i18n key segment for dotted backend names (`conversation.created`). */
 export function slug(name: string) {
   return name.replace(/\./g, "_");
+}
+
+/**
+ * Custom field paths a condition may test (CF-196): the conversation's own
+ * fields and the contact's and company's. List fields compare by option id.
+ */
+export const CUSTOM_FIELD_PREFIXES = [
+  "custom_fields.",
+  "contact.custom_fields.",
+  "company.custom_fields.",
+] as const;
+
+export function isCustomFieldPath(field: string): boolean {
+  if (field.length > 180) return false;
+  return CUSTOM_FIELD_PREFIXES.some((p) => {
+    if (!field.startsWith(p)) return false;
+    const key = field.slice(p.length);
+    return key !== "" && !key.includes(".");
+  });
 }

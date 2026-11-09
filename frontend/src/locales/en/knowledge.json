@@ -104,5 +104,11 @@
   "versions.restore": "Restore version v{{version}} into the draft",
   "versions.restore_action": "Restore into draft",
   "versions.restored": "v{{version}} loaded into the draft. Save to keep it.",
-  "versions.empty_body": "This version has no content."
+  "versions.empty_body": "This version has no content.",
+  "audience.title": "Who sees it",
+  "audience.everyone": "No conditions: the widget suggests the article to everyone.",
+  "audience.targeted": "The widget suggests the article only to contacts that match every condition. Saving applies at once.",
+  "audience.save": "Save targeting",
+  "audience.saved": "Targeting saved.",
+  "audience.failed": "Targeting could not be saved."
 }

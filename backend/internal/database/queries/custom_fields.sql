@@ -146,8 +146,8 @@ SET hits = custom_field_unknown_keys.hits + 1,
 SELECT k.uuid, k.entity_type, k.key, k.source, k.value_kind, k.hits, k.first_seen_at, k.last_seen_at,
        ci.uuid AS channel_uuid, ci.name AS channel_name, ct.uuid AS last_contact_uuid
 FROM custom_field_unknown_keys k
-LEFT JOIN channel_instances ci ON ci.id = k.channel_instance_id
-LEFT JOIN contacts ct ON ct.id = k.last_contact_id
+LEFT JOIN channel_instances ci ON ci.id = k.channel_instance_id AND ci.organization_id = k.organization_id
+LEFT JOIN contacts ct ON ct.id = k.last_contact_id AND ct.organization_id = k.organization_id
 WHERE k.organization_id = sqlc.arg(organization_id)
   AND k.dismissed_at IS NULL AND k.resolved_at IS NULL
   AND (sqlc.narg(channel_uuid)::uuid IS NULL OR ci.uuid = sqlc.narg(channel_uuid)::uuid)
@@ -168,8 +168,10 @@ WHERE organization_id = sqlc.arg(organization_id) AND entity_type = sqlc.arg(ent
 -- name: StoreContactUnknownField :exec
 INSERT INTO custom_field_unknown_values (organization_id, contact_id, key, value, verified)
 SELECT sqlc.arg(organization_id), sqlc.arg(contact_id), sqlc.arg(key)::text, sqlc.arg(value)::jsonb, sqlc.arg(verified)
-WHERE EXISTS (SELECT 1 FROM custom_field_unknown_values WHERE contact_id = sqlc.arg(contact_id) AND key = sqlc.arg(key)::text)
-   OR (SELECT COUNT(*) FROM custom_field_unknown_values WHERE contact_id = sqlc.arg(contact_id)) < 50
+WHERE EXISTS (SELECT 1 FROM custom_field_unknown_values
+              WHERE organization_id = sqlc.arg(organization_id) AND contact_id = sqlc.arg(contact_id) AND key = sqlc.arg(key)::text)
+   OR (SELECT COUNT(*) FROM custom_field_unknown_values
+       WHERE organization_id = sqlc.arg(organization_id) AND contact_id = sqlc.arg(contact_id)) < 50
 ON CONFLICT (contact_id, key) DO UPDATE
 SET value = EXCLUDED.value, verified = EXCLUDED.verified, received_at = NOW();
 
@@ -223,7 +225,7 @@ SELECT custom_fields FROM companies WHERE organization_id = sqlc.arg(organizatio
 -- name: KnowledgeArticleAudience :one
 SELECT a.id, COALESCE(au.conditions, '[]'::jsonb)::jsonb AS conditions
 FROM knowledge_articles a
-LEFT JOIN knowledge_article_audiences au ON au.article_id = a.id
+LEFT JOIN knowledge_article_audiences au ON au.article_id = a.id AND au.organization_id = a.organization_id
 WHERE a.organization_id = sqlc.arg(organization_id) AND a.uuid = sqlc.arg(uuid) AND a.deleted_at IS NULL;
 
 -- name: SaveKnowledgeArticleAudience :exec
@@ -234,6 +236,6 @@ ON CONFLICT (article_id) DO UPDATE SET conditions = EXCLUDED.conditions, updated
 -- name: KnowledgeAudiencesByUUID :many
 SELECT a.uuid, au.conditions
 FROM knowledge_article_audiences au
-JOIN knowledge_articles a ON a.id = au.article_id
+JOIN knowledge_articles a ON a.id = au.article_id AND a.organization_id = au.organization_id
 WHERE au.organization_id = sqlc.arg(organization_id) AND a.uuid = ANY(sqlc.arg(uuids)::uuid[])
   AND au.conditions <> '[]'::jsonb;

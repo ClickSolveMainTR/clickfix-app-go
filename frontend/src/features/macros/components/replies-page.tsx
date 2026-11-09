@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { TemplateVariableChips } from "@/features/custom-fields";
 import { useLocale } from "@/providers/locale-provider";
 
 import {
@@ -285,6 +286,10 @@ function CannedDialog({
                 </button>
               ))}
             </div>
+            <TemplateVariableChips
+              audience="agent"
+              onPick={(v) => setForm((f) => ({ ...f, content: f.content + v }))}
+            />
           </div>
           {!item && scope.canWrite && (
             <label className="flex items-center gap-2 text-sm">

@@ -49,6 +49,7 @@ import {
   type KnowledgeArticleInput,
   type KnowledgeArticleVersion,
 } from "../services/knowledge.service";
+import { ArticleAudience } from "./article-audience";
 import { articleState, ArticleStateBadge } from "./article-state-badge";
 import { TagsInput } from "./tags-input";
 import { VersionHistory } from "./version-history";
@@ -546,6 +547,12 @@ function Editor({
                 />
               </div>
               {article && <ArticleBrandAssign articleUuid={article.uuid} />}
+              {article && (
+                <ArticleAudience
+                  articleUuid={article.uuid}
+                  readOnly={readOnly}
+                />
+              )}
               {article && (
                 <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t pt-3 text-xs">
                   <dt>{t("knowledge.editor.version")}</dt>

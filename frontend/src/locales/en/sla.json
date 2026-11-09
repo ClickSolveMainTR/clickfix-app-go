@@ -112,5 +112,6 @@
   "fields.company_plans_placeholder": "Pro, Enterprise",
   "fields.min_company_mrr": "Min. MRR",
   "fields.min_company_mrr_hint": "Company MRR is at least this amount",
-  "policy.min_mrr": "MRR ≥ {{amount}}"
+  "policy.min_mrr": "MRR ≥ {{amount}}",
+  "fields.custom_fields": "Custom field (from the catalog)"
 }

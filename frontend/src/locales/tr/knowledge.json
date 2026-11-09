@@ -104,5 +104,11 @@
   "versions.restore": "v{{version}} sürümünü taslağa geri yükle",
   "versions.restore_action": "Taslağa geri yükle",
   "versions.restored": "v{{version}} taslağa yüklendi. Kalıcı olması için kaydedin.",
-  "versions.empty_body": "Bu sürümün içeriği boş."
+  "versions.empty_body": "Bu sürümün içeriği boş.",
+  "audience.title": "Kime önerilsin",
+  "audience.everyone": "Koşul yok: widget makaleyi herkese önerir.",
+  "audience.targeted": "Widget makaleyi yalnız bütün koşullara uyan kişilere önerir. Kaydedince hemen geçerli olur.",
+  "audience.save": "Hedeflemeyi kaydet",
+  "audience.saved": "Hedefleme kaydedildi.",
+  "audience.failed": "Hedefleme kaydedilemedi."
 }

@@ -16,6 +16,14 @@ export const customFieldsKeys = {
       params.objectTypeUuid ?? null,
       Boolean(params.includeArchived),
     ] as const,
+  unknownKeys: (org: string | null, channelUuid?: string | null) =>
+    [
+      ...customFieldsKeys.all(org),
+      "unknown-keys",
+      channelUuid ?? null,
+    ] as const,
+  values: (org: string | null, entityType: string, entityUuid: string) =>
+    [...customFieldsKeys.all(org), "values", entityType, entityUuid] as const,
   objectTypes: (org: string | null) =>
     ["tenant", org, "custom-objects"] as const,
   objectType: (org: string | null, uuid: string) =>

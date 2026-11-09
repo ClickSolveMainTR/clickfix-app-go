@@ -81,7 +81,7 @@ func Project(defs []Definition, values map[string]any, a Audience) []FieldValue 
 func FilterFor(defs []Definition, values map[string]any, a Audience) map[string]any {
 	out := map[string]any{}
 	for _, d := range defs {
-		if v, ok := values[d.Key]; ok && d.Allows(a) && !(a == AudienceAgent && d.Sensitive) {
+		if v, ok := values[d.Key]; ok && d.Allows(a) && (a != AudienceAgent || !d.Sensitive) {
 			out[d.Key] = v
 		}
 	}
