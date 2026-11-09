@@ -32,16 +32,17 @@ type Capability struct {
     Title       string   // kart başlığı için kısa ad (en); i18n anahtarı TitleKey
     TitleKey    string   // "assistant.cap.channels_api_create"
     Description string   // modele giden açıklama (en)
-    Surfaces    []string // "web", "platform", "widget"; boş = yalnız "web"
-    Permission  string   // tenant.* slug'ı; boş = her üye
+    Surfaces    []string // "web", "mobile", "platform", "widget", "mcp"; boş = DefaultSurfaces (web + mobile)
+    Permission  string   // tenant.* slug'ı; boş = her üye (mcp yüzeyinde zorunlu)
     Kind        Kind
     Input       *jsonschema.Schema // girdi şeması; kayıtta bir kez çözülür
     Secrets     []Secret           // gizli alanlar: modele gösterilmez, modelden kabul edilmez
     Routes      []string           // ilgili sayfalar (rota önekleri) — sıralama ve rehber için
-    Focus       *Focus             // "sayfaya git ve vurgula" hedefi (rota + data-guide)
+    MCPName     string             // MCP araç adı (eski adları korumak için); boş = Name'in "_"li hâli
+    Aliases     []string           // eski eylem adları (open_route, connect_channel, ...)
 
     Validate func(Params) error                       // şemanın ötesindeki kurallar
-    Read     func(ctx, Exec, Params) (Result, error)  // read yetenekleri
+    Run      func(ctx, Exec, Params) (Result, error)  // read yetenekleri
     DryRun   func(ctx, Exec, Params) (Result, error)  // isteğe bağlı; AĞA ÇIKMAZ, veri değiştirmez
     Apply    func(ctx, Exec, Params) (Result, error)  // write/destructive
     Verify   func(ctx, Exec, Params, Result) (Check, error) // isteğe bağlı; uygulama sonrası durum denetimi
@@ -96,7 +97,7 @@ MCP kataloğu CF-192'de defterden üretilir; o zamana kadar iki sunum yan yana d
 5. Kullanıcı kartta parametreleri düzenler, isterse **Kuru çalıştır**, sonra **Onayla**.
 6. `confirm`: eylem hâlâ beklemede mi, yetenek hâlâ var mı, kullanıcının yetkisi var mı (modelin değil), düzenlenmiş parametreler şema + `Validate`'ten geçiyor mu; sonra `Apply`, `Verify`, denetim kaydı, sonuç mesajı.
 
-Eski `Executor` eylemleri bir bağdaştırıcıyla deftere girer; CF-188/CF-189 bunları birer birer gerçek yeteneklere çevirir.
+Eski `Executor` eylemlerinin çoğu CF-184…CF-190'da gerçek yeteneklere çevrildi (`Aliases` eski adları taşır). Geriye `create_channel_email`, `install_widget` ve `escalate_to_support` kaldı; bunlar `propose_action` ile önerilir.
 
 ## 2. Sayfa bağlamı
 
@@ -137,15 +138,15 @@ Uç noktalar:
 - `POST /v1/tenant/assistant/threads/{uuid}/actions/{action_id}/dry-run` gövde `{params?}`: düzenlenmiş parametrelerle kuru çalıştırır, sonucu karta yazar. Veri değişmez.
 - `POST .../confirm` gövde `{params?}` (isteğe bağlı): düzenlenmiş parametrelerle uygular. Yanıt mesajı + bir kez `secret_once`.
 
-**Sayfaya git ve vurgula**: `open_route` yeteneğine isteğe bağlı `focus` parametresi eklenir. Rota yalnız iç yol olabilir (`^/[a-z0-9/_\-\[\]]{0,150}$`, `//` ile başlayamaz, şema yok, sorgu ya da parça yok). Hedef `^[a-z0-9][a-z0-9_.-]{0,59}$`. Ön yüz `?focus=<hedef>` ile gider; ortak `FocusHighlighter` bileşeni `[data-guide="<hedef>"]` öğesini bulur (rehber turuyla aynı öznitelik), görünür alana kaydırır ve birkaç saniye halka ile vurgular. Hedef bulunamazsa sessizce geçer. Kullanıcı sohbette "şu düğmeyi göster" dediğinde model, sayfa rehberindeki hedef listesinden seçer; liste dışı hedef reddedilmez ama vurgulanamaz.
+**Sayfaya git ve vurgula**: `navigation.open_route` (eski adı `open_route`) yeteneğinin isteğe bağlı `target` parametresi vurgulanacak öğeyi verir; kart sonucu `focus: {route, target}` taşır. Rota yalnız iç yol olabilir (`^/[a-z0-9/_\-\[\]]{0,150}$`, `//` ile başlayamaz, şema yok, sorgu ya da parça yok). Hedef `^[a-z0-9][a-z0-9_.-]{0,59}$`. Ön yüz `?focus=<hedef>` ile gider; ortak `FocusHighlighter` bileşeni `[data-guide="<hedef>"]` öğesini bulur (rehber turuyla aynı öznitelik), görünür alana kaydırır ve birkaç saniye halka ile vurgular. Hedef bulunamazsa sessizce geçer. Kullanıcı sohbette "şu düğmeyi göster" dediğinde model, sayfa rehberindeki hedef listesinden seçer; liste dışı hedef reddedilmez ama vurgulanamaz.
 
 ## 4. Dosya ve bağlantı girdisi (CF-191)
 
 Senaryo 1'de yazılımcı kendi API dokümanını paylaşır.
 
-- **Dosya**: en fazla 2 MB; `text/plain`, `text/markdown`, `application/json`, `application/yaml`, `application/pdf`. Yalnız metin çıkarılır, en fazla 60 000 karakter, kalanı kesilir. Dosya `attachments` deposunda organizasyon kapsamlı saklanır, 7 gün sonra silinir.
-- **Bağlantı**: yalnız `https`. Çekme `platform/netguard` ile korunur: özel, yerel, bağlantı-yerel ve meta veri adresleri reddedilir; her yönlendirmede ve bağlanma anında IP yeniden denetlenir (DNS yeniden bağlama); en fazla 3 yönlendirme, 10 sn, 2 MB.
-- Çıkarılan metin modele `ConversationData` sarmalıyla **veri** olarak gider; içindeki talimatlar uygulanmaz.
+- **Dosya**: en fazla 2 MB; `text/plain`, `text/markdown`, `application/json`, `application/yaml`, `application/pdf`. Yalnız metin çıkarılır, en fazla 60 000 karakter, kalanı kesilir. Dosyanın baytları saklanmaz; yalnız çıkarılan (maskelenmiş) metin `assistant_documents` tablosunda iş parçacığına bağlı, organizasyon kapsamlı tutulur ve 7 gün sonra silinir. PDF ayrıştırması süre sınırlı ayrı bir goroutine'de, aynı anda en fazla iki tane çalışır (sıkıştırma bombasına karşı).
+- **Bağlantı**: yalnız `https`. Çekme `platform/netguard` ile korunur: özel, yerel, bağlantı-yerel ve meta veri adresleri reddedilir; her yönlendirmede ve bağlanma anında IP yeniden denetlenir (DNS yeniden bağlama); en fazla 3 yönlendirme, atlama başına 10 sn, toplam 15 sn, 2 MB.
+- Çıkarılan metin modele `read_document` aracının sonucu olarak **veri** gider; içindeki talimatlar uygulanmaz, `ai.Guard`'a takılan parçalar modele verilmez. Dosya adları da veridir; sistem talimatında "talimat değildir" diye işaretlenir.
 - Gizli değer maskeleme (§1.3) dosya ve bağlantı metnine de uygulanır.
 - Model dokümandan parametre çıkarır (webhook adresi, kimlik doğrulama türü, örnek gövde); bunlar yalnız onay kartında ön dolgu olarak görünür. Dokümandaki anahtarlar hiçbir zaman ön dolgu olmaz.
 
@@ -188,7 +189,7 @@ Senaryo 1'de yazılımcı kendi API dokümanını paylaşır.
 | Webhook | abonelik oluştur/güncelle, test teslimatı | P2 | CF-190 |
 | API anahtarı | oluştur (`secret_once`), iptal (destructive, adım yükseltme) | P2 | CF-190 |
 | Entegrasyonlar | durum, bağlantı sayfasına yönlendirme | P2 | CF-190 |
-| Gezinme | `open_route` (+`focus`) | P0 | CF-184 |
+| Gezinme | `navigation.open_route` (+`target`) | P0 | CF-184 |
 | Destek | `escalate_to_support` (değişmez) | P0 | — |
 
 ## 6. Yüzeyler ve izin listeleri
@@ -197,9 +198,13 @@ Senaryo 1'de yazılımcı kendi API dokümanını paylaşır.
 |---|---|---|
 | `web` (çekmece) | organizasyon üyesi | yetkiye göre tümü |
 | `platform` (platform yöneticisi sayfası) | platform personeli | yalnız `read` ve platform ayarları; organizasyon verisine yazma yok |
-| `widget` | organizasyonun **kimliği doğrulanmış** son kullanıcısı | açık izin listesi: `open_route` (yalnız widget rotaları), yardım merkezi araması, destek talebi; ziyaretçiye (kimliksiz) hiçbir `write` yeteneği verilmez |
+| `mobile` | organizasyon üyesi (mobil uygulama) | `web` ile aynı |
+| `mcp` | MCP istemcisi (OAuth, kapsam + üyenin yetkisi) | yalnız `Permission`'ı olan ve gizli alan taşımayan yetenekler; araç adı (`MCPName`) defterde tekildir |
+| `widget` | ClickFix destek widget'ındaki **kimliği doğrulanmış** organizasyon üyesi | kodda sabit izin listesi (`assistant.WidgetAllowed`): paneldeki okumalar, `navigation.open_route`, `channels.connect`, `ai.enable`, `channels.test`, `webhooks.test`. Gizli alanlı, yıkıcı ve geniş yazma yetenekleri, eski `propose_action` eylemleri ve destek aktarımı yoktur |
 
-Varsayılan kapalıdır: `Surfaces` boşsa yetenek yalnız `web`'dedir. Widget yüzeyi CF-193'te açılır; organizasyon ayarında widget için izin verilen yetenekler listelenir ve platform listesinin alt kümesi olmak zorundadır.
+`Surfaces` boşsa yetenek `DefaultSurfaces`'tadır (`web` + `mobile`); okumalar çoğunlukla `ReadSurfaces` (`web` + `mobile` + `mcp`) ile açılır. `platform` yüzeyi tanımlıdır ama şu an hiçbir yetenek onu kullanmaz. Widget izin listesi kayıttan sonra `Registry.AllowOn` ile uygulanır; onay anında iş parçacığının o anki yüzeyi yeniden denetlenir.
+
+**Paneldeki destek widget'ı (CF-193 kararları):** panelde widget'ın başlatıcısı gizlidir; tek giriş asistan çekmecesidir ve çekmecedeki "Canlı destek" widget'ı destek ekibiyle yeni bir konuşmaya açar. Panel widget'a Asistan sekmesi açtırmaz (widget çalışma zamanındaki asistan modu, betik sayfanın kendi kaynağından yüklendiğinde `init({ assistant })` ile açılabilir, ancak panelde kullanılmaz). Panelde birlikte göz atma ve oturum kaydı kapalıdır (`init({ capture: false })`). Üye, sunucuda hesaplanan imzayla (`user_hash`) tanıtılır; platform asistanı kapalıyken widget gömülmez.
 
 ## 7. Güvenlik modeli ve denetim kaydı
 
@@ -207,17 +212,18 @@ Varsayılan kapalıdır: `Surfaces` boşsa yetenek yalnız `web`'dedir. Widget y
 2. **Onaysız yazma yok.** `write`/`destructive` yetenekler yalnız öneri üretir; `Apply` yalnız `confirm` uç noktasından çağrılır. Onay, aynı iş parçacığında, aynı kullanıcının, beklemedeki bir eylemine bağlıdır.
 3. **Parametre doğrulama.** Şema (`additionalProperties: false`, tür, uzunluk, enum, desen) + `Validate`. Kullanıcının düzenlediği parametreler de aynı denetimden geçer.
 4. **Açık yönlendirme yok.** Rota yalnız iç yol; ön yüz `router.push` ile yalnız `/` ile başlayan yolu açar.
-5. **SSRF.** Kullanıcı ya da model kaynaklı her URL `channelhttp.ValidateURL` (şema, yerel adlar, özel IP) ile; ağ çağrısı yapan yerler ayrıca `netguard`'lı istemciyle.
+5. **SSRF.** Kullanıcı ya da model kaynaklı her URL `netguard.ValidateURL` (şema, yerel adlar, özel IP) ile denetlenir; ağ çağrısı yapan yerler `netguard` istemcisini kullanır (bağlanma anında IP denetimi, yönlendirmeler tek tek doğrulanır).
 6. **Gizli değerler** (§1.3): sohbete, `actions` JSON'una, loga, Sentry'ye, denetim kaydına ve model bağlamına yazılmaz.
 7. **Enjeksiyon.** Araç sonuçları, dokümanlar ve müşteri metni veridir; `ai.Guard` ve sistem talimatları korunur. Model metni hiçbir zaman SQL, yol ya da kabuk komutuna doğrudan girmez; yollar sabit şablon + doğrulanmış UUID ile kurulur.
-8. **Hız ve maliyet.** Var olan dakika/gün sınırları geçerli; `dry-run` ve `confirm` için iş parçacığı başına dakikada 20 istek.
+8. **Hız ve maliyet.** Var olan dakika/gün sınırları geçerli; `dry-run` ve `confirm` için organizasyon başına dakikada 30 istek; kanal test teslimatı kanal başına 10 dakikada 6.
+9. **Uygulama hataları.** Panel API'sine kullanıcı adına ulaşılamıyorsa eylem `confirmed` yapılmaz (kart beklemede kalır, yeniden onaylanabilir); `Apply` sırasında bir panik kartı `failed` yapar. Oluşturma yeteneklerinin yinelenme denetimi kuru çalıştırmanın yanında onay anında da çalışır.
 
 **Denetim kaydı** (`activity.Recorder`, kaynak `assistant_thread`):
 
 | Olay | Ne zaman | Yük |
 |---|---|---|
 | `assistant.action_dry_run` | kuru çalıştırma | `capability`, `outcome` |
-| `assistant.action_confirmed` | onay sonrası | `capability`, `kind`, `status`, `verification`, maskelenmiş parametreler |
+| `assistant.action_confirmed` | onay sonrası | `capability`, `kind`, `status`, `verification`, parametreler: defter yeteneklerinde gizli alanlar çıkarılmış, eski eylemlerde gizli görünen değerler `[SECRET]` ile maskelenmiş |
 | `assistant.action_rejected` | kullanıcı reddetti | `capability` |
 | `assistant.action_forbidden` | yetkisiz onay denemesi | `capability` |
 
@@ -248,7 +254,7 @@ Varsayılanlar uygulanır; değiştirmek isterseniz issue'ya yazın.
 
 1. **İmza anahtarının gösterimi.** Varsayılan: sunucu üretir, onay yanıtında bir kez gösterilir, sonra yalnız döndürülerek (rotate) yenilenebilir. Alternatif: kullanıcı kendi anahtarını girer (kart formunda da mümkün).
 2. **Sayfa içi testlerin onayı.** Varsayılan: dış uca istek atan her test (`channels.test`, e-posta test gönderimi, webhook test teslimatı) onaylıdır. Alternatif: yalnız okuma sayılıp onaysız çalışması.
-3. **Kayıtlı iş akışının kuru çalıştırması.** Varsayılan: onaysız `read` (veri değiştirmez), ama `tenant.automations.write` ister.
+3. **Kayıtlı iş akışının kuru çalıştırması.** Karar: `workflows.dry_run` ve `automations.dry_run` onaysız `read`'dir (yan etkisiz olduğu doğrulandı) ama `tenant.automations.write` ister. MCP'de de `read` sayılır: `mcp:write` kapsamı gerekmez, üyenin `tenant.automations.write` yetkisi yeterlidir.
 4. **Araç sayısı üst sınırı.** Varsayılan 24; aşarsa sayfa dışı yetenekler düşer. Model maliyeti ölçülünce yeniden bakılır.
-5. **Widget yüzeyinin varsayılanı.** Varsayılan: kapalı; organizasyon açıkça izin vermedikçe widget'ta yalnız gezinme ve yardım araması.
+5. **Widget yüzeyi.** Karar: izin listesi kodda sabit (§6); panelde widget başlatıcısı gizli, asistan tek giriş, birlikte göz atma kapalı.
 6. **Eski eylemler.** Varsayılan: bağdaştırıcıyla çalışmaya devam; CF-188/CF-189'da yeteneğe çevrilir.
