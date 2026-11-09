@@ -82,6 +82,12 @@ func (f *fixture) events(t *testing.T, name string) int64 {
 	return scalar(t, f.pool, "SELECT COUNT(*) FROM outbox_events WHERE organization_id = $1 AND event_name = $2", f.org, name)
 }
 
+// metrics counts this organization's SLA clocks matching cond.
+func (f *fixture) metrics(t *testing.T, cond string) int64 {
+	t.Helper()
+	return scalar(t, f.pool, "SELECT COUNT(*) FROM conversation_sla_metrics WHERE organization_id = $1 AND "+cond, f.org)
+}
+
 func mins(v int32) *int32 { return &v }
 
 func standardPolicy(name string, cond model.Conditions) model.PolicyInput {
@@ -135,20 +141,31 @@ func TestClocksFollowConversationAndSweepBreaches(t *testing.T) {
 	}
 
 	// The sweep breaches the overdue first response and warns nothing else
-	// (resolution is at 90/480 minutes, below the 80% warning).
+	// (resolution is at 90/480 minutes, below the 80% warning). The sweep is
+	// platform-wide and other packages' tests share this database, so its
+	// count is only a lower bound; the assertions look at this organization.
 	n, err := f.svc.Sweep(ctx)
-	if err != nil || n != 1 {
+	if err != nil || n < 1 {
 		t.Fatalf("sweep n=%d err=%v", n, err)
 	}
 	if got := f.events(t, "sla.breached"); got != 1 {
 		t.Fatalf("sla.breached = %d", got)
 	}
+	if got := f.metrics(t, "breached_at IS NOT NULL"); got != 1 {
+		t.Fatalf("breached clocks = %d", got)
+	}
+	if got := f.metrics(t, "warned_at IS NOT NULL AND breached_at IS NULL"); got != 0 {
+		t.Fatalf("warned clocks = %d", got)
+	}
 	var breached *time.Time
 	if err := f.pool.QueryRow(ctx, "SELECT sla_breached_at FROM conversations WHERE id = $1", id).Scan(&breached); err != nil || breached == nil {
 		t.Fatalf("conversation not marked breached: %v", err)
 	}
-	if n, _ := f.svc.Sweep(ctx); n != 0 {
-		t.Fatalf("second sweep moved %d", n)
+	if _, err := f.svc.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.events(t, "sla.breached"); got != 1 {
+		t.Fatalf("second sweep breached again: sla.breached = %d", got)
 	}
 
 	// The agent answers and sets pending: first response completes (already
@@ -187,8 +204,14 @@ func TestClocksFollowConversationAndSweepBreaches(t *testing.T) {
 
 	// 25 minutes later the sweep warns about the next response (80%).
 	f.now = f.now.Add(25 * time.Minute)
-	if n, err := f.svc.Sweep(ctx); err != nil || n != 1 || f.events(t, "sla.warning") != 1 {
+	if n, err := f.svc.Sweep(ctx); err != nil || n < 1 {
 		t.Fatalf("warning sweep n=%d err=%v", n, err)
+	}
+	if got := f.events(t, "sla.warning"); got != 1 {
+		t.Fatalf("sla.warning = %d", got)
+	}
+	if got := f.metrics(t, "metric = 'next_response' AND warned_at IS NOT NULL"); got != 1 {
+		t.Fatalf("warned next response clocks = %d", got)
 	}
 
 	// Priority goes urgent: resolution target drops to 120 minutes and the
@@ -214,6 +237,49 @@ func TestClocksFollowConversationAndSweepBreaches(t *testing.T) {
 	sla, _ = f.svc.ConversationSLA(ctx, f.org, u)
 	if m := metric(t, sla, "resolution"); m.Status != "breached" {
 		t.Fatalf("resolution %+v", m)
+	}
+}
+
+// The sweep claims a clock together with its conversation and skips both when
+// another transaction holds the conversation (a Sync in flight, an
+// organization being deleted). Before, it locked the metric first and then
+// waited on the conversation, which deadlocked against the holder.
+func TestSweepSkipsConversationsHeldByAnotherTransaction(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	if _, err := f.svc.CreatePolicy(ctx, f.org, standardPolicy("Varsayılan", model.Conditions{})); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := f.conversation(t, "widget", "normal", f.now.Add(-90*time.Minute))
+	if err := f.svc.Sync(ctx, f.org, id, f.now); err != nil {
+		t.Fatal(err)
+	}
+
+	holder, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Rollback(ctx) }()
+	if _, err := holder.Exec(ctx, "SELECT id FROM conversations WHERE id = $1 FOR UPDATE", id); err != nil {
+		t.Fatal(err)
+	}
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := f.svc.Sweep(bounded); err != nil {
+		t.Fatalf("sweep waited on a held conversation: %v", err)
+	}
+	if got := f.events(t, "sla.breached"); got != 0 {
+		t.Fatalf("held conversation was breached: sla.breached = %d", got)
+	}
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.svc.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.events(t, "sla.breached"); got != 1 {
+		t.Fatalf("released conversation not breached: sla.breached = %d", got)
 	}
 }
 

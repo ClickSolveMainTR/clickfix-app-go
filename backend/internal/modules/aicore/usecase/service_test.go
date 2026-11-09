@@ -12,6 +12,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/billingtest"
 	billingmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	billingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
@@ -77,45 +78,43 @@ func aiFixture(t *testing.T, modes ...string) (*Service, *fakeAI, int64, int64) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	enabled := true
-	limit := int64(1000000)
-	features, err := billing.Features(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	grants := []billingmodel.Grant{}
-	for _, feature := range features {
-		g := billingmodel.Grant{Feature: feature.Key, Enforcement: "hard", WarnPercent: 80}
-		if feature.Kind == "boolean" {
-			g.Enabled = &enabled
-		} else {
-			g.Limit = &limit
+	grant := billingtest.Grant(1000000, map[string]int64{"ai.credits": 1000})
+	if len(modes) > 0 && modes[0] == "unlimited" {
+		base := grant
+		grant = func(feature billingmodel.Feature) billingmodel.Grant {
+			g := base(feature)
 			if feature.Key == "ai.credits" {
-				credits := int64(1000)
-				g.Limit = &credits
+				g.Limit = nil
+				g.Unlimited = true
 			}
+			return g
 		}
-		if len(modes) > 0 && modes[0] == "unlimited" && feature.Key == "ai.credits" {
-			g.Limit = nil
-			g.Unlimited = true
-		}
-		grants = append(grants, g)
 	}
-	version, err := billing.SaveVersion(ctx, plan.UUID, uuid.Nil, billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}, Entitlements: grants})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prices := billingmodel.VersionInput{Prices: []billingmodel.Price{{Interval: "monthly", Currency: "TRY", Amount: 10000, VAT: 2000}}}
+	var version billingmodel.Version
 	if len(modes) > 0 && modes[0] == "missing-tokens" {
-		// Simulate an immutable legacy version created before the current complete-catalog validator.
+		// Simulate an immutable legacy version created before the current
+		// complete-catalog validator: save the draft, drop one grant and
+		// publish it behind the validator's back.
+		features, err := billing.Features(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := prices
+		for _, feature := range features {
+			in.Entitlements = append(in.Entitlements, grant(feature))
+		}
+		if version, err = billing.SaveVersion(ctx, plan.UUID, uuid.Nil, in); err != nil {
+			t.Fatal(err)
+		}
 		_, err = pool.Exec(ctx, "DELETE FROM billing_plan_entitlements WHERE plan_version_id=(SELECT id FROM billing_plan_versions WHERE uuid=$1) AND feature_id=(SELECT id FROM billing_features WHERE key='ai.tokens')", version.UUID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = pool.Exec(ctx, "UPDATE billing_plan_versions SET status='published',published_at=now() WHERE uuid=$1", version.UUID)
-	} else {
-		version, err = billing.Publish(ctx, plan.UUID, version.UUID, actor)
-	}
-	if err != nil {
+		if _, err = pool.Exec(ctx, "UPDATE billing_plan_versions SET status='published',published_at=now() WHERE uuid=$1", version.UUID); err != nil {
+			t.Fatal(err)
+		}
+	} else if version, err = billingtest.PublishVersion(ctx, billing, plan.UUID, actor, prices, grant); err != nil {
 		t.Fatal(err)
 	}
 	_, err = billing.CreateSubscription(ctx, billingmodel.CreateSubscription{OrganizationUUID: orgUUID, VersionUUID: version.UUID, PriceUUID: version.Prices[0].UUID, Status: "active", PeriodStart: time.Now().Add(-time.Hour), PeriodEnd: time.Now().AddDate(0, 1, 0)}, actor)
