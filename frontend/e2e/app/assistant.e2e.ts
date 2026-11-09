@@ -191,6 +191,26 @@ test("scenario 4: go to the page and highlight the field", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("the assistant docks beside the page and opens as a full page", async ({
+  page,
+}) => {
+  await openAssistant(page, "/channels");
+  await ask(page, "Bu sayfada neler yapabilirim?");
+  await drawer(page)
+    .getByRole("button", { name: "Yan panele sabitle" })
+    .click();
+  // Split view: the page stays usable next to the same conversation.
+  const dock = page.getByRole("complementary", { name: "ClickFix Asistan" });
+  await expect(dock).toContainText("Bu sayfada neler yapabilirim?");
+  await dock.getByRole("button", { name: "Çekmeceye al" }).click();
+  await expect(drawer(page)).toBeVisible();
+  await drawer(page).getByRole("link", { name: "Tam sayfada aç" }).click();
+  await expect(page).toHaveURL(/\/assistant$/);
+  await expect(
+    page.getByText("Bu sayfada neler yapabilirim?").first(),
+  ).toBeVisible();
+});
+
 test("rejected: a card that is turned down changes nothing", async ({
   page,
 }) => {
