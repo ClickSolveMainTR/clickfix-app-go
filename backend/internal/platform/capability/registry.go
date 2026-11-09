@@ -12,8 +12,6 @@ type Registry struct {
 	list   []*Capability
 	byName map[string]*Capability
 	pages  []*Page
-}
-
 	// mcpNames keeps MCP tool names unique (MCPName may differ from Name).
 	mcpNames map[string]*Capability
 }
