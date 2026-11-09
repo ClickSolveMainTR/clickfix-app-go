@@ -99,6 +99,14 @@ func TestWebhooksAndAPIKeysFromTheChat(t *testing.T) {
 	if pv, _ := f.svc.DryRun(ctx, c, th.UUID, dup[0].ID, nil); pv.Preview == nil || pv.Preview.OK {
 		t.Fatalf("duplicate %+v", pv.Preview)
 	}
+	if out, err := f.svc.Confirm(ctx, c, th.UUID, dup[0].ID, nil); err != nil || out.Actions[0].Status != "failed" {
+		t.Fatalf("duplicate confirm %+v %v", out.Actions, err)
+	}
+	// 130 newer subscriptions push ERP past the first list pages.
+	if _, err := f.pool.Exec(ctx, `INSERT INTO outbound_webhooks (organization_id, name, url, secret_enc, events)
+		SELECT $1, 'Dolgu '||g, 'https://fill'||g||'.example.com/h', 'x', ARRAY[$2::text] FROM generate_series(1,130) g`, f.scope.ID, event); err != nil {
+		t.Fatal(err)
+	}
 	// Update keeps the other fields; delete is destructive.
 	acts = propose("ERP'yi durdur", "webhooks_update", `{"params":{"webhook_uuid":"`+hookID+`","enabled":false}}`)
 	if _, err := f.svc.Confirm(ctx, c, th.UUID, acts[0].ID, nil); err != nil {
