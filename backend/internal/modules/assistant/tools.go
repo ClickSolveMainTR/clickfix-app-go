@@ -21,7 +21,7 @@ const (
 	maxToolResultBytes = 3800
 )
 
-func (s *Service) tools() []ai.Tool {
+func (s *Service) tools(surface string) []ai.Tool {
 	str := map[string]any{"type": "string"}
 	kinds := sortedKeys(s.Actions)
 	tools := []ai.Tool{
@@ -36,7 +36,10 @@ func (s *Service) tools() []ai.Tool {
 			Description: "Read what this organization has configured (channels, members, business hours, SLA, AI, widget, help center, mobile app) and the missing set-up steps.",
 			Schema:      map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{}},
 		},
-		{
+	}
+	// Legacy set-up actions are not on the widget surface's allowlist.
+	if surface != capability.SurfaceWidget {
+		tools = append(tools, ai.Tool{
 			Name: ToolProposeAction,
 			Description: "Propose ONE change for the user to confirm. It is shown as a confirmation card and runs only after the user " +
 				"confirms (with their own permissions). params must follow the action's description.",
@@ -45,9 +48,10 @@ func (s *Service) tools() []ai.Tool {
 					"kind": map[string]any{"type": "string", "enum": kinds}, "title": str, "summary": str,
 					"params": map[string]any{"type": "object"},
 				}},
-		},
+		})
 	}
-	if _, ok := s.Actions[KindEscalate]; ok {
+	// In the support widget the member talks to the team in the widget itself.
+	if _, ok := s.Actions[KindEscalate]; ok && surface != capability.SurfaceWidget {
 		tools = append(tools, ai.Tool{
 			Name:        ToolEscalate,
 			Description: "Offer to hand this conversation to ClickFix's human support team (shown as a confirmation card).",
@@ -105,12 +109,18 @@ func (r *toolRun) run(ctx context.Context, call ai.ToolCall) (ai.ToolResult, err
 		}
 		return toolJSON(st), nil
 	case ToolProposeAction:
+		if r.surface == capability.SurfaceWidget {
+			return toolError("unknown tool"), nil
+		}
 		var in ProposedAction
 		if json.Unmarshal(call.Input, &in) != nil {
 			return toolError("invalid proposal"), nil
 		}
 		return r.propose(in), nil
 	case ToolEscalate:
+		if r.surface == capability.SurfaceWidget {
+			return toolError("unknown tool"), nil
+		}
 		var in struct {
 			Note string `json:"note"`
 		}

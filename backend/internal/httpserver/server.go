@@ -687,7 +687,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		RegisterPages(automationmodule.Pages()...).
 		RegisterPages(slamodule.Pages()...).
 		Register(conversationsmodule.Capabilities()...).
-		RegisterPages(webhooksmodule.Pages()...)
+		RegisterPages(webhooksmodule.Pages()...).
+		AllowOn(capability.SurfaceWidget, assistantmodule.WidgetAllowed)
+	assistantSvc.Instances = inboxCore.Channels
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}

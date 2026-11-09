@@ -20,6 +20,8 @@ export type AssistantContext = components["schemas"]["AssistantContext"];
 export type AssistantSendResult = components["schemas"]["AssistantSendResult"];
 export type AssistantSettings = components["schemas"]["AssistantSettings"];
 export type AssistantUsage = components["schemas"]["AssistantUsage"];
+export type AssistantSupportWidget =
+  components["schemas"]["AssistantSupportWidget"];
 
 const A = "/v1/tenant/assistant";
 
@@ -70,6 +72,15 @@ export const assistantService = {
         });
       emit(name, data);
     });
+  },
+  /** ClickFix's support widget and the member's identity signature. */
+  supportWidget(slug: string) {
+    return tenantRequest<AssistantSupportWidget>(
+      slug,
+      "GET",
+      `${A}/support-widget`,
+      { silent: true },
+    );
   },
   status(slug: string) {
     return tenantRequest<AssistantStatus>(slug, "GET", `${A}/status`, {

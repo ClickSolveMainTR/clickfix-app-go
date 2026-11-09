@@ -77,6 +77,27 @@ func (r *Registry) add(c *Capability) error {
 	return nil
 }
 
+// AllowOn adds surface to every registered capability that allow accepts
+// (a surface allowlist, e.g. the support widget). Call it after the last
+// Register; it keeps the rule that secrets never reach the MCP surface.
+func (r *Registry) AllowOn(surface string, allow func(*Capability) bool) *Registry {
+	for _, c := range r.list {
+		if c.OnSurface(surface) || !allow(c) {
+			continue
+		}
+		if surface == SurfaceMCP && len(c.Secrets) > 0 {
+			panic(fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name))
+		}
+		if len(c.Surfaces) == 0 {
+			c.Surfaces = slices.Clone(DefaultSurfaces)
+		} else {
+			c.Surfaces = slices.Clone(c.Surfaces)
+		}
+		c.Surfaces = append(c.Surfaces, surface)
+	}
+	return r
+}
+
 // Get finds a capability by name, tool name or alias.
 func (r *Registry) Get(name string) (*Capability, bool) {
 	if r == nil {

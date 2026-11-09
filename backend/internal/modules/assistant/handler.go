@@ -68,6 +68,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		tenant("GET /v1/tenant/assistant/status", h.Status)
 		tenant("GET /v1/tenant/assistant/threads", h.Threads)
 		tenant("GET /v1/tenant/assistant/page-state", h.PageState)
+		tenant("GET /v1/tenant/assistant/support-widget", h.SupportWidget)
 		tenant("POST /v1/tenant/assistant/threads", h.CreateThread)
 		tenant("GET /v1/tenant/assistant/threads/{uuid}/messages", h.Messages)
 		tenant("POST /v1/tenant/assistant/threads/{uuid}/messages", h.Send)
@@ -209,6 +210,24 @@ func (h *Handler) PageState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, r, http.StatusOK, st)
+}
+
+// SupportWidget: GET /v1/tenant/assistant/support-widget (CF-193). The
+// support organization's widget id and the member's identity signature;
+// the identity secret stays on the server.
+func (h *Handler) SupportWidget(w http.ResponseWriter, r *http.Request) {
+	c, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	p := authctx.MustPrincipal(r.Context())
+	out, err := h.svc.SupportWidgetFor(r.Context(), c.Scope, p.UserID)
+	if err != nil {
+		WriteError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 // Threads: GET /v1/tenant/assistant/threads

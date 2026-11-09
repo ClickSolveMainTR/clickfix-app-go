@@ -570,6 +570,30 @@ func (q *Queries) AssistantSupportInbox(ctx context.Context, organizationUuid uu
 	return i, err
 }
 
+const assistantSupportWidget = `-- name: AssistantSupportWidget :one
+SELECT ci.id, ci.uuid AS public_uuid, o.id AS organization_id FROM channel_instances ci
+JOIN organizations o ON o.id = ci.organization_id
+WHERE o.uuid = $1 AND o.deleted_at IS NULL AND ci.deleted_at IS NULL AND ci.status = 'active'
+  AND ci.channel_type = 'widget'
+ORDER BY ci.id
+LIMIT 1
+`
+
+type AssistantSupportWidgetRow struct {
+	ID             int64     `json:"id"`
+	PublicUuid     uuid.UUID `json:"public_uuid"`
+	OrganizationID int64     `json:"organization_id"`
+}
+
+// The support organization's active widget (CF-193): the panel embeds it
+// and identifies the member with a server-side signature.
+func (q *Queries) AssistantSupportWidget(ctx context.Context, organizationUuid uuid.UUID) (AssistantSupportWidgetRow, error) {
+	row := q.db.QueryRow(ctx, assistantSupportWidget, organizationUuid)
+	var i AssistantSupportWidgetRow
+	err := row.Scan(&i.ID, &i.PublicUuid, &i.OrganizationID)
+	return i, err
+}
+
 const assistantTenantRoleUUID = `-- name: AssistantTenantRoleUUID :one
 SELECT uuid FROM roles
 WHERE scope = 'tenant' AND slug = $1 AND (organization_id IS NULL OR organization_id = $2)

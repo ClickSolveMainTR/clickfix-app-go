@@ -193,6 +193,9 @@ type Querier interface {
 	AssistantSetupState(ctx context.Context, organizationID int64) (AssistantSetupStateRow, error)
 	// The inbox escalations land in, in ClickFix's own support organization.
 	AssistantSupportInbox(ctx context.Context, organizationUuid uuid.UUID) (AssistantSupportInboxRow, error)
+	// The support organization's active widget (CF-193): the panel embeds it
+	// and identifies the member with a server-side signature.
+	AssistantSupportWidget(ctx context.Context, organizationUuid uuid.UUID) (AssistantSupportWidgetRow, error)
 	AssistantTenantRoleUUID(ctx context.Context, arg AssistantTenantRoleUUIDParams) (uuid.UUID, error)
 	AssistantThreadCreate(ctx context.Context, arg AssistantThreadCreateParams) (AssistantThread, error)
 	AssistantThreadEscalated(ctx context.Context, arg AssistantThreadEscalatedParams) error

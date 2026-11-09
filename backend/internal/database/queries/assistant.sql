@@ -114,6 +114,16 @@ WHERE o.uuid = sqlc.arg(organization_uuid) AND o.deleted_at IS NULL AND ci.delet
 ORDER BY CASE ci.channel_type WHEN 'api' THEN 0 WHEN 'widget' THEN 1 ELSE 2 END, ci.id
 LIMIT 1;
 
+-- name: AssistantSupportWidget :one
+-- The support organization's active widget (CF-193): the panel embeds it
+-- and identifies the member with a server-side signature.
+SELECT ci.id, ci.uuid AS public_uuid, o.id AS organization_id FROM channel_instances ci
+JOIN organizations o ON o.id = ci.organization_id
+WHERE o.uuid = sqlc.arg(organization_uuid) AND o.deleted_at IS NULL AND ci.deleted_at IS NULL AND ci.status = 'active'
+  AND ci.channel_type = 'widget'
+ORDER BY ci.id
+LIMIT 1;
+
 -- name: AssistantEscalatedConversation :one
 SELECT c.uuid, c.number FROM messages m
 JOIN conversations c ON c.organization_id = m.organization_id AND c.id = m.conversation_id

@@ -15846,6 +15846,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/assistant/support-widget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ClickFix support widget for the panel
+         * @description CF-193: the widget of ClickFix's own support organization and the member's identity signature (user_id + user_hash, HMAC of the widget's identity secret, computed server-side). The panel embeds the widget with it; inside the widget the member also gets the assistant on the `widget` surface (allowlisted capabilities only). `available` is false without a support organization, an active widget or identity verification.
+         */
+        get: operations["getTenantAssistantSupportWidget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/assistant/page-state": {
         parameters: {
             query?: never;
@@ -26900,7 +26920,7 @@ export interface components {
         };
         AssistantContext: {
             /** @enum {string} */
-            surface?: "web" | "mobile";
+            surface?: "web" | "mobile" | "widget";
             route?: string;
             guide_key?: string;
         };
@@ -26970,6 +26990,19 @@ export interface components {
             warnings: components["schemas"]["AssistantPageStep"][];
             tests: components["schemas"]["AssistantPageTest"][];
             actions: string[];
+        };
+        AssistantSupportWidget: {
+            available: boolean;
+            /** Format: uuid */
+            widget_id?: string;
+            user_id?: string;
+            user_hash?: string;
+        };
+        EnvelopeAssistantSupportWidget: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AssistantSupportWidget"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeAssistantPageState: {
             /** @enum {boolean} */
@@ -64338,11 +64371,40 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getTenantAssistantSupportWidget: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Support widget */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAssistantSupportWidget"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getTenantAssistantPageState: {
         parameters: {
             query: {
                 route: string;
-                surface?: "web" | "mobile";
+                surface?: "web" | "mobile" | "widget";
             };
             header: {
                 /**

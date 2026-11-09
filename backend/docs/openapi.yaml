@@ -40379,6 +40379,30 @@ paths:
           $ref: '#/components/responses/OrganizationRequired'
         '403':
           $ref: '#/components/responses/TenantForbidden'
+  /v1/tenant/assistant/support-widget:
+    get:
+      tags:
+      - Assistant
+      operationId: getTenantAssistantSupportWidget
+      summary: ClickFix support widget for the panel
+      description: "CF-193: the widget of ClickFix's own support organization and the member's identity signature (user_id + user_hash, HMAC of the widget's identity secret, computed server-side). The panel embeds the widget with it; inside the widget the member also gets the assistant on the `widget` surface (allowlisted capabilities only). `available` is false without a support organization, an active widget or identity verification."
+      security:
+      - bearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/XOrganization'
+      responses:
+        '200':
+          description: Support widget
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeAssistantSupportWidget'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/TenantForbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /v1/tenant/assistant/page-state:
     get:
       tags:
@@ -40403,6 +40427,7 @@ paths:
           enum:
           - web
           - mobile
+          - widget
       responses:
         '200':
           description: Page state
@@ -58941,6 +58966,7 @@ components:
           enum:
           - web
           - mobile
+          - widget
         route:
           type: string
           maxLength: 200
@@ -59097,6 +59123,36 @@ components:
           type: array
           items:
             type: string
+    AssistantSupportWidget:
+      type: object
+      additionalProperties: false
+      required:
+      - available
+      properties:
+        available:
+          type: boolean
+        widget_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        user_hash:
+          type: string
+    EnvelopeAssistantSupportWidget:
+      type: object
+      required:
+      - success
+      - data
+      - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+          - true
+        data:
+          $ref: '#/components/schemas/AssistantSupportWidget'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     EnvelopeAssistantPageState:
       type: object
       required:
