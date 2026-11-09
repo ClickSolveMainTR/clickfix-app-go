@@ -33,7 +33,8 @@ func listRules(ctx context.Context, api capability.API) ([]ruleView, int64, erro
 		Items []ruleView `json:"items"`
 		Total int64      `json:"total"`
 	}
-	return page.Items, page.Total, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, page.Total, decErr
 }
 
 func listWorkflows(ctx context.Context, api capability.API) ([]workflowView, error) {
@@ -44,7 +45,8 @@ func listWorkflows(ctx context.Context, api capability.API) ([]workflowView, err
 	var page struct {
 		Items []workflowView `json:"items"`
 	}
-	return page.Items, r.Decode(&page)
+	decErr := r.Decode(&page)
+	return page.Items, decErr
 }
 
 // RuleCapabilities are the automation rule capabilities.
