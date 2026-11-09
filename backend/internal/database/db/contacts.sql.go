@@ -1035,17 +1035,16 @@ func (q *Queries) MarkContactMerged(ctx context.Context, arg MarkContactMergedPa
 	return err
 }
 
-const markContactVerified = `-- name: MarkContactVerified :exec
+const markContactVerified = `-- name: MarkContactVerified :execrows
 UPDATE contacts c SET
     verified_at = $1,
-    external_id = CASE
-        WHEN c.external_id IS NULL AND NOT EXISTS (
+    external_id = COALESCE(c.external_id, $2::text)
+WHERE c.organization_id = $3 AND c.id = $4 AND c.deleted_at IS NULL
+  AND (c.external_id = $2::text
+       OR (c.external_id IS NULL AND NOT EXISTS (
             SELECT 1 FROM contacts o
             WHERE o.organization_id = c.organization_id AND o.external_id = $2::text
-              AND o.deleted_at IS NULL AND o.id <> c.id)
-        THEN $2::text
-        ELSE c.external_id END
-WHERE c.organization_id = $3 AND c.id = $4 AND c.deleted_at IS NULL
+              AND o.deleted_at IS NULL AND o.id <> c.id)))
 `
 
 type MarkContactVerifiedParams struct {
@@ -1057,15 +1056,21 @@ type MarkContactVerifiedParams struct {
 
 // CF-195: a user_hash check succeeded. The external id is taken only when
 // the contact has none and no other live contact holds it, so a contact
-// matched by e-mail never steals another user's id.
-func (q *Queries) MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) error {
-	_, err := q.db.Exec(ctx, markContactVerified,
+// matched by e-mail never steals another user's id; and the contact is
+// marked verified only when its external id is the proved user id (a
+// contact of another user never gets the badge). Returns 0 rows when it
+// was not verified.
+func (q *Queries) MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markContactVerified,
 		arg.VerifiedAt,
 		arg.ExternalID,
 		arg.OrganizationID,
 		arg.ID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const moveContactConversations = `-- name: MoveContactConversations :execrows

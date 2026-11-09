@@ -72,6 +72,32 @@ func TestIdentifyAdoptsExternalContact(t *testing.T) {
 	}
 }
 
+// CF-195: a signed-in user whose e-mail is on another user's contact gets
+// a contact of its own; the other contact is neither taken over nor
+// marked verified.
+func TestIdentifyDoesNotTakeOverAnotherUsersContact(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	if _, err := e.pool.Exec(ctx, "INSERT INTO contacts (organization_id, name, email, external_id) VALUES ($1, 'Başka', 'ortak@example.com', 'u-1')", e.org); err != nil {
+		t.Fatal(err)
+	}
+	token := str(e.call(http.MethodPost, "/bootstrap", "", siteOrigin, nil).Data, "visitor", "token")
+	user := e.call(http.MethodPost, "/identify", token, siteOrigin, map[string]any{
+		"user_id": "u-2", "user_hash": widget.UserHash(identitySecret, "u-2"), "email": "ortak@example.com",
+	})
+	if user.Code != http.StatusOK {
+		t.Fatalf("identify = %d %v", user.Code, user.Err)
+	}
+	var verified bool
+	if err := e.pool.QueryRow(ctx, "SELECT verified_at IS NOT NULL FROM contacts WHERE organization_id = $1 AND external_id = 'u-1'", e.org).Scan(&verified); err != nil || verified {
+		t.Fatalf("another user's contact verified=%v %v", verified, err)
+	}
+	var owner string
+	if err := e.pool.QueryRow(ctx, "SELECT COALESCE(c.external_id, '') FROM contact_identities ci JOIN contacts c ON c.id = ci.contact_id WHERE ci.organization_id = $1 AND ci.external_id = 'user:u-2'", e.org).Scan(&owner); err != nil || owner != "u-2" {
+		t.Fatalf("u-2 identity belongs to %q %v", owner, err)
+	}
+}
+
 // CF-195: a widget whose identify calls are rejected, or that has no
 // identity secret, warns on its channel health with the reason.
 func TestWidgetIdentityHealthWarning(t *testing.T) {

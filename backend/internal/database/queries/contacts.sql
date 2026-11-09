@@ -81,20 +81,22 @@ SELECT * FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at I
 SELECT * FROM contacts
 WHERE organization_id = $1 AND external_id = sqlc.arg(external_id)::text AND deleted_at IS NULL;
 
--- name: MarkContactVerified :exec
+-- name: MarkContactVerified :execrows
 -- CF-195: a user_hash check succeeded. The external id is taken only when
 -- the contact has none and no other live contact holds it, so a contact
--- matched by e-mail never steals another user's id.
+-- matched by e-mail never steals another user's id; and the contact is
+-- marked verified only when its external id is the proved user id (a
+-- contact of another user never gets the badge). Returns 0 rows when it
+-- was not verified.
 UPDATE contacts c SET
     verified_at = sqlc.arg(verified_at),
-    external_id = CASE
-        WHEN c.external_id IS NULL AND NOT EXISTS (
+    external_id = COALESCE(c.external_id, sqlc.arg(external_id)::text)
+WHERE c.organization_id = sqlc.arg(organization_id) AND c.id = sqlc.arg(id) AND c.deleted_at IS NULL
+  AND (c.external_id = sqlc.arg(external_id)::text
+       OR (c.external_id IS NULL AND NOT EXISTS (
             SELECT 1 FROM contacts o
             WHERE o.organization_id = c.organization_id AND o.external_id = sqlc.arg(external_id)::text
-              AND o.deleted_at IS NULL AND o.id <> c.id)
-        THEN sqlc.arg(external_id)::text
-        ELSE c.external_id END
-WHERE c.organization_id = sqlc.arg(organization_id) AND c.id = sqlc.arg(id) AND c.deleted_at IS NULL;
+              AND o.deleted_at IS NULL AND o.id <> c.id)));
 
 -- name: FindContactByEmail :one
 SELECT * FROM contacts

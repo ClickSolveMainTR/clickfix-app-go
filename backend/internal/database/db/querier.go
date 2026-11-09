@@ -1497,8 +1497,11 @@ type Querier interface {
 	MarkContactMerged(ctx context.Context, arg MarkContactMergedParams) error
 	// CF-195: a user_hash check succeeded. The external id is taken only when
 	// the contact has none and no other live contact holds it, so a contact
-	// matched by e-mail never steals another user's id.
-	MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) error
+	// matched by e-mail never steals another user's id; and the contact is
+	// marked verified only when its external id is the proved user id (a
+	// contact of another user never gets the badge). Returns 0 rows when it
+	// was not verified.
+	MarkContactVerified(ctx context.Context, arg MarkContactVerifiedParams) (int64, error)
 	MarkConversationBulkOpReverted(ctx context.Context, arg MarkConversationBulkOpRevertedParams) (int64, error)
 	MarkConversationMerged(ctx context.Context, arg MarkConversationMergedParams) (Conversation, error)
 	// The marker only moves forward.
