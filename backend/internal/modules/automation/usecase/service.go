@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation/repository"
 	convmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	conv "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
+	sysmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/model"
 	notifmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications/model"
 	notify "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications/usecase"
 	hooks "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/webhooks/usecase"
@@ -28,6 +31,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+// Connected system actions run from workflows (CF-197).
+const systemsActionsPath = "/v1/tenant/integrations/system/actions/"
+
+var systemActionKey = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 
 var ErrInvalid = errors.New("invalid automation rule")
 
@@ -79,6 +87,11 @@ func Validate(in model.RuleInput) error {
 		case "add_note", "send_canned_reply":
 			if strings.TrimSpace(a.Content) == "" || len([]rune(a.Content)) > 10000 {
 				return ErrInvalid
+			}
+		case "run_system_action":
+			// A connected system action (CF-197); value is the action key.
+			if !systemActionKey.MatchString(a.Value) {
+				return fmt.Errorf("%w: run_system_action requires the action key as value", ErrInvalid)
 			}
 		default:
 			return fmt.Errorf("%w: unsupported action %s", ErrInvalid, a.Type)
@@ -242,6 +255,8 @@ func (s *Service) data(ctx context.Context, rule db.AutomationRule, id uuid.UUID
 		out["hours_waiting"] = now.Sub(*d.WaitingSince).Hours()
 	}
 	out["clock"] = map[string]any{"hour": float64(now.Hour()), "weekday": float64(now.Weekday())}
+	// Screen context (CF-197): the page and events of the latest widget message.
+	out["screen"] = d.ScreenContext.Conditions()
 	return out, nil
 }
 
@@ -337,6 +352,13 @@ func (s *Service) action(ctx context.Context, p apibridge.Principal, rule db.Aut
 			return fmt.Errorf("missing webhook management permission")
 		}
 		return s.Webhooks.Enqueue(ctx, rule.OrganizationID, a.TargetUUID, key, "automation.executed", map[string]any{"id": key, "event": "automation.executed", "rule_uuid": rule.Uuid, "conversation_uuid": id})
+	case "run_system_action":
+		// The run route checks that the action allows "workflow" and needs
+		// no approval; WithWorkflow marks this in-process call (CF-197).
+		ctx = sysmodel.WithWorkflow(ctx)
+		method = http.MethodPost
+		path = systemsActionsPath + url.PathEscape(a.Value) + "/run"
+		body = map[string]any{"conversation_uuid": id, "params": map[string]any{}}
 	case "notify":
 		u, err := s.Store.GetOrganizationAgentByUUID(ctx, db.GetOrganizationAgentByUUIDParams{OrganizationID: rule.OrganizationID, Uuid: a.TargetUUID})
 		if err != nil {

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var fields = []string{"uuid", "number", "status", "priority", "subject", "channel_type", "source", "inbox.uuid", "contact.uuid", "contact.name", "contact.email", "contact.phone", "company.uuid", "company.name", "assignee.uuid", "team_id", "tag_uuids", "unread_count", "message_count", "last_message_direction", "hours_since_created", "hours_since_updated", "hours_since_inbound", "hours_waiting", "sla_breached", "clock.hour", "clock.weekday"}
+var fields = []string{"uuid", "number", "status", "priority", "subject", "channel_type", "source", "inbox.uuid", "contact.uuid", "contact.name", "contact.email", "contact.phone", "company.uuid", "company.name", "assignee.uuid", "team_id", "tag_uuids", "unread_count", "message_count", "last_message_direction", "hours_since_created", "hours_since_updated", "hours_since_inbound", "hours_waiting", "sla_breached", "clock.hour", "clock.weekday", "screen.page_url", "screen.page_path", "screen.last_event", "screen.event_names"}
 var operators = []string{"eq", "neq", "contains", "not_contains", "in", "not_in", "gt", "gte", "lt", "lte", "exists", "not_exists"}
 
 func validateCondition(c model.Condition, depth int, n *int) error {

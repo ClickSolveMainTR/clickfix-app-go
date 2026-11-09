@@ -86,3 +86,30 @@ func TestEmptyConditionGroupsSurviveStorage(t *testing.T) {
 		}
 	}
 }
+
+func TestScreenContextConditions(t *testing.T) {
+	data := map[string]any{"screen": map[string]any{"page_path": "/faturalar/F-1", "last_event": "payment_failed", "event_names": []any{"opened", "payment_failed"}}}
+	n := 0
+	for _, c := range []model.Condition{
+		{Field: "screen.page_path", Operator: "contains", Value: "/faturalar"},
+		{Field: "screen.last_event", Operator: "eq", Value: "payment_failed"},
+	} {
+		if err := validateCondition(c, 0, &n); err != nil {
+			t.Fatalf("%s rejected: %v", c.Field, err)
+		}
+		if !matches(c, data) {
+			t.Fatalf("%s did not match", c.Field)
+		}
+	}
+	if matches(model.Condition{Field: "screen.last_event", Operator: "eq", Value: "opened"}, data) {
+		t.Fatal("wrong event matched")
+	}
+	if err := Validate(model.RuleInput{Name: "x", Trigger: "conversation.created", Conditions: model.Condition{All: []model.Condition{}},
+		Actions: []model.Action{{Type: "run_system_action", Value: "fatura_tekrar_gonder"}}}); err != nil {
+		t.Fatalf("system action rejected: %v", err)
+	}
+	if err := Validate(model.RuleInput{Name: "x", Trigger: "conversation.created", Conditions: model.Condition{All: []model.Condition{}},
+		Actions: []model.Action{{Type: "run_system_action", Value: "Bad Key"}}}); err == nil {
+		t.Fatal("bad system action key accepted")
+	}
+}
