@@ -518,6 +518,11 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 	}
 	actions := run.actions
 	interrupted := ctx.Err() != nil || (emit != nil && aiErr != nil)
+	if !interrupted && aiErr == nil && strings.TrimSpace(reply.Reply) == "" && len(actions) > 0 {
+		// The model answered only with cards: give them a one-line lead-in
+		// instead of the apology, and keep the cards.
+		reply.Reply = cardOnlyText(locale, len(actions))
+	}
 	if !interrupted && (aiErr != nil || strings.TrimSpace(reply.Reply) == "") {
 		// Never leave the user without an answer: apologize and offer
 		// the human support team.
@@ -585,6 +590,20 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 		go s.title(context.WithoutCancel(ctx), c, t, text, ai.RedactPII(content))
 	}
 	return out, nil
+}
+
+// cardOnlyText introduces a reply that consists only of proposed actions.
+func cardOnlyText(locale string, n int) string {
+	if locale == "en" {
+		if n == 1 {
+			return "Here is my proposal; review the card below and confirm or dismiss it."
+		}
+		return "Here are my proposals; review the cards below and confirm or dismiss each one."
+	}
+	if n == 1 {
+		return "Önerim aşağıdaki kartta; kontrol edip onaylayabilir ya da vazgeçebilirsiniz."
+	}
+	return "Önerilerim aşağıdaki kartlarda; her birini kontrol edip onaylayabilir ya da vazgeçebilirsiniz."
 }
 
 func fallbackText(locale string) string {

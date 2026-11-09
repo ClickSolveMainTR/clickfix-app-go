@@ -73,7 +73,10 @@ func (p *PlatformAI) Run(ctx context.Context, c Call) (ai.Result, error) {
 	} else {
 		res, err = route.Provider.Generate(ctx, c.Req)
 	}
-	if err == nil && res.Text == "" {
+	// A turn that only calls tools (a proposed action card, suggestions)
+	// legitimately has no prose; the assistant adds a short lead-in. Only a
+	// turn with neither text nor calls is an invalid answer.
+	if err == nil && res.Text == "" && len(res.Calls) == 0 {
 		err = ai.ErrInvalidOutput
 	}
 	if err == nil {
