@@ -696,6 +696,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Register(appsmodule.Capabilities()...).
 		Register(webhooksmodule.Capabilities()...).
 		Register(systemsmodule.Capabilities()...).
+		Register(systemsmodule.SetupCapabilities()...).
 		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
 		RegisterPages(channelsmodule.Pages()...).
 		RegisterPages(automationmodule.Pages()...).

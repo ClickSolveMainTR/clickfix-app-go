@@ -17,7 +17,12 @@ import (
 // Defined actions reach the assistant as a confirmation card and MCP as a
 // write tool, gated by tenant.integrations.use and mcp:write.
 func TestCapabilitiesRegisterForAssistantAndMCP(t *testing.T) {
-	reg := capability.NewRegistry().Register(systems.Capabilities()...)
+	reg := capability.NewRegistry().Register(systems.Capabilities()...).Register(systems.SetupCapabilities()...)
+	for _, name := range []string{"integrations.concepts.create", "integrations.sources.save", "integrations.actions.save", "integrations.playbooks.save"} {
+		if cp, _ := reg.Get(name); cp == nil || !cp.Writes() || cp.OnSurface(capability.SurfaceMCP) {
+			t.Fatalf("%s: set-up capability missing or on MCP", name)
+		}
+	}
 	run, _ := reg.Get("integrations.actions.run")
 	if run == nil || !run.Writes() || run.Permission != rbac.PermTenantIntegrationsUse || run.DryRun == nil {
 		t.Fatalf("run capability: %+v", run)

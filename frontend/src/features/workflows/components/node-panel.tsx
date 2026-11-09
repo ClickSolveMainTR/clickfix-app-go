@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AsyncCombobox } from "@/components/ui/async-combobox";
+import { SystemActionSelect } from "@/features/integrations/connect";
 import { useLocale } from "@/providers/locale-provider";
 
 import { useTargetOptions } from "../hooks/use-workflows";
@@ -285,6 +286,14 @@ export function ActionForm({
           value={action.target_uuid ?? ""}
           readOnly={readOnly}
           onChange={(target_uuid) => onChange({ ...action, target_uuid })}
+        />
+      )}
+      {action.type === "run_system_action" && (
+        <SystemActionSelect
+          value={action.value ?? ""}
+          readOnly={readOnly}
+          label={t("workflows.fields_ui.system_action")}
+          onChange={(value) => onChange({ ...action, value })}
         />
       )}
       {action.type === "set_status" && (

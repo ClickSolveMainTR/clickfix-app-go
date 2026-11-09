@@ -57,6 +57,7 @@ import {
   initials,
 } from "../lib/format";
 import type { ConversationDetail, ConversationPriority } from "../types";
+import { ScreenContextChip } from "./screen-context-chip";
 import { ChannelGlyph } from "./channel-glyph";
 import { ReminderMenu } from "./reminder-menu";
 
@@ -133,6 +134,7 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
                 #{c.number} · {c.inbox?.name ?? t("inbox.header.no_inbox")}
               </span>
               <BrandBadge brandId={c.brand_id} />
+              <ScreenContextChip conversation={c} />
             </p>
           </div>
         </div>

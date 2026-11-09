@@ -395,5 +395,9 @@
   "cobrowse.masked_note": "Click on the page to show the visitor where to look. Text and inputs are masked; you cannot type or navigate for them.",
   "cobrowse.audit_note": "The request, the visitor's consent, guided clicks and the end of the session are written to the audit log.",
   "cobrowse.audit_meta": "Consent notice {{version}} · accepted {{accepted}}",
-  "cobrowse.audit_link": "Open the audit log"
+  "cobrowse.audit_link": "Open the audit log",
+  "screen.label": "Screen the customer wrote from",
+  "screen.title": "Screen context",
+  "screen.page": "Page",
+  "screen.events": "Events"
 }
