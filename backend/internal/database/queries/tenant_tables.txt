@@ -287,6 +287,8 @@ widget_versions
 widget_installs
 # CF-176
 widget_identity_rejections
+# Mobile app keys (CF-201)
+widget_app_keys
 # CF-122
 recording_transcripts
 
