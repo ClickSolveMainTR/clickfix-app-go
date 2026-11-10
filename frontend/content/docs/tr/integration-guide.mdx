@@ -20,13 +20,14 @@ Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma istekl
 
 ### Paketler [#packages]
 
-| Paket                                                                            | Sürüm                                                                             | Kurulum                                                                                        |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>`      |
-| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                        |
-| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                             | `npm install @clickfix/react-widget` (React 18+)                                               |
-| Go modülü                                                                        | `go/v0.1.0`                                                                       | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
-| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)            | 0.1.0                                                                             | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); bkz. [Laravel paketi](#laravel) |
+| Paket                                                                                  | Sürüm                                                                             | Kurulum                                                                                        |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>`      |
+| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                        |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                             | `npm install @getclickfix/visitor-core` (React Native, Node 22+, tarayıcı; DOM'suz)            |
+| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                             | `npm install @clickfix/react-widget` (React 18+)                                               |
+| Go modülü                                                                              | `go/v0.1.0`                                                                       | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
+| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)                  | 0.1.0                                                                             | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); bkz. [Laravel paketi](#laravel) |
 
 Değişiklik günlükleri her paketin `CHANGELOG.md` dosyasındadır. `0.x` sürümlerinde küçük sürüm kırıcı değişiklik taşıyabilir; günlükte **Kırıcı** başlığıyla yazılır. Örnekleri kendi ortamınızda çalıştırmak için ortam değişkenleri: `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE`, `CLICKFIX_CHANNEL_SECRET`.
 
@@ -955,6 +956,8 @@ Mobil uygulamalar için yol, ayrı bir yerel SDK değil, **oturumu taşıyan gü
 4. Çıkışta `{"type":"clickfix:reset"}` gönderin; ziyaretçi unutulur, sonraki açılış yeni ziyaretçidir.
 
 Webview'in çerez ve depolaması oturumu sayfa yenilemeleri arasında taşır; `reset` göndermeden hesap değiştirmeyin.
+
+**Yerel çekirdekle oturum devri (CF-201).** Uygulama widget uçlarını webview olmadan da çağırabilir: Web widget → Gelişmiş → **Mobil uygulamalar** bölümünde platform ve paket adıyla bir **uygulama anahtarı** oluşturun; `@getclickfix/visitor-core` paketi `mode: "app"` ile bu anahtarı `X-ClickFix-App-Key` ve `X-ClickFix-App-Package` başlıklarında gönderir, sayfa kaynağı gerekmez. Yerel oturumu webview'e `{"type":"clickfix:session","token":client.getToken()}` komutuyla devredin; widget de `ready`, `identify` ve `reset` sonrasında `clickfix:session` mesajıyla kendi belirtecini verir (`client.adoptToken`). Anahtar yalnızca oluşturulduğunda gösterilir ve panelden iptal edilir; `user_hash` doğrulaması tarayıcıdakiyle aynıdır.
 
 ### Köprü: uygulamadan widget'a ve widget'tan uygulamaya [#mobile-bridge]
 

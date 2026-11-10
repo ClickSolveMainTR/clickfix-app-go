@@ -7,7 +7,9 @@
  *
  * Host -> widget messages are "commands" (`type` starts with `clickfix:`);
  * widget -> host messages are `clickfix:ready`, `clickfix:event`,
- * `clickfix:link` and, for commands that carry an `id`, `clickfix:result`.
+ * `clickfix:link`, `clickfix:session` and, for commands that carry an
+ * `id`, `clickfix:result`. The same types ship in @getclickfix/visitor-core
+ * (sdks/visitor-core/src/bridge.ts) for native SDKs; a test keeps them equal.
  */
 
 export const BRIDGE_VERSION = 1;
@@ -43,7 +45,13 @@ export type BridgeCommand =
   | { type: "clickfix:update"; id?: string; update: Record<string, unknown> }
   | { type: "clickfix:consent"; id?: string; granted: boolean }
   | { type: "clickfix:reset"; id?: string }
-  | { type: "clickfix:get-state"; id?: string };
+  | { type: "clickfix:get-state"; id?: string }
+  /**
+   * Continue the visitor session the app started natively (CF-201: the
+   * app's `@getclickfix/visitor-core` client with an app key). The widget
+   * resumes that visitor instead of starting a stranger.
+   */
+  | { type: "clickfix:session"; id?: string; token: string };
 
 export type BridgeCommandType = BridgeCommand["type"];
 
@@ -56,6 +64,7 @@ export const COMMAND_TYPES: readonly BridgeCommandType[] = [
   "clickfix:consent",
   "clickfix:reset",
   "clickfix:get-state",
+  "clickfix:session",
 ];
 
 /** Widget -> host messages. */
@@ -76,7 +85,12 @@ export type BridgeOutbound =
       ok: boolean;
       data?: unknown;
       error?: { code: string; message: string };
-    };
+    }
+  /** The webview's visitor token after ready, identify and reset (CF-201). */
+  | { type: "clickfix:session"; token: string; visitor_id: string };
+
+/** Largest accepted visitor token in `clickfix:session`. */
+export const MAX_TOKEN_LENGTH = 2048;
 
 /** SDK events forwarded to the host as `clickfix:event`. */
 export const FORWARDED_EVENTS: readonly string[] = [
@@ -198,6 +212,11 @@ export function parseCommand(raw: unknown): ParseResult {
       if (typeof data.granted !== "boolean")
         return fail("INVALID_MESSAGE", "consent needs granted boolean", id);
       return { ok: true, command: { type: kind, id, granted: data.granted } };
+    case "clickfix:session": {
+      const token = str(data.token, MAX_TOKEN_LENGTH);
+      if (!token) return fail("INVALID_MESSAGE", "session needs token", id);
+      return { ok: true, command: { type: kind, id, token } };
+    }
     case "clickfix:close":
     case "clickfix:reset":
     case "clickfix:get-state":
@@ -288,6 +307,8 @@ export interface Bridge {
     visitor_id: string;
   }): void;
   link(url: string): void;
+  /** Hands the webview's visitor token to the host (CF-201). */
+  session(payload: { token: string; visitor_id: string }): void;
   readonly version: number;
 }
 
@@ -350,6 +371,9 @@ export function createBridge(options: { send: Send; run: Runner }): Bridge {
     },
     link(url) {
       send({ type: "clickfix:link", url });
+    },
+    session(payload) {
+      send({ type: "clickfix:session", ...payload });
     },
   };
 }

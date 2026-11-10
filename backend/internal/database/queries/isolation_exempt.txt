@@ -131,3 +131,9 @@ RebindWidgetTokensSession  the caller's own tokens follow a rotated refresh sess
 # Assistant documents (CF-191): retention cleanup, it only deletes rows
 # whose 7 days are over, whichever organization they belong to.
 AssistantDocumentsPurgeExpired retention: deletes only expired rows of every organization
+
+# Mobile app keys (CF-201): the visitor API has no organization until the key
+# is found; the caller then checks the row's channel instance (which carries
+# the organization) before using it.
+GetWidgetAppKeyByHash      lookup by the key's sha256; OpenApp rejects rows of another widget
+TouchWidgetAppKey          last_used_at of a row GetWidgetAppKeyByHash already resolved
