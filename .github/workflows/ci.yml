@@ -897,7 +897,7 @@ jobs:
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
   # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
-  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z, laravel/vX.Y.Z. Needs the
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Needs the
   # SDKS_MIRROR_KEY repository secret (private half of the mirror's write
   # deploy key); without it the job skips with a note and never fails main.
   # One mirror commit per release; history is not rewritten, tags are never moved.
@@ -911,8 +911,6 @@ jobs:
         env:
           SDKS_MIRROR_KEY: ${{ secrets.SDKS_MIRROR_KEY }}
           MIRROR: git@github.com:ClickSolveMainTR/clickfix-sdks.git
-          LARAVEL_MIRROR_KEY: ${{ secrets.LARAVEL_MIRROR_KEY }}
-          LARAVEL_SPLIT: git@github.com:ClickSolveMainTR/clickfix-laravel.git
         run: |
           if [ -z "$SDKS_MIRROR_KEY" ]; then
             echo "SDKS_MIRROR_KEY secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
@@ -941,25 +939,4 @@ jobs:
           done
           [ -f go/VERSION ] && tag "go/v$(tr -d '[:space:]' < go/VERSION)"
           [ -f flutter/clickfix_webview/pubspec.yaml ] && tag "flutter/v$(sed -n 's/^version: *//p' flutter/clickfix_webview/pubspec.yaml)"
-          [ -f laravel/VERSION ] && tag "laravel/v$(tr -d '[:space:]' < laravel/VERSION)"
-          # Packagist reads composer.json at the root of a repository and plain vX.Y.Z tags, so
-          # laravel/ is also split out of the mirror's history (git subtree, one commit per
-          # release) into the public repository ClickSolveMainTR/clickfix-laravel, which Packagist
-          # watches as clickfix/laravel. Needs the LARAVEL_MIRROR_KEY repository secret (write
-          # deploy key of that repository); without it the split is skipped with a note.
-          if [ -f laravel/VERSION ]; then
-            if [ -z "$LARAVEL_MIRROR_KEY" ]; then
-              echo "LARAVEL_MIRROR_KEY secret is not set: Packagist split of laravel/ skipped" >> "$GITHUB_STEP_SUMMARY"
-            else
-              printf '%s\n' "$LARAVEL_MIRROR_KEY" > "$work/laravel-key"; chmod 600 "$work/laravel-key"
-              export GIT_SSH_COMMAND="ssh -i $work/laravel-key -o IdentitiesOnly=yes -o UserKnownHostsFile=$work/known_hosts"
-              split=$(git subtree split --prefix=laravel HEAD)
-              git push --quiet "$LARAVEL_SPLIT" "$split:refs/heads/main"
-              v="v$(tr -d '[:space:]' < laravel/VERSION)"
-              if git ls-remote --tags "$LARAVEL_SPLIT" "refs/tags/$v" | grep -q .; then echo "clickfix-laravel $v exists"; else
-                git tag "split-$v" "$split" && git push --quiet "$LARAVEL_SPLIT" "refs/tags/split-$v:refs/tags/$v"
-                echo "clickfix-laravel: pushed main and tagged $v (Packagist clickfix/laravel)" >> "$GITHUB_STEP_SUMMARY"
-              fi
-            fi
-          fi
           true

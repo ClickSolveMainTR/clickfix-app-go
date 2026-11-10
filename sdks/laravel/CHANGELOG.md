@@ -1,5 +1,9 @@
 # Changelog
 
+The newest `## X.Y.Z` heading is the package version: the release job pushes `sdks/laravel` to
+`ClickSolveMainTR/clickfix-laravel` and tags it `vX.Y.Z` there; Packagist (`clickfix/laravel`) follows that
+repository. Bump the heading in the same PR as the change.
+
 ## 0.1.0
 
 First release (CF-205).

@@ -10,10 +10,11 @@
     "webhooks",
     "widget"
   ],
-  "homepage": "https://getclickfix.com/docs/integration-guide",
+  "homepage": "https://github.com/ClickSolveMainTR/clickfix-laravel",
   "support": {
-    "issues": "https://github.com/ClickSolveMainTR/clickfix-sdks/issues",
-    "source": "https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/laravel"
+    "issues": "https://github.com/ClickSolveMainTR/clickfix-laravel/issues",
+    "source": "https://github.com/ClickSolveMainTR/clickfix-laravel",
+    "docs": "https://getclickfix.com/docs/integration-guide#laravel"
   },
   "require": {
     "php": "^8.1",

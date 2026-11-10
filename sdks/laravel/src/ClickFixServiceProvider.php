@@ -44,13 +44,21 @@ class ClickFixServiceProvider extends ServiceProvider
             ]);
             if (class_exists(AboutCommand::class)) {
                 AboutCommand::add('ClickFix', fn () => [
-                    'Version' => trim((string) @file_get_contents(__DIR__.'/../VERSION')),
+                    'Version' => self::version(),
                     'Base URL' => (string) config('clickfix.base_url'),
                     'Widget' => config('clickfix.widget.id') ? 'configured' : 'missing',
                     'Webhook' => config('clickfix.webhook.route') ? '/'.ltrim((string) config('clickfix.webhook.path'), '/') : 'manual',
                 ]);
             }
         }
+    }
+
+    /** The newest `## X.Y.Z` heading of CHANGELOG.md is the package version (the release tag). */
+    public static function version(): string
+    {
+        $changelog = (string) @file_get_contents(__DIR__.'/../CHANGELOG.md');
+
+        return preg_match('/^## (\d+\.\d+\.\d+)/m', $changelog, $m) === 1 ? $m[1] : '0.0.0';
     }
 
     private function registerWebhookRoute(): void

@@ -20,7 +20,8 @@ final class ConfigTest extends TestCase
             $this->assertSame('^10.0 || ^11.0 || ^12.0 || ^13.0', $composer['require'][$dep]);
         }
         $this->assertSame('^8.1', $composer['require']['php']);
-        $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', trim((string) file_get_contents(__DIR__.'/../VERSION')));
+        $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', ClickFixServiceProvider::version());
+        $this->assertSame('https://github.com/ClickSolveMainTR/clickfix-laravel', $composer['support']['source']);
     }
 
     public function test_config_is_merged_and_facade_resolves(): void

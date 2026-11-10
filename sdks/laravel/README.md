@@ -5,9 +5,11 @@ Laravel app. Service provider and `ClickFix` facade, `config/clickfix.php`, arti
 `POST clickfix/webhook` route that raises a Laravel event per ClickFix event, and the `@clickfixWidget`
 Blade directive that boots the widget with a verified identity (`user_hash`).
 
-MIT licensed. Published from the public mirror
-[ClickSolveMainTR/clickfix-sdks](https://github.com/ClickSolveMainTR/clickfix-sdks) (`laravel/`), tags
-`laravel/vX.Y.Z`. Full walkthrough with every other platform: [Integration guide](https://getclickfix.com/docs/integration-guide).
+MIT licensed. Developed in the `sdks/laravel` directory of the ClickFix monorepo and published through the
+read-only repository [ClickSolveMainTR/clickfix-laravel](https://github.com/ClickSolveMainTR/clickfix-laravel),
+which Packagist watches as `clickfix/laravel`: every release pushes this directory there and tags `vX.Y.Z`,
+where `X.Y.Z` is the newest `## X.Y.Z` heading in `CHANGELOG.md`. Fixes land in the monorepo and ship with the
+next release. Full walkthrough with every other platform: [Integration guide](https://getclickfix.com/docs/integration-guide).
 
 ## Install
 
