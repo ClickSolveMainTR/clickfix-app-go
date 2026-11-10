@@ -1,15 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
 import { DeleteDialog } from "@/components/dialogs/delete-dialog";
 import { AppDialog } from "@/components/dialogs/app-dialog";
 import { FormActions } from "@/components/forms/form-actions";
+import { EntityTable } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -93,17 +93,100 @@ export function SchedulesTab({
     onError,
   });
 
-  if (schedules.isLoading) return <Loading label={t("common.loading")} />;
-  if (schedules.isError)
-    return (
-      <ErrorState
-        title={t("reports.error.title")}
-        description={t("reports.error.description")}
-        onRetry={() => void schedules.refetch()}
-      />
-    );
-  const items = schedules.data ?? [];
   const reportList = reports.data ?? [];
+  const { memberName } = directory;
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<ReportSchedule>({
+          accessorKey: "name",
+          labelKey: "reports.schedules.report",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <div>
+              <div className="font-medium">{row.original.name}</div>
+              {!row.original.enabled && (
+                <Badge variant="secondary" className="mt-1">
+                  {t("reports.schedules.paused")}
+                </Badge>
+              )}
+            </div>
+          ),
+        }),
+        createColumn<ReportSchedule>({
+          id: "frequency",
+          accessorFn: (s) => t(`reports.frequency.${s.frequency}`),
+          labelKey: "reports.schedules.frequency",
+          cell: ({ row, getValue }) => (
+            <div>
+              {getValue() as string}
+              <div className="text-muted-foreground text-xs">
+                {row.original.timezone}
+              </div>
+            </div>
+          ),
+        }),
+        createColumn<ReportSchedule>({
+          accessorKey: "format",
+          labelKey: "reports.schedules.format",
+          searchable: false,
+          cell: ({ row }) => (
+            <Badge variant="outline">{row.original.format.toUpperCase()}</Badge>
+          ),
+        }),
+        createColumn<ReportSchedule>({
+          id: "recipients",
+          accessorFn: (s) => s.recipients.map(memberName).join(", "),
+          labelKey: "reports.schedules.recipients",
+          enableSorting: false,
+          cell: ({ getValue }) => (
+            <span
+              className="block max-w-[14rem] truncate"
+              title={getValue() as string}
+            >
+              {getValue() as string}
+            </span>
+          ),
+        }),
+        createColumn<ReportSchedule>({
+          accessorKey: "next_run_at",
+          labelKey: "reports.schedules.next_run",
+          searchable: false,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {datetime(row.original.next_run_at, "dd.MM.yyyy HH:mm", locale)}
+            </span>
+          ),
+        }),
+        ...(canWrite
+          ? [
+              createColumn<ReportSchedule>({
+                id: "actions",
+                labelKey: "common.actions",
+                enableHiding: false,
+                enableSorting: false,
+                meta: {
+                  headerClassName: "text-right",
+                  cellClassName: "text-right",
+                },
+                cell: ({ row }) => (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("reports.schedules.delete")}
+                    onClick={() => setDeleting(row.original)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ),
+              }),
+            ]
+          : []),
+      ] as ColumnDef<ReportSchedule, unknown>[],
+    [canWrite, locale, memberName, t],
+  );
 
   return (
     <div className="space-y-4">
@@ -128,82 +211,26 @@ export function SchedulesTab({
         )}
       </div>
 
-      {items.length === 0 ? (
-        <EmptyState
-          icon={<CalendarClock className="size-6" />}
-          title={t("reports.schedules.empty_title")}
-          description={t("reports.schedules.empty_description")}
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[40rem] text-sm">
-            <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
-              <tr>
-                <th className="px-3 py-2 font-medium">
-                  {t("reports.schedules.report")}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t("reports.schedules.frequency")}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t("reports.schedules.format")}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t("reports.schedules.recipients")}
-                </th>
-                <th className="px-3 py-2 font-medium">
-                  {t("reports.schedules.next_run")}
-                </th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {items.map((s) => (
-                <tr key={s.uuid}>
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{s.name}</div>
-                    {!s.enabled && (
-                      <Badge variant="secondary" className="mt-1">
-                        {t("reports.schedules.paused")}
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    {t(`reports.frequency.${s.frequency}`)}
-                    <div className="text-muted-foreground text-xs">
-                      {s.timezone}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge variant="outline">{s.format.toUpperCase()}</Badge>
-                  </td>
-                  <td
-                    className="max-w-[14rem] truncate px-3 py-2"
-                    title={s.recipients.map(directory.memberName).join(", ")}
-                  >
-                    {s.recipients.map(directory.memberName).join(", ")}
-                  </td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {datetime(s.next_run_at, "dd.MM.yyyy HH:mm", locale)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    {canWrite && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t("reports.schedules.delete")}
-                        onClick={() => setDeleting(s)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <EntityTable
+        columns={columns}
+        data={schedules.data ?? []}
+        getRowId={(s) => s.uuid}
+        isLoading={schedules.isLoading}
+        isError={schedules.isError}
+        errorTitle={t("reports.error.title")}
+        errorDescription={t("reports.error.description")}
+        onRetry={() => void schedules.refetch()}
+        emptyTitle={t("reports.schedules.empty_title")}
+        emptyDescription={t("reports.schedules.empty_description")}
+        // One short, unpaged list: search, sort and pages in the browser.
+        manual={{ filtering: false, sorting: false, pagination: false }}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+        features={{
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+      />
 
       {creating && (
         <ScheduleDialog
