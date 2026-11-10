@@ -453,15 +453,6 @@ func normalize(raw map[string]any) (Settings, []Issue) {
 	return s, n.issues
 }
 
-func (s Settings) hasMapping(key string) bool {
-	for _, m := range s.AttributeMapping {
-		if m.Key == key {
-			return true
-		}
-	}
-	return false
-}
-
 // preChat reads the pre-chat switch, the request form choice and the
 // consent box. "name", "email", "phone" and "fields" are the pre-CF-198
 // shape (the fields now live on the request form); they are accepted and

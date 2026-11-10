@@ -332,10 +332,8 @@ const (
 
 var (
 	colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-	clockRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 	keyRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 	ccRe    = regexp.MustCompile(`^[A-Z]{2}$`)
-	dayKeys = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 )
 
 // DefaultCards is the home screen of a new widget.

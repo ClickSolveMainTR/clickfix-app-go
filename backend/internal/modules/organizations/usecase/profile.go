@@ -20,7 +20,6 @@ import (
 // Organization profile (/v1/tenant/organization, CF-3).
 
 var (
-	hhmmRE     = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 	currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
 	countryRE  = regexp.MustCompile(`^[A-Z]{2}$`)
 	colorRE    = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
