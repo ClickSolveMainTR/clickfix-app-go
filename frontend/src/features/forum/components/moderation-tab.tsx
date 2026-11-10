@@ -1,14 +1,17 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, Check, ShieldAlert, Sparkles, X } from "lucide-react";
-import { useState } from "react";
-
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { isApiError } from "@/lib/api";
 import { datetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
@@ -19,7 +22,6 @@ import {
   forumService,
   type ForumModerationItem,
 } from "../services/forum.service";
-import { Pager } from "./pager";
 
 const PAGE = 20;
 const KNOWN_FLAGS = new Set([
@@ -39,11 +41,13 @@ const KNOWN_FLAGS = new Set([
 export function ModerationTab({ org }: { org: string }) {
   const { t, locale } = useLocale();
   const qc = useQueryClient();
-  const [offset, setOffset] = useState(0);
-  const key = forumKeys.moderation(org, offset);
+  const listState = useServerListState({ initialPageSize: PAGE });
+  const { limit, offset } = listState.params;
   const list = useQuery({
-    queryKey: key,
-    queryFn: () => forumService.moderation(PAGE, offset),
+    // The page size is fixed (`pageSizeOptions`), so the offset keys the page.
+    queryKey: forumKeys.moderation(org, offset),
+    queryFn: () => forumService.moderation(limit, offset),
+    placeholderData: keepPreviousData,
   });
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: forumKeys.all(org) });
@@ -115,31 +119,12 @@ export function ModerationTab({ org }: { org: string }) {
     (moderate.isPending && moderate.variables?.uuid === uuid) ||
     (assist.isPending && assist.variables === uuid);
 
-  if (list.isLoading) return <Loading label={t("common.loading")} />;
-  if (list.isError)
-    return (
-      <ErrorState
-        title={t("forum.error.title")}
-        description={t("forum.error.description")}
-        onRetry={() => void list.refetch()}
-      />
-    );
-  const page = list.data;
-  if (!page || page.items.length === 0)
-    return (
-      <Card>
-        <CardContent className="text-muted-foreground py-8 text-center text-sm">
-          {t("forum.moderation.empty")}
-        </CardContent>
-      </Card>
-    );
-
-  return (
-    <div className="space-y-3">
-      <p className="text-muted-foreground text-sm">
-        {t("forum.moderation.count", { count: page.total })}
-      </p>
-      {page.items.map((p: ForumModerationItem) => {
+  // Rebuilt every render: the cells read the pending mutation (`busy`).
+  const columns = [
+    createColumn<ForumModerationItem>({
+      id: "kind",
+      labelKey: "forum.moderation.columns.kind",
+      cell: ({ row: { original: p } }) => {
         const isReply = p.topic_id != null;
         const flag = flagLabel(p.flag_reason);
         const risky =
@@ -147,95 +132,154 @@ export function ModerationTab({ org }: { org: string }) {
           p.flag_reason === "link_spam" ||
           p.flag_reason.startsWith("ai: ");
         return (
-          <Card key={p.uuid}>
-            <CardContent className="space-y-3 py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={isReply ? "secondary" : "default"}>
-                  {isReply ? t("forum.kind.reply") : t("forum.kind.topic")}
-                </Badge>
-                {flag && (
-                  <Badge
-                    variant="outline"
-                    className={
-                      risky
-                        ? "border-red-500/40 text-red-700 dark:text-red-300"
-                        : undefined
-                    }
-                  >
-                    {risky && <ShieldAlert className="size-3" />}
-                    {flag}
-                  </Badge>
-                )}
-                <span className="text-muted-foreground ml-auto text-xs">
-                  {datetime(p.created_at, "dd.MM.yyyy HH:mm", locale)}
-                </span>
-              </div>
-              {p.title && <p className="font-medium break-words">{p.title}</p>}
-              <p className="text-muted-foreground line-clamp-6 text-sm break-words whitespace-pre-wrap">
-                {p.body}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  disabled={busy(p.uuid)}
-                  onClick={() =>
-                    moderate.mutate({
-                      uuid: p.uuid,
-                      status: "published",
-                      reply: isReply,
-                    })
-                  }
-                >
-                  <Check className="size-4" />
-                  {t("forum.moderation.approve")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy(p.uuid)}
-                  onClick={() =>
-                    moderate.mutate({ uuid: p.uuid, status: "rejected" })
-                  }
-                >
-                  <X className="size-4" />
-                  {t("forum.moderation.reject")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-destructive"
-                  disabled={busy(p.uuid)}
-                  onClick={() =>
-                    moderate.mutate({
-                      uuid: p.uuid,
-                      status: "rejected",
-                      spam: true,
-                    })
-                  }
-                >
-                  <Ban className="size-4" />
-                  {t("forum.moderation.spam")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy(p.uuid)}
-                  title={t("forum.moderation.assist_hint")}
-                  onClick={() => assist.mutate(p.uuid)}
-                >
-                  <Sparkles className="size-4" />
-                  {t("forum.moderation.assist")}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant={isReply ? "secondary" : "default"}>
+              {isReply ? t("forum.kind.reply") : t("forum.kind.topic")}
+            </Badge>
+            {flag && (
+              <Badge
+                variant="outline"
+                className={
+                  risky
+                    ? "border-red-500/40 text-red-700 dark:text-red-300"
+                    : undefined
+                }
+              >
+                {risky && <ShieldAlert className="size-3" />}
+                {flag}
+              </Badge>
+            )}
+          </div>
         );
-      })}
-      <Pager
-        total={page.total}
-        limit={PAGE}
-        offset={offset}
-        onChange={setOffset}
+      },
+    }),
+    createColumn<ForumModerationItem>({
+      id: "post",
+      labelKey: "forum.moderation.columns.post",
+      enableHiding: false,
+      gridPrimary: true,
+      cell: ({ row: { original: p } }) => (
+        <div className="max-w-xl min-w-0">
+          {p.title && <p className="font-medium break-words">{p.title}</p>}
+          <p className="text-muted-foreground line-clamp-2 text-sm break-words">
+            {p.body}
+          </p>
+        </div>
+      ),
+    }),
+    createColumn<ForumModerationItem>({
+      accessorKey: "created_at",
+      labelKey: "forum.moderation.columns.created",
+      meta: {
+        cellClassName: "text-muted-foreground text-xs whitespace-nowrap",
+      },
+      cell: ({ row: { original: p } }) =>
+        datetime(p.created_at, "dd.MM.yyyy HH:mm", locale),
+    }),
+    createColumn<ForumModerationItem>({
+      id: "actions",
+      labelKey: "common.actions",
+      enableHiding: false,
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right whitespace-nowrap",
+      },
+      cell: ({ row: { original: p } }) => (
+        <div className="flex justify-end gap-1">
+          <Button
+            size="sm"
+            disabled={busy(p.uuid)}
+            onClick={() =>
+              moderate.mutate({
+                uuid: p.uuid,
+                status: "published",
+                reply: p.topic_id != null,
+              })
+            }
+          >
+            <Check className="size-4" />
+            {t("forum.moderation.approve")}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label={t("forum.moderation.reject")}
+            title={t("forum.moderation.reject")}
+            disabled={busy(p.uuid)}
+            onClick={() =>
+              moderate.mutate({ uuid: p.uuid, status: "rejected" })
+            }
+          >
+            <X className="size-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            className="text-destructive"
+            aria-label={t("forum.moderation.spam")}
+            title={t("forum.moderation.spam")}
+            disabled={busy(p.uuid)}
+            onClick={() =>
+              moderate.mutate({
+                uuid: p.uuid,
+                status: "rejected",
+                spam: true,
+              })
+            }
+          >
+            <Ban className="size-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={t("forum.moderation.assist")}
+            title={t("forum.moderation.assist_hint")}
+            disabled={busy(p.uuid)}
+            onClick={() => assist.mutate(p.uuid)}
+          >
+            <Sparkles className="size-4" />
+          </Button>
+        </div>
+      ),
+    }),
+  ] as ColumnDef<ForumModerationItem, unknown>[];
+
+  return (
+    <div className="space-y-3">
+      {list.data ? (
+        <p className="text-muted-foreground text-sm">
+          {t("forum.moderation.count", { count: list.data.total })}
+        </p>
+      ) : null}
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(p) => p.uuid}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        errorTitle={t("forum.error.title")}
+        errorDescription={t("forum.error.description")}
+        onRetry={() => void list.refetch()}
+        emptyTitle={t("forum.moderation.empty")}
+        emptyDescription=""
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        pageSizeOptions={[PAGE]}
+        renderSubRow={(p) => (
+          <div className="space-y-1 ps-10">
+            {p.title && <p className="font-medium break-words">{p.title}</p>}
+            <p className="text-sm break-words whitespace-pre-wrap">{p.body}</p>
+          </div>
+        )}
+        features={{
+          // The endpoint takes `limit` and `offset` only.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
       />
     </div>
   );
