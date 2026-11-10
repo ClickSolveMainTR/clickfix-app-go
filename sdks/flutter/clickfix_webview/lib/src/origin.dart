@@ -91,10 +91,28 @@ class ClickFixOrigin {
   }
 
   /// Whether a `clickfix:link` URL may be handed to the system browser:
-  /// `https:` only, plus `http://localhost` for development. Never pass a
-  /// link to a deep-link or intent handler.
-  static bool isSafeExternalLink(Uri url) =>
-      url.hasAuthority && url.host.isNotEmpty && _schemeAllowed(url);
+  /// `https:` only. In debug builds (assertions enabled) `http://localhost`
+  /// and loopback addresses are also accepted for development; release
+  /// builds never are. Never pass a link to a deep-link or intent handler.
+  static bool isSafeExternalLink(Uri url) {
+    if (!url.hasAuthority || url.host.isEmpty) return false;
+    final scheme = url.scheme.toLowerCase();
+    if (scheme == 'https') return true;
+    return isDebugBuild &&
+        scheme == 'http' &&
+        _isLoopback(url.host.toLowerCase());
+  }
+
+  /// True when assertions are enabled (Flutter debug builds), like
+  /// `kDebugMode` but without a Flutter import.
+  static final bool isDebugBuild = () {
+    var debug = false;
+    assert(() {
+      debug = true;
+      return true;
+    }());
+    return debug;
+  }();
 
   /// Builds the `widget-embed.html` URL. [widgetId] is the public widget id
   /// (1–128 chars of `A-Z a-z 0-9 _ -`); [conversation] opens that

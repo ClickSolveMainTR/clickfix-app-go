@@ -95,6 +95,7 @@ class ClickFixController {
       StreamController<ClickFixMessage>.broadcast();
   final Map<String, Completer<ClickFixResult>> _pending =
       <String, Completer<ClickFixResult>>{};
+  final Map<String, Timer> _timers = <String, Timer>{};
   final List<ClickFixCommand> _queue = <ClickFixCommand>[];
   ClickFixBridgeTransport? _transport;
   ClickFixReady? _ready;
@@ -137,12 +138,14 @@ class ClickFixController {
     _transport = transport;
   }
 
-  /// Unbinds the webview: the widget is no longer ready, queued commands
-  /// stay queued for the next page, pending results fail with
-  /// [ClickFixErrorCode.notAttached].
+  /// Unbinds the webview: the widget is no longer ready, pending results
+  /// fail with [ClickFixErrorCode.notAttached]. Queued commands stay queued
+  /// for the next page, except `identify`: an identity must never be
+  /// replayed into a page the app did not ask to identify.
   void detach() {
     _transport = null;
     _resetReady();
+    _queue.removeWhere((c) => c is ClickFixIdentifyCommand);
     _failPending(ClickFixErrorCode.notAttached);
   }
 
@@ -184,6 +187,11 @@ class ClickFixController {
   void _dispatch(ClickFixMessage message) {
     switch (message) {
       case ClickFixReady():
+        if (message.bridgeVersion != bridgeVersion) {
+          // The contract only breaks with a new bridge_version; report it so
+          // the app can log it, then carry on best effort.
+          onRejectedMessage?.call('UNSUPPORTED_BRIDGE_VERSION');
+        }
         _ready = message;
         if (!_readyCompleter.isCompleted) _readyCompleter.complete(message);
         _messages.add(message);
@@ -219,7 +227,10 @@ class ClickFixController {
 
   /// Sends a raw [command]. Without an id the future completes when the
   /// command was queued or handed to the page; with an id it completes with
-  /// the widget's [ClickFixResult] (whatever `ok` is).
+  /// the widget's [ClickFixResult] (whatever `ok` is), or with an `ok:
+  /// false` result carrying [ClickFixErrorCode.timeout] when no answer
+  /// arrives within [resultTimeout] of the command reaching the page (the
+  /// clock starts at delivery, not while the command waits for `ready`).
   Future<ClickFixResult?> send(ClickFixCommand command) {
     _checkNotDisposed();
     final id = command.id;
@@ -227,15 +238,7 @@ class ClickFixController {
     if (id != null) {
       final completer = Completer<ClickFixResult>();
       _pending[id] = completer;
-      result = completer.future
-          .timeout(
-            resultTimeout,
-            onTimeout: () {
-              _pending.remove(id);
-              throw const ClickFixBridgeError(ClickFixErrorCode.timeout);
-            },
-          )
-          .whenComplete(() => _pending.remove(id));
+      result = completer.future.whenComplete(() => _forget(id));
     }
     if (!isReady || _transport == null) {
       _queue.add(command);
@@ -323,6 +326,22 @@ class ClickFixController {
     }
     try {
       await transport.runJavaScript(bridgeReceiveScript(text));
+      final id = command.id;
+      if (id != null && _pending.containsKey(id)) {
+        _timers[id]?.cancel();
+        _timers[id] = Timer(resultTimeout, () {
+          _timers.remove(id);
+          _pending
+              .remove(id)
+              ?.complete(
+                ClickFixResult(
+                  id: id,
+                  ok: false,
+                  error: const ClickFixBridgeError(ClickFixErrorCode.timeout),
+                ),
+              );
+        });
+      }
     } catch (e, st) {
       final id = command.id;
       if (id != null) {
@@ -338,9 +357,11 @@ class ClickFixController {
               ),
             );
       }
+      // The platform exception may quote the script, i.e. the command
+      // (user_id, user_hash): report a sanitised error, never the original.
       FlutterError.reportError(
         FlutterErrorDetails(
-          exception: e,
+          exception: StateError('runJavaScript failed (${e.runtimeType})'),
           stack: st,
           library: 'clickfix_webview',
           context: ErrorDescription('while delivering ${command.type}'),
@@ -356,11 +377,20 @@ class ClickFixController {
       'window.ClickFixBridge && window.ClickFixBridge.receive('
       '${jsonEncode(commandJson)});';
 
+  void _forget(String id) {
+    _pending.remove(id);
+    _timers.remove(id)?.cancel();
+  }
+
   void _failPending(String code) {
     final pending = List<MapEntry<String, Completer<ClickFixResult>>>.of(
       _pending.entries,
     );
     _pending.clear();
+    for (final timer in _timers.values) {
+      timer.cancel();
+    }
+    _timers.clear();
     for (final entry in pending) {
       if (!entry.value.isCompleted) {
         entry.value.complete(

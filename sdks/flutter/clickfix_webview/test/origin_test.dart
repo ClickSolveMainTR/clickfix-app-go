@@ -64,7 +64,12 @@ void main() {
       expect(origin.allowsString('::not a url::'), isFalse);
     });
 
-    test('external links must be https (or http localhost)', () {
+    test('external links must be https (or http localhost in debug)', () {
+      expect(
+        ClickFixOrigin.isDebugBuild,
+        isTrue,
+        reason: 'tests run with asserts',
+      );
       expect(
         ClickFixOrigin.isSafeExternalLink(Uri.parse('https://example.com/a')),
         isTrue,

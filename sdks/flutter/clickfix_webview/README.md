@@ -15,10 +15,20 @@ Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
-```sh
-flutter pub add clickfix_webview
+The package will be published to pub.dev by the repository's `sdk-publish`
+job on the first tagged release. Until that first release, depend on it from
+git:
+
+```yaml
+dependencies:
+  clickfix_webview:
+    git:
+      url: https://github.com/ClickSolveMainTR/clickfix-app-go.git
+      path: sdks/flutter/clickfix_webview
+      ref: main
 ```
 
+After the first release, `flutter pub add clickfix_webview` works as usual.
 Requires Flutter 3.38+ / Dart 3.10+. The package depends on `webview_flutter`
 (Android `minSdk` 24, iOS 12+). Opening external links needs a launcher of your
 choice (`url_launcher` in the example); the package only validates them.
@@ -106,8 +116,14 @@ Errors are `ClickFixBridgeError` with the contract's codes
 - `ClickFixFlutter` channel messages are accepted only while the page is on
   that origin; too large or malformed messages are dropped and reported by
   code through `onRejectedMessage`.
-- `clickfix:link` URLs reach `onLink` only when they are `https:`; never hand
-  them to a deep-link or intent handler.
+- `clickfix:link` URLs reach `onLink` only when they are `https:` (debug
+  builds also accept `http://localhost`); never hand them to a deep-link or
+  intent handler.
+- On Android the JavaScript interface behind the channel is exposed to every
+  frame of the page, not only the main frame; the origin check looks at the
+  main-frame URL. This is the accepted boundary as long as the embed page
+  stays first party: it loads only ClickFix's own scripts and no third-party
+  frames.
 - On Android file access, content access and mixed content are off.
 - `user_hash` is computed on your server; the identity secret never enters the
   app. Send `reset()` on logout and account switch; pass `consent: true` only

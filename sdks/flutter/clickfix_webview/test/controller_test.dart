@@ -223,6 +223,65 @@ void main() {
       FlutterError.onError = previous;
     }
     expect(errors, hasLength(1));
+    // The platform exception could quote the script (user_hash); only a
+    // sanitised error is reported.
+    expect(errors.single.exception.toString(), isNot(contains('webview gone')));
+    expect(
+      errors.single.exception.toString(),
+      contains('runJavaScript failed'),
+    );
+  });
+
+  test('the result timeout starts at delivery, not while queued', () async {
+    transport.autoReply = false;
+    final identify = controller.identify(
+      ClickFixIdentity(userId: '1', userHash: 'h'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(transport.commands, isEmpty); // still queued, not timed out
+    await ready();
+    expect(transport.commands.single['type'], 'clickfix:identify');
+    await expectLater(
+      identify,
+      throwsA(
+        isA<ClickFixBridgeError>().having(
+          (e) => e.code,
+          'code',
+          ClickFixErrorCode.timeout,
+        ),
+      ),
+    );
+  });
+
+  test('detach drops a queued identify but keeps other commands', () async {
+    final identify = controller.identify(
+      ClickFixIdentity(userId: '1', userHash: 'h'),
+    );
+    unawaited(controller.send(const ClickFixCloseCommand()));
+    controller.detach();
+    await expectLater(
+      identify,
+      throwsA(
+        isA<ClickFixBridgeError>().having(
+          (e) => e.code,
+          'code',
+          ClickFixErrorCode.notAttached,
+        ),
+      ),
+    );
+    controller.attach(transport);
+    await ready();
+    expect(transport.commands.map((c) => c['type']), ['clickfix:close']);
+  });
+
+  test('an unknown bridge_version is reported and still accepted', () async {
+    await controller.handleRawMessage(
+      '{"type":"clickfix:ready","bridge_version":2,"protocol_version":1,'
+      '"sdk_version":"9.0.0","widget_id":"w1","visitor_id":"v1"}',
+    );
+    expect(rejected, ['UNSUPPORTED_BRIDGE_VERSION']);
+    expect(controller.isReady, isTrue);
+    expect(controller.readyInfo?.bridgeVersion, 2);
   });
 
   test('messages are streamed and events, links, results split', () async {
