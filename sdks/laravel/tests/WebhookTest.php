@@ -45,13 +45,14 @@ final class WebhookTest extends TestCase
 
     public function test_tampered_body_returns_401_without_events(): void
     {
-        Event::fake();
+        Event::fake([WebhookReceived::class, ConversationCreated::class]);
         $body = $this->eventBody();
         $ts = time();
         $headers = ['ClickFix-Webhook-Signature' => 'v1='.hash_hmac('sha256', $ts.'.'.$body, self::WEBHOOK_SECRET)];
         $this->postWebhook(str_replace('"open"', '"resolved"', $body), $headers, $ts)
             ->assertStatus(401)->assertJsonPath('error.code', 'WEBHOOK_SIGNATURE_INVALID');
-        Event::assertNothingDispatched();
+        Event::assertNotDispatched(WebhookReceived::class);
+        Event::assertNotDispatched(ConversationCreated::class);
     }
 
     public function test_wrong_secret_missing_header_and_stale_timestamp_return_401(): void

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace ClickFix\Laravel\Tests;
 
-use ClickFix\Laravel\Contracts\ProvidesClickFixIdentity;
 use ClickFix\Laravel\Exceptions\MissingConfiguration;
 use ClickFix\Laravel\Facades\ClickFix;
+use ClickFix\Laravel\Tests\Fixtures\IdentityUser;
 use ClickFix\Laravel\Tests\Fixtures\User;
 use Illuminate\Support\Facades\Blade;
 
@@ -63,13 +63,7 @@ final class BladeTest extends TestCase
 
     public function test_model_can_provide_its_own_identity(): void
     {
-        $user = new class extends User implements ProvidesClickFixIdentity
-        {
-            public function toClickFixIdentity(): array
-            {
-                return ['user_id' => 'crm-77', 'name' => 'Custom', 'company' => ['id' => 'F-77', 'name' => 'Acme'], 'user_hash' => 'ignored'];
-            }
-        };
+        $user = new IdentityUser;
         $identity = ClickFix::identity($user);
         $this->assertSame('crm-77', $identity['user_id']);
         $this->assertSame(hash_hmac('sha256', 'crm-77', self::IDENTITY_SECRET), $identity['user_hash']);

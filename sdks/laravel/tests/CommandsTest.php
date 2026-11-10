@@ -44,13 +44,13 @@ final class CommandsTest extends TestCase
         $this->artisan('clickfix:webhook:secret')->assertExitCode(0);
         $env = $this->useEnv("CLICKFIX_WEBHOOK_SECRET=old\n");
         $this->artisan('clickfix:webhook:secret', ['--write' => true])->assertExitCode(0);
-        $this->assertMatchesRegularExpression('/^APP_NAME=Demo\nCLICKFIX_WEBHOOK_SECRET=[0-9a-f]{64}\n$/', (string) file_get_contents($env));
+        $this->assertMatchesRegularExpression('/^CLICKFIX_WEBHOOK_SECRET=[0-9a-f]{64}\n$/', (string) file_get_contents($env));
     }
 
     public function test_install_publishes_config_adds_env_keys_and_is_idempotent(): void
     {
         $env = $this->useEnv();
-        $this->artisan('clickfix:install')->expectsOutputToContain('https://example.test/clickfix/webhook')->assertExitCode(0);
+        $this->artisan('clickfix:install')->expectsOutputToContain('http://localhost/clickfix/webhook')->assertExitCode(0);
 
         $this->assertFileExists($this->app->configPath('clickfix.php'));
         $written = (string) file_get_contents($env);

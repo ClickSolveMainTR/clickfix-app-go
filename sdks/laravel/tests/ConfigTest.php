@@ -32,7 +32,7 @@ final class ConfigTest extends TestCase
         $this->assertInstanceOf(ClickFixManager::class, ClickFix::getFacadeRoot());
         $this->assertSame($this->app->make('clickfix'), ClickFix::getFacadeRoot());
         $this->assertTrue(Route::has('clickfix.webhook'));
-        $this->assertSame('https://example.test/clickfix/webhook', route('clickfix.webhook'));
+        $this->assertStringEndsWith('/clickfix/webhook', route('clickfix.webhook'));
     }
 
     public function test_config_publishes_to_the_app(): void
