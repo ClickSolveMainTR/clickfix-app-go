@@ -1,13 +1,12 @@
 "use client";
 
-import { Search } from "lucide-react";
+import type { ColumnDef, RowSelectionState } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
+import { EntityTable } from "@/components/entity";
+import { createColumn, createSelectColumnDef } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   usePlanSubscribers,
@@ -60,9 +57,8 @@ export function MigrateSubscribersDialog({
   const { t, locale } = useLocale();
   const subscribers = usePlanSubscribers(plan.uuid, open);
   const schedule = useSchedulePlanMigration(plan.uuid);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selection, setSelection] = useState<RowSelectionState>({});
   const [reason, setReason] = useState("");
-  const [q, setQ] = useState("");
 
   const candidates = useMemo<Candidate[]>(() => {
     const offered = new Set(
@@ -85,47 +81,84 @@ export function MigrateSubscribersDialog({
       );
   }, [subscribers.data, target]);
 
-  const visible = useMemo(() => {
-    const needle = q.trim().toLocaleLowerCase(locale);
-    return needle
-      ? candidates.filter((c) =>
-          c.row.organization_name.toLocaleLowerCase(locale).includes(needle),
-        )
-      : candidates;
-  }, [candidates, q, locale]);
+  // Rows filtered out by the search stay selected, as before.
+  const selected = useMemo(
+    () => candidates.filter((c) => selection[c.row.uuid]),
+    [candidates, selection],
+  );
 
-  const selectable = visible.filter((c) => !c.blocked);
-  const allVisibleSelected =
-    selectable.length > 0 && selectable.every((c) => selected.has(c.row.uuid));
-
-  const toggle = (uuid: string, on: boolean) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (on && next.size < MAX) next.add(uuid);
-      else next.delete(uuid);
-      return next;
-    });
-
-  const toggleAll = (on: boolean) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const c of selectable) {
-        if (on && next.size < MAX) next.add(c.row.uuid);
-        if (!on) next.delete(c.row.uuid);
-      }
-      return next;
-    });
+  const columns = useMemo(
+    () =>
+      [
+        createSelectColumnDef<Candidate>(),
+        createColumn<Candidate>({
+          id: "organization",
+          accessorFn: (c) => c.row.organization_name,
+          labelKey: "credit_products.migrate.columns.organization",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row: { original: c } }) => (
+            <span className="flex flex-wrap items-center gap-2 font-medium">
+              <span className="truncate">{c.row.organization_name}</span>
+              <Badge variant="secondary" className="font-normal">
+                {t("credit_products.migrate.on_version", {
+                  version: c.row.version_number,
+                })}
+              </Badge>
+            </span>
+          ),
+        }),
+        createColumn<Candidate>({
+          id: "price",
+          accessorFn: (c) => c.row.price_amount_minor,
+          labelKey: "credit_products.migrate.columns.price",
+          searchable: false,
+          meta: { cellClassName: "text-xs tabular-nums whitespace-nowrap" },
+          cell: ({ row: { original: c } }) => (
+            <>
+              {t(`billing.interval.${c.row.price_interval}`)} ·{" "}
+              {formatMinor(
+                c.row.price_amount_minor,
+                c.row.price_currency,
+                locale,
+              )}
+            </>
+          ),
+        }),
+        createColumn<Candidate>({
+          id: "renews",
+          accessorFn: (c) => c.row.period_end,
+          labelKey: "credit_products.migrate.columns.renews",
+          searchable: false,
+          meta: { cellClassName: "text-xs tabular-nums whitespace-nowrap" },
+          cell: ({ row: { original: c } }) =>
+            date(c.row.period_end, undefined, locale),
+        }),
+        createColumn<Candidate>({
+          id: "blocked",
+          accessorFn: (c) => c.blocked ?? "",
+          labelKey: "credit_products.migrate.columns.status",
+          searchable: false,
+          cell: ({ row: { original: c } }) =>
+            c.blocked ? (
+              <span className="text-xs text-amber-700 dark:text-amber-400">
+                {t(`credit_products.migrate.blocked_${c.blocked}`)}
+              </span>
+            ) : null,
+        }),
+      ] as ColumnDef<Candidate, unknown>[],
+    [locale, t],
+  );
 
   const close = () => {
     if (schedule.isPending) return;
-    setSelected(new Set());
+    setSelection({});
     setReason("");
-    setQ("");
     onClose();
   };
 
   const submit = async () => {
-    const rows = candidates.filter((c) => selected.has(c.row.uuid));
+    const rows = selected;
     await schedule.mutateAsync({
       version_uuid: target.uuid,
       subscription_uuids: rows.map((c) => c.row.uuid),
@@ -148,109 +181,44 @@ export function MigrateSubscribersDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative sm:w-64">
-              <Search className="text-muted-foreground pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={t("credit_products.migrate.search")}
-                aria-label={t("credit_products.migrate.search")}
-                className="h-9 ps-8"
-              />
-            </div>
-            <p className="text-muted-foreground text-xs tabular-nums">
-              {t("credit_products.migrate.selected", {
-                count: formatCount(selected.size, locale),
-                max: MAX,
-              })}
-            </p>
-          </div>
-
-          {subscribers.isError ? (
-            <ErrorState
-              title={t("common.error_generic")}
-              onRetry={() => void subscribers.refetch()}
-              retryLabel={t("common.retry")}
-            />
-          ) : subscribers.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} className="h-12 rounded-md" />
-              ))}
-            </div>
-          ) : candidates.length === 0 ? (
-            <EmptyState
-              className="py-8"
-              title={t("credit_products.migrate.empty")}
-              description={t("credit_products.migrate.empty_hint")}
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border">
-              <label className="bg-muted/40 flex items-center gap-3 border-b px-3 py-2 text-xs font-medium">
-                <Checkbox
-                  checked={allVisibleSelected}
-                  disabled={selectable.length === 0}
-                  onCheckedChange={(v) => toggleAll(v === true)}
-                  aria-label={t("credit_products.migrate.select_all")}
-                />
-                {t("credit_products.migrate.select_all")}
-              </label>
-              <ul className="divide-y">
-                {visible.map(({ row, blocked }) => (
-                  <li key={row.uuid}>
-                    <label
-                      className={
-                        blocked
-                          ? "flex items-start gap-3 px-3 py-2.5 opacity-60"
-                          : "hover:bg-muted/30 flex cursor-pointer items-start gap-3 px-3 py-2.5"
-                      }
-                    >
-                      <Checkbox
-                        className="mt-0.5"
-                        checked={selected.has(row.uuid)}
-                        disabled={
-                          Boolean(blocked) ||
-                          (!selected.has(row.uuid) && selected.size >= MAX)
-                        }
-                        onCheckedChange={(v) => toggle(row.uuid, v === true)}
-                        aria-label={row.organization_name}
-                      />
-                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                          <span className="truncate">
-                            {row.organization_name}
-                          </span>
-                          <Badge variant="secondary" className="font-normal">
-                            {t("credit_products.migrate.on_version", {
-                              version: row.version_number,
-                            })}
-                          </Badge>
-                        </span>
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          {t(`billing.interval.${row.price_interval}`)} ·{" "}
-                          {formatMinor(
-                            row.price_amount_minor,
-                            row.price_currency,
-                            locale,
-                          )}{" "}
-                          ·{" "}
-                          {t("credit_products.migrate.renews", {
-                            date: date(row.period_end, undefined, locale),
-                          })}
-                        </span>
-                        {blocked ? (
-                          <span className="text-xs text-amber-700 dark:text-amber-400">
-                            {t(`credit_products.migrate.blocked_${blocked}`)}
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <EntityTable
+            columns={columns}
+            data={candidates}
+            getRowId={(c) => c.row.uuid}
+            getRowCanSelect={(c) => !c.blocked}
+            maxSelection={MAX}
+            isLoading={subscribers.isLoading}
+            isError={subscribers.isError}
+            onRetry={() => void subscribers.refetch()}
+            emptyTitle={t("credit_products.migrate.empty")}
+            emptyDescription={t("credit_products.migrate.empty_hint")}
+            searchPlaceholder={t("credit_products.migrate.search")}
+            state={{
+              rowSelection: selection,
+              onRowSelectionChange: setSelection,
+            }}
+            manual={{ filtering: false, sorting: false, pagination: false }}
+            toolbarExtra={
+              <p className="text-muted-foreground text-xs tabular-nums">
+                {t("credit_products.migrate.selected", {
+                  count: formatCount(selected.length, locale),
+                  max: MAX,
+                })}
+              </p>
+            }
+            features={{
+              // One page: "select all" takes every row the search shows (up to
+              // MAX), as before. The list is capped by the server (`truncated`).
+              pagination: false,
+              columnFilters: false,
+              viewMode: false,
+              density: false,
+              columnVisibility: false,
+              columnResizing: false,
+              columnPinning: false,
+              columnOrdering: false,
+            }}
+          />
           {subscribers.data?.truncated ? (
             <p className="text-muted-foreground text-xs">
               {t("credit_products.migrate.truncated")}
@@ -287,12 +255,12 @@ export function MigrateSubscribersDialog({
           <Button
             type="button"
             disabled={
-              selected.size === 0 || !reason.trim() || schedule.isPending
+              selected.length === 0 || !reason.trim() || schedule.isPending
             }
             onClick={() => void submit()}
           >
             {t("credit_products.migrate.submit", {
-              count: formatCount(selected.size, locale),
+              count: formatCount(selected.length, locale),
             })}
           </Button>
         </DialogFooter>
