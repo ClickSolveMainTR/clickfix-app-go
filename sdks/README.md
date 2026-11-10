@@ -3,6 +3,7 @@
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
+- `flutter/clickfix_webview`: `clickfix_webview` (pub.dev), Flutter webview widget + controller implementing the webview bridge contract v1 (`docs/webview-bridge.md`). Checked by the separate `flutter` CI job (`dart analyze`, `flutter test`, publish dry run); published by `sdk-publish` when the `PUB_CREDENTIALS` secret is set.
 - `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
 
 The source of truth is `backend/docs/openapi.yaml`. `make sdks` selects only
