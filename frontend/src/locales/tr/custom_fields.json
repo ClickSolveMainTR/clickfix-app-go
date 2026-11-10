@@ -15,6 +15,8 @@
   "actions.archive": "Arşivle",
   "actions.restore": "Geri yükle",
   "actions.move_up": "Yukarı taşı",
+  "columns.order": "Sıra",
+  "columns.field": "Alan",
   "actions.move_down": "Aşağı taşı",
   "badges.required": "Zorunlu",
   "badges.conditional": "Koşullu",

@@ -47,6 +47,9 @@
   "channel.web": "Web formu",
   "channel.email": "E-posta",
   "channel.agent": "Temsilci",
+  "columns.name": "Form",
+  "columns.channels": "Kanallar",
+  "columns.fields": "Alanlar",
   "toast.saved": "Kaydedildi",
   "toast.deleted": "Silindi",
   "toast.failed": "İşlem tamamlanamadı. Tekrar deneyin."
