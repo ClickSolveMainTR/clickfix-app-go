@@ -3,7 +3,9 @@
 MIT licensed (`LICENSE`, copied into every package). Published from the public mirror
 [ClickSolveMainTR/clickfix-sdks](https://github.com/ClickSolveMainTR/clickfix-sdks): every tagged `main`
 run pushes this directory there and tags each package version (`node/vX.Y.Z`, `go/vX.Y.Z`,
-`flutter/vX.Y.Z`, ...). The mirror is read-only; fixes land here and ship with the next release.
+`flutter/vX.Y.Z`, ...); `php/` and `laravel/` are also pushed to their own mirrors
+(`clickfix-php`, `clickfix-laravel`, tags `vX.Y.Z`) because Packagist needs `composer.json`
+at the repository root. Mirrors are read-only; fixes land here and ship with the next release.
 
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-sdks/go`, tags `go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.

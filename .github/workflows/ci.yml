@@ -839,50 +839,66 @@ jobs:
           git push origin "$next"
           echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"
 
-  # SDK mirror (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
+  # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
   # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
-  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Needs the
-  # SDKS_MIRROR_KEY repository secret (private half of the mirror's write
-  # deploy key); without it the job skips with a note and never fails main.
-  # One mirror commit per release; history is not rewritten, tags are never moved.
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Packagist
+  # needs composer.json at the repository root, so sdks/php and sdks/laravel are
+  # also pushed to their own mirrors (clickfix-php, clickfix-laravel) and tagged
+  # vX.Y.Z there (version = newest "## X.Y.Z" heading of the package CHANGELOG).
+  # Needs the SDKS_MIRROR_TOKEN repository secret: a fine-grained token with
+  # Contents read/write on the three mirror repositories only. Without it the
+  # job skips with a note and never fails main. One mirror commit per release;
+  # history is not rewritten and tags are never moved.
   sdks-mirror:
     needs: [release-tag]
     if: ${{ !failure() && needs.release-tag.result == 'success' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - uses: actions/checkout@v7
-      - name: Mirror sdks/ to clickfix-sdks
+      - name: Mirror sdks/ to the public SDK repositories
         env:
-          SDKS_MIRROR_KEY: ${{ secrets.SDKS_MIRROR_KEY }}
-          MIRROR: git@github.com:ClickSolveMainTR/clickfix-sdks.git
+          SDKS_MIRROR_TOKEN: ${{ secrets.SDKS_MIRROR_TOKEN }}
         run: |
-          if [ -z "$SDKS_MIRROR_KEY" ]; then
-            echo "SDKS_MIRROR_KEY secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          if [ -z "$SDKS_MIRROR_TOKEN" ]; then
+            echo "SDKS_MIRROR_TOKEN secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-          printf '%s\n' "$SDKS_MIRROR_KEY" > "$work/key"; chmod 600 "$work/key"
-          ssh-keyscan -t ed25519 github.com > "$work/known_hosts" 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i $work/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$work/known_hosts"
-          git clone --quiet --branch main "$MIRROR" "$work/mirror" || { git init --quiet -b main "$work/mirror"; git -C "$work/mirror" remote add origin "$MIRROR"; }
-          rsync -a --delete --exclude .git sdks/ "$work/mirror/"
-          cd "$work/mirror"
-          git config user.name "clickfix-ci"; git config user.email "ci@getclickfix.com"
-          release=$(git -C "$GITHUB_WORKSPACE" tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
-          git add -A
-          if git diff --cached --quiet; then echo "mirror unchanged"; else
-            git commit --quiet -m "clickfix-app-go ${release:-$GITHUB_SHA}"
-            git push --quiet origin HEAD:main
-            echo "mirrored sdks/ at ${release:-$GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          tag() {
-            if git ls-remote --tags origin "refs/tags/$1" | grep -q .; then echo "$1 exists"; return; fi
-            git tag "$1" HEAD && git push --quiet origin "refs/tags/$1" && echo "tagged $1" >> "$GITHUB_STEP_SUMMARY"
+          printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"
+          git config --global credential.helper "store --file=$work/cred"
+          release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
+          changelog_version() { sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' "$1/CHANGELOG.md" | head -1; }
+          # mirror <source dir> <repository> : one commit per release, then tags via tag()
+          mirror() {
+            src=$1; repo=$2; dir="$work/$repo"
+            git clone --quiet --branch main "https://github.com/ClickSolveMainTR/$repo.git" "$dir" 2>/dev/null \
+              || { git init --quiet -b main "$dir"; git -C "$dir" remote add origin "https://github.com/ClickSolveMainTR/$repo.git"; }
+            rsync -a --delete --exclude .git "$src/" "$dir/"
+            [ -f "$dir/LICENSE" ] || cp sdks/LICENSE "$dir/LICENSE"
+            git -C "$dir" config user.name "clickfix-ci"; git -C "$dir" config user.email "ci@getclickfix.com"
+            git -C "$dir" add -A
+            if git -C "$dir" diff --cached --quiet; then echo "$repo unchanged"; else
+              git -C "$dir" commit --quiet -m "clickfix-app-go ${release:-$GITHUB_SHA}"
+              git -C "$dir" push --quiet origin HEAD:main
+              echo "mirrored $src to $repo at ${release:-$GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+            fi
           }
+          tag() { # tag <repository> <tag>
+            dir="$work/$1"
+            if git -C "$dir" ls-remote --tags origin "refs/tags/$2" | grep -q .; then echo "$1 $2 exists"; return; fi
+            git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
+          }
+          mirror sdks clickfix-sdks
           for p in node react-widget visitor-core; do
-            [ -f "$p/package.json" ] && tag "$p/v$(jq -r .version "$p/package.json")"
+            [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
           done
-          [ -f go/VERSION ] && tag "go/v$(tr -d '[:space:]' < go/VERSION)"
-          [ -f flutter/clickfix_webview/pubspec.yaml ] && tag "flutter/v$(sed -n 's/^version: *//p' flutter/clickfix_webview/pubspec.yaml)"
+          [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
+          [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          for p in php laravel; do
+            if [ -f "sdks/$p/composer.json" ]; then
+              mirror "sdks/$p" "clickfix-$p"
+              v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+            fi
+          done
           true
