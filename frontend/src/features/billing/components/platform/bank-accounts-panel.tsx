@@ -1,10 +1,13 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
 import { AppForm, AppInput, AppSwitch, FormActions } from "@/components/forms";
+import { EntityTable } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,10 +18,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { permissions } from "@/config/permissions";
-import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
 import {
   useBankAccounts,
   useSaveBankAccount,
@@ -61,60 +60,73 @@ export function BankAccountsPanel() {
   const schema = useMemo(() => createSchema(t), [t]);
   const current = editing && editing !== "new" ? editing : null;
 
-  const columns: BillingColumn<BillingBankAccount>[] = [
-    {
-      key: "bank",
-      header: t("billing.bank.columns.bank"),
-      cell: (row) => (
-        <span className="flex flex-col">
-          <span className="font-medium">{row.bank_name}</span>
-          {row.branch ? (
-            <span className="text-muted-foreground text-xs">{row.branch}</span>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      key: "holder",
-      header: t("billing.bank.columns.holder"),
-      cell: (row) => row.account_name,
-    },
-    {
-      key: "iban",
-      header: "IBAN",
-      cell: (row) => (
-        <code className="text-xs tabular-nums">{formatIban(row.iban)}</code>
-      ),
-    },
-    {
-      key: "status",
-      header: t("billing.bank.columns.status"),
-      cell: (row) =>
-        row.active ? (
-          <Badge variant="success">{t("billing.bank.active")}</Badge>
-        ) : (
-          <Badge variant="outline">{t("billing.bank.inactive")}</Badge>
-        ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">{t("billing.common.actions")}</span>,
-      align: "end",
-      cell: (row) =>
-        canWrite ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8"
-            onClick={() => setEditing(row)}
-          >
-            <Pencil className="size-3.5" />
-            {t("billing.common.edit")}
-          </Button>
-        ) : null,
-    },
-  ];
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<BillingBankAccount>({
+          id: "bank",
+          accessorKey: "bank_name",
+          labelKey: "billing.bank.columns.bank",
+          cell: ({ row: { original: row } }) => (
+            <span className="flex flex-col">
+              <span className="font-medium">{row.bank_name}</span>
+              {row.branch ? (
+                <span className="text-muted-foreground text-xs">
+                  {row.branch}
+                </span>
+              ) : null}
+            </span>
+          ),
+        }),
+        createColumn<BillingBankAccount>({
+          id: "holder",
+          accessorKey: "account_name",
+          labelKey: "billing.bank.columns.holder",
+          cell: ({ row: { original: row } }) => row.account_name,
+        }),
+        createColumn<BillingBankAccount>({
+          id: "iban",
+          accessorKey: "iban",
+          labelKey: "billing.bank.columns.iban",
+          cell: ({ row: { original: row } }) => (
+            <code className="text-xs tabular-nums">{formatIban(row.iban)}</code>
+          ),
+        }),
+        createColumn<BillingBankAccount>({
+          id: "status",
+          accessorKey: "active",
+          searchable: false,
+          labelKey: "billing.bank.columns.status",
+          cell: ({ row: { original: row } }) =>
+            row.active ? (
+              <Badge variant="success">{t("billing.bank.active")}</Badge>
+            ) : (
+              <Badge variant="outline">{t("billing.bank.inactive")}</Badge>
+            ),
+        }),
+        createColumn<BillingBankAccount>({
+          id: "actions",
+          labelKey: "billing.common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: { headerClassName: "text-end", cellClassName: "text-end" },
+          cell: ({ row: { original: row } }) =>
+            canWrite ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={() => setEditing(row)}
+              >
+                <Pencil className="size-3.5" />
+                {t("billing.common.edit")}
+              </Button>
+            ) : null,
+        }),
+      ] as ColumnDef<BillingBankAccount, unknown>[],
+    [canWrite, t],
+  );
 
   return (
     <div className="space-y-3">
@@ -129,16 +141,23 @@ export function BankAccountsPanel() {
           </Button>
         ) : null}
       </div>
-      <BillingTable
-        caption={t("billing.admin.tabs.bank")}
+      <EntityTable
         columns={columns}
-        rows={query.data?.items}
+        data={query.data?.items ?? []}
         getRowId={(row) => row.uuid}
         isLoading={query.isLoading}
         isError={query.isError}
         onRetry={() => void query.refetch()}
         emptyTitle={t("billing.bank.empty")}
         emptyDescription={t("billing.bank.empty_hint")}
+        // The list is short and unpaged: search, sort and pages in the browser.
+        manual={{ filtering: false, sorting: false, pagination: false }}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+        features={{
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
       />
       <Dialog
         open={editing !== null}

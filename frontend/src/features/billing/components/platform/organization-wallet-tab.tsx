@@ -1,17 +1,19 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { BellRing, Bot, RefreshCcw, Video, Wallet } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { EntitySectionCard } from "@/components/entity";
+import {
+  EntitySectionCard,
+  EntityTable,
+  useServerListState,
+} from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { permissions } from "@/config/permissions";
-import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
 import {
   WALLET_CATEGORY_KEYS,
   WALLET_UNIT_KEYS,
@@ -208,9 +210,10 @@ export function OrganizationWalletTab({
   const { t, locale } = useLocale();
   const { can } = usePermission();
   const canWrite = can(permissions.billing.subscriptionsWrite);
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: PAGE_SIZE });
+  const { limit, offset } = listState.params;
   const [adding, setAdding] = useState(false);
-  const wallet = useOrgWallet(organizationUuid, { limit: PAGE_SIZE, offset });
+  const wallet = useOrgWallet(organizationUuid, { limit, offset });
   const data = wallet.data;
   const lowAI =
     data !== undefined &&
@@ -227,11 +230,15 @@ export function OrganizationWalletTab({
     return key ? t(key) : reason;
   };
 
-  const columns: BillingColumn<BillingWalletEntry>[] = [
-    {
-      key: "created_at",
-      header: t("commerce.org.wallet.col_date"),
-      cell: (row) =>
+  const columns: ColumnDef<BillingWalletEntry, unknown>[] = [
+    createColumn<BillingWalletEntry>({
+      id: "created_at",
+      meta: {
+        headerClassName: "whitespace-nowrap",
+        cellClassName: "whitespace-nowrap",
+      },
+      labelKey: "commerce.org.wallet.col_date",
+      cell: ({ row: { original: row } }) =>
         row.created_at ? (
           <time
             dateTime={row.created_at}
@@ -242,12 +249,11 @@ export function OrganizationWalletTab({
         ) : (
           "—"
         ),
-      className: "whitespace-nowrap",
-    },
-    {
-      key: "reason",
-      header: t("commerce.org.wallet.col_reason"),
-      cell: (row) => (
+    }),
+    createColumn<BillingWalletEntry>({
+      id: "reason",
+      labelKey: "commerce.org.wallet.col_reason",
+      cell: ({ row: { original: row } }) => (
         <span className="flex min-w-0 flex-col gap-1">
           <span className="line-clamp-2 break-words">
             {reasonLabel(row.reason)}
@@ -264,19 +270,25 @@ export function OrganizationWalletTab({
           </span>
         </span>
       ),
-    },
-    {
-      key: "expires_at",
-      header: t("commerce.org.wallet.col_expires"),
-      cell: (row) =>
+    }),
+    createColumn<BillingWalletEntry>({
+      id: "expires_at",
+      meta: {
+        headerClassName: "whitespace-nowrap",
+        cellClassName: "whitespace-nowrap",
+      },
+      labelKey: "commerce.org.wallet.col_expires",
+      cell: ({ row: { original: row } }) =>
         row.expires_at ? date(row.expires_at, undefined, locale) : "—",
-      className: "whitespace-nowrap",
-    },
-    {
-      key: "delta",
-      header: t("commerce.org.wallet.col_amount"),
-      align: "end",
-      cell: (row) => {
+    }),
+    createColumn<BillingWalletEntry>({
+      id: "delta",
+      labelKey: "commerce.org.wallet.col_amount",
+      meta: {
+        headerClassName: "text-end whitespace-nowrap",
+        cellClassName: "text-end tabular-nums whitespace-nowrap",
+      },
+      cell: ({ row: { original: row } }) => {
         const delta = row.delta ?? 0;
         return (
           <span
@@ -292,8 +304,7 @@ export function OrganizationWalletTab({
           </span>
         );
       },
-      className: "whitespace-nowrap",
-    },
+    }),
   ];
 
   return (
@@ -352,26 +363,26 @@ export function OrganizationWalletTab({
             ) : null
           }
         >
-          <BillingTable
+          <EntityTable
             columns={columns}
-            rows={data?.entries.items}
+            data={data?.entries.items ?? []}
             getRowId={(row) => row.uuid ?? row.idempotency_key ?? ""}
             isLoading={wallet.isLoading}
             isError={wallet.isError}
             onRetry={() => void wallet.refetch()}
             emptyTitle={t("billing.wallet.empty")}
             emptyDescription={t("billing.wallet.empty_hint")}
-            caption={t("commerce.org.wallet.ledger")}
-            page={
-              data
-                ? {
-                    total: data.entries.total,
-                    limit: PAGE_SIZE,
-                    offset,
-                    onOffsetChange: setOffset,
-                  }
-                : undefined
-            }
+            total={data?.entries.total ?? 0}
+            state={listState.tableState}
+            features={{
+              // The endpoint takes `limit` and `offset` only; the card is small.
+              toolbar: false,
+              sorting: false,
+              globalFilter: false,
+              columnFilters: false,
+              rowSelection: false,
+              viewMode: false,
+            }}
           />
         </EntitySectionCard>
         {data ? (

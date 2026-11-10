@@ -1,25 +1,28 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckCircle2,
   ExternalLink,
   MessageSquare,
   MessagesSquare,
-  Search,
   ThumbsUp,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
 import { AppDialog } from "@/components/dialogs/app-dialog";
 import { FormActions } from "@/components/forms/form-actions";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -41,9 +44,6 @@ import {
   forumService,
   type ForumTopicSummary,
 } from "../services/forum.service";
-import { Pager } from "./pager";
-
-const PAGE = 20;
 const ALL = "__all__";
 
 /**
@@ -58,131 +58,151 @@ export function TopicsTab({
   canConvert: boolean;
 }) {
   const { t, locale } = useLocale();
-  const [q, setQ] = useState("");
-  const [debounced, setDebounced] = useState("");
   const [category, setCategory] = useState<string>(ALL);
-  const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState<ForumTopicSummary | null>(null);
-  useEffect(() => {
-    const id = setTimeout(() => {
-      setDebounced(q.trim());
-      setOffset(0);
-    }, 300);
-    return () => clearTimeout(id);
-  }, [q]);
+  const listState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset, q } = listState.params;
   const categories = useQuery({
     queryKey: forumKeys.categories(org),
     queryFn: forumService.categories,
   });
   const filter = {
+    limit,
     offset,
     category: category === ALL ? undefined : category,
-    q: debounced || undefined,
+    q: q?.slice(0, 200),
   };
   const list = useQuery({
     queryKey: forumKeys.topics(org, filter),
-    queryFn: () => forumService.topics({ limit: PAGE, ...filter }),
+    queryFn: () => forumService.topics(filter),
+    placeholderData: keepPreviousData,
   });
-  const catName = (slug: string) =>
-    categories.data?.find((c) => c.slug === slug)?.name ?? slug;
+  const catName = useMemo(() => {
+    const names = new Map((categories.data ?? []).map((c) => [c.slug, c.name]));
+    return (slug: string) => names.get(slug) ?? slug;
+  }, [categories.data]);
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-          <Input
-            value={q}
-            maxLength={200}
-            placeholder={t("forum.topics.search")}
-            aria-label={t("forum.topics.search")}
-            className="pl-9"
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-        <Select
-          value={category}
-          onValueChange={(v) => {
-            setCategory(v);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger
-            className="w-full sm:w-56"
-            aria-label={t("forum.topics.category")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>
-              {t("forum.topics.all_categories")}
-            </SelectItem>
-            {(categories.data ?? []).map((c) => (
-              <SelectItem key={c.uuid} value={c.slug}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <p className="text-muted-foreground text-xs">{t("forum.topics.hint")}</p>
-      {list.isLoading && <Loading label={t("common.loading")} />}
-      {list.isError && (
-        <ErrorState
-          title={t("forum.error.title")}
-          description={t("forum.error.description")}
-          onRetry={() => void list.refetch()}
-        />
-      )}
-      {list.data?.items.length === 0 && (
-        <Card>
-          <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {t("forum.topics.empty")}
-          </CardContent>
-        </Card>
-      )}
-      <div className="space-y-2">
-        {(list.data?.items ?? []).map((topic) => (
-          <button
-            key={topic.uuid}
-            type="button"
-            onClick={() => setOpen(topic)}
-            className="bg-card hover:bg-muted/50 focus-visible:ring-ring flex w-full items-start gap-3 rounded-xl border p-4 text-left outline-none focus-visible:ring-2"
-          >
-            <MessagesSquare className="text-muted-foreground mt-0.5 size-5 shrink-0" />
-            <span className="min-w-0 flex-1 space-y-1">
-              <span className="block font-medium break-words">
-                {topic.title}
-              </span>
-              <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <span>{catName(topic.category_slug)}</span>
-                <span>{datetime(topic.created_at, "dd.MM.yyyy", locale)}</span>
-                <span className="flex items-center gap-1">
-                  <ThumbsUp className="size-3" />
-                  {topic.votes}
-                </span>
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<ForumTopicSummary>({
+          accessorKey: "title",
+          labelKey: "forum.topics.columns.title",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <span className="flex min-w-0 items-start gap-2">
+              <MessagesSquare className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+              <span className="font-medium break-words whitespace-normal">
+                {row.original.title}
               </span>
             </span>
-            {topic.accepted_reply_uuid && (
+          ),
+        }),
+        createColumn<ForumTopicSummary>({
+          id: "category",
+          accessorKey: "category_slug",
+          labelKey: "forum.topics.category",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground">
+              {catName(row.original.category_slug)}
+            </span>
+          ),
+        }),
+        createColumn<ForumTopicSummary>({
+          accessorKey: "created_at",
+          labelKey: "forum.topics.columns.created",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground tabular-nums">
+              {datetime(row.original.created_at, "dd.MM.yyyy", locale)}
+            </span>
+          ),
+        }),
+        createColumn<ForumTopicSummary>({
+          accessorKey: "votes",
+          labelKey: "forum.topics.columns.votes",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => (
+            <span className="text-muted-foreground inline-flex items-center gap-1">
+              <ThumbsUp className="size-3" />
+              {row.original.votes}
+            </span>
+          ),
+        }),
+        createColumn<ForumTopicSummary>({
+          id: "answered",
+          accessorFn: (topic) => Boolean(topic.accepted_reply_uuid),
+          labelKey: "forum.topics.columns.answered",
+          cell: ({ row }) =>
+            row.original.accepted_reply_uuid ? (
               <Badge
                 variant="outline"
-                className="shrink-0 border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+                className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
               >
                 <CheckCircle2 className="size-3" />
                 {t("forum.topics.answered")}
               </Badge>
-            )}
-          </button>
-        ))}
-      </div>
-      {list.data && (
-        <Pager
-          total={list.data.total}
-          limit={PAGE}
-          offset={offset}
-          onChange={setOffset}
-        />
-      )}
+            ) : null,
+        }),
+      ] as ColumnDef<ForumTopicSummary, unknown>[],
+    [catName, locale, t],
+  );
+
+  return (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs">{t("forum.topics.hint")}</p>
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(topic) => topic.uuid}
+        onRowClick={(topic) => setOpen(topic)}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        errorTitle={t("forum.error.title")}
+        errorDescription={t("forum.error.description")}
+        onRetry={() => void list.refetch()}
+        emptyTitle={t("forum.topics.empty")}
+        emptyDescription=""
+        searchPlaceholder={t("forum.topics.search")}
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `q`, `category`, `limit` and `offset`.
+          sorting: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+        toolbarExtra={
+          <Select
+            value={category}
+            onValueChange={(v) => {
+              setCategory(v);
+              listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
+            }}
+          >
+            <SelectTrigger
+              className="h-8 w-full sm:w-56"
+              aria-label={t("forum.topics.category")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>
+                {t("forum.topics.all_categories")}
+              </SelectItem>
+              {(categories.data ?? []).map((c) => (
+                <SelectItem key={c.uuid} value={c.slug}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
       {open && (
         <TopicDialog
           org={org}
