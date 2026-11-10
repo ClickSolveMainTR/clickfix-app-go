@@ -43,6 +43,7 @@ import type {
 } from "../services/contacts.service";
 import { CompanyDialog } from "./companies-page";
 import { CompanyHealthBadge } from "./company-health-badge";
+import { CompanyVerifiedBadge } from "./company-verified-badge";
 import { CompanyHealthCard } from "./company-health-card";
 import { CompanyRevenueCard } from "./company-revenue-card";
 
@@ -115,6 +116,7 @@ export function AccountPage({ uuid }: { uuid: string }) {
           )}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <CompanyVerifiedBadge verifiedAt={company.verified_at} />
           <CompanyHealthBadge health={company.health} />
           <span className="text-muted-foreground text-sm">
             {t("contacts.account.owner")}:{" "}

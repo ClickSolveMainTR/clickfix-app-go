@@ -68,7 +68,12 @@ export interface ClickFixInitOptions {
 }
 
 export interface ClickFixCompany {
-  /** Your id of the company (preferred match key). */
+  /**
+   * Your id of the company (preferred match key). It binds the contact to
+   * the company only when `user_hash` signs it together with `user_id`
+   * (hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))); an
+   * unsigned id is ignored and `name`/`domain` stay hints.
+   */
   id?: string;
   name?: string;
   /** Company web domain, e.g. "acme.com" (second match key). */
@@ -77,7 +82,9 @@ export interface ClickFixCompany {
 
 /**
  * Proves the visitor is one of your signed-in users. Compute `user_hash` on
- * your server: hex(HMAC-SHA256(identity_secret, user_id)). Never ship the
+ * your server: hex(HMAC-SHA256(identity_secret, user_id)), or with the
+ * user's company hex(HMAC-SHA256(identity_secret, user_id + "\n" +
+ * company.id)) so the user cannot claim another company. Never ship the
  * identity secret to the browser.
  */
 export interface ClickFixIdentity {
@@ -159,7 +166,11 @@ export interface ClickFixEventMap {
   "conversation:ended": { conversation_uuid: string; status: string };
   /** Unread agent replies across the visitor's conversations changed. */
   unread: { count: number };
-  identify: { verified: boolean };
+  /**
+   * `company_verified`: the contact's company was proved by a user_hash that
+   * signs `company.id` too; false when the company came only as a hint.
+   */
+  identify: { verified: boolean; company_verified: boolean };
   /** The CSAT survey was answered (alias: "csat"). */
   rating: { conversation_uuid: string; score: number; existing: boolean };
   csat: { conversation_uuid: string; score: number; existing: boolean };

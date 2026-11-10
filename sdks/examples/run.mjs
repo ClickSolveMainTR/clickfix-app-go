@@ -113,13 +113,17 @@ async function systemEndpoint(label, start, curl) {
   } catch (err) { failures.push(label); log('FAIL', label, err.message.slice(0, 800)); }
 }
 
-// user hash: all three implementations must agree
+// user hash: all three implementations must agree, for the user id alone
+// and for the user id signed together with the company id (CF-206:
+// HMAC over user_id + "\n" + company_id).
 const expected = createHmac('sha256', env.CLICKFIX_IDENTITY_SECRET).update('1001').digest('hex');
+const expectedWithCompany = createHmac('sha256', env.CLICKFIX_IDENTITY_SECRET).update('1001\nF-77').digest('hex');
 for (const [label, cmd] of [['node/01-user-hash.ts', node('01-user-hash.ts')], ['go user-hash', go('user-hash')], ['curl/01-user-hash.sh', sh('01-user-hash.sh')]]) {
   try {
     const out = execFileSync(cmd[0], cmd[1], { cwd: cmd[2].cwd ?? dir, env, encoding: 'utf8', stdio: 'pipe', timeout: 120000 });
-    if (!out.includes(expected)) throw new Error(`hash mismatch: ${out.trim()}`);
-    log('ok', label, 'same HMAC');
+    if (!out.includes(expected)) throw new Error(`user hash mismatch: ${out.trim()}`);
+    if (!out.includes(expectedWithCompany)) throw new Error(`user + company hash mismatch: ${out.trim()}`);
+    log('ok', label, 'same HMAC (user id; user id + company id)');
   } catch (err) { failures.push(label); log('FAIL', label, String(err.stderr || err.message).slice(0, 800)); }
 }
 for (const step of ['02-external-id', '03-custom-fields', '04-company', '05-events', '06-api-channel']) {

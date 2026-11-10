@@ -176,6 +176,21 @@ func UserHash(secret, userID string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// UserCompanyHash is the identity verification signature of a user id
+// together with the user's company id (CF-206):
+// hex(HMAC-SHA256(identity secret, user id + "\n" + company id)). The
+// newline keeps the two ids apart, so "1" + "12" and "11" + "2" never sign
+// the same bytes; neither id may contain a newline (identify rejects one).
+// A company id is sent in identify as company.id (the company's external
+// id); when it is signed, the user cannot claim another company.
+func UserCompanyHash(secret, userID, companyID string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(userID))
+	mac.Write([]byte("\n"))
+	mac.Write([]byte(companyID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // VerifyUserHash reports whether hash signs userID with secret (constant
 // time; an empty secret never verifies).
 func VerifyUserHash(secret, userID, hash string) bool {
@@ -183,4 +198,13 @@ func VerifyUserHash(secret, userID, hash string) bool {
 		return false
 	}
 	return hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(hash))), []byte(UserHash(secret, userID)))
+}
+
+// VerifyUserCompanyHash reports whether hash signs userID and companyID
+// together (UserCompanyHash) with secret, in constant time.
+func VerifyUserCompanyHash(secret, userID, companyID, hash string) bool {
+	if secret == "" || userID == "" || companyID == "" || hash == "" {
+		return false
+	}
+	return hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(hash))), []byte(UserCompanyHash(secret, userID, companyID)))
 }

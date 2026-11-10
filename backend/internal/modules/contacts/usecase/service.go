@@ -85,16 +85,19 @@ type Contact struct {
 
 // Company is the API shape of a company.
 type Company struct {
-	UUID              uuid.UUID `json:"uuid"`
-	Name              string    `json:"name"`
-	Domain            *string   `json:"domain"`
-	ExternalID        *string   `json:"external_id"`
-	Tier              string    `json:"tier"`
-	AccountOwner      *Ref      `json:"account_owner"`
-	Notes             string    `json:"notes"`
-	CustomFields      any       `json:"custom_fields"`
-	ContactCount      int64     `json:"contact_count"`
-	OpenConversations int64     `json:"open_conversations"`
+	UUID       uuid.UUID `json:"uuid"`
+	Name       string    `json:"name"`
+	Domain     *string   `json:"domain"`
+	ExternalID *string   `json:"external_id"`
+	// VerifiedAt is the last time a user proved ExternalID with a
+	// company-signed user_hash (CF-206); nil when never proved.
+	VerifiedAt        *time.Time `json:"verified_at"`
+	Tier              string     `json:"tier"`
+	AccountOwner      *Ref       `json:"account_owner"`
+	Notes             string     `json:"notes"`
+	CustomFields      any        `json:"custom_fields"`
+	ContactCount      int64      `json:"contact_count"`
+	OpenConversations int64      `json:"open_conversations"`
 	// Revenue is the customer's revenue data (CF-86); nil when never set.
 	Revenue *Revenue `json:"revenue"`
 	// Health is the customer health score (CF-87); nil until computed.
@@ -487,7 +490,7 @@ func (s *Service) ListCompaniesByExternalID(ctx context.Context, orgID int64, q,
 	for _, r := range rows {
 		ids = append(ids, r.ID)
 		c := companyOf(db.Company{
-			ID: r.ID, Uuid: r.Uuid, Name: r.Name, Domain: r.Domain, ExternalID: r.ExternalID, Notes: r.Notes,
+			ID: r.ID, Uuid: r.Uuid, Name: r.Name, Domain: r.Domain, ExternalID: r.ExternalID, VerifiedAt: r.VerifiedAt, Notes: r.Notes,
 			CustomFields: r.CustomFields, Tier: r.Tier, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		})
 		if r.OwnerUuid.Valid {
@@ -688,7 +691,7 @@ func cleanExternalID(v string) (string, error) {
 
 func companyOf(r db.Company) Company {
 	return Company{
-		UUID: r.Uuid, Name: r.Name, Domain: textPtr(r.Domain), ExternalID: textPtr(r.ExternalID), Tier: r.Tier,
+		UUID: r.Uuid, Name: r.Name, Domain: textPtr(r.Domain), ExternalID: textPtr(r.ExternalID), VerifiedAt: timePtr(r.VerifiedAt), Tier: r.Tier,
 		Notes: r.Notes, CustomFields: decode(r.CustomFields), CreatedAt: r.CreatedAt.Time.UTC(), UpdatedAt: r.UpdatedAt.Time.UTC(),
 	}
 }

@@ -61,5 +61,18 @@ export function verifyWebhook(secret:string,timestamp:string,signature:string,bo
  const expected=createHmac('sha256',secret).update(timestamp+'.').update(body).digest();
  return timingSafeEqual(expected,Buffer.from(signature.slice(3),'hex'));
 }
-/** Server-only: send the hash to your browser; keep the secret on your server. */
-export const identityHash=(secret:string,userId:string)=>createHmac('sha256',secret).update(userId).digest('hex');
+/**
+ * Server-only: send the hash to your browser; keep the secret on your server.
+ * With companyId (the company's id in your system, sent as identify `company.id`)
+ * the hash covers both ids: hex(HMAC-SHA256(secret, userId + "\n" + companyId)),
+ * so a signed-in user cannot claim another company (CF-206). Without it the
+ * original formula hex(HMAC-SHA256(secret, userId)) is used. Neither id may
+ * contain a line break.
+ */
+export function identityHash(secret:string,userId:string,companyId?:string):string{
+ if(!secret)throw new Error('identity secret required');
+ if(!userId||/[\r\n]/.test(userId)||(companyId&&/[\r\n]/.test(companyId)))throw new Error('user id and company id must be non-empty without line breaks');
+ const mac=createHmac('sha256',secret).update(userId);
+ if(companyId)mac.update('\n').update(companyId);
+ return mac.digest('hex');
+}

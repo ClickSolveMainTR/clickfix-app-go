@@ -218,6 +218,12 @@ export function SecuritySection({
         description={t("widget.fields.identity_secret_hint")}
       >
         <IdentityWarning widgetId={widgetId} hasSecret={Boolean(secretHint)} />
+        <p
+          className="text-muted-foreground text-xs"
+          data-testid="identity-company-hint"
+        >
+          {t("widget.fields.identity_company_hint")}
+        </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label>{t("widget.fields.identity_secret")}</Label>
           <Button

@@ -9,12 +9,12 @@ Bu sayfa tek entegrasyon kılavuzudur: panelde **Kurulum** sihirbazının izledi
 
 ## Başlamadan önce [#before-you-start]
 
-| Gereken                                 | Nereden                                              | Nerede kullanılır                                           |
-| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
-| **API anahtarı** (`cf_sk_…`)            | Organizasyon → API ve otomasyonlar → API anahtarları | Sunucunuzdan yapılan tüm çağrılar (`Authorization: Bearer`) |
-| **Widget kimlik anahtarı**              | Web widget → Güvenlik → Kimlik doğrulama             | `user_hash` hesaplamak için, yalnız sunucuda                |
-| **Widget kimliği** (`WIDGET_ID`)        | Web widget → Kurulum                                 | `widget.js` ve mobil webview adresi                         |
-| **API kanalı kimliği ve imza anahtarı** | Kanallar → Kanal ekle → API                          | Yalnız kendi sohbet uygulamanızı kanal olarak bağlıyorsanız |
+| Gereken                                 | Nereden                                              | Nerede kullanılır                                                        |
+| --------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| **API anahtarı** (`cf_sk_…`)            | Organizasyon → API ve otomasyonlar → API anahtarları | Sunucunuzdan yapılan tüm çağrılar (`Authorization: Bearer`)              |
+| **Widget kimlik anahtarı**              | Web widget → Güvenlik → Kimlik doğrulama             | `user_hash` hesaplamak için (kullanıcı + firma kimliği), yalnız sunucuda |
+| **Widget kimliği** (`WIDGET_ID`)        | Web widget → Kurulum                                 | `widget.js` ve mobil webview adresi                                      |
+| **API kanalı kimliği ve imza anahtarı** | Kanallar → Kanal ekle → API                          | Yalnız kendi sohbet uygulamanızı kanal olarak bağlıyorsanız              |
 
 Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma isteklerinde `Idempotency-Key` zorunludur. Anahtarlar tarayıcıya ve mobil uygulamaya girmez. Yanıt zarfı, hata kodları ve hız sınırları: [API](/docs/api).
 
@@ -49,10 +49,16 @@ Paneldeki **Kurulum** sihirbazı beş adımdır; bu kılavuzun bölümleri aynı
 Giriş yapmış kullanıcıyı widget'a kanıtlı biçimde tanıtmanın tek yolu `user_hash` değeridir:
 
 ```text
+# kullanıcı bir firmaya bağlıysa (identify'da company.id gönderilir): iki kimlik birlikte imzalanır
+user_hash = hex(HMAC-SHA256(widget_kimlik_anahtari, user_id + "\n" + company_id))
+
+# firma yoksa: yalnız kullanıcı kimliği
 user_hash = hex(HMAC-SHA256(widget_kimlik_anahtari, user_id))
 ```
 
-`user_id` kullanıcının **sizin** sisteminizdeki kimliğidir ve bir sonraki bölümdeki dış kimliğin kendisidir. Değer **yalnız sunucunuzda** hesaplanır; sitenize ve mobil uygulamanıza anahtar değil, hazır `user_hash` gider. Geçerli `user_hash` ile doğrulanan kişi panelde **Doğrulanmış** rozeti alır; anonim geçmişi aynı kişiye taşınır. Reddedilen `identify` çağrısında widget çalışmaya devam eder ama kullanıcı anonim kalır ve `error` olayı `WIDGET_IDENTITY_DISABLED` (anahtar üretilmemiş) ya da `WIDGET_IDENTITY_INVALID` (eşleşmiyor) kodunu verir.
+`user_id` kullanıcının **sizin** sisteminizdeki kimliğidir ve bir sonraki bölümdeki dış kimliğin kendisidir; `company_id` firmasının sizin sisteminizdeki kimliğidir ve `identify` çağrısına `company: { id }` olarak gider. Değer **yalnız sunucunuzda** hesaplanır; sitenize ve mobil uygulamanıza anahtar değil, hazır `user_hash` gider. Geçerli `user_hash` ile doğrulanan kişi panelde **Doğrulanmış** rozeti alır; anonim geçmişi aynı kişiye taşınır. Firma kimliği imzalıysa kişi o firmaya imzalı değerle bağlanır, firma da panelde **Doğrulanmış** rozeti alır ve doğrulanmış bir kullanıcı başka bir firmayı iddia edemez; `identify` olayı `company_verified: true` döner. Reddedilen `identify` çağrısında widget çalışmaya devam eder ama kullanıcı anonim kalır ve `error` olayı `WIDGET_IDENTITY_DISABLED` (anahtar üretilmemiş) ya da `WIDGET_IDENTITY_INVALID` (eşleşmiyor; başka bir firma kimliğini imzalayan değer de buna girer) kodunu verir. İki kimlik satır sonu (`\n`) içeremez.
+
+**Geçiş.** Yalnız `user_id` ile hesaplanan eski `user_hash` çalışmaya devam eder (geriye uyumlu). Böyle bir çağrı `company.id` de taşıyorsa kullanıcı yine doğrulanır ama firma kimliği **bağlanmaz ve saklanmaz**: `company.name` ve `company.domain` yalnız eşleştirme ipucu olarak kullanılır, widget konsola sabit bir uyarı yazar ve `identify` olayı `company_verified: false` döner. Firmayı kimliğiyle bağlamak için sunucunuzda imzaya `company_id`'yi ekleyin: Node `identityHash(secret, userId, companyId)`, Go `IdentityCompanyHash(secret, userID, companyID)`; PHP ve Laravel yardımcıları aynı formülü kendi sürümlerinde alır.
 
 {/* example: widget/01-identify.js */}
 
@@ -61,14 +67,17 @@ user_hash = hex(HMAC-SHA256(widget_kimlik_anahtari, user_id))
 // @ts-check
 ClickFix("boot", { widgetId: "WIDGET_ID", locale: "tr" });
 
-fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash } döner
+fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash, company_id } döner
   .then((r) => r.json())
   .then((session) =>
     ClickFix("identify", {
       user_id: session.user_id, // kişinin dış kimliği
-      user_hash: session.user_hash, // hex(HMAC-SHA256(anahtar, user_id)), sunucuda
+      // Firma ile: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)), sunucuda.
+      // Firmasız: hex(HMAC-SHA256(anahtar, user_id)).
+      user_hash: session.user_hash,
       name: "Ayşe Yılmaz",
       email: "ayse@example.com",
+      company: { id: session.company_id }, // imzadaki firma kimliği
     }),
   );
 
@@ -87,14 +96,21 @@ import { identityHash } from "@clickfix/node";
 // Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
 const secret = process.env.CLICKFIX_IDENTITY_SECRET!;
 
-// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik)
-export function userHashFor(userId: string): string {
-  return identityHash(secret, userId);
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik) ve
+// firmasının kimliği (identify'daki company.id). Firma verilirse imza ikisini
+// birden kapsar: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)).
+export function userHashFor(userId: string, companyId?: string): string {
+  return identityHash(secret, userId, companyId);
 }
 
 // Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
 console.log(
-  JSON.stringify({ user_id: "1001", user_hash: userHashFor("1001") }),
+  JSON.stringify({
+    user_id: "1001",
+    user_hash: userHashFor("1001"), // firmasız: eski formül
+    company_id: "F-77",
+    company_user_hash: userHashFor("1001", "F-77"), // company: { id: "F-77" } ile gönderilir
+  }),
 );
 ```
 
@@ -115,8 +131,14 @@ import (
 func userHash(ctx context.Context) error {
 	secret := os.Getenv("CLICKFIX_IDENTITY_SECRET") // Panel > Web widget > Güvenlik
 	userID := "1001"                                // kullanıcının sizin sisteminizdeki kimliği
-	hash := clickfix.IdentityHash(secret, userID)
-	return json.NewEncoder(os.Stdout).Encode(map[string]string{"user_id": userID, "user_hash": hash})
+	companyID := "F-77"                             // firmasının kimliği (identify: company.id)
+	return json.NewEncoder(os.Stdout).Encode(map[string]string{
+		"user_id":   userID,
+		"user_hash": clickfix.IdentityHash(secret, userID), // firmasız: eski formül
+		// Firma ile: imza user_id + "\n" + company_id üzerinden; company: { id } ile gönderilir.
+		"company_id":        companyID,
+		"company_user_hash": clickfix.IdentityCompanyHash(secret, userID, companyID),
+	})
 }
 ```
 
@@ -126,6 +148,9 @@ func userHash(ctx context.Context) error {
 # Adım 1: user_hash = hex(HMAC-SHA256(kimlik_anahtari, user_id)); yalnız sunucuda.
 USER_ID="1001"
 printf '%s' "$USER_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
+# Firma ile (company: { id }): imza user_id + "\n" + company_id üzerinden hesaplanır.
+COMPANY_ID="F-77"
+printf '%s\n%s' "$USER_ID" "$COMPANY_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
 ```
 
 Anahtarı **Anahtarı yenile** ile değiştirirseniz eski anahtarla üretilen değerler geçersiz olur; sunucunuzdaki anahtarı aynı anda güncelleyin. Çerez onayı gerektiren sitelerde `boot({ consent })` ya da `ClickFix("consent", true)` ile onayı iletin; onay gelene kadar tarayıcıya hiçbir şey yazılmaz.
@@ -148,11 +173,11 @@ Kendi sisteminizdeki numaralar ClickFix'te **dış kimlik** (`external_id`) olar
 // @ts-check
 ClickFix("identify", {
   user_id: "1001", // API: contacts.external_id
-  user_hash: "SUNUCUDA_HESAPLANAN",
+  user_hash: "SUNUCUDA_HESAPLANAN", // user_id + "\n" + company.id üzerinden imzalı
   company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" }, // API: companies.external_id
 });
-ClickFix("on", "identify", ({ verified }) =>
-  console.log("doğrulandı:", verified),
+ClickFix("on", "identify", ({ verified, company_verified }) =>
+  console.log("doğrulandı:", verified, "firma:", company_verified),
 );
 ```
 
@@ -340,18 +365,19 @@ curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/contacts/by-e
 
 ## 4. Şirket [#company]
 
-Şirket, widget `identify` çağrısındaki `company` ile oluşur ya da eşleşir: birinci anahtar `company.id` (şirketin dış kimliği), ikinci anahtar `domain`. API'de şirket `GET /v1/public-api/companies?external_id=` ile bulunur; şirket kaydı üzerinde müşteri sağlığı için üç sinyal gönderilir: kullanım (`PUT /company-usage`, 0–100), gelir (`PUT /company-revenue`) ve ürün olayları (`POST /company-events`, bir sonraki bölüm). Şirket her üçünde `company_uuid`, `external_id` ya da `domain` ile seçilir.
+Şirket, widget `identify` çağrısındaki `company` ile oluşur ya da eşleşir: birinci anahtar `company.id` (şirketin dış kimliği; yalnız `user_hash` onu da imzalıyorsa kullanılır, bkz. [kimlik doğrulama](#identity)), ikinci anahtar `domain`. İmzalı kimlikle bağlanan şirket panelde **Doğrulanmış** rozeti taşır. API'de şirket `GET /v1/public-api/companies?external_id=` ile bulunur; şirket kaydı üzerinde müşteri sağlığı için üç sinyal gönderilir: kullanım (`PUT /company-usage`, 0–100), gelir (`PUT /company-revenue`) ve ürün olayları (`POST /company-events`, bir sonraki bölüm). Şirket her üçünde `company_uuid`, `external_id` ya da `domain` ile seçilir.
 
 {/* example: widget/04-company.js */}
 
 ```js tab="Widget"
 // Adım 4: şirket identify ile oluşur ya da dış kimliğiyle eşleşir (ikinci anahtar: domain).
+// company.id yalnız user_hash onu da imzalıyorsa bağlanır (user_id + "\n" + company.id).
 // @ts-check
 ClickFix("boot", {
   widgetId: "WIDGET_ID",
   user: {
     user_id: "1001",
-    user_hash: "SUNUCUDA_HESAPLANAN",
+    user_hash: "SUNUCUDA_HESAPLANAN", // user_id + "\n" + "F-77" üzerinden
     company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" },
   },
 });
@@ -949,9 +975,9 @@ Mobil uygulamalar için yol, ayrı bir yerel SDK değil, **oturumu taşıyan gü
 
 ### Oturum devri [#mobile-session]
 
-1. Uygulama, kendi sunucunuzdan `{ user_id, user_hash }` alır ([kimlik doğrulama](#identity)); anahtar uygulamaya hiç inmez.
+1. Uygulama, kendi sunucunuzdan `{ user_id, user_hash, company_id }` alır ([kimlik doğrulama](#identity)); `user_hash` kullanıcı ve firma kimliğini birlikte imzalar, anahtar uygulamaya hiç inmez.
 2. Webview `widget-embed.html?widget=WIDGET_ID&locale=tr&theme=auto` adresini açar. Widget hazır olunca köprüden `{"type":"clickfix:ready", ...}` gelir.
-3. Uygulama `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}` gönderir; cevap `{"type":"clickfix:result","id":"1","ok":true}` olur. Reddedilirse `ok:false` ve `error.code` (`WIDGET_IDENTITY_INVALID` gibi) döner; kullanıcı anonim kalır.
+3. Uygulama `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}` gönderir; `company.id` imzadaki firma kimliğidir (köprü sözleşmesi 1.2, `bridge_version` 1). Cevap `{"type":"clickfix:result","id":"1","ok":true}` olur. Reddedilirse `ok:false` ve `error.code` (`WIDGET_IDENTITY_INVALID` gibi) döner; kullanıcı anonim kalır.
 4. Çıkışta `{"type":"clickfix:reset"}` gönderin; ziyaretçi unutulur, sonraki açılış yeni ziyaretçidir.
 
 Webview'in çerez ve depolaması oturumu sayfa yenilemeleri arasında taşır; `reset` göndermeden hesap değiştirmeyin.

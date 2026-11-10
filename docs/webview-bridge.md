@@ -14,6 +14,7 @@ Uygulama: `frontend/widget-sdk/src/shared/bridge.ts` (saf, birim testli: `fronte
 |---|---|---|
 | 1.0 | CF-199 | İlk sözleşme: sekiz komut, `ready` / `event` / `link` / `result` mesajları. |
 | 1.1 | CF-201 | Geriye uyumlu ekleme, `bridge_version` 1 kaldı: `clickfix:session` komutu ve mesajı (yerel SDK ile iki yönlü oturum devri); tipler `@getclickfix/visitor-core` paketinde de yayımlanır ("SDK çekirdeği ile paylaşım"). |
+| 1.2 | CF-206 | Alan değişmedi, `bridge_version` 1 kaldı: `clickfix:identify` içindeki `user.company.id` **firma kimliği** olarak netleşti ve `user_hash` onu da imzalayabilir (`hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id))`). İmzasız `company.id` bağlanmaz; `identify` olayının yükü `company_verified` alanını kazandı. Eski (yalnız `user_id`) imza çalışmaya devam eder. |
 
 ## Açma
 
@@ -57,7 +58,7 @@ Her komut bir JSON nesnesidir; `type` zorunlu, `id` isteğe bağlıdır (≤128 
 
 | `type` | Alanlar | Widget ne yapar | `result.data` |
 |---|---|---|---|
-| `clickfix:identify` | `user: { user_id, user_hash, name?, email?, phone?, company?: { id?, name?, domain? }, attributes? }` | `ClickFix("identify", user)`; `user_hash` uygulamanın sunucusunda hesaplanır | yok |
+| `clickfix:identify` | `user: { user_id, user_hash, name?, email?, phone?, company?: { id?, name?, domain? }, attributes? }` | `ClickFix("identify", user)`; `user_hash` uygulamanın sunucusunda hesaplanır. `company.id` firmanın uygulamadaki kimliğidir (dış firma kimliği); `user_hash` = `hex(HMAC-SHA256(anahtar, user_id + "\n" + company.id))` olarak ikisini birlikte imzalarsa kişi o firmaya bağlanır ve `identify` olayında `company_verified: true` gelir (CF-206). Yalnız `user_id` imzalanmışsa kullanıcı yine doğrulanır ama `company.id` bağlanmaz, `name`/`domain` ipucu kalır | yok |
 | `clickfix:track` | `name` (≤100), `properties?` (nesne) | `ClickFix("track", name, properties)`; ekran bağlamına eklenir | yok |
 | `clickfix:open` | `view?` (`home`/`messages`/`help`/`new`), `conversation?` (UUID) | `conversation` varsa o konuşmayı, yoksa `view`'i açar | yok |
 | `clickfix:close` | – | Paneli kapatır | yok |

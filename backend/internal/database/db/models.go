@@ -1538,6 +1538,7 @@ type Company struct {
 	Tier           string             `json:"tier"`
 	AccountOwnerID pgtype.Int8        `json:"account_owner_id"`
 	SlaPolicyID    pgtype.Int8        `json:"sla_policy_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
 }
 
 type CompanyEvent struct {

@@ -40,6 +40,37 @@ func TestUserHash(t *testing.T) {
 	}
 }
 
+// CF-206: the company id signed with the user id. The fixed vector is what
+// the Node, Go and PHP helpers and the guide must produce for the same input.
+func TestUserCompanyHash(t *testing.T) {
+	const secret = "secret-0123456789abcdef0123"
+	got := UserCompanyHash(secret, "user-42", "F-77")
+	if want := UserHash(secret, "user-42\nF-77"); got != want {
+		t.Fatalf("company hash = %q, want HMAC over user_id + newline + company_id %q", got, want)
+	}
+	if got == UserHash(secret, "user-42") || got == UserHash(secret, "user-42F-77") {
+		t.Fatal("company hash must differ from the user-only hash and from plain concatenation")
+	}
+	if !VerifyUserCompanyHash(secret, "user-42", "F-77", strings.ToUpper(got)) {
+		t.Fatal("valid company hash rejected")
+	}
+	if VerifyUserCompanyHash(secret, "user-42", "F-78", got) {
+		t.Fatal("hash of another company accepted")
+	}
+	if VerifyUserCompanyHash(secret, "user-43", "F-77", got) {
+		t.Fatal("hash of another user accepted")
+	}
+	if VerifyUserHash(secret, "user-42", got) {
+		t.Fatal("company hash must not verify as a user-only hash")
+	}
+	if VerifyUserCompanyHash(secret, "user-42", "", UserCompanyHash(secret, "user-42", "")) {
+		t.Fatal("empty company id must never verify (use VerifyUserHash)")
+	}
+	if VerifyUserCompanyHash("", "user-42", "F-77", UserCompanyHash("", "user-42", "F-77")) {
+		t.Fatal("empty secret must never verify")
+	}
+}
+
 func TestTokenRoundTripAndExpiry(t *testing.T) {
 	now := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
 	s := NewSigner("app-secret").WithClock(func() time.Time { return now })

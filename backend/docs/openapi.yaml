@@ -43623,12 +43623,13 @@ components:
         avatar_url: { type: [string, "null"] }
     WidgetVisitor:
       type: object
-      required: [id, token, expires_at, verified, contact]
+      required: [id, token, expires_at, verified, company_verified, contact]
       properties:
         id: { type: string, description: Anonymous visitor id }
         token: { type: string, description: "Visitor token, sent as a bearer Authorization header" }
         expires_at: { type: string, format: date-time }
         verified: { type: boolean }
+        company_verified: { type: boolean, description: "The visitor's contact belongs to a company whose id was proved by a signed company id (CF-206)" }
         contact:
           oneOf:
             - type: "null"
@@ -43704,15 +43705,23 @@ components:
       type: object
       required: [user_id, user_hash]
       properties:
-        user_id: { type: string, maxLength: 200 }
-        user_hash: { type: string, description: "hex(HMAC-SHA256(identity_secret, user_id))" }
+        user_id: { type: string, maxLength: 200, description: "The user's id in your system (the contact's external id); no line breaks" }
+        user_hash:
+          type: string
+          description: >-
+            Computed on your server with the widget's identity secret. Without a company id:
+            hex(HMAC-SHA256(identity_secret, user_id)). With company.id (CF-206):
+            hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id)), so the user cannot claim
+            another company. A user-only hash sent together with company.id still verifies the user,
+            but the company id is then a claim: it binds no company and is not stored (name and domain
+            stay hints).
         name: { type: string }
         email: { type: string }
         phone: { type: string }
         company:
           type: object
           properties:
-            id: { type: string }
+            id: { type: string, maxLength: 200, description: "The company's id in your system (companies.external_id); binds the contact to the company only when user_hash covers it" }
             name: { type: string }
             domain: { type: string }
     WidgetProfileInput:
@@ -56288,12 +56297,13 @@ components:
 
     Company:
       type: object
-      required: [uuid, name, domain, external_id, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
+      required: [uuid, name, domain, external_id, verified_at, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         domain: { type: [string, "null"] }
         external_id: { type: [string, "null"] }
+        verified_at: { type: [string, "null"], format: date-time, description: "Last time a signed-in user proved external_id with a company-signed user_hash (CF-206); null when the company was never proved" }
         tier: { type: string }
         account_owner: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         notes: { type: string }

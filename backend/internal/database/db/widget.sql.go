@@ -92,7 +92,7 @@ func (q *Queries) DeleteWidgetDraft(ctx context.Context, arg DeleteWidgetDraftPa
 }
 
 const getCompanyByExternalID = `-- name: GetCompanyByExternalID :one
-SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id FROM companies
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
 WHERE organization_id = $1 AND external_id = $2::text AND deleted_at IS NULL
 ORDER BY id ASC
 LIMIT 1
@@ -121,6 +121,7 @@ func (q *Queries) GetCompanyByExternalID(ctx context.Context, arg GetCompanyByEx
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -175,6 +176,41 @@ func (q *Queries) GetWidgetAppKeyByHash(ctx context.Context, keyHash string) (Wi
 		&i.CreatedAt,
 		&i.LastUsedAt,
 		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getWidgetCompanyByID = `-- name: GetWidgetCompanyByID :one
+
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
+WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type GetWidgetCompanyByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+// CF-206: a signed company id (user_hash covers user_id and company.id).
+func (q *Queries) GetWidgetCompanyByID(ctx context.Context, arg GetWidgetCompanyByIDParams) (Company, error) {
+	row := q.db.QueryRow(ctx, getWidgetCompanyByID, arg.OrganizationID, arg.ID)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Domain,
+		&i.ExternalID,
+		&i.Notes,
+		&i.CustomFields,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Tier,
+		&i.AccountOwnerID,
+		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -884,6 +920,22 @@ func (q *Queries) ListWidgetVersions(ctx context.Context, arg ListWidgetVersions
 	return items, nil
 }
 
+const markCompanyVerified = `-- name: MarkCompanyVerified :exec
+UPDATE companies SET verified_at = $1, updated_at = NOW()
+WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
+`
+
+type MarkCompanyVerifiedParams struct {
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+func (q *Queries) MarkCompanyVerified(ctx context.Context, arg MarkCompanyVerifiedParams) error {
+	_, err := q.db.Exec(ctx, markCompanyVerified, arg.VerifiedAt, arg.OrganizationID, arg.ID)
+	return err
+}
+
 const mergeWidgetContactCustomFields = `-- name: MergeWidgetContactCustomFields :exec
 UPDATE contacts SET custom_fields = custom_fields || $1::jsonb, updated_at = now()
 WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
@@ -933,6 +985,43 @@ func (q *Queries) RevokeWidgetAppKey(ctx context.Context, arg RevokeWidgetAppKey
 		&i.RevokedAt,
 	)
 	return i, err
+}
+
+const setCompanyExternalIDIfEmpty = `-- name: SetCompanyExternalIDIfEmpty :exec
+UPDATE companies SET external_id = $1::text, updated_at = NOW()
+WHERE organization_id = $2 AND id = $3 AND external_id IS NULL AND deleted_at IS NULL
+`
+
+type SetCompanyExternalIDIfEmptyParams struct {
+	ExternalID     string `json:"external_id"`
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+}
+
+// The company matched by domain takes the proved external id when it has
+// none (the id was looked up first, so no other live company holds it).
+func (q *Queries) SetCompanyExternalIDIfEmpty(ctx context.Context, arg SetCompanyExternalIDIfEmptyParams) error {
+	_, err := q.db.Exec(ctx, setCompanyExternalIDIfEmpty, arg.ExternalID, arg.OrganizationID, arg.ID)
+	return err
+}
+
+const setContactCompany = `-- name: SetContactCompany :exec
+UPDATE contacts SET company_id = $1, updated_at = NOW()
+WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
+  AND company_id IS DISTINCT FROM $1
+`
+
+type SetContactCompanyParams struct {
+	CompanyID      pgtype.Int8 `json:"company_id"`
+	OrganizationID int64       `json:"organization_id"`
+	ID             int64       `json:"id"`
+}
+
+// A proved company id moves the contact to that company even when it had
+// another one (the unsigned path only fills an empty company).
+func (q *Queries) SetContactCompany(ctx context.Context, arg SetContactCompanyParams) error {
+	_, err := q.db.Exec(ctx, setContactCompany, arg.CompanyID, arg.OrganizationID, arg.ID)
+	return err
 }
 
 const setContactCompanyIfEmpty = `-- name: SetContactCompanyIfEmpty :exec

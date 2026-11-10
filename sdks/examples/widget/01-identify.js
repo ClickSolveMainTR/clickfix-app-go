@@ -2,14 +2,17 @@
 // @ts-check
 ClickFix("boot", { widgetId: "WIDGET_ID", locale: "tr" });
 
-fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash } döner
+fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash, company_id } döner
   .then((r) => r.json())
   .then((session) =>
     ClickFix("identify", {
       user_id: session.user_id, // kişinin dış kimliği
-      user_hash: session.user_hash, // hex(HMAC-SHA256(anahtar, user_id)), sunucuda
+      // Firma ile: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)), sunucuda.
+      // Firmasız: hex(HMAC-SHA256(anahtar, user_id)).
+      user_hash: session.user_hash,
       name: "Ayşe Yılmaz",
       email: "ayse@example.com",
+      company: { id: session.company_id }, // imzadaki firma kimliği
     }),
   );
 

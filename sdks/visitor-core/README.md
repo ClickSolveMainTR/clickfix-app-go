@@ -40,6 +40,8 @@ const client = createVisitorClient({
   language: 'tr',
 });
 await client.init();
+// user_hash from your server signs user_id and company.id together (CF-206):
+// hex(HMAC-SHA256(secret, '1001' + '\n' + 'F-77')); without a company, user_id alone.
 await client.identify({ user_id: '1001', user_hash: fromYourServer, company: { id: 'F-77' } });
 client.track('viewed_order', { id: 42 });           // rides with the next message
 const { items } = await client.conversations();

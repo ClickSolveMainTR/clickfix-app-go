@@ -139,7 +139,7 @@ func (q *Queries) FillContactDetails(ctx context.Context, arg FillContactDetails
 }
 
 const findCompanyByName = `-- name: FindCompanyByName :one
-SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id FROM companies
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
 WHERE organization_id = $1 AND lower(name) = lower($2::text) AND deleted_at IS NULL
 ORDER BY id
 LIMIT 1
@@ -169,6 +169,7 @@ func (q *Queries) FindCompanyByName(ctx context.Context, arg FindCompanyByNamePa
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -370,7 +371,7 @@ func (q *Queries) FindOrganizationMemberByEmail(ctx context.Context, arg FindOrg
 }
 
 const getCompanyByDomain = `-- name: GetCompanyByDomain :one
-SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id FROM companies
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
 WHERE organization_id = $1 AND lower(domain) = lower($2::text) AND deleted_at IS NULL
 `
 
@@ -397,12 +398,13 @@ func (q *Queries) GetCompanyByDomain(ctx context.Context, arg GetCompanyByDomain
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
 
 const getCompanyByUUID = `-- name: GetCompanyByUUID :one
-SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id FROM companies WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
 `
 
 type GetCompanyByUUIDParams struct {
@@ -428,6 +430,7 @@ func (q *Queries) GetCompanyByUUID(ctx context.Context, arg GetCompanyByUUIDPara
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -606,7 +609,7 @@ const insertCompany = `-- name: InsertCompany :one
 INSERT INTO companies (organization_id, name, domain, external_id, notes, custom_fields, tier, account_owner_id, sla_policy_id)
 VALUES ($1, $2, $3, $4,
         $5, $6, $7, $8, $9)
-RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id
+RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at
 `
 
 type InsertCompanyParams struct {
@@ -650,6 +653,7 @@ func (q *Queries) InsertCompany(ctx context.Context, arg InsertCompanyParams) (C
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -739,7 +743,7 @@ func (q *Queries) LinkContactsToCompanyByDomain(ctx context.Context, arg LinkCon
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT co.id, co.uuid, co.organization_id, co.name, co.domain, co.external_id, co.notes, co.custom_fields, co.created_at, co.updated_at, co.deleted_at, co.tier, co.account_owner_id, co.sla_policy_id, u.uuid AS owner_uuid, u.name AS owner_name, u.surname AS owner_surname,
+SELECT co.id, co.uuid, co.organization_id, co.name, co.domain, co.external_id, co.notes, co.custom_fields, co.created_at, co.updated_at, co.deleted_at, co.tier, co.account_owner_id, co.sla_policy_id, co.verified_at, u.uuid AS owner_uuid, u.name AS owner_name, u.surname AS owner_surname,
        (SELECT COUNT(*) FROM contacts c WHERE c.organization_id = co.organization_id AND c.company_id = co.id AND c.deleted_at IS NULL)::bigint AS contact_count,
        (SELECT COUNT(*) FROM conversations v WHERE v.organization_id = co.organization_id AND v.company_id = co.id
           AND v.deleted_at IS NULL AND v.status IN ('open', 'pending'))::bigint AS open_conversations
@@ -777,6 +781,7 @@ type ListCompaniesRow struct {
 	Tier              string             `json:"tier"`
 	AccountOwnerID    pgtype.Int8        `json:"account_owner_id"`
 	SlaPolicyID       pgtype.Int8        `json:"sla_policy_id"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
 	OwnerUuid         pgtype.UUID        `json:"owner_uuid"`
 	OwnerName         pgtype.Text        `json:"owner_name"`
 	OwnerSurname      pgtype.Text        `json:"owner_surname"`
@@ -814,6 +819,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 			&i.Tier,
 			&i.AccountOwnerID,
 			&i.SlaPolicyID,
+			&i.VerifiedAt,
 			&i.OwnerUuid,
 			&i.OwnerName,
 			&i.OwnerSurname,
@@ -1143,7 +1149,7 @@ func (q *Queries) MoveContactMessages(ctx context.Context, arg MoveContactMessag
 const softDeleteCompany = `-- name: SoftDeleteCompany :one
 UPDATE companies SET deleted_at = NOW()
 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id
+RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at
 `
 
 type SoftDeleteCompanyParams struct {
@@ -1169,6 +1175,7 @@ func (q *Queries) SoftDeleteCompany(ctx context.Context, arg SoftDeleteCompanyPa
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -1224,7 +1231,7 @@ UPDATE companies SET
     account_owner_id = $7,
     sla_policy_id = $8
 WHERE organization_id = $9 AND id = $10 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id
+RETURNING id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at
 `
 
 type UpdateCompanyParams struct {
@@ -1269,6 +1276,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }

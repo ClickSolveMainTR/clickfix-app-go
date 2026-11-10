@@ -160,5 +160,53 @@ test("a verified identify stays quiet", async () => {
   const lines = await captured(() => w.start());
   assert.deepEqual(lines.warn, []);
   assert.deepEqual(errors, []);
-  assert.deepEqual(seen, [{ verified: true }]);
+  assert.deepEqual(seen, [{ verified: true, company_verified: false }]);
+});
+
+// CF-206: the company id was covered by user_hash; the API says so.
+test("a company-signed identify reports company_verified", async () => {
+  const { w, errors } = widget(
+    { user: { ...USER, company: { id: "F-77", name: "Acme" } } },
+    async () => ({
+      id: "v",
+      token: "t",
+      verified: true,
+      company_verified: true,
+    }),
+  );
+  const seen = [];
+  w.on("identify", (e) => seen.push(e));
+  const lines = await captured(() => w.start());
+  assert.deepEqual(lines.warn, []);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(seen, [{ verified: true, company_verified: true }]);
+});
+
+// CF-206: company.id was sent but user_hash signed only user_id: the user
+// is verified, the company was not bound by the id, and the integrator is
+// told how to sign both, without the ids or the hash in the console.
+test("an unsigned company id warns without leaking the request", async () => {
+  const { w, errors } = widget(
+    { user: { ...USER, company: { id: "F-77" } } },
+    async () => ({
+      id: "v",
+      token: "t",
+      verified: true,
+      company_verified: false,
+    }),
+  );
+  const seen = [];
+  w.on("identify", (e) => seen.push(e));
+  const lines = await captured(() => w.start());
+  assert.equal(lines.warn.length, 1);
+  assert.match(
+    lines.warn[0],
+    /company\.id was sent but user_hash signs only user_id/,
+  );
+  assert.match(lines.warn[0], /user_id \+ "\\n" \+ company\.id/);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(seen, [{ verified: true, company_verified: false }]);
+  assert.ok(!JSON.stringify(lines).includes(HASH));
+  assert.ok(!JSON.stringify(lines).includes("F-77"));
+  assert.ok(!JSON.stringify(lines).includes("user-176"));
 });
