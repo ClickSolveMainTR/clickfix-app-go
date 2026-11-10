@@ -124,8 +124,8 @@ T10 kapsamındaki ekranlar (her biri ayrı satır olarak taşınır):
 | T10e | Banka hesapları `/platform/billing` | `billing/components/platform/bank-accounts-panel.tsx:132` | Sayfasız | | |
 | T10f | Kredi ürünleri `/platform/billing` | `billing/components/platform/catalog/credit-products-panel.tsx:285` | Sayfasız; birime göre 3 ayrı tablo | Üç ayrı `DataTable` olarak kalabilir | |
 | T10g | Organizasyon cüzdanı `/platform/organizations/[uuid]` → Cüzdan | `billing/components/platform/organization-wallet-tab.tsx:355` | Sunucu sayfalı | | |
-| T10h | Faturalar `/billing` | `billing/components/portal/billing-portal-page.tsx:558` | Sunucu, 10'ar | Satır işlemi: öde, PDF | |
-| T10i | Kredi hareketleri `/billing` | `billing/components/portal/wallet/wallet-ledger-card.tsx:106` | Sunucu sayfalı | | |
+| T10h | Faturalar `/billing` | `billing/components/portal/billing-portal-page.tsx:558` | Sunucu, 10'ar | Satır işlemi: öde, PDF | taşındı (PR #125) |
+| T10i | Kredi hareketleri `/billing` | `billing/components/portal/wallet/wallet-ledger-card.tsx:106` | Sunucu sayfalı | | taşındı (PR #125) |
 
 ### 3.3 Diyalog, yardım ve panel
 
