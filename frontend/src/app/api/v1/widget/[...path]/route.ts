@@ -12,7 +12,11 @@ import {
  *   visitor token travels in `Authorization`),
  * - answers CORS for any origin without credentials (the per-widget origin
  *   allowlist is enforced by the API from `X-Widget-Origin`),
- * - forwards only the headers the widget API needs.
+ * - forwards only the headers the widget API needs, including the mobile
+ *   app identity pair (`X-ClickFix-App-Key`, `X-ClickFix-App-Package`,
+ *   CF-201) that native apps send in place of a page origin. The pair is not
+ *   CORS-allowed on purpose: a browser page always has an origin, and the
+ *   API rejects an app key that arrives with one.
  */
 
 type RouteContext = { params: Promise<{ path: string[] }> };
@@ -88,6 +92,8 @@ async function handle(request: Request, context: RouteContext) {
     "content-type",
     "user-agent",
     "cf-ipcountry",
+    "x-clickfix-app-key",
+    "x-clickfix-app-package",
   ]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);

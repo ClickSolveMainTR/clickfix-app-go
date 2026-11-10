@@ -4137,6 +4137,22 @@ type WebauthnCredential struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type WidgetAppKey struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	ChannelInstanceID int64              `json:"channel_instance_id"`
+	Platform          string             `json:"platform"`
+	PackageName       string             `json:"package_name"`
+	Label             string             `json:"label"`
+	KeyPrefix         string             `json:"key_prefix"`
+	KeyHash           string             `json:"key_hash"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt        pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt         pgtype.Timestamptz `json:"revoked_at"`
+}
+
 type WidgetDiagnostic struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

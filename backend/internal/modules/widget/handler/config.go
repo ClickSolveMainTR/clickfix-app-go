@@ -268,3 +268,61 @@ func (h *ConfigHandler) Installs(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, r, http.StatusOK, map[string]any{"items": items, "identity_rejection": rejection})
 }
+
+// AppKeys is GET /v1/tenant/widgets/{uuid}/app-keys (CF-201).
+func (h *ConfigHandler) AppKeys(w http.ResponseWriter, r *http.Request) {
+	scope, _, id, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.svc.ListAppKeys(r.Context(), scope.ID, id)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
+// CreateAppKey is POST /v1/tenant/widgets/{uuid}/app-keys: the response
+// carries the key exactly once.
+func (h *ConfigHandler) CreateAppKey(w http.ResponseWriter, r *http.Request) {
+	scope, actor, id, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	var in usecase.CreateAppKeyInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	out, err := h.svc.CreateAppKey(r.Context(), scope.ID, actor, id, in)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.record(r, actor, "widgets.app_key_created", id, map[string]any{
+		"organization_uuid": scope.UUID, "app_key_uuid": out.UUID, "platform": out.Platform, "package_name": out.PackageName,
+	})
+	response.JSON(w, r, http.StatusCreated, out)
+}
+
+// RevokeAppKey is DELETE /v1/tenant/widgets/{uuid}/app-keys/{key}.
+func (h *ConfigHandler) RevokeAppKey(w http.ResponseWriter, r *http.Request) {
+	scope, actor, id, ok := h.scope(w, r)
+	if !ok {
+		return
+	}
+	key, err := uuid.Parse(r.PathValue("key"))
+	if err != nil {
+		response.NotFound(w, r, "App key not found")
+		return
+	}
+	out, err := h.svc.RevokeAppKey(r.Context(), scope.ID, id, key)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	h.record(r, actor, "widgets.app_key_revoked", id, map[string]any{
+		"organization_uuid": scope.UUID, "app_key_uuid": out.UUID, "platform": out.Platform, "package_name": out.PackageName,
+	})
+	response.JSON(w, r, http.StatusOK, out)
+}

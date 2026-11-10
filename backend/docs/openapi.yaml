@@ -24215,6 +24215,9 @@ paths:
   # open (no credentials); the page origin is checked against the widget's
   # allowlist and every route except bootstrap needs the visitor token.
   /v1/widget/{public_id}/replay-policy:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       operationId: GetreplayprivacypolicyCF126
       summary: Get replay privacy policy
@@ -24258,6 +24261,9 @@ paths:
         '429':
           description: Rate or plan quota exceeded
   /v1/widget/{public_id}/conversations/{conversation}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: StartconsentedreplayCF126
       summary: Start consented replay
@@ -24315,6 +24321,9 @@ paths:
                   type: boolean
                   const: true
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/consent:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: ChangevisitorsessionconsentCF126
       summary: Change visitor session consent
@@ -24380,6 +24389,9 @@ paths:
                   - stop
                   - revoke
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/chunks:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: UploadmaskedcompressedDOMeventsCF126
       summary: Upload masked compressed DOM events
@@ -24449,6 +24461,9 @@ paths:
                   description: Base64 gzip of rrweb event array; max 512 KiB compressed, 2 MiB expanded; sequential
                     for replay, ephemeral for co-browse
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/live-token:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: VisitorlivestreamtokenCF126
       summary: Visitor live stream token
@@ -25092,9 +25107,90 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /v1/tenant/widgets/{uuid}/app-keys:
+    get:
+      tags: [Tenant]
+      operationId: listTenantWidgetAppKeys
+      summary: Mobile app keys of the widget
+      description: |
+        The native apps (iOS bundle id, Android application id) that may use
+        the widget without a page origin (CF-201). Keys are never returned:
+        only `key_prefix` identifies one. Active keys first. Requires
+        `tenant.channels.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: App keys
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKeyList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: createTenantWidgetAppKey
+      summary: Create a mobile app key
+      description: |
+        Mints a key for one app. The response is the only time the key is
+        shown; only its sha256 is stored. A widget may have at most 20
+        active keys. Requires `tenant.channels.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WidgetAppKeyCreate" }
+      responses:
+        "201":
+          description: The app key, shown once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKeyCreated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/tenant/widgets/{uuid}/app-keys/{key}:
+    delete:
+      tags: [Tenant]
+      operationId: revokeTenantWidgetAppKey
+      summary: Revoke a mobile app key
+      description: |
+        The key stops working at once; the row stays listed with
+        `revoked_at`. Revoking twice is 404. Requires `tenant.channels.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: key
+          in: path
+          required: true
+          description: App key uuid
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The revoked key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKey" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/widget/{public_id}/attributes:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     patch:
       tags: [Widget]
       operationId: widgetSetAttributes
@@ -25129,6 +25225,8 @@ paths:
   /v1/widget/{public_id}/bootstrap:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetBootstrap
@@ -25157,6 +25255,8 @@ paths:
   /v1/widget/{public_id}/identify:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetIdentify
@@ -25190,6 +25290,8 @@ paths:
   /v1/widget/{public_id}/profile:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     patch:
       tags: [Widget]
       operationId: widgetUpdateProfile
@@ -25213,6 +25315,8 @@ paths:
   /v1/widget/{public_id}/realtime-token:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetRealtimeToken
@@ -25230,6 +25334,8 @@ paths:
   /v1/widget/{public_id}/conversations:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetListConversations
@@ -25271,6 +25377,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/messages:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     get:
       tags: [Widget]
@@ -25324,6 +25432,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/read:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25351,6 +25461,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/typing:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25480,6 +25592,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/rating:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25537,6 +25651,8 @@ paths:
   /v1/widget/{public_id}/booking:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetBookingLink
@@ -25559,6 +25675,8 @@ paths:
   /v1/widget/{public_id}/help/search:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetHelpSearch
@@ -41894,7 +42012,7 @@ components:
     widgetVisitor:
       type: http
       scheme: bearer
-      description: Visitor token from `POST /v1/widget/{public_id}/bootstrap` (HMAC signed, bound to one widget and visitor).
+      description: Visitor token from `POST /v1/widget/{public_id}/bootstrap` (HMAC signed, bound to one widget and visitor). Every widget route also needs a page origin on the widget's allowlist, or a mobile app key (`X-ClickFix-App-Key` + `X-ClickFix-App-Package`, CF-201); the token itself is not bound to either, so a session started in a native app continues in the app's webview.
     integrationKey: {"type": "http", "scheme": "bearer", "bearerFormat": "cf_sk_\u2026", "description": "Organization API key; created through /v1/tenant/api-keys."}
     mcpOAuth: {"type": "oauth2", "flows": {"authorizationCode": {"authorizationUrl": "/oauth/authorize", "tokenUrl": "/oauth/token", "scopes": {"mcp:read": "Read organization support data", "mcp:write": "Mutate organization support data"}}}}
 
@@ -41916,6 +42034,24 @@ components:
       required: true
       description: Public widget id (the widget's channel instance uuid)
       schema: { type: string, format: uuid }
+    WidgetAppKey:
+      name: X-ClickFix-App-Key
+      in: header
+      required: false
+      description: |
+        Mobile app key (CF-201): a native app sends it with
+        `X-ClickFix-App-Package` instead of a page origin; the widget's
+        origin allowlist is then not consulted. Unknown, revoked or
+        mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+        that arrives together with an `Origin` or `Referer` (a page never
+        holds an app key; the headers are not CORS-allowed).
+      schema: { type: string, maxLength: 200 }
+    WidgetAppPackage:
+      name: X-ClickFix-App-Package
+      in: header
+      required: false
+      description: The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's.
+      schema: { type: string, maxLength: 200 }
     WidgetConversation:
       name: conversation
       in: path
@@ -43313,6 +43449,58 @@ components:
           enum: [WIDGET_IDENTITY_DISABLED, WIDGET_IDENTITY_INVALID]
           description: "`WIDGET_IDENTITY_DISABLED`: the widget has no identity secret. `WIDGET_IDENTITY_INVALID`: `user_hash` did not match `user_id`."
         rejected_at: { type: string, format: date-time }
+    WidgetAppKey:
+      type: object
+      description: A mobile app that may use the widget (CF-201). Never carries the key.
+      required: [uuid, platform, package_name, label, key_prefix, created_at, last_used_at, revoked_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        platform: { type: string, enum: [ios, android] }
+        package_name: { type: string, description: iOS bundle id or Android application id }
+        label: { type: string }
+        key_prefix: { type: string, description: "The first characters of the key (`cf_app_…`), to tell keys apart" }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time, description: Updated at most every five minutes }
+        revoked_at: { type: [string, "null"], format: date-time }
+    WidgetAppKeyCreate:
+      type: object
+      required: [platform, package_name]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        package_name: { type: string, minLength: 3, maxLength: 200, description: "Dot-separated labels, e.g. com.example.shop" }
+        label: { type: string, maxLength: 100 }
+    WidgetAppKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/WidgetAppKey"
+        - type: object
+          required: [key]
+          properties:
+            key: { type: string, description: The app key; shown only in this response }
+    EnvelopeWidgetAppKeyList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/WidgetAppKey" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeWidgetAppKey:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/WidgetAppKey" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeWidgetAppKeyCreated:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/WidgetAppKeyCreated" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     WidgetReplyEstimate:
       type: object
       required: [value, next_open_at]
