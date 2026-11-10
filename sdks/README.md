@@ -2,7 +2,7 @@
 
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
-- `visitor-core`: `@clickfix/visitor-core`, the DOM-free visitor (widget) API client for React Native, Node and browsers: browser mode (same-origin BFF) or app mode (mobile app key headers), retries, session renewal, realtime abstraction and the webview bridge types (CF-201).
+- `visitor-core`: `@getclickfix/visitor-core`, the DOM-free visitor (widget) API client for React Native, Node and browsers: browser mode (same-origin BFF) or app mode (mobile app key headers), retries, session renewal, realtime abstraction and the webview bridge types (CF-201).
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ hooks over `visitor-core` in browser mode.
 - `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
 
