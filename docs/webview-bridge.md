@@ -121,7 +121,7 @@ Uygulama anahtarı webview'e **girmez**: widget sayfası uygulamanın kendi kayn
 3. Köprü `"*"` kaynağını hiçbir yönde kabul etmez; çerçeve dışı sayfada üst pencereden gelen mesajlar işlenmez. `clickfix:link` ile gelen adres uygulamada yeniden doğrulanır (yalnız `https:`), intent/derin bağlantı işleyicisine verilmez.
 4. Reddedilen komutlar içerik sızdırmaz (`parseCommand` ve `errorOf` yalnız kod üretir).
 5. Oturum webview depolamasındadır: hesap değişimi ve çıkışta `clickfix:reset`; paylaşılan cihazlarda depolama temizliği. `clickfix:session` ile alınan belirteç uygulamanın güvenli depolamasında tutulur (çıkışta silinir); belirteç tek widget ve ziyaretçiye bağlı imzalı bir değerdir, `user_hash` ya da uygulama anahtarı değildir.
-7. Uygulama anahtarı (`X-ClickFix-App-Key`) yalnız yerel çekirdekte, uygulamanın yapılandırmasındadır; webview'e ya da sayfaya verilmez, sızdığında panelden iptal edilir ve yenisi oluşturulur.
+7. Uygulama anahtarı (`X-ClickFix-App-Key`) yalnız yerel çekirdekte, uygulamanın yapılandırmasındadır; webview'e ya da sayfaya verilmez, sızdığında panelden iptal edilir ve yenisi oluşturulur. API, anahtarla birlikte `Origin` ya da `Referer` gelen isteği reddeder ve bu başlıklar CORS'ta izinli değildir: sızmış bir anahtar bir web sayfasını allowlist'ten geçiremez.
 6. `consent` olmadan hiçbir şey saklanmaz; onayı uygulama iletir. `widget-embed.html?consent=1` adresi onayı kullanıcıya sormadan verir: bu adresi yalnız uygulamanın kendisi, onayı gerçekten aldıktan sonra kurar; dışarıdan gelen bir bağlantıyı olduğu gibi webview'de açmayın.
 
 ## Test

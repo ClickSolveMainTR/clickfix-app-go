@@ -93,7 +93,7 @@ func CORS(next http.Handler) http.Handler {
 		if origin := r.Header.Get("Origin"); origin != "" {
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
-			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Widget-Page, "+AppKeyHeader+", "+AppPackageHeader)
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Widget-Page")
 			h.Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions {
@@ -114,7 +114,10 @@ func (h *Handler) Preflight(w http.ResponseWriter, _ *http.Request) {
 const OriginHeader = "X-Widget-Origin"
 
 // Mobile app identity headers (CF-201): a native app sends its app key and
-// package name instead of a page origin. The BFF relays both unchanged.
+// package name instead of a page origin. The BFF relays both unchanged. They
+// are deliberately not in Access-Control-Allow-Headers: a browser page has an
+// origin and must pass the allowlist, so a leaked key cannot be used from a
+// site (open rejects a key that arrives with a page origin).
 const (
 	AppKeyHeader     = "X-ClickFix-App-Key"
 	AppPackageHeader = "X-ClickFix-App-Package"
@@ -187,6 +190,11 @@ func (h *Handler) open(w http.ResponseWriter, r *http.Request) (usecase.Widget, 
 	}
 	var wd usecase.Widget
 	if key := r.Header.Get(AppKeyHeader); key != "" {
+		if pageOrigin(r) != "" {
+			// A page (any Origin/Referer, relayed or not) never holds an app key.
+			h.fail(w, r, usecase.ErrAppKeyInvalid)
+			return usecase.Widget{}, false
+		}
 		wd, err = h.svc.OpenApp(r.Context(), id, key, r.Header.Get(AppPackageHeader))
 	} else {
 		wd, err = h.svc.Open(r.Context(), id, pageOrigin(r))

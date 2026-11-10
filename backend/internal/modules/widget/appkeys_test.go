@@ -104,16 +104,31 @@ func TestAppKeyFlow(t *testing.T) {
 	if token == "" {
 		t.Fatalf("no visitor session: %v", boot.Data)
 	}
-	// A foreign Origin alongside a valid key is ignored: the key decides.
-	req := httptest.NewRequest(http.MethodGet, "/v1/widget/"+e.inst.UUID.String()+"/conversations", nil)
-	req.Header.Set("Origin", "https://evil.test")
-	req.Header.Set(handler.AppKeyHeader, created.Key)
-	req.Header.Set(handler.AppPackageHeader, "com.example.shop")
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	e.mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("app conversations with foreign origin = %d %s", rec.Code, rec.Body)
+	// A page never holds an app key: a key arriving with any Origin, Referer
+	// or relayed origin (even an allowed one) is rejected, so a leaked key
+	// cannot take a site past the allowlist. Nothing falls back to the
+	// origin check.
+	for name, hdr := range map[string][2]string{
+		"foreign origin": {"Origin", "https://evil.test"},
+		"allowed origin": {"Origin", siteOrigin},
+		"referer":        {"Referer", siteOrigin + "/page"},
+		"relayed origin": {handler.OriginHeader, siteOrigin},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/widget/"+e.inst.UUID.String()+"/conversations", nil)
+		req.Header.Set(hdr[0], hdr[1])
+		req.Header.Set(handler.AppKeyHeader, created.Key)
+		req.Header.Set(handler.AppPackageHeader, "com.example.shop")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		e.mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), handler.CodeAppKeyInvalid) {
+			t.Fatalf("app key with %s = %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	// The app headers are not CORS-allowed: a browser cannot send them.
+	pre := e.call(http.MethodOptions, "/bootstrap", "", siteOrigin, nil)
+	if allow := pre.Hdr.Get("Access-Control-Allow-Headers"); strings.Contains(strings.ToLower(allow), "clickfix-app") {
+		t.Fatalf("app headers are CORS-allowed: %s", allow)
 	}
 	// The install checker lists the app instead of a page origin.
 	installs, err := cfgs.Installs(ctx, e.org, e.inst.UUID)

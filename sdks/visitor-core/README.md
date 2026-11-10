@@ -20,7 +20,11 @@ Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes:
 | `app` | a **mobile app key** (`X-ClickFix-App-Key`) plus the app's package name (`X-ClickFix-App-Package`), created in Web widget → Advanced → Mobile apps | absolute, `https://<app>/api` | React Native / native SDKs |
 
 Everything after that is the same: the visitor token, `identify` with a
-server-computed `user_hash`, external ids, custom fields, rate limits.
+server-computed `user_hash`, external ids, custom fields, rate limits. App
+mode is for native code only: the API rejects an app key that arrives with
+an `Origin`/`Referer`, and the headers are not CORS-allowed, so a page (or a
+webview) cannot use a key; a webview continues the session over the bridge
+instead.
 
 ```ts
 import { createVisitorClient, createRealtime } from '@clickfix/visitor-core';

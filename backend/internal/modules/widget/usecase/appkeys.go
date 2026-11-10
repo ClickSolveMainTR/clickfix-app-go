@@ -33,6 +33,9 @@ const (
 	MaxAppKeys  = 20
 	appKeyBytes = 20
 	appKeyShown = 12
+	// appKeyTouchInterval bounds last_used_at writes (the query repeats the
+	// check, this skips the round trip).
+	appKeyTouchInterval = 5 * time.Minute
 )
 
 // ErrAppKeyInvalid: the app key is unknown, revoked, belongs to another
@@ -190,7 +193,8 @@ func (c *Configs) RevokeAppKey(ctx context.Context, org int64, id, key uuid.UUID
 
 // OpenApp loads a live widget for a native app: the key must hash to an
 // active key of this widget whose package name matches. The origin
-// allowlist is not consulted (an app has no page origin).
+// allowlist is not consulted (an app has no page origin; the handler
+// rejects a key that arrives together with one).
 func (s *Service) OpenApp(ctx context.Context, publicID uuid.UUID, key, packageName string) (Widget, error) {
 	w, err := s.load(ctx, publicID)
 	if err != nil {
@@ -214,8 +218,10 @@ func (s *Service) OpenApp(ctx context.Context, publicID uuid.UUID, key, packageN
 		subtle.ConstantTimeCompare([]byte(strings.ToLower(row.PackageName)), []byte(strings.ToLower(packageName))) != 1 {
 		return Widget{}, ErrAppKeyInvalid
 	}
-	if err := s.q.TouchWidgetAppKey(ctx, row.ID); err != nil {
-		s.log.Warn("widget_app_key_touch_failed", "instance", w.Instance.UUID, "error", err)
+	if !row.LastUsedAt.Valid || s.now().Sub(row.LastUsedAt.Time) >= appKeyTouchInterval {
+		if err := s.q.TouchWidgetAppKey(ctx, row.ID); err != nil {
+			s.log.Warn("widget_app_key_touch_failed", "instance", w.Instance.UUID, "error", err)
+		}
 	}
 	w.App = &AppIdentity{Platform: row.Platform, PackageName: row.PackageName}
 	return w, nil
