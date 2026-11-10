@@ -9047,7 +9047,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9074,7 +9076,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9101,7 +9105,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9128,7 +9134,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9155,7 +9163,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9542,7 +9552,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9584,7 +9596,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9620,7 +9634,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9660,7 +9676,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9693,7 +9711,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9723,7 +9743,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9757,7 +9779,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9792,7 +9816,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9823,7 +9849,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -9877,7 +9905,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -10407,7 +10437,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -10443,7 +10475,9 @@ export interface paths {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -28584,7 +28618,9 @@ export interface components {
          * @description Mobile app key (CF-201): a native app sends it with
          *     `X-ClickFix-App-Package` instead of a page origin; the widget's
          *     origin allowlist is then not consulted. Unknown, revoked or
-         *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+         *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+         *     that arrives together with an `Origin` or `Referer` (a page never
+         *     holds an app key; the headers are not CORS-allowed).
          */
         WidgetAppKey: string;
         /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -48315,7 +48351,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -48386,7 +48424,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -48465,7 +48505,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -48545,7 +48587,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -48631,7 +48675,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49579,7 +49625,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49620,7 +49668,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49661,7 +49711,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49703,7 +49755,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49743,7 +49797,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49785,7 +49841,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49820,7 +49878,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49875,7 +49935,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49912,7 +49974,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -49964,7 +50028,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -50007,7 +50073,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -50117,7 +50185,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -51262,7 +51332,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
@@ -51309,7 +51381,9 @@ export interface operations {
                  * @description Mobile app key (CF-201): a native app sends it with
                  *     `X-ClickFix-App-Package` instead of a page origin; the widget's
                  *     origin allowlist is then not consulted. Unknown, revoked or
-                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`.
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
                  */
                 "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
                 /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
