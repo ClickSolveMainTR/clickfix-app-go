@@ -1,12 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarDays, Clock, Pencil, Plus, Timer, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ErrorState } from "@/components/common/error-state";
 import { Loading } from "@/components/common/loading";
+import { EntityTable } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +29,7 @@ import {
   slaService,
   type SlaBusinessHours,
   type SlaBusinessHoursInput,
+  type SlaHoliday,
   type SlaPolicy,
   type SlaPolicyInput,
 } from "../services/sla.service";
@@ -422,6 +426,7 @@ function HolidaysTab({
   orgSlug: string;
   canWrite: boolean;
 }) {
+  const { confirmDelete } = useDialogs();
   const { t, locale } = useLocale();
   const qc = useQueryClient();
   const onError = useOnError();
@@ -465,6 +470,82 @@ function HolidaysTab({
     onError,
   });
   const today = new Date().toISOString().slice(0, 10);
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<SlaHoliday>({
+          accessorKey: "date",
+          labelKey: "sla.holidays.columns.date",
+          enableHiding: false,
+          cell: ({ row }) => (
+            <span className="tabular-nums">
+              {datetime(row.original.date, "dd.MM.yyyy")}
+            </span>
+          ),
+        }),
+        createColumn<SlaHoliday>({
+          accessorKey: "name",
+          labelKey: "sla.holidays.columns.name",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <span className="block max-w-[16rem] truncate">
+              {row.original.name}
+            </span>
+          ),
+        }),
+        createColumn<SlaHoliday>({
+          id: "hours",
+          accessorFn: (h) => (h.closed ? "" : (h.open ?? "")),
+          labelKey: "sla.holidays.columns.hours",
+          enableSorting: false,
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-xs">
+              {row.original.closed
+                ? t("sla.holidays.closed")
+                : `${row.original.open ?? ""}–${row.original.close ?? ""}`}
+            </span>
+          ),
+        }),
+        ...(canWrite
+          ? [
+              createColumn<SlaHoliday>({
+                id: "actions",
+                labelKey: "common.actions",
+                enableHiding: false,
+                enableSorting: false,
+                meta: {
+                  headerClassName: "text-right",
+                  cellClassName: "text-right",
+                },
+                cell: ({ row }) => (
+                  <Button
+                    disabled={remove.isPending}
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("sla.holidays.delete")}
+                    onClick={async () => {
+                      if (
+                        await confirmDelete({
+                          title: t("sla.holidays.confirm_delete", {
+                            name: row.original.name,
+                          }),
+                        })
+                      )
+                        remove.mutate(row.original.uuid);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ),
+              }),
+            ]
+          : []),
+      ] as ColumnDef<SlaHoliday, unknown>[],
+    [canWrite, confirmDelete, remove, t],
+  );
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="space-y-3">
@@ -527,37 +608,30 @@ function HolidaysTab({
             </CardContent>
           </Card>
         )}
-        <ul className="divide-y rounded-md border">
-          {(holidays.data ?? []).length === 0 && (
-            <li className="text-muted-foreground p-3 text-sm">
-              {t("sla.holidays.empty")}
-            </li>
-          )}
-          {(holidays.data ?? []).map((h) => (
-            <li key={h.uuid} className="flex items-center gap-3 p-3 text-sm">
-              <span className="w-24 tabular-nums">
-                {datetime(h.date, "dd.MM.yyyy")}
-              </span>
-              <span className="flex-1 truncate">{h.name}</span>
-              <span className="text-muted-foreground text-xs">
-                {h.closed
-                  ? t("sla.holidays.closed")
-                  : `${h.open ?? ""}–${h.close ?? ""}`}
-              </span>
-              {canWrite && (
-                <Button
-                  disabled={remove.isPending}
-                  size="icon"
-                  variant="ghost"
-                  aria-label={t("sla.holidays.delete")}
-                  onClick={() => remove.mutate(h.uuid)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <EntityTable
+          columns={columns}
+          data={holidays.data ?? []}
+          getRowId={(h) => h.uuid}
+          isLoading={holidays.isLoading}
+          isError={holidays.isError}
+          onRetry={() => void holidays.refetch()}
+          emptyTitle={t("sla.holidays.empty")}
+          emptyDescription=""
+          // A few days a year, all in one response: sort and pages in the
+          // browser, soonest first.
+          manual={{ filtering: false, sorting: false, pagination: false }}
+          initialState={{
+            pagination: { pageIndex: 0, pageSize: 20 },
+            sorting: [{ id: "date", desc: false }],
+          }}
+          features={{
+            toolbar: false,
+            globalFilter: false,
+            columnFilters: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
       </section>
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">{t("sla.holidays.public")}</h2>
