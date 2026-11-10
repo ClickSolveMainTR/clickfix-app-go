@@ -48,6 +48,7 @@ jobs:
   #   backend/**                  -> backend, contracts
   #   backend/migrations/**       -> backend, contracts, infra
   #   mobile/**                   -> mobile
+  #   sdks/php/**, sdks/laravel/** -> laravel (plus backend, contracts like sdks/**)
   #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
@@ -60,6 +61,7 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       mobile: ${{ steps.filter.outputs.mobile }}
       infra: ${{ steps.filter.outputs.infra }}
+      laravel: ${{ steps.filter.outputs.laravel }}
       full: ${{ steps.filter.outputs.full }}
     steps:
       - uses: actions/checkout@v7
@@ -73,7 +75,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; infra=false; full=false
+          mobile=false; infra=false; laravel=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -101,17 +103,18 @@ jobs:
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
+              sdks/php/*|sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; infra=true
+            backend=true; frontend=true; contracts=true; mobile=true; infra=true; laravel=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "infra=$infra"; echo "full=$full"
+            echo "infra=$infra"; echo "laravel=$laravel"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -341,6 +344,56 @@ jobs:
           done
           echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
 
+  # Laravel package (CF-205): the Testbench suite on every supported Laravel x PHP
+  # pair. clickfix/laravel depends on clickfix/sdk through a Composer path
+  # repository (../php), so the checkout is enough; nothing is fetched from
+  # Packagist for the SDK itself.
+  laravel:
+    needs: [changes]
+    if: needs.changes.outputs.laravel == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    name: laravel ${{ matrix.laravel }} php ${{ matrix.php }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { laravel: "10.*", testbench: "8.*", php: "8.1" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.2" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.2" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.4" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.2" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.3" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.4" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.3" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.4" }
+    env:
+      # The runners on one machine share $HOME; keep Composer's cache per job.
+      COMPOSER_CACHE_DIR: ${{ runner.temp }}/composer-cache
+      COMPOSER_NO_INTERACTION: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, sqlite3, pdo_sqlite, openssl
+          coverage: none
+          tools: composer:v2
+      - name: Validate composer.json
+        working-directory: sdks/laravel
+        run: composer validate --strict --no-check-lock
+      - name: Install Laravel ${{ matrix.laravel }} with Testbench ${{ matrix.testbench }}
+        working-directory: sdks/laravel
+        run: |
+          composer update --prefer-dist --no-progress \
+            --with="laravel/framework:${{ matrix.laravel }}" \
+            --with="orchestra/testbench:${{ matrix.testbench }}"
+          composer show laravel/framework orchestra/testbench phpunit/phpunit | grep -E '^(name|versions)'
+      - name: Tests
+        working-directory: sdks/laravel
+        run: vendor/bin/phpunit --no-coverage
+
   # Lint, format, types, unit tests and the production build.
   frontend:
     needs: [changes]
@@ -488,7 +541,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, laravel]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
@@ -741,7 +794,7 @@ jobs:
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
   # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
-  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Needs the
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z, laravel/vX.Y.Z. Needs the
   # SDKS_MIRROR_KEY repository secret (private half of the mirror's write
   # deploy key); without it the job skips with a note and never fails main.
   # One mirror commit per release; history is not rewritten, tags are never moved.
@@ -755,6 +808,8 @@ jobs:
         env:
           SDKS_MIRROR_KEY: ${{ secrets.SDKS_MIRROR_KEY }}
           MIRROR: git@github.com:ClickSolveMainTR/clickfix-sdks.git
+          LARAVEL_MIRROR_KEY: ${{ secrets.LARAVEL_MIRROR_KEY }}
+          LARAVEL_SPLIT: git@github.com:ClickSolveMainTR/clickfix-laravel.git
         run: |
           if [ -z "$SDKS_MIRROR_KEY" ]; then
             echo "SDKS_MIRROR_KEY secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
@@ -783,4 +838,25 @@ jobs:
           done
           [ -f go/VERSION ] && tag "go/v$(tr -d '[:space:]' < go/VERSION)"
           [ -f flutter/clickfix_webview/pubspec.yaml ] && tag "flutter/v$(sed -n 's/^version: *//p' flutter/clickfix_webview/pubspec.yaml)"
+          [ -f laravel/VERSION ] && tag "laravel/v$(tr -d '[:space:]' < laravel/VERSION)"
+          # Packagist reads composer.json at the root of a repository and plain vX.Y.Z tags, so
+          # laravel/ is also split out of the mirror's history (git subtree, one commit per
+          # release) into the public repository ClickSolveMainTR/clickfix-laravel, which Packagist
+          # watches as clickfix/laravel. Needs the LARAVEL_MIRROR_KEY repository secret (write
+          # deploy key of that repository); without it the split is skipped with a note.
+          if [ -f laravel/VERSION ]; then
+            if [ -z "$LARAVEL_MIRROR_KEY" ]; then
+              echo "LARAVEL_MIRROR_KEY secret is not set: Packagist split of laravel/ skipped" >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf '%s\n' "$LARAVEL_MIRROR_KEY" > "$work/laravel-key"; chmod 600 "$work/laravel-key"
+              export GIT_SSH_COMMAND="ssh -i $work/laravel-key -o IdentitiesOnly=yes -o UserKnownHostsFile=$work/known_hosts"
+              split=$(git subtree split --prefix=laravel HEAD)
+              git push --quiet "$LARAVEL_SPLIT" "$split:refs/heads/main"
+              v="v$(tr -d '[:space:]' < laravel/VERSION)"
+              if git ls-remote --tags "$LARAVEL_SPLIT" "refs/tags/$v" | grep -q .; then echo "clickfix-laravel $v exists"; else
+                git tag "split-$v" "$split" && git push --quiet "$LARAVEL_SPLIT" "refs/tags/split-$v:refs/tags/$v"
+                echo "clickfix-laravel: pushed main and tagged $v (Packagist clickfix/laravel)" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            fi
+          fi
           true

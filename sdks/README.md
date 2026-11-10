@@ -8,6 +8,7 @@ run pushes this directory there and tags each package version (`node/vX.Y.Z`, `g
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-sdks/go`, tags `go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
+- `laravel`: `clickfix/laravel`, Laravel 10-13 package on top of `clickfix/sdk` (`php`): provider, facade, artisan commands, signed webhook route with Laravel events, `@clickfixWidget` Blade directive. Version in `laravel/VERSION`, mirror tag `laravel/vX.Y.Z`; Packagist reads the split repository `ClickSolveMainTR/clickfix-laravel` (same job, `LARAVEL_MIRROR_KEY` secret). Tests: `cd sdks/laravel && composer install && vendor/bin/phpunit` (CI runs the Testbench matrix in the `laravel` job).
 - `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
 
 The source of truth is `backend/docs/openapi.yaml`. `make sdks` selects only

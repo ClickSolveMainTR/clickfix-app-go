@@ -20,12 +20,13 @@ Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma istekl
 
 ### Paketler [#packages]
 
-| Paket                                                                            | Sürüm                                                                             | Kurulum                                                                                   |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                   |
-| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                             | `npm install @clickfix/react-widget` (React 18+)                                          |
-| Go modülü                                                                        | `go/v0.1.0`                                                                       | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
+| Paket                                                                            | Sürüm                                                                             | Kurulum                                                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>`      |
+| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                        |
+| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                             | `npm install @clickfix/react-widget` (React 18+)                                               |
+| Go modülü                                                                        | `go/v0.1.0`                                                                       | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
+| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)            | 0.1.0                                                                             | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); bkz. [Laravel paketi](#laravel) |
 
 Değişiklik günlükleri her paketin `CHANGELOG.md` dosyasındadır. `0.x` sürümlerinde küçük sürüm kırıcı değişiklik taşıyabilir; günlükte **Kırıcı** başlığıyla yazılır. Örnekleri kendi ortamınızda çalıştırmak için ortam değişkenleri: `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE`, `CLICKFIX_CHANNEL_SECRET`.
 
@@ -1140,6 +1141,79 @@ class SupportActivity : AppCompatActivity() {
 - **Onay:** uygulamanız onay topluyorsa adrese `consent=1` ekleyin ya da `clickfix:consent` gönderin; onaysız hiçbir şey saklanmaz.
 
 Flutter paketi ve yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.
+
+## Laravel paketi [#laravel]
+
+Laravel 10, 11, 12 ve 13 (PHP 8.1+) için [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) bu kılavuzdaki adımları tek pakette toplar: servis sağlayıcı ve `ClickFix` facade'ı, `config/clickfix.php`, artisan komutları, imzayı doğrulayan `POST /clickfix/webhook` rotası ve her olay için bir Laravel event'i, `@clickfixWidget` Blade direktifi. Paket keşfi sağlayıcıyı kendisi kaydeder. Kaynak ve değişiklik günlüğü: [`clickfix-sdks/laravel`](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/laravel).
+
+### Kurulum [#laravel-install]
+
+```sh
+composer require clickfix/laravel
+php artisan clickfix:install
+php artisan clickfix:check
+```
+
+`clickfix:install` `config/clickfix.php` dosyasını yayımlar, `.env` dosyasına eksik `CLICKFIX_*` anahtarlarını ekler (webhook sırrını üretir), abone olunacak webhook adresini ve sonraki adımları yazar. Anahtarları doldurduktan sonra `clickfix:check` API anahtarını API'ye karşı dener, widget kimliğini, kimlik anahtarını, webhook sırrını ve rotanın `https` olduğunu doğrular; bir şey eksikse çıkış kodu 1'dir.
+
+| `.env` anahtarı            | Nereden                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `CLICKFIX_API_KEY`         | [Başlamadan önce](#before-you-start) tablosundaki API anahtarı                               |
+| `CLICKFIX_WIDGET_ID`       | Web widget → Kurulum                                                                         |
+| `CLICKFIX_IDENTITY_SECRET` | Web widget → Güvenlik → Kimlik doğrulama; yalnız sunucuda kalır                              |
+| `CLICKFIX_WEBHOOK_SECRET`  | Aboneliğin `data.secret` değeri ya da `clickfix:install`'ın ürettiği değer (aboneliğe girin) |
+| `CLICKFIX_WEBHOOK_QUEUE`   | Boş: olaylar istek içinde; `true` veya kuyruk adı: kuyruğa alınan işten                      |
+
+### Artisan komutları [#laravel-artisan]
+
+| Komut                                                               | Ne yapar                                                                                                                                      |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clickfix:install [--force] [--no-env]`                             | Config yayımlar, `.env` anahtarlarını ekler, webhook sırrı üretir, webhook adresini yazar                                                     |
+| `clickfix:check`                                                    | API anahtarı, widget kimliği, kimlik anahtarı, webhook sırrı ve rotası; hata varsa çıkış kodu 1                                               |
+| `clickfix:user-hash {user} [--raw] [--json]`                        | Bir kullanıcı (model anahtarı) için `user_hash`; `WIDGET_IDENTITY_INVALID` ayıklamak için                                                     |
+| `clickfix:webhook:secret [--write]`                                 | 64 karakter hex sır; `--write` `.env`'e yazar                                                                                                 |
+| `clickfix:sync:contacts [--id=*] [--since=] [--chunk=] [--dry-run]` | `config('clickfix.contacts')` içindeki modeli dış kimlikle kişi olarak oluşturur/günceller (`PUT /contacts/by-external-id`, `contacts:write`) |
+
+`clickfix:sync:contacts` için model (`App\Models\User`), alan eşlemesi (`name`, `email`, `phone`, `job_title`, `locale`, `timezone` → model özniteliği veya noktalı yol) ve özel alan eşlemesi config'dedir. Dış kimlik her zaman modelin birincil anahtarıdır; `identify`'daki `user_id` ile aynı değer olduğu için eşitlenen kişi ile widget oturumu tek kişidir ([dış kimlik](#external-id)).
+
+### Widget ve kimlik doğrulama [#laravel-widget]
+
+```blade
+    @clickfixWidget
+</body>
+```
+
+Direktif kuyruk parçacığını, `ClickFix("boot", {...})` çağrısını ve `widget.js` etiketini basar. Argümansız kullanımda oturum açmış kullanıcı doğrulanır (`user_id` model anahtarı, `user_hash` kimlik anahtarıyla sunucuda hesaplanır, `name` ve `email` modelden); kimse oturum açmamışsa widget anonim açılır. `@clickfixWidget($musteri)` belirli bir modeli, `@clickfixWidget(null)` her zaman anonim widget'ı, `@clickfixWidget(auth()->user(), ['locale' => 'tr'])` ek başlatma seçeneklerini verir. Kimliğe giren alanlar `clickfix.widget.user` ile ya da modelde `ProvidesClickFixIdentity` arayüzüyle (`company`, `attributes` dahil) belirlenir.
+
+Inertia, Livewire veya widget'ı kendisi başlatan bir SPA için kimlik yükünü sunucuda üretip sayfaya paylaşın:
+
+```php
+use ClickFix\Laravel\Facades\ClickFix;
+
+ClickFix::userHash($user);  // hex HMAC-SHA256(kimlik anahtarı, model anahtarı)
+ClickFix::identity($user);  // ['user_id' => '42', 'user_hash' => '…', 'name' => …, 'email' => …]
+```
+
+Tarayıcıda `ClickFix("identify", identity)` çağırın; kimlik anahtarı sunucudan çıkmaz ([kimlik doğrulama](#identity)).
+
+### Webhook [#laravel-webhook]
+
+Paket `POST /clickfix/webhook` rotasını `web` grubunun dışında (oturum ve CSRF yok) ve `clickfix.webhook` middleware'i arkasında kaydeder. Middleware `ClickFix-Webhook-Timestamp` ve `ClickFix-Webhook-Signature` başlıklarını ham gövde üzerinde doğrular ([Webhook'lar](#webhooks) bölümündeki kuralla; 5 dakika tolerans, sabit zamanlı karşılaştırma); bozuk veya bayat imza `401`, sır tanımsızsa `503` döner. Aynı `ClickFix-Webhook-Id` ile gelen tekrar teslimat önbellekten tanınır ve olaylar ikinci kez tetiklenmeden `200` ile yanıtlanır.
+
+Doğrulanan her teslimat `ClickFix\Laravel\Events\WebhookReceived` olayını, tanınan olay adları ayrıca kendi sınıfını tetikler: `ConversationCreated`, `ConversationResolved`, `MessageReceived`, `MessageSent`, `ContactCreated`, `ContactUpdated`, `CompanyUpdated`, `SlaBreached`, `CsatSubmitted` … (olay başına bir sınıf; tanınmayan ad yalnız `WebhookReceived`).
+
+```php
+use ClickFix\Laravel\Events\MessageReceived;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(MessageReceived::class, function (MessageReceived $event) {
+    $event->get('conversation_uuid');
+    $event->get('contact_external_id'); // sizin kullanıcı numaranız
+    $event->payload->occurredAt();      // Carbon
+});
+```
+
+`CLICKFIX_WEBHOOK_QUEUE=true` (veya bir kuyruk adı) ile olaylar istek yerine `ProcessWebhook` işinden tetiklenir ve rota `202` döner. Rotayı kendiniz tanımlamak için `CLICKFIX_WEBHOOK_ROUTE=false` yapıp kendi rotanıza `clickfix.webhook` middleware'ini ekleyin. Abonelik açma örneği için [Webhook'lar](#webhooks).
 
 ## Sonraki adımlar [#next-steps]
 
