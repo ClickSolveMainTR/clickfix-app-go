@@ -193,6 +193,16 @@ func (s *Service) OnMessage(ctx context.Context, org int64, message uuid.UUID) e
 	if kind == "" {
 		return nil
 	}
+	// At-least-once delivery: a replayed event must not acknowledge twice.
+	if kind == KindAck {
+		last, err := s.q.LastAutoReplyAt(ctx, db.LastAutoReplyAtParams{OrganizationID: org, ConversationID: conv.ID, Kind: KindAck})
+		if err != nil {
+			return err
+		}
+		if last.Valid {
+			return nil
+		}
+	}
 	var eta *time.Duration
 	if kind == KindAck && s.eta != nil {
 		if eta, err = s.eta.FirstResponseTarget(ctx, org, conv.ID); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 )
 
 // fixedHours answers the organization's working-hours state from a flag.
@@ -79,7 +80,26 @@ func TestAutoRepliesReachTheVisitor(t *testing.T) {
 	}
 
 	// 1. Inside hours: the first message is acknowledged with the estimate.
-	if err := auto.OnMessage(ctx, e.org, lastInbound()); err != nil {
+	// The consumer handles the messages.received event itself, in one call
+	// and without any delay of its own; the outbox relays events every
+	// 500 ms, so the whole path stays far below the 10 s the product
+	// promises. Its retry budget and timeout stay small so a stuck reply
+	// never piles up.
+	consumer := auto.Consumer()
+	if consumer.Timeout > 30*time.Second || consumer.MaxRetry > 3 {
+		t.Fatalf("auto-reply consumer must stay snappy: timeout=%s retries=%d", consumer.Timeout, consumer.MaxRetry)
+	}
+	first := lastInbound()
+	ev := events.New(events.MessagesReceived).WithTenant(e.org).WithPayload(map[string]any{"message_uuid": first.String()})
+	started := time.Now()
+	if err := consumer.Handle(ctx, ev); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(started); took > 10*time.Second {
+		t.Fatalf("acknowledgement took %s, the product promises 10 s", took)
+	}
+	// A replay of the same event (at-least-once delivery) adds nothing.
+	if err := consumer.Handle(ctx, ev); err != nil {
 		t.Fatal(err)
 	}
 	bots := botMessages()

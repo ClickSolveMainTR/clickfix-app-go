@@ -92,6 +92,103 @@ func TestOnboardingAgainstPostgres(t *testing.T) {
 		t.Fatalf("after facts: %+v", st)
 	}
 
+	// The remaining conditions, one row each, against the real tables the
+	// OrganizationSetupCounts query reads.
+	stepOf := func(key string) onboarding.Step {
+		st, err := svc.Get(ctx, org.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range st.Steps {
+			if s.Key == key {
+				return s
+			}
+		}
+		t.Fatalf("no step %s", key)
+		return onboarding.Step{}
+	}
+	condition := func(step onboarding.Step, key string) bool {
+		for _, c := range step.Conditions {
+			if c.Key == key {
+				return c.Done
+			}
+		}
+		t.Fatalf("no condition %s on %s", key, step.Key)
+		return false
+	}
+	// package: a company's revenue plan counts as well as its tier.
+	if _, err := pool.Exec(ctx, "DELETE FROM companies WHERE organization_id = $1", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if condition(stepOf(onboarding.StepCustomer), onboarding.CondPackage) {
+		t.Fatal("package: no company, must be unmet")
+	}
+	var planned int64
+	if err := pool.QueryRow(ctx, "INSERT INTO companies (organization_id, name) VALUES ($1, 'Planlı') RETURNING id", org.ID).Scan(&planned); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO company_revenue (organization_id, company_id, plan) VALUES ($1, $2, 'pro')", org.ID, planned); err != nil {
+		t.Fatal(err)
+	}
+	if !condition(stepOf(onboarding.StepCustomer), onboarding.CondPackage) {
+		t.Fatal("package: a revenue plan must count")
+	}
+	// system: an integration connection.
+	if stepOf(onboarding.StepSystem).Done {
+		t.Fatal("system: must be unmet without a connection")
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO integration_connections (organization_id, name, base_url) VALUES ($1, 'ERP', 'https://erp.example.com')", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !stepOf(onboarding.StepSystem).Done {
+		t.Fatal("system: a connection must finish the step")
+	}
+	// ai: the switch and a published procedure, a draft is not enough.
+	if _, err := pool.Exec(ctx, "INSERT INTO ai_policies (organization_id, enabled) VALUES ($1, TRUE) ON CONFLICT (organization_id) DO UPDATE SET enabled = TRUE", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO ai_procedures (organization_id, intent, locale, title, draft) VALUES ($1, 'refund', 'tr', 'İade', '{}')", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	ai := stepOf(onboarding.StepAI)
+	if !condition(ai, onboarding.CondAIEnabled) || condition(ai, onboarding.CondProcedure) || ai.Done {
+		t.Fatalf("ai: switch on, draft procedure must not count: %+v", ai)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE ai_procedures SET published = draft, published_revision = revision WHERE organization_id = $1", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !stepOf(onboarding.StepAI).Done {
+		t.Fatal("ai: a published procedure must finish the step")
+	}
+	// automation: an SLA policy and a rule or a workflow.
+	if _, err := pool.Exec(ctx, "INSERT INTO sla_policies (organization_id, name) VALUES ($1, 'Standart')", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	auto := stepOf(onboarding.StepAutomation)
+	if !condition(auto, onboarding.CondSLAPolicy) || condition(auto, onboarding.CondAutomation) || auto.Done {
+		t.Fatalf("automation: policy alone is not enough: %+v", auto)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO workflows (organization_id, name, draft, created_by) VALUES ($1, 'Karşılama', '{}', $2)", org.ID, userID); err != nil {
+		t.Fatal(err)
+	}
+	if !stepOf(onboarding.StepAutomation).Done {
+		t.Fatal("automation: a workflow must finish the step")
+	}
+	if _, err := pool.Exec(ctx, "DELETE FROM workflows WHERE organization_id = $1", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO automation_rules (organization_id, created_by, name, trigger_event) VALUES ($1, $2, 'Etiketle', 'conversations.created')", org.ID, userID); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = svc.Get(ctx, org.ID)
+	if st.Completed != 5 || onboarding.Next(st.Steps) != "" {
+		t.Fatalf("all conditions met: %+v", st)
+	}
+	// Undo the system connection so the skip below has something to skip.
+	if _, err := pool.Exec(ctx, "DELETE FROM integration_connections WHERE organization_id = $1", org.ID); err != nil {
+		t.Fatal(err)
+	}
+
 	for range 2 {
 		if _, err := svc.SkipStep(ctx, org.ID, onboarding.StepSystem); err != nil {
 			t.Fatal(err)
@@ -102,7 +199,9 @@ func TestOnboardingAgainstPostgres(t *testing.T) {
 		t.Fatalf("skips must be idempotent: %+v %v", row.Steps, err)
 	}
 	st, _ = svc.Get(ctx, org.ID)
-	if !st.Steps[1].Skipped || st.Skipped != 1 || onboarding.Next(st.Steps) != onboarding.StepAI {
+	// Every other step is done, so nothing is next; the skipped step stays
+	// listed as a warning.
+	if !st.Steps[1].Skipped || st.Skipped != 1 || st.Completed != 4 || onboarding.Next(st.Steps) != "" || len(onboarding.MissingKeys(st.Steps)) != 1 {
 		t.Fatalf("skipped system: %+v", st)
 	}
 
