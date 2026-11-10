@@ -7,13 +7,15 @@ order: 2
 
 ClickFix has server SDKs for Go and Node.js and a UI-free widget client for React. The SDKs handle authentication, bounded retries (including `Retry-After`), pagination and webhook signature verification.
 
-<Callout title="Packages are not published yet">
-  When the SDK packages (`@clickfix/node`, `@clickfix/react-widget` and the Go
-  module) are published, they will be announced on this page. Until then, the
-  [examples without an SDK](#without-an-sdk) below do the same operations over
-  plain HTTP, and every endpoint in the [API
-  reference](/docs/api-reference/conversations?lang=en) has ready-made curl,
-  JavaScript, Python and Go requests.
+<Callout title="Packages">
+  `npm install @clickfix/node` (0.1.0, Node 22+), `npm install
+  @clickfix/react-widget` (0.1.0, React 18+) and `go get
+  github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`. The end-to-end
+  setup order with verified samples at every step: [Integration
+  guide](/docs/integration-guide?lang=en). The [examples without an
+  SDK](#without-an-sdk) below do the same work over plain HTTP; every endpoint
+  in the [API reference](/docs/api-reference/conversations?lang=en) also ships
+  ready requests for curl, JavaScript, Python and Go.
 </Callout>
 
 Use `https://api.getclickfix.com` as the base URL (without `/v1`). Keep API keys on your server; never put them in browser code. Creating keys and scopes: [API](/docs/api?lang=en).

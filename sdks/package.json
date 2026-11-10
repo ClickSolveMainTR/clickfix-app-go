@@ -6,7 +6,11 @@
     "generate": "node scripts/generate.mjs",
     "check": "node scripts/generate.mjs --check",
     "build": "tsc -p node && tsc -p react-widget && cp node/src/schema.d.ts node/dist/schema.d.ts && cp react-widget/src/schema.d.ts react-widget/dist/schema.d.ts && cp react-widget/src/clickfix.d.ts react-widget/dist/clickfix.d.ts",
-    "test": "pnpm build && tsc -p type-tests && node --test tests/*.test.mjs"
+    "test": "pnpm build && tsc -p type-tests && node --test tests/*.test.mjs",
+    "examples": "node examples/run.mjs",
+    "examples:check": "node examples/run.mjs --check && node examples/sync-docs.mjs --check",
+    "examples:sync": "node examples/sync-docs.mjs",
+    "publish:check": "pnpm build && for p in node react-widget; do (cd $p && npm pack --dry-run && npm publish --dry-run); done"
   },
   "devDependencies": {
     "@types/node": "22.19.0",

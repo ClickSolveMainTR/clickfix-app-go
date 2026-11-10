@@ -165,6 +165,12 @@ export type InitOptions = {
    * session replay, whatever the widget settings say (the ClickFix panel).
    */
   capture?: boolean;
+  /**
+   * Webview bridge (CF-199, docs/webview-bridge.md): forwards SDK events to
+   * the native host and accepts its commands. `{ origin }` names the parent
+   * frame allowed to drive the widget when it runs inside an iframe.
+   */
+  bridge?: boolean | { origin?: string };
 };
 
 export type TrackedEvent = {

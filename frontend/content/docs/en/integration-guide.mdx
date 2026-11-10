@@ -1,0 +1,1152 @@
+---
+title: Integration guide
+description: Connect ClickFix to your own product end to end; identity verification, external ids, custom fields, companies, events, the API channel, webhooks, system binding and the mobile webview. Widget, Node.js, Go and curl samples at every step.
+section: developers
+order: 0
+---
+
+This is the single integration guide: in the order the **Setup** wizard in the panel follows, it covers everything you write to connect your own product to ClickFix. Every step has four samples: the **widget** in the browser (JavaScript), **Node.js** (`@clickfix/node`), **Go** (the `sdks/go` module) and **curl**. The samples come from the repository's [`sdks/examples`](https://github.com/ClickSolveMainTR/clickfix-app-go/tree/main/sdks/examples) folder and are executed on every release; the code you see here is the code that passed.
+
+## Before you start [#before-you-start]
+
+| You need                                    | Where                                         | Used for                                              |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`) |
+| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash`, server side only               |
+| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                |
+| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel  |
+
+The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require `Idempotency-Key`. Keys never reach the browser or the mobile app. Envelope, error codes and rate limits: [API](/docs/api?lang=en).
+
+### Packages [#packages]
+
+| Package                                                                          | Version                                                                             | Install                                                                                   |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                   |
+| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                               | `npm install @clickfix/react-widget` (React 18+)                                          |
+| Go module                                                                        | `sdks/go/v0.1.0`                                                                    | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                       |
+
+Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
+
+## The right setup order [#setup-order]
+
+The **Setup** wizard in the panel has five steps; the sections of this guide follow the same order. Open each step in the panel first, then write its code.
+
+| Wizard step               | In this guide                                                                                                                             | In the panel                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Introduce the customer | [Identity verification](#identity), [external ids](#external-id), [custom fields](#custom-fields), [company](#company), [events](#events) | Web widget → Security; Settings → Custom fields |
+| 2. Connect your system    | [System binding](#system-binding)                                                                                                         | Integrations → Connect your system              |
+| 3. Teach the AI           | [Next steps](#next-steps)                                                                                                                 | AI → Procedures                                 |
+| 4. Knowledge base         | [Next steps](#next-steps)                                                                                                                 | Knowledge base                                  |
+| 5. Automation and SLA     | [Webhooks](#webhooks), [next steps](#next-steps)                                                                                          | Automation, SLA                                 |
+
+The [API channel](#api-channel) and the [mobile webview](#mobile) are channel setup; do them after introducing the customer, before or after system binding.
+
+## 1. Identity verification: `user_hash` [#identity]
+
+`user_hash` is the only way to introduce a signed-in user to the widget with proof:
+
+```text
+user_hash = hex(HMAC-SHA256(widget_identity_secret, user_id))
+```
+
+`user_id` is the user's id in **your** system and is the external id of the next section. The value is computed **on your server only**; your site and your mobile app receive the finished `user_hash`, never the secret. A contact verified with a valid `user_hash` gets the **Verified** badge in the panel and their anonymous history moves to the same contact. When `identify` is rejected the widget keeps working but the user stays anonymous, and the `error` event carries `WIDGET_IDENTITY_DISABLED` (no secret generated yet) or `WIDGET_IDENTITY_INVALID` (mismatch).
+
+{/* example: widget/01-identify.js */}
+
+```js tab="Widget"
+// Adım 1: sunucunuzdan aldığınız user_hash ile giriş yapmış kullanıcıyı tanıtın.
+// @ts-check
+ClickFix("boot", { widgetId: "WIDGET_ID", locale: "tr" });
+
+fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash } döner
+  .then((r) => r.json())
+  .then((session) =>
+    ClickFix("identify", {
+      user_id: session.user_id, // kişinin dış kimliği
+      user_hash: session.user_hash, // hex(HMAC-SHA256(anahtar, user_id)), sunucuda
+      name: "Ayşe Yılmaz",
+      email: "ayse@example.com",
+    }),
+  );
+
+ClickFix("on", "error", (e) => {
+  if (e.code === "WIDGET_IDENTITY_INVALID")
+    console.warn("user_hash eşleşmedi:", e.message);
+});
+```
+
+{/* example: node/01-user-hash.ts */}
+
+```ts tab="Node.js"
+// Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
+import { identityHash } from "@clickfix/node";
+
+// Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
+const secret = process.env.CLICKFIX_IDENTITY_SECRET!;
+
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik)
+export function userHashFor(userId: string): string {
+  return identityHash(secret, userId);
+}
+
+// Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
+console.log(
+  JSON.stringify({ user_id: "1001", user_hash: userHashFor("1001") }),
+);
+```
+
+{/* example: go/user_hash.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 1: user_hash sunucuda hesaplanır; anahtar tarayıcıya ve uygulamaya gitmez.
+func userHash(ctx context.Context) error {
+	secret := os.Getenv("CLICKFIX_IDENTITY_SECRET") // Panel > Web widget > Güvenlik
+	userID := "1001"                                // kullanıcının sizin sisteminizdeki kimliği
+	hash := clickfix.IdentityHash(secret, userID)
+	return json.NewEncoder(os.Stdout).Encode(map[string]string{"user_id": userID, "user_hash": hash})
+}
+```
+
+{/* example: curl/01-user-hash.sh */}
+
+```bash tab="curl"
+# Adım 1: user_hash = hex(HMAC-SHA256(kimlik_anahtari, user_id)); yalnız sunucuda.
+USER_ID="1001"
+printf '%s' "$USER_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
+```
+
+If you **Rotate** the secret, values made with the old one stop working; update the secret on your server at the same time. On sites that need cookie consent pass it with `boot({ consent })` or `ClickFix("consent", true)`; nothing is written to the browser before consent.
+
+## 2. External ids: contact and company [#external-id]
+
+The ids of your own system live in ClickFix as the **external id** (`external_id`). Contact and company external ids are **separate fields**, independent of each other and unique within the organization:
+
+| Record  | API field     | Widget `identify` counterpart | In system binding       |
+| ------- | ------------- | ----------------------------- | ----------------------- |
+| Contact | `external_id` | `user_id`                     | `{external_id}`         |
+| Company | `external_id` | `company.id`                  | `{company_external_id}` |
+
+`PUT /v1/public-api/contacts/by-external-id` creates or updates the contact by external id (`201` created, `200` updated). Matching is by external id only; no other contact is taken over through e-mail or phone. An id that belongs to another contact returns `409 EXTERNAL_ID_EXISTS`. If you create the contact through the API first and the user later arrives through `identify`, no new contact is opened: the user is linked to the same contact, and a conversation an agent started before the customer visited the site (with `contact_external_id`) appears in the widget once the user signs in.
+
+{/* example: widget/02-external-id.js */}
+
+```js tab="Widget"
+// Adım 2: kişi ve şirket için ayrı dış kimlik. user_id kişinin, company.id şirketin.
+// @ts-check
+ClickFix("identify", {
+  user_id: "1001", // API: contacts.external_id
+  user_hash: "SUNUCUDA_HESAPLANAN",
+  company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" }, // API: companies.external_id
+});
+ClickFix("on", "identify", ({ verified }) =>
+  console.log("doğrulandı:", verified),
+);
+```
+
+{/* example: node/02-external-id.ts */}
+
+```ts tab="Node.js"
+// Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!, // https://api.getclickfix.com
+  apiKey: process.env.CLICKFIX_API_KEY!, // contacts:read, contacts:write, companies:read
+});
+
+// Aynı dış kimlikle ikinci çağrı yeni kişi açmaz, günceller (200); ilki 201 döner.
+const contact = await client.request(
+  "/v1/public-api/contacts/by-external-id",
+  "put",
+  { external_id: "1001", name: "Ayşe Yılmaz", email: "ayse@example.com" },
+  { idempotencyKey: `user-1001-${Date.now()}` },
+);
+
+// Şirketin dış kimliği kişininkinden ayrıdır (widget: company.id).
+const companies = await client.request(
+  "/v1/public-api/companies",
+  "get",
+  undefined,
+  { query: { external_id: "F-77" } },
+);
+
+console.log(
+  JSON.stringify({ contact: contact.data, companies: companies.data }),
+);
+```
+
+{/* example: go/external_id.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
+func externalID(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	name, email := "Ayşe Yılmaz", "ayse@example.com"
+	key := fmt.Sprintf("user-1001-%d", time.Now().UnixNano())
+	res, err := client.PutV1PublicApiContactByExternalIdWithResponse(ctx,
+		&clickfix.PutV1PublicApiContactByExternalIdParams{IdempotencyKey: key},
+		clickfix.PutV1PublicApiContactByExternalIdJSONRequestBody{ExternalId: "1001", Name: &name, Email: &email})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 200 && res.StatusCode() != 201 { // 200 güncellendi, 201 oluşturuldu
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	ext := "F-77" // şirketin dış kimliği (widget identify: company.id)
+	companies, err := client.GetV1PublicApiCompaniesWithResponse(ctx, &clickfix.GetV1PublicApiCompaniesParams{ExternalId: &ext})
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{"contact": res.StatusCode(), "companies": companies.StatusCode()})
+}
+```
+
+{/* example: curl/02-external-id.sh */}
+
+```bash tab="curl"
+# Adım 2: kişiyi dış kimliğiyle oluştur/güncelle (201 oluşturuldu, 200 güncellendi).
+curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/contacts/by-external-id" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: user-1001-$(date +%s)" \
+  -d '{ "external_id": "1001", "name": "Ayşe Yılmaz", "email": "ayse@example.com" }'
+
+# Şirketi kendi dış kimliğiyle bul (kişi dış kimliğinden ayrıdır).
+curl -sS --fail-with-body "$CLICKFIX_BASE_URL/v1/public-api/companies?external_id=F-77" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY"
+```
+
+The `identity_state` field of contact and conversation responses is `verified`, `anonymous` or `self_named`; webhook events carry `contact_external_id`, `contact_verified`, `company_uuid` and `company_external_id`, so you match your own record without another request.
+
+## 3. Custom fields [#custom-fields]
+
+Define a custom field once under **Settings → Custom fields**; defining it is the only step. Whatever the field's **key** is, send that key both in `custom_fields` through the API and in `setAttributes` / `identify({ attributes })` in the widget. Values are validated by the field's type; **list** fields accept the option id or its label and store the id. The field's **widget access** decides whether anonymous visitors may write it (default: verified users only). An undefined key is not dropped silently: it is listed in the panel as an **undefined field** warning and applied to the contact once you define the field. When the visitor has no contact yet the widget result is `pending: true` and the values travel with the first message.
+
+{/* example: widget/03-custom-fields.js */}
+
+```js tab="Widget"
+// Adım 3: özel alanlar. Anahtar panelde tanımlı alanın anahtarıdır; tanımsız
+// anahtar "tanımsız alan" uyarısı olarak kalır ve alanı tanımlayınca işlenir.
+// @ts-check
+ClickFix("setAttributes", {
+  plan: "pro",
+  seats: 12,
+  renewal_date: "2027-01-31",
+});
+ClickFix("on", "attributes", ({ applied, ignored, pending }) => {
+  console.log({ applied, ignored, pending }); // pending: ilk mesajla gönderilecek
+});
+```
+
+{/* example: node/03-custom-fields.ts */}
+
+```ts tab="Node.js"
+// Adım 3: özel alanlar. Alanı panelde tanımlayın (Ayarlar > Özel alanlar);
+// anahtarı neyse custom_fields içinde o anahtarla gönderin.
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+const contact = await client.request(
+  "/v1/public-api/contacts/by-external-id",
+  "put",
+  {
+    external_id: "1001",
+    // Liste alanlarında seçeneğin kimliği ya da etiketi kabul edilir.
+    custom_fields: { plan: "pro", seats: 12, renewal_date: "2027-01-31" },
+  },
+  { idempotencyKey: `user-1001-fields-${Date.now()}` },
+);
+
+console.log(JSON.stringify(contact.data));
+```
+
+{/* example: go/custom_fields.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 3: özel alanlar; anahtar panelde tanımladığınız alanın anahtarıdır.
+func customFields(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	fields := map[string]any{"plan": "pro", "seats": 12, "renewal_date": "2027-01-31"}
+	res, err := client.PutV1PublicApiContactByExternalIdWithResponse(ctx,
+		&clickfix.PutV1PublicApiContactByExternalIdParams{IdempotencyKey: fmt.Sprintf("user-1001-fields-%d", time.Now().UnixNano())},
+		clickfix.PutV1PublicApiContactByExternalIdJSONRequestBody{ExternalId: "1001", CustomFields: &fields})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 200 && res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
+}
+```
+
+{/* example: curl/03-custom-fields.sh */}
+
+```bash tab="curl"
+# Adım 3: özel alanlar; anahtar panelde tanımlı alanın anahtarıdır.
+curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/contacts/by-external-id" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: user-1001-fields-$(date +%s)" \
+  -d '{ "external_id": "1001", "custom_fields": { "plan": "pro", "seats": 12, "renewal_date": "2027-01-31" } }'
+```
+
+## 4. Company [#company]
+
+A company is created or matched through `company` in the widget's `identify` call: the first key is `company.id` (the company's external id), the second is `domain`. Through the API a company is found with `GET /v1/public-api/companies?external_id=`; three customer-health signals are sent against it: usage (`PUT /company-usage`, 0–100), revenue (`PUT /company-revenue`) and product events (`POST /company-events`, next section). In all three the company is selected by `company_uuid`, `external_id` or `domain`.
+
+{/* example: widget/04-company.js */}
+
+```js tab="Widget"
+// Adım 4: şirket identify ile oluşur ya da dış kimliğiyle eşleşir (ikinci anahtar: domain).
+// @ts-check
+ClickFix("boot", {
+  widgetId: "WIDGET_ID",
+  user: {
+    user_id: "1001",
+    user_hash: "SUNUCUDA_HESAPLANAN",
+    company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" },
+  },
+});
+```
+
+{/* example: node/04-company.ts */}
+
+```ts tab="Node.js"
+// Adım 4: şirket. Şirket widget identify (company.id) ile oluşur; API ile
+// bulunur ve müşteri sağlığı sinyalleri (kullanım, gelir, olay) gönderilir.
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!, // companies:read, health:write
+});
+
+const found = await client.request(
+  "/v1/public-api/companies",
+  "get",
+  undefined,
+  {
+    query: { external_id: "F-77" },
+  },
+);
+
+// 0-100 arası kullanım sinyali; 30 gün boyunca sağlık puanına katılır.
+const usage = await client.request(
+  "/v1/public-api/company-usage",
+  "put",
+  { external_id: "F-77", score: 82 },
+  // İşlemi tanımlayan sabit değer: kendi ölçüm kaydınızın kimliği (örnekte zaman damgası)
+  { idempotencyKey: `usage-F-77-${Date.now()}` },
+);
+
+console.log(JSON.stringify({ found: found.data, usage: usage.data }));
+```
+
+{/* example: go/company.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 4: şirketi bul ve kullanım sinyali gönder (health:write).
+func company(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	ext := "F-77"
+	found, err := client.GetV1PublicApiCompaniesWithResponse(ctx, &clickfix.GetV1PublicApiCompaniesParams{ExternalId: &ext})
+	if err != nil {
+		return err
+	}
+	usage, err := client.PutV1PublicApiCompanyUsageWithResponse(ctx,
+		// İşlemi tanımlayan sabit değer: kendi ölçüm kaydınızın kimliği (örnekte zaman damgası)
+		&clickfix.PutV1PublicApiCompanyUsageParams{IdempotencyKey: fmt.Sprintf("usage-F-77-%d", time.Now().UnixNano())},
+		clickfix.PutV1PublicApiCompanyUsageJSONRequestBody{ExternalId: &ext, Score: 82})
+	if err != nil {
+		return err
+	}
+	if usage.StatusCode() != 200 {
+		return fmt.Errorf("clickfix: HTTP %d", usage.StatusCode())
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"found": found.StatusCode(), "usage": usage.StatusCode()})
+}
+```
+
+{/* example: curl/04-company.sh */}
+
+```bash tab="curl"
+# Adım 4: şirket kullanım sinyali (0-100, health:write); şirket external_id ile bulunur.
+curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/company-usage" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: usage-F-77-$(date +%s%N)" \
+  -d '{ "external_id": "F-77", "score": 82 }'
+```
+
+## 5. Events and screen context [#events]
+
+There are two separate event channels:
+
+- **Screen context** (widget): the last 20 events you record with `ClickFix("track", name, properties)` and the page URL travel with the visitor's next message. In the panel they appear in the conversation header as **which screen they wrote from**, and they feed the AI agent's input and workflow conditions. Query strings and `#` fragments are dropped on the server; still, keep personal data out of `track` properties.
+- **Product events** (API, `events:write`): `POST /v1/public-api/company-events` writes to the company timeline; `contact_email` links the event to a known contact and `idempotency_key` stops the same event from being written twice (`duplicate: true`).
+
+{/* example: widget/05-events.js */}
+
+```js tab="Widget"
+// Adım 5: ekran bağlamı. Son 20 olay ve sayfa adresi ziyaretçinin mesajıyla
+// gider; panelde "hangi ekrandan yazdı" ve AI'ın girdisi olur.
+// @ts-check
+ClickFix("track", "order_viewed", { order_id: "SP-1042", total: 1250.5 });
+ClickFix("track", "payment_failed", { reason: "insufficient_funds" });
+// Kullanıcı destek isterse konuşmayı hazır metinle açın:
+ClickFix(
+  "startConversation",
+  "SP-1042 numaralı siparişimde ödeme hatası alıyorum",
+);
+```
+
+{/* example: node/05-events.ts */}
+
+```ts tab="Node.js"
+// Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
+// şirket zaman çizelgesine API ile yazılır (events:write).
+import { createClient } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+const eventId = `seat-limit-F-77-${Date.now()}`;
+
+const event = await client.request(
+  "/v1/public-api/company-events",
+  "post",
+  {
+    external_id: "F-77", // şirketin dış kimliği (ya da company_uuid / domain)
+    contact_email: "ayse@example.com", // olayı bilinen kişiye bağlar
+    name: "seat_limit_reached",
+    properties: { seats: 12, limit: 12 },
+    idempotency_key: eventId,
+  },
+  { idempotencyKey: eventId },
+);
+
+console.log(JSON.stringify(event.data));
+```
+
+{/* example: go/events.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
+func events(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+	ext, email, idem := "F-77", "ayse@example.com", fmt.Sprintf("seat-limit-F-77-%d", time.Now().UnixNano())
+	props := map[string]any{"seats": 12, "limit": 12}
+	res, err := client.PostV1PublicApiCompanyEventWithResponse(ctx,
+		&clickfix.PostV1PublicApiCompanyEventParams{IdempotencyKey: idem},
+		clickfix.PostV1PublicApiCompanyEventJSONRequestBody{
+			ExternalId: &ext, ContactEmail: &email, Name: "seat_limit_reached", Properties: &props, IdempotencyKey: &idem,
+		})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 200 && res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
+}
+```
+
+{/* example: curl/05-events.sh */}
+
+```bash tab="curl"
+# Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
+# Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+EVENT_ID="seat-limit-F-77-$(date +%s%N)"
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/public-api/company-events" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $EVENT_ID" \
+  -d '{ "external_id": "F-77", "contact_email": "ayse@example.com", "name": "seat_limit_reached", "properties": { "seats": 12, "limit": 12 }, "idempotency_key": "'$EVENT_ID'" }'
+```
+
+## 6. System binding [#system-binding]
+
+The **Integrations → Connect your system** screen lets ClickFix call your system; it is not an API in the other direction. You only write an endpoint that answers by the customer's external id; the rest is set up in the panel:
+
+1. **Connection:** your system's base URL (public `https` only) and authentication (none, Bearer, custom header or username/password). The secret is stored encrypted, never shown again and masked in logs.
+2. **Concepts:** the objects of your system (Invoice, Order, License…). Each concept is a custom object type.
+3. **Source:** which endpoint the concept is read from, relative to the base URL: `/customers/{external_id}/invoices`. `{external_id}` is the customer's id in your system, `{company_external_id}` their company's; one of them must appear in the path. **Try** calls it with a real id; you pick where the records are in the answer (`items`) and which fields the AI sees by clicking on the answer.
+4. **Actions:** operations such as "Resend invoice": method, endpoint, parameters, whether approval is needed and who may use it (AI, agent, workflow).
+5. **AI playbooks:** for one intent, which concepts to read and which actions may run.
+
+ClickFix calls public hosts only (private networks, localhost and cloud metadata addresses are refused), follows no redirects, caps the response at 256 KB and makes at most 60 calls per minute per organization. The shape of your endpoint is yours; the sample below answers a source set up in the panel as `/customers/{external_id}/invoices` with record path `items`. The `curl` sample is the exact call the panel's **Try** button makes.
+
+{/* example: widget/08-system-endpoint.js */}
+
+```js tab="Widget"
+// Adım 8: sistem bağlama için widget'ta ek bir şey yoktur; ClickFix sisteminizi
+// identify'daki user_id (dış kimlik) ile çağırır. Doğru kimliği verdiğinizden emin olun:
+// @ts-check
+ClickFix("on", "ready", () => {
+  const state = ClickFix("getState");
+  if (state && !state.verified)
+    console.warn("identify yapılmadı: sistem verisi eşleşmez");
+});
+```
+
+{/* example: node/08-system-endpoint.ts */}
+
+```ts tab="Node.js"
+// Adım 8: sistem bağlama. ClickFix sizin sisteminizi çağırır; siz yalnız
+// müşterinin dış kimliğiyle cevap veren bir uç yazarsınız. Panelde
+// Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+import { createServer } from "node:http";
+
+const token = process.env.SYSTEM_TOKEN ?? "example-system-token"; // bağlantıda Bearer
+
+createServer((req, res) => {
+  if (req.headers.authorization !== `Bearer ${token}`) {
+    res.writeHead(401).end();
+    return;
+  }
+  const m = /^\/customers\/([^/]+)\/invoices$/.exec(req.url ?? "");
+  if (!m) {
+    res.writeHead(404).end();
+    return;
+  }
+  const externalId = decodeURIComponent(m[1]);
+  // Gerçek sisteminizde: veritabanından externalId'nin faturaları
+  const items = [
+    {
+      number: "F-2026-0042",
+      total: 1250.5,
+      currency: "TRY",
+      status: "paid",
+      customer_id: externalId,
+    },
+  ];
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ items })); // Kayıt yolu: items
+}).listen(Number(process.env.PORT ?? 3000), () => console.log("listening"));
+```
+
+{/* example: go/system_endpoint.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+)
+
+// Adım 8: sistem bağlama. ClickFix bu ucu müşterinin dış kimliğiyle çağırır:
+// Panel > Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+func systemEndpoint(ctx context.Context) error {
+	token := os.Getenv("SYSTEM_TOKEN") // bağlantıda Bearer olarak girilir
+	if token == "" {
+		token = "example-system-token"
+	}
+	http.HandleFunc("GET /customers/{external_id}/invoices", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		externalID := r.PathValue("external_id")
+		// Gerçek sisteminizde: veritabanından externalID'nin faturaları
+		items := []map[string]any{{"number": "F-2026-0042", "total": 1250.5, "currency": "TRY", "status": "paid", "customer_id": externalID}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": items}) // Kayıt yolu: items
+	})
+	port := strings.TrimSpace(os.Getenv("PORT"))
+	if port == "" {
+		port = "3000"
+	}
+	fmt.Println("listening")
+	return http.ListenAndServe("127.0.0.1:"+port, nil)
+}
+```
+
+{/* example: curl/08-system-endpoint.sh */}
+
+```bash tab="curl"
+# Adım 8: ClickFix'in sisteminize atacağı çağrının aynısı (Sistemini bağla > Dene düğmesi).
+# SYSTEM_BASE_URL sizin sisteminiz, {external_id} müşterinin dış kimliğidir.
+curl -sS --fail-with-body "$SYSTEM_BASE_URL/customers/1001/invoices" \
+  -H "Authorization: Bearer $SYSTEM_TOKEN"
+```
+
+Concept data is read by the customer's **external id**, so system binding only works once [external ids](#external-id) are in place. The panel's **Try as this customer** preview shows what is accepted for an external id, which concepts are read and the context the AI sees.
+
+## 7. API channel [#api-channel]
+
+Use the API channel to connect your own chat app or system as a **channel**; a website does not need it, the widget already is a channel. The channel is created under **Channels → Add channel → API**; you get an inbound address (`/v1/webhooks/channels/api/{instance}`), a **signing secret** and a field for the address agent replies are delivered to.
+
+- **Customer message → ClickFix:** `POST /v1/webhooks/channels/api/{instance}` with `{ id, sender_id, sender_name?, text, thread_id?, reply_to?, at? }`. The request is verified with the channel's signing secret, not the API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body)). `sender_id` is the customer's id in your system; the same `id` is stored once.
+- **Agent reply → you:** ClickFix `POST`s the `apiChannelReply` body to the address configured on the channel, with the same signature headers and an `Idempotency-Key` carrying the message UUID. Return `2xx` after storing the message; `4xx` other than `408` and `429` counts as permanent. Verification is the same as for [webhooks](#webhooks) (`sha256=` instead of `v1=`).
+
+{/* example: widget/06-api-channel.js */}
+
+```js tab="Widget"
+// Adım 6: web'de API kanalı gerekmez; widget zaten kanaldır. Kendi arayüzünüz
+// varsa @clickfix/react-widget'ın arayüzsüz istemcisini kullanın.
+// @ts-check
+ClickFix("on", "message", (m) => {
+  // Temsilci veya AI yanıtı: kendi bildirim sisteminize aktarabilirsiniz
+  console.log(m.conversation_uuid, m.sender_type, m.text);
+});
+```
+
+{/* example: node/06-api-channel.ts */}
+
+```ts tab="Node.js"
+// Adım 6: API kanalı. Kendi uygulamanızdaki müşteri mesajını ClickFix'e
+// gönderin; imza API anahtarıyla değil kanalın imza anahtarıyla atılır.
+import { createHmac } from "node:crypto";
+
+const base = process.env.CLICKFIX_BASE_URL!;
+const instance = process.env.CLICKFIX_CHANNEL_INSTANCE!; // Kanallar > API kanalı
+const secret = process.env.CLICKFIX_CHANNEL_SECRET!;
+
+const body = JSON.stringify({
+  id: `msg-${Date.now()}`, // kanal içinde tekil; aynı id bir kez kaydedilir
+  sender_id: "1001", // müşterinin sizin sisteminizdeki kimliği
+  sender_name: "Ayşe Yılmaz",
+  text: "Siparişim ne zaman gelir?",
+});
+const timestamp = String(Math.floor(Date.now() / 1000));
+const signature =
+  "sha256=" +
+  createHmac("sha256", secret)
+    .update(`${timestamp}.`)
+    .update(body)
+    .digest("hex");
+
+const res = await fetch(`${base}/v1/webhooks/channels/api/${instance}`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-ClickFix-Timestamp": timestamp,
+    "X-ClickFix-Signature": signature,
+  },
+  body,
+});
+if (!res.ok) throw new Error(`ClickFix ${res.status}`);
+console.log(JSON.stringify(await res.json()));
+```
+
+{/* example: go/api_channel.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+)
+
+// Adım 6: API kanalına müşteri mesajı gönder; imza kanalın imza anahtarıyla.
+func apiChannel(ctx context.Context) error {
+	base, instance, secret := os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_CHANNEL_INSTANCE"), os.Getenv("CLICKFIX_CHANNEL_SECRET")
+	body, _ := json.Marshal(map[string]string{
+		"id":          fmt.Sprintf("msg-%d", time.Now().UnixNano()), // kanal içinde tekil
+		"sender_id":   "1001",                                       // müşterinin sizin sisteminizdeki kimliği
+		"sender_name": "Ayşe Yılmaz",
+		"text":        "Siparişim ne zaman gelir?",
+	})
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp + "."))
+	mac.Write(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/webhooks/channels/api/"+instance, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ClickFix-Timestamp", timestamp)
+	req.Header.Set("X-ClickFix-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode)
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode})
+}
+```
+
+{/* example: curl/06-api-channel.sh */}
+
+```bash tab="curl"
+# Adım 6: API kanalına müşteri mesajı; imza kanalın imza anahtarıyla (API anahtarı değil).
+BODY='{"id":"msg-'$(date +%s)'","sender_id":"1001","sender_name":"Ayşe Yılmaz","text":"Siparişim ne zaman gelir?"}'
+TS=$(date +%s)
+SIG=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$CLICKFIX_CHANNEL_SECRET" | sed 's/^.* //')
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/webhooks/channels/api/$CLICKFIX_CHANNEL_INSTANCE" \
+  -H "Content-Type: application/json" \
+  -H "X-ClickFix-Timestamp: $TS" \
+  -H "X-ClickFix-Signature: sha256=$SIG" \
+  -d "$BODY"
+```
+
+## 8. Webhooks [#webhooks]
+
+Webhooks deliver events (new conversation, incoming message, contact update, SLA breach, satisfaction…) to you as signed `POST`s; no polling. Create the subscription with the `webhooks:write` scope through `POST /v1/public-api/webhooks`; `data.secret` is returned in that response only. The URL must be public `https`. Every delivery carries `ClickFix-Webhook-Id`, `ClickFix-Webhook-Event`, `ClickFix-Webhook-Timestamp` and `ClickFix-Webhook-Signature: v1=…`. Verification: `hex(HMAC-SHA256(secret, timestamp + "." + raw_body))` over the raw body, constant-time comparison, five minutes tolerance, deduplication by `ClickFix-Webhook-Id`; then `2xx`. Failed deliveries are retried with growing intervals for up to 24 hours. Event list and body format: [Webhooks](/docs/webhooks?lang=en).
+
+{/* example: widget/07-webhooks.js */}
+
+```js tab="Widget"
+// Adım 7: tarayıcı tarafında webhook yoktur; konuşma olaylarını SDK verir.
+// @ts-check
+ClickFix("on", "conversation:started", ({ conversation_uuid }) =>
+  console.log("yeni", conversation_uuid),
+);
+ClickFix("on", "conversation:ended", ({ conversation_uuid, status }) =>
+  console.log(conversation_uuid, status),
+);
+ClickFix("on", "csat", ({ score }) => console.log("memnuniyet", score));
+```
+
+{/* example: node/07-webhooks.ts */}
+
+```ts tab="Node.js"
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+import { createServer } from "node:http";
+import { createClient, verifyWebhook } from "@clickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!, // webhooks:write
+});
+
+const created = await client.request(
+  "/v1/public-api/webhooks",
+  "post",
+  {
+    name: "CRM senkronizasyonu",
+    url: "https://example.com/clickfix/webhook",
+    events: ["conversation.created", "message.received", "contact.updated"],
+    enabled: true,
+  },
+  { idempotencyKey: `webhook-crm-${Date.now()}` },
+);
+// data.secret yalnız bu yanıtta döner: güvenli saklayın (ör. gizli değer deposu),
+// loglamayın. Doğrulama sunucunuz onu oradan okur.
+const { secret: issued, ...subscription } = created.data as {
+  secret: string;
+  uuid: string;
+};
+const secret = process.env.CLICKFIX_WEBHOOK_SECRET ?? issued;
+console.log(JSON.stringify({ subscription }));
+
+createServer(async (req, res) => {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  const raw = Buffer.concat(chunks);
+  const ok = verifyWebhook(
+    secret,
+    String(req.headers["clickfix-webhook-timestamp"] ?? ""),
+    String(req.headers["clickfix-webhook-signature"] ?? ""),
+    raw,
+  );
+  if (!ok) {
+    res.writeHead(401).end();
+    return;
+  }
+  // ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+  const event = JSON.parse(raw.toString()) as { event: string; data: unknown };
+  console.log(JSON.stringify({ received: event.event }));
+  res.writeHead(200).end();
+}).listen(Number(process.env.PORT ?? 3000), () => console.log("listening"));
+```
+
+{/* example: go/webhooks.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+)
+
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+func webhooks(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	res, err := client.PostV1PublicApiWebhooksWithResponse(ctx,
+		&clickfix.PostV1PublicApiWebhooksParams{IdempotencyKey: fmt.Sprintf("webhook-crm-%d", time.Now().UnixNano())},
+		clickfix.PostV1PublicApiWebhooksJSONRequestBody{
+			Name: "CRM senkronizasyonu", Url: "https://example.com/clickfix/webhook",
+			Events: []string{"conversation.created", "message.received", "contact.updated"}, Enabled: true,
+		})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	var created struct {
+		Data struct {
+			Secret string `json:"secret"` // yalnız bu yanıtta döner
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body, &created); err != nil {
+		return err
+	}
+	// Yalnız bu yanıtta döner: güvenli saklayın, loglamayın; sunucu onu oradan okur.
+	secret := os.Getenv("CLICKFIX_WEBHOOK_SECRET")
+	if secret == "" {
+		secret = created.Data.Secret
+	}
+	fmt.Println(`{"subscription":"created"}`)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := clickfix.VerifyWebhook(secret, r.Header.Get("ClickFix-Webhook-Timestamp"),
+			r.Header.Get("ClickFix-Webhook-Signature"), raw, time.Now(), 5*time.Minute); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+		var event struct {
+			Event string `json:"event"`
+		}
+		_ = json.Unmarshal(raw, &event)
+		fmt.Printf(`{"received":%q}`+"\n", event.Event)
+		w.WriteHeader(http.StatusOK)
+	})
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	fmt.Println("listening")
+	return http.ListenAndServe("127.0.0.1:"+port, nil)
+}
+```
+
+{/* example: curl/07-webhooks.sh */}
+
+```bash tab="curl"
+# Adım 7: webhook aboneliği (webhooks:write). data.secret yalnız bu yanıtta döner.
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/public-api/webhooks" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: webhook-crm-$(date +%s)" \
+  -d '{ "name": "CRM senkronizasyonu", "url": "https://example.com/clickfix/webhook", "events": ["conversation.created", "message.received", "contact.updated"], "enabled": true }'
+```
+
+For Zapier, Make and n8n, `POST /v1/public-api/subscriptions` (REST hook) and `GET /v1/public-api/triggers` (cursor polling) use the same infrastructure: [Zapier, Make and n8n](/docs/mcp-integrations?lang=en).
+
+## 9. Mobile: a secure webview that carries the session [#mobile]
+
+The path for mobile apps is not a separate native SDK but a **secure webview that carries the session**: the app opens `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` in a webview; the widget opens full screen and talks to the app over a **bridge**. Flutter, React Native, iOS, Android and every other platform connect the same way, with the same contract. The full bridge contract (message names, fields, error codes, security rules) is a separate document: [Webview bridge](https://github.com/ClickSolveMainTR/clickfix-app-go/blob/main/docs/webview-bridge.md).
+
+### Session handoff [#mobile-session]
+
+1. The app fetches `{ user_id, user_hash }` from your own server ([identity verification](#identity)); the secret never reaches the app.
+2. The webview loads `widget-embed.html?widget=WIDGET_ID&locale=en&theme=auto`. When the widget is ready, `{"type":"clickfix:ready", ...}` arrives over the bridge.
+3. The app sends `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}`; the answer is `{"type":"clickfix:result","id":"1","ok":true}`. When rejected, `ok:false` and `error.code` (such as `WIDGET_IDENTITY_INVALID`) come back and the user stays anonymous.
+4. On logout send `{"type":"clickfix:reset"}`; the visitor is forgotten and the next launch is a new visitor.
+
+The webview's cookies and storage carry the session across reloads; never switch accounts without sending `reset`.
+
+### The bridge: app to widget and widget to app [#mobile-bridge]
+
+App → widget (commands): `clickfix:identify`, `clickfix:track` (adds an app event to the screen context), `clickfix:open` (`view` or `conversation`), `clickfix:close`, `clickfix:update` (language, theme, profile, attributes), `clickfix:consent`, `clickfix:reset`, `clickfix:get-state`. Every command may carry an `id`; when it does, the widget answers with `clickfix:result`. A command arrives through `window.ClickFixBridge.receive(json)` or a `postMessage` to the page.
+
+Widget → app: `clickfix:ready`, `clickfix:event` (every SDK event: `message`, `unread`, `close`, `conversation:ended`…), `clickfix:link` (a link to open outside; use the system browser) and `clickfix:result`. The widget picks the transport by platform: `ReactNativeWebView.postMessage`, iOS `webkit.messageHandlers.ClickFix`, the Android `ClickFixAndroid` interface, the Flutter `ClickFixFlutter` channel.
+
+The host-side samples below set up the bridge, hand over the session when the widget is ready, send an app event and close the support screen on the widget's `close` event. They are not part of the guide's automated test; build and verify them in your own project.
+
+```dart tab="Flutter"
+// webview_flutter ^4: the JavaScriptChannel must be named ClickFixFlutter.
+final controller = WebViewController()
+  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+  ..setNavigationDelegate(NavigationDelegate(
+    onNavigationRequest: (req) =>
+        req.url.startsWith('https://getclickfix.com/')
+            ? NavigationDecision.navigate
+            : NavigationDecision.prevent, // other hosts never load inside the webview
+  ))
+  ..addJavaScriptChannel('ClickFixFlutter', onMessageReceived: (msg) async {
+    final data = jsonDecode(msg.message) as Map<String, dynamic>;
+    switch (data['type']) {
+      case 'clickfix:ready':
+        final s = await api.supportSession(); // { user_id, user_hash } from your server
+        send(controller, {'type': 'clickfix:identify', 'id': 'login',
+          'user': {'user_id': s.userId, 'user_hash': s.userHash, 'company': {'id': s.companyId}}});
+        send(controller, {'type': 'clickfix:track', 'name': 'app_screen', 'properties': {'screen': 'orders'}});
+      case 'clickfix:link':
+        launchUrl(Uri.parse(data['url'] as String), mode: LaunchMode.externalApplication);
+      case 'clickfix:event' when data['event'] == 'close':
+        Navigator.of(context).pop();
+      case 'clickfix:event' when data['event'] == 'unread':
+        badge.value = (data['payload'] as Map)['count'] as int;
+    }
+  })
+  ..loadRequest(Uri.parse('https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en'));
+
+void send(WebViewController c, Map<String, Object?> m) =>
+    c.runJavaScript('window.ClickFixBridge && window.ClickFixBridge.receive(${jsonEncode(jsonEncode(m))})');
+```
+
+```tsx tab="React Native"
+// react-native-webview: onMessage from the widget, injectJavaScript to it.
+import { useRef } from "react";
+import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
+
+export function Support({ onClose }: { onClose: () => void }) {
+  const ref = useRef<WebView>(null);
+  const send = (m: object) =>
+    ref.current?.injectJavaScript(
+      `window.ClickFixBridge && window.ClickFixBridge.receive(${JSON.stringify(JSON.stringify(m))}); true;`,
+    );
+  return (
+    <WebView
+      ref={ref}
+      source={{
+        uri: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en",
+      }}
+      originWhitelist={["https://getclickfix.com"]}
+      onShouldStartLoadWithRequest={(r) =>
+        r.url.startsWith("https://getclickfix.com/")
+      }
+      sharedCookiesEnabled={false}
+      onMessage={async (e) => {
+        const data = JSON.parse(e.nativeEvent.data);
+        if (data.type === "clickfix:ready") {
+          const s = await api.supportSession(); // { user_id, user_hash } from your server
+          send({
+            type: "clickfix:identify",
+            id: "login",
+            user: { user_id: s.user_id, user_hash: s.user_hash },
+          });
+          send({
+            type: "clickfix:track",
+            name: "app_screen",
+            properties: { screen: "orders" },
+          });
+        } else if (data.type === "clickfix:link") Linking.openURL(data.url);
+        else if (data.type === "clickfix:event" && data.event === "close")
+          onClose();
+      }}
+    />
+  );
+}
+```
+
+```swift tab="iOS"
+// WKWebView: the script message handler is named "ClickFix"; commands go through evaluateJavaScript.
+final class SupportViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+    private lazy var webView: WKWebView = {
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(self, name: "ClickFix")
+        config.websiteDataStore = .default() // the session survives relaunches; send clickfix:reset on logout
+        let w = WKWebView(frame: .zero, configuration: config)
+        w.navigationDelegate = self
+        return w
+    }()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view = webView
+        webView.load(URLRequest(url: URL(string: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en")!))
+    }
+
+    func send(_ message: [String: Any]) {
+        let json = try! JSONSerialization.data(withJSONObject: message)
+        let literal = String(data: try! JSONSerialization.data(withJSONObject: [String(decoding: json, as: UTF8.self)]), encoding: .utf8)!
+        webView.evaluateJavaScript("window.ClickFixBridge && window.ClickFixBridge.receive(\(literal)[0])")
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let text = m.body as? String, let data = text.data(using: .utf8),
+              let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        switch msg["type"] as? String {
+        case "clickfix:ready":
+            api.supportSession { s in // { user_id, user_hash } from your server
+                self.send(["type": "clickfix:identify", "id": "login", "user": ["user_id": s.userId, "user_hash": s.userHash]])
+            }
+        case "clickfix:link":
+            if let url = URL(string: msg["url"] as? String ?? "") { UIApplication.shared.open(url) }
+        case "clickfix:event" where msg["event"] as? String == "close":
+            dismiss(animated: true)
+        default: break
+        }
+    }
+
+    func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        decisionHandler(a.request.url?.host == "getclickfix.com" ? .allow : .cancel) // other hosts never load inside the webview
+    }
+}
+```
+
+```kotlin tab="Android"
+// WebView: the JavascriptInterface is named "ClickFixAndroid"; commands go through evaluateJavascript.
+class SupportActivity : AppCompatActivity() {
+    private lateinit var web: WebView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        web = WebView(this).also { setContentView(it) }
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true      // the session survives relaunches; send clickfix:reset on logout
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) =
+                r.url.host != "getclickfix.com" // other hosts never load inside the webview
+        }
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun postMessage(text: String) = runOnUiThread { onBridge(JSONObject(text)) }
+        }, "ClickFixAndroid")
+        web.loadUrl("https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en")
+    }
+
+    private fun send(m: JSONObject) =
+        web.evaluateJavascript("window.ClickFixBridge && window.ClickFixBridge.receive(${JSONObject.quote(m.toString())})", null)
+
+    private fun onBridge(m: JSONObject) = when (m.optString("type")) {
+        "clickfix:ready" -> lifecycleScope.launch {
+            val s = api.supportSession() // { user_id, user_hash } from your server
+            send(JSONObject().put("type", "clickfix:identify").put("id", "login")
+                .put("user", JSONObject().put("user_id", s.userId).put("user_hash", s.userHash)))
+        }
+        "clickfix:link" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(m.getString("url"))))
+        "clickfix:event" -> if (m.optString("event") == "close") finish() else Unit
+        else -> Unit
+    }
+}
+```
+
+### Deep links [#mobile-deep-link]
+
+- **Open a specific conversation:** load `…/widget-embed.html?widget=WIDGET_ID&conversation=CONVERSATION_UUID`, or send `{"type":"clickfix:open","conversation":"CONVERSATION_UUID"}` to an open webview. `view` picks the tab (`home`, `messages`, `help`, `new`).
+- **From a notification to the conversation:** subscribe to the `message.sent` webhook event for your app's own push notification; the event carries `conversation_uuid` and `contact_external_id`. When the notification's deep link (`myapp://support?conversation=…`) opens, load the webview with the URL above. The widget's `unread` event (`clickfix:event`) is enough for the badge.
+- **Out of the widget:** help articles and links in messages arrive as `clickfix:link`; open them in the system browser. Do not allow navigation away from `getclickfix.com` inside the webview.
+
+### Security notes [#mobile-security]
+
+- **The identity secret never enters the app.** `user_hash` comes from an authenticated endpoint on your server; it is neither computed nor hard-coded in the app.
+- **Origin restriction:** the webview loads `https://getclickfix.com` only (or the app URL given to you); navigation elsewhere is blocked, and a `clickfix:link` URL is re-validated in the app (`https:` only) before it opens in the system browser; never hand it to an intent or deep-link handler. Disable third-party and shared cookie stores; disable file and content access (`allowFileAccess`, `allowContentAccess`).
+- **JS bridge:** `window.ClickFixBridge.receive` exists on this page only, and the page belongs to ClickFix. Messages arriving by `postMessage` are accepted from the configured parent origin only when framed (`boot({ bridge: { origin } })`) and from the page itself only when not framed; `"*"` is refused. Rejected commands never write the message content (for example `user_hash`) to the console or the result.
+- **Cookies and storage:** the session lives in the webview's storage; send `clickfix:reset` on account switch and logout. On shared devices clear the webview storage too.
+- **Consent:** if your app collects consent, add `consent=1` to the URL or send `clickfix:consent`; nothing is stored without it.
+
+The Flutter package and native SDKs are separate projects; when they ship they will use this same bridge contract.
+
+## Next steps [#next-steps]
+
+The remaining steps of the setup wizard are panel work, not code:
+
+- **Teach the AI:** [AI](/docs/ai?lang=en). The concepts and actions of system binding feed the AI playbooks.
+- **Knowledge base:** [Knowledge base](/docs/knowledge-base?lang=en). The widget's help tab and the AI read from it.
+- **Automation and SLA:** [Automation](/docs/automation?lang=en). Workflow conditions can read custom fields and screen context; for outbound actions use [webhooks](#webhooks).
+
+Other references: [API](/docs/api?lang=en), [SDKs and sample code](/docs/sdks?lang=en), [Web widget](/docs/web-widget?lang=en), [Webhooks](/docs/webhooks?lang=en), [API reference](/docs/api-reference/conversations?lang=en).

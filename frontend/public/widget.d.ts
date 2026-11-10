@@ -1,6 +1,7 @@
 /**
  * ClickFix web widget SDK — public TypeScript contract (protocol version 1,
- * SDK 2.x; every 1.x call keeps working).
+ * SDK 2.x; every 1.x call keeps working). SDK 2.1 adds the webview bridge
+ * (docs/webview-bridge.md).
  *
  * Served at https://<app>/widget.d.ts next to https://<app>/widget.js.
  * Copy it into your project (e.g. `types/clickfix-widget.d.ts`) to type
@@ -55,6 +56,15 @@ export interface ClickFixInitOptions {
    * from the page's own origin, so it has no effect on other sites.
    */
   assistant?: { organization: string };
+  /**
+   * Webview bridge for native apps (docs/webview-bridge.md): the host app
+   * drives the widget through `window.ClickFixBridge.receive(json)` or
+   * postMessage and receives every SDK event, external links and command
+   * results. `{ origin }` names the parent frame allowed to drive the
+   * widget when it runs inside an iframe (never "*"). The hosted page
+   * https://<app>/widget-embed.html?widget=<id> turns it on for you.
+   */
+  bridge?: boolean | { origin?: string };
 }
 
 export interface ClickFixCompany {
@@ -282,8 +292,58 @@ export interface ClickFixSDK extends ClickFixCommand {
   shutdown(): void;
 }
 
+/** Host -> widget messages of the webview bridge (docs/webview-bridge.md). */
+export type ClickFixBridgeCommand =
+  | { type: "clickfix:identify"; id?: string; user: ClickFixIdentity }
+  | {
+      type: "clickfix:track";
+      id?: string;
+      name: string;
+      properties?: Record<string, unknown>;
+    }
+  | {
+      type: "clickfix:open";
+      id?: string;
+      view?: ClickFixView;
+      conversation?: string;
+    }
+  | { type: "clickfix:close"; id?: string }
+  | { type: "clickfix:update"; id?: string; update: ClickFixUpdate }
+  | { type: "clickfix:consent"; id?: string; granted: boolean }
+  | { type: "clickfix:reset"; id?: string }
+  | { type: "clickfix:get-state"; id?: string };
+
+/** Widget -> host messages of the webview bridge. */
+export type ClickFixBridgeMessage =
+  | ({ type: "clickfix:ready"; bridge_version: 1 } & ClickFixEventMap["ready"])
+  | {
+      [E in ClickFixEvent]: {
+        type: "clickfix:event";
+        event: E;
+        payload: ClickFixEventMap[E];
+      };
+    }[ClickFixEvent]
+  | { type: "clickfix:link"; url: string }
+  | {
+      type: "clickfix:result";
+      id: string;
+      ok: boolean;
+      data?: unknown;
+      error?: { code: string; message: string };
+    };
+
+export interface ClickFixBridge {
+  version: 1;
+  /** Detected host transport, or null when no host object was found. */
+  transport: "react-native" | "ios" | "android" | "flutter" | "frame" | null;
+  /** Entry point for the host app: a JSON string or an object. */
+  receive(message: string | ClickFixBridgeCommand): Promise<void>;
+}
+
 declare global {
   interface Window {
     ClickFix: ClickFixSDK;
+    /** Present only while the webview bridge is on. */
+    ClickFixBridge?: ClickFixBridge;
   }
 }
