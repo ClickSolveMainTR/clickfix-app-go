@@ -25,7 +25,7 @@ Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma istekl
 | `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
 | [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                   |
 | [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                             | `npm install @clickfix/react-widget` (React 18+)                                          |
-| Go modülü                                                                        | `sdks/go/v0.1.0`                                                                  | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                       |
+| Go modülü                                                                        | `go/v0.1.0`                                                                       | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
 
 Değişiklik günlükleri her paketin `CHANGELOG.md` dosyasındadır. `0.x` sürümlerinde küçük sürüm kırıcı değişiklik taşıyabilir; günlükte **Kırıcı** başlığıyla yazılır. Örnekleri kendi ortamınızda çalıştırmak için ortam değişkenleri: `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE`, `CLICKFIX_CHANNEL_SECRET`.
 
@@ -107,7 +107,7 @@ import (
 	"encoding/json"
 	"os"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 1: user_hash sunucuda hesaplanır; anahtar tarayıcıya ve uygulamaya gitmez.
@@ -199,7 +199,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
@@ -303,7 +303,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 3: özel alanlar; anahtar panelde tanımladığınız alanın anahtarıdır.
@@ -401,7 +401,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 4: şirketi bul ve kullanım sinyali gönder (health:write).
@@ -505,7 +505,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
@@ -865,7 +865,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.

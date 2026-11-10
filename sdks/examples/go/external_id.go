@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.

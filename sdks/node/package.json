@@ -8,7 +8,7 @@
     "api-client",
     "webhooks"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ClickSolveMainTR/clickfix-app-go.git",

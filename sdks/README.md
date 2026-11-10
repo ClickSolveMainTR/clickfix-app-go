@@ -1,6 +1,11 @@
 # ClickFix SDKs
 
-- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
+MIT licensed (`LICENSE`, copied into every package). Published from the public mirror
+[ClickSolveMainTR/clickfix-sdks](https://github.com/ClickSolveMainTR/clickfix-sdks): every tagged `main`
+run pushes this directory there and tags each package version (`node/vX.Y.Z`, `go/vX.Y.Z`,
+`flutter/vX.Y.Z`, ...). The mirror is read-only; fixes land here and ship with the next release.
+
+- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-sdks/go`, tags `go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
 - `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
@@ -36,9 +41,9 @@ Versions live in each package (`node/package.json`, `react-widget/package.json`,
 `npm pack --dry-run` and `npm publish --dry-run`. On a green `main` the
 `sdk-publish` job publishes any npm version that is not on the registry yet
 (needs the `NPM_TOKEN` repository secret, an npm automation token for the
-`@clickfix` scope; without it the job skips with a note), and the `release-tag`
-job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
-tags by hand. Details: `docs/entegrasyon-kilavuzu.md`.
+`@clickfix` scope; without it the job skips with a note), and the `sdks-mirror`
+job pushes the tree and the `go/vX.Y.Z` tag to the public mirror when they do not exist.
+Nobody publishes or tags by hand. Details: `docs/entegrasyon-kilavuzu.md`.
 
 References: existing ClickFix widget routes/types and Laravel
 `resources/js/widget/lib/widget-api.ts` for the headless transport approach;

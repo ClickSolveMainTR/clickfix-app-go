@@ -23,13 +23,13 @@ make guide-examples-check    # yalnız derleme, tip kontrolü ve sayfa eşitliğ
 |---|---|---|
 | `@clickfix/node` | `sdks/node/package.json`, `CHANGELOG.md` | `main`'de `sdk-publish` işi: npm'de olmayan sürümü `npm publish --access public` ile yayımlar |
 | `@clickfix/react-widget` | `sdks/react-widget/package.json`, `CHANGELOG.md` | aynı iş |
-| `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go` | `sdks/go/VERSION`, `CHANGELOG.md` | `release-tag` işi `sdks/go/vX.Y.Z` etiketini basar (yoksa); elle etiket basılmaz |
+| `github.com/ClickSolveMainTR/clickfix-sdks/go` | `sdks/go/VERSION`, `CHANGELOG.md` | `release-tag` işi `go/vX.Y.Z` etiketini basar (yoksa); elle etiket basılmaz |
 
 - PR'da `sdks` işi `npm pack --dry-run` ve `npm publish --dry-run` koşar; token gerekmez.
 - `sdk-publish` için **`NPM_TOKEN`** repository secret'ı gerekir (npm'de `@clickfix` kapsamının sahibi hesabın *automation* token'ı; Settings → Secrets and variables → Actions). Secret yoksa iş özet notuyla atlar, `main` kırılmaz.
 - Sürüm artırma: paketi değiştiren PR'da `package.json` / `VERSION` sürümünü yükseltin ve `CHANGELOG.md`'ye yazın; kılavuzun **Paketler** tablosundaki sürümleri de güncelleyin. `0.x`'te küçük sürüm kırıcı olabilir, günlükte **Kırıcı** başlığı zorunludur.
 - npm kapsam adı: `@clickfix/*` paket adları npm'de boştur (`npm view` 404, kapsam aramasında paket yok); kapsamın bir organizasyon olarak alınıp alınmadığı hesap olmadan doğrulanamaz. Alınamazsa yedek ad `@getclickfix/*`; o durumda iki `package.json`, kılavuzun Paketler tablosu ve `sdks/README.md` birlikte değişir, başka yerde paket adı geçmez.
-- Go modülü repo private kaldığı sürece `GOPRIVATE=github.com/ClickSolveMainTR/*` ve git kimliği ister; README'de yazar. Repo herkese açık olunca `go get` doğrudan çalışır. Modül yolu `furkanmeclis` kökünden `ClickSolveMainTR` köküne taşındı; eski yol kullanılmaz.
+- SDK'lar herkese açık ayna repodan sunulur: her etiketli `main` koşusunda `sdks-mirror` işi `sdks/` ağacını `ClickSolveMainTR/clickfix-sdks` reposuna iter ve paket etiketlerini (`node/vX`, `react-widget/vX`, `visitor-core/vX`, `go/vX`, `flutter/vX`) orada basar (`SDKS_MIRROR_KEY` secret'ı; yoksa iş atlar). Go modül yolu `github.com/ClickSolveMainTR/clickfix-sdks/go`'dur; `go get` ayna repodan çalışır, ana repo private kalabilir. Kaynak her zaman ana repodaki `sdks/`; aynaya elle commit yapılmaz. Lisans: MIT (`sdks/LICENSE`, her pakette kopyası).
 
 ## Mobil karar
 

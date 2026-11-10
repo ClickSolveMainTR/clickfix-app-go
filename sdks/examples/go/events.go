@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).

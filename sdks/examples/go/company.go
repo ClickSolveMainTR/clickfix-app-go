@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 4: şirketi bul ve kullanım sinyali gönder (health:write).
