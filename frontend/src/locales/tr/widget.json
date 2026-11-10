@@ -547,7 +547,7 @@
   "app_keys.never_used": "Henüz kullanılmadı",
   "app_keys.limit": "Bir widget'ta en fazla 20 etkin anahtar olabilir.",
   "app_keys.headers": "Uygulama her widget isteğine şu başlıkları ekler (ziyaretçi belirteci ve user_hash tarayıcıdakiyle aynıdır):",
-  "app_keys.core_hint": "Hazır istemci: @clickfix/visitor-core paketi, mode: \"app\" ile bu başlıkları kendisi gönderir.",
+  "app_keys.core_hint": "Hazır istemci: @getclickfix/visitor-core paketi, mode: \"app\" ile bu başlıkları kendisi gönderir.",
   "toast.app_key_created": "Uygulama anahtarı oluşturuldu",
   "toast.app_key_revoked": "Uygulama anahtarı iptal edildi"
 }

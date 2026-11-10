@@ -37,7 +37,7 @@ importers:
 
   react-widget:
     dependencies:
-      '@clickfix/visitor-core':
+      '@getclickfix/visitor-core':
         specifier: workspace:^
         version: link:../visitor-core
       react:

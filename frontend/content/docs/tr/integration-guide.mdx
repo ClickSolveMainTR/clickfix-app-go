@@ -20,13 +20,13 @@ Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma istekl
 
 ### Paketler [#packages]
 
-| Paket                                                                            | Sürüm                                                                             | Kurulum                                                                                   |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                   |
-| [`@clickfix/visitor-core`](https://www.npmjs.com/package/@clickfix/visitor-core) | 0.1.0                                                                             | `npm install @clickfix/visitor-core` (React Native, Node 22+, tarayıcı; DOM'suz)          |
-| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.1                                                                             | `npm install @clickfix/react-widget` (React 18+)                                          |
-| Go modülü                                                                        | `sdks/go/v0.1.0`                                                                  | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                       |
+| Paket                                                                                  | Sürüm                                                                             | Kurulum                                                                                   |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, tipler `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                             | `npm install @clickfix/node` (Node 22+)                                                   |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                             | `npm install @getclickfix/visitor-core` (React Native, Node 22+, tarayıcı; DOM'suz)       |
+| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                             | `npm install @clickfix/react-widget` (React 18+)                                          |
+| Go modülü                                                                              | `sdks/go/v0.1.0`                                                                  | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                       |
 
 Değişiklik günlükleri her paketin `CHANGELOG.md` dosyasındadır. `0.x` sürümlerinde küçük sürüm kırıcı değişiklik taşıyabilir; günlükte **Kırıcı** başlığıyla yazılır. Örnekleri kendi ortamınızda çalıştırmak için ortam değişkenleri: `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE`, `CLICKFIX_CHANNEL_SECRET`.
 
@@ -956,7 +956,7 @@ Mobil uygulamalar için yol, ayrı bir yerel SDK değil, **oturumu taşıyan gü
 
 Webview'in çerez ve depolaması oturumu sayfa yenilemeleri arasında taşır; `reset` göndermeden hesap değiştirmeyin.
 
-**Yerel çekirdekle oturum devri (CF-201).** Uygulama widget uçlarını webview olmadan da çağırabilir: Web widget → Gelişmiş → **Mobil uygulamalar** bölümünde platform ve paket adıyla bir **uygulama anahtarı** oluşturun; `@clickfix/visitor-core` paketi `mode: "app"` ile bu anahtarı `X-ClickFix-App-Key` ve `X-ClickFix-App-Package` başlıklarında gönderir, sayfa kaynağı gerekmez. Yerel oturumu webview'e `{"type":"clickfix:session","token":client.getToken()}` komutuyla devredin; widget de `ready`, `identify` ve `reset` sonrasında `clickfix:session` mesajıyla kendi belirtecini verir (`client.adoptToken`). Anahtar yalnızca oluşturulduğunda gösterilir ve panelden iptal edilir; `user_hash` doğrulaması tarayıcıdakiyle aynıdır.
+**Yerel çekirdekle oturum devri (CF-201).** Uygulama widget uçlarını webview olmadan da çağırabilir: Web widget → Gelişmiş → **Mobil uygulamalar** bölümünde platform ve paket adıyla bir **uygulama anahtarı** oluşturun; `@getclickfix/visitor-core` paketi `mode: "app"` ile bu anahtarı `X-ClickFix-App-Key` ve `X-ClickFix-App-Package` başlıklarında gönderir, sayfa kaynağı gerekmez. Yerel oturumu webview'e `{"type":"clickfix:session","token":client.getToken()}` komutuyla devredin; widget de `ready`, `identify` ve `reset` sonrasında `clickfix:session` mesajıyla kendi belirtecini verir (`client.adoptToken`). Anahtar yalnızca oluşturulduğunda gösterilir ve panelden iptal edilir; `user_hash` doğrulaması tarayıcıdakiyle aynıdır.
 
 ### Köprü: uygulamadan widget'a ve widget'tan uygulamaya [#mobile-bridge]
 
@@ -967,35 +967,34 @@ Widget → uygulama: `clickfix:ready`, `clickfix:event` (her SDK olayı: `messag
 Aşağıdaki uygulama tarafı örnekleri köprüyü kurar, hazır olunca oturumu devreder, uygulama olayı gönderir ve widget'ın `close` olayında destek ekranını kapatır. Bunlar kılavuzun otomatik testine girmez; kendi projenizde derleyip doğrulayın.
 
 ```dart tab="Flutter"
-// webview_flutter ^4: JavaScriptChannel adı ClickFixFlutter olmalı.
-final controller = WebViewController()
-  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  ..setNavigationDelegate(NavigationDelegate(
-    onNavigationRequest: (req) =>
-        req.url.startsWith('https://getclickfix.com/')
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent, // başka adres: webview içinde açılmaz
-  ))
-  ..addJavaScriptChannel('ClickFixFlutter', onMessageReceived: (msg) async {
-    final data = jsonDecode(msg.message) as Map<String, dynamic>;
-    switch (data['type']) {
-      case 'clickfix:ready':
-        final s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
-        send(controller, {'type': 'clickfix:identify', 'id': 'login',
-          'user': {'user_id': s.userId, 'user_hash': s.userHash, 'company': {'id': s.companyId}}});
-        send(controller, {'type': 'clickfix:track', 'name': 'app_screen', 'properties': {'screen': 'orders'}});
-      case 'clickfix:link':
-        launchUrl(Uri.parse(data['url'] as String), mode: LaunchMode.externalApplication);
-      case 'clickfix:event' when data['event'] == 'close':
-        Navigator.of(context).pop();
-      case 'clickfix:event' when data['event'] == 'unread':
-        badge.value = (data['payload'] as Map)['count'] as int;
-    }
-  })
-  ..loadRequest(Uri.parse('https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr'));
+// Paket: clickfix_webview (sdks/flutter/clickfix_webview; ilk sürüme kadar git bağımlılığı). Köprüyü, kaynak
+// kilidini ve ClickFixFlutter kanalını paket kurar; siz oturumu devredersiniz.
+import 'package:clickfix_webview/clickfix_webview.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void send(WebViewController c, Map<String, Object?> m) =>
-    c.runJavaScript('window.ClickFixBridge && window.ClickFixBridge.receive(${jsonEncode(jsonEncode(m))})');
+final controller = ClickFixController(
+  widgetId: 'WIDGET_ID',
+  locale: 'tr',
+  conversation: conversationUuid, // isteğe bağlı derin bağlantı
+);
+
+ClickFixWebView(
+  controller: controller,
+  onReady: (_) async {
+    final s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
+    try {
+      await controller.identify(ClickFixIdentity(
+        userId: s.userId, userHash: s.userHash, company: ClickFixCompany(id: s.companyId)));
+      await controller.track('app_screen', properties: {'screen': 'orders'});
+    } on ClickFixBridgeError catch (e) {
+      debugPrint('kimlik reddedildi: ${e.code}'); // WIDGET_IDENTITY_INVALID gibi; ziyaretçi anonim kalır
+    }
+  },
+  onUnread: (count) => badge.value = count,
+  onLink: (link) => launchUrl(link.url, mode: LaunchMode.externalApplication), // yalnız https gelir
+  onClose: () => Navigator.of(context).pop(),
+);
+// Çıkışta: controller.reset(); ekran kapanınca: controller.dispose().
 ```
 
 ```tsx tab="React Native"
@@ -1142,7 +1141,7 @@ class SupportActivity : AppCompatActivity() {
 - **Çerez ve depolama:** oturum webview'in depolamasında kalır; hesap değişiminde ve çıkışta `clickfix:reset` gönderin. Cihaz paylaşımlıysa webview depolamasını da temizleyin.
 - **Onay:** uygulamanız onay topluyorsa adrese `consent=1` ekleyin ya da `clickfix:consent` gönderin; onaysız hiçbir şey saklanmaz.
 
-Flutter paketi ve yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.
+Flutter paketi `clickfix_webview` (`sdks/flutter/clickfix_webview`; `ClickFixWebView` + `ClickFixController`, köprü sözleşmesi v1, kaynak kilidi, derin bağlantı) ilk sürümünde CI'daki `sdk-publish` işiyle pub.dev'e yayımlanacaktır; o zamana kadar `pubspec.yaml` içinde git bağımlılığı olarak kullanın: `clickfix_webview: { git: { url: https://github.com/ClickSolveMainTR/clickfix-app-go.git, path: sdks/flutter/clickfix_webview, ref: main } }`. Yerel Dart istemcisi (`clickfix_visitor`) ve diğer yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.
 
 ## Sonraki adımlar [#next-steps]
 

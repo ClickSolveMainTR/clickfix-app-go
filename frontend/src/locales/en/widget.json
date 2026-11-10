@@ -547,7 +547,7 @@
   "app_keys.never_used": "Not used yet",
   "app_keys.limit": "A widget may have at most 20 active keys.",
   "app_keys.headers": "The app adds these headers to every widget request (the visitor token and user_hash work exactly as in the browser):",
-  "app_keys.core_hint": "Ready-made client: the @clickfix/visitor-core package sends these headers itself with mode: \"app\".",
+  "app_keys.core_hint": "Ready-made client: the @getclickfix/visitor-core package sends these headers itself with mode: \"app\".",
   "toast.app_key_created": "App key created",
   "toast.app_key_revoked": "App key revoked"
 }

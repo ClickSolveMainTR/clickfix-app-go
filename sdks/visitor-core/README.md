@@ -1,4 +1,4 @@
-# @clickfix/visitor-core
+# @getclickfix/visitor-core
 
 The ClickFix visitor (widget) API for any JavaScript runtime: React Native
 (Hermes), Node 22+ and browsers. No UI, no DOM, no `window`; only `fetch`,
@@ -6,7 +6,7 @@ The ClickFix visitor (widget) API for any JavaScript runtime: React Native
 from `globalThis` or injected. ESM, no runtime dependencies.
 
 ```sh
-npm install @clickfix/visitor-core
+npm install @getclickfix/visitor-core
 ```
 
 Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes:
@@ -27,7 +27,7 @@ webview) cannot use a key; a webview continues the session over the bridge
 instead.
 
 ```ts
-import { createVisitorClient, createRealtime } from '@clickfix/visitor-core';
+import { createVisitorClient, createRealtime } from '@getclickfix/visitor-core';
 
 const client = createVisitorClient({
   mode: 'app',

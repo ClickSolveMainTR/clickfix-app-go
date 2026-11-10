@@ -1,4 +1,4 @@
-// @clickfix/visitor-core (CF-201): runs under plain Node 22 (no DOM). The
+// @getclickfix/visitor-core (CF-201): runs under plain Node 22 (no DOM). The
 // same checks hold on React Native (Hermes): the core only touches
 // globalThis.fetch/FormData/WebSocket/timers, which these tests inject.
 import {test} from 'node:test';

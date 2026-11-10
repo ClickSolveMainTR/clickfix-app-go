@@ -1,7 +1,7 @@
 # @clickfix/react-widget
 
 UI-free, typed, tree-shakable React 18+ hooks around the existing visitor API.
-The transport is [`@clickfix/visitor-core`](../visitor-core/README.md) in browser
+The transport is [`@getclickfix/visitor-core`](../visitor-core/README.md) in browser
 mode (same-origin BFF); no other runtime dependency besides the React peer.
 
 ```sh

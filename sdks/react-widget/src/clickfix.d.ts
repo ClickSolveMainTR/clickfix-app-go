@@ -312,7 +312,7 @@ export type ClickFixBridgeCommand =
   | { type: "clickfix:consent"; id?: string; granted: boolean }
   | { type: "clickfix:reset"; id?: string }
   | { type: "clickfix:get-state"; id?: string }
-  /** Continue the session the app started natively (@clickfix/visitor-core, CF-201). */
+  /** Continue the session the app started natively (@getclickfix/visitor-core, CF-201). */
   | { type: "clickfix:session"; id?: string; token: string };
 
 /** Widget -> host messages of the webview bridge. */

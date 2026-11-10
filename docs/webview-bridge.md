@@ -2,6 +2,8 @@
 
 Mobil uygulamaların widget'ı **oturumu taşıyan güvenli bir webview** içinde göstermesi için uygulama ile widget arasındaki `postMessage` sözleşmesi. Müşteri ekibinin kararı (issue #114, 9 Kas): mobil yol tam SDK değil, bu webview'dir; böylece Flutter, React Native, iOS, Android ve diğer platformlar aynı yolla bağlanır. İleride çıkacak yerel paketler (CF-201 altyapı, CF-202 React Native, CF-203 Flutter) de bu sözleşmeyi kullanır.
 
+Uygulama tarafı paketler: Flutter `clickfix_webview` (`sdks/flutter/clickfix_webview`, CF-203) sözleşmeyi `ClickFixController` + `ClickFixWebView` olarak uygular ve `dart analyze` / `flutter test` ile doğrulanır.
+
 Uygulama: `frontend/widget-sdk/src/shared/bridge.ts` (saf, birim testli: `frontend/widget-sdk/tests/bridge.test.mjs`) ve `frontend/widget-sdk/src/widget.ts` (`attachBridge`). Barındırılan sayfa: `frontend/public/widget-embed.html`. Tipler: `frontend/public/widget.d.ts` (`ClickFixBridgeCommand`, `ClickFixBridgeMessage`, `ClickFixBridge`). Kullanıcı kılavuzu: `frontend/content/docs/tr/integration-guide.mdx` → "Mobil".
 
 ## Sürüm
@@ -11,7 +13,7 @@ Uygulama: `frontend/widget-sdk/src/shared/bridge.ts` (saf, birim testli: `fronte
 | Belge sürümü | İş | Değişiklik |
 |---|---|---|
 | 1.0 | CF-199 | İlk sözleşme: sekiz komut, `ready` / `event` / `link` / `result` mesajları. |
-| 1.1 | CF-201 | Geriye uyumlu ekleme, `bridge_version` 1 kaldı: `clickfix:session` komutu ve mesajı (yerel SDK ile iki yönlü oturum devri); tipler `@clickfix/visitor-core` paketinde de yayımlanır ("SDK çekirdeği ile paylaşım"). |
+| 1.1 | CF-201 | Geriye uyumlu ekleme, `bridge_version` 1 kaldı: `clickfix:session` komutu ve mesajı (yerel SDK ile iki yönlü oturum devri); tipler `@getclickfix/visitor-core` paketinde de yayımlanır ("SDK çekirdeği ile paylaşım"). |
 
 ## Açma
 
@@ -34,7 +36,7 @@ Widget → uygulama yönünde widget, sayfada bulduğu **ilk** yerel nesneyi kul
 | React Native (`react-native-webview`) | `window.ReactNativeWebView` | `.postMessage(jsonString)` → `onMessage` |
 | iOS (WKWebView) | `window.webkit.messageHandlers.ClickFix` | `.postMessage(jsonString)` → `WKScriptMessageHandler` (ad: `ClickFix`) |
 | Android (WebView) | `window.ClickFixAndroid` | `.postMessage(jsonString)` → `@JavascriptInterface` (ad: `ClickFixAndroid`) |
-| Flutter (`webview_flutter`) | `window.ClickFixFlutter` | `.postMessage(jsonString)` → `JavaScriptChannel` (ad: `ClickFixFlutter`) |
+| Flutter (`webview_flutter`; hazır paket: `clickfix_webview`, `sdks/flutter/clickfix_webview`, CF-203) | `window.ClickFixFlutter` | `.postMessage(jsonString)` → `JavaScriptChannel` (ad: `ClickFixFlutter`) |
 | Üst çerçeve (iframe) | `window.parent` | `.postMessage(obj, origin)`; yalnız `bridge.origin` verilmişse, `"*"` asla |
 
 Yerel nesneler JSON **metin** alır; üst çerçeve yapılandırılmış nesne alır. Hiçbiri yoksa köprü yine kurulur (komutlar işler) ama dışarı mesaj gitmez ve `ClickFixBridge.transport` `null` olur.
@@ -63,7 +65,7 @@ Her komut bir JSON nesnesidir; `type` zorunlu, `id` isteğe bağlıdır (≤128 
 | `clickfix:consent` | `granted` (boolean) | `ClickFix("consent", granted)`; `false` saklanan her şeyi siler | yok |
 | `clickfix:reset` | – | `ClickFix("reset")`: ziyaretçi unutulur (çıkışta) | yok |
 | `clickfix:get-state` | – | – | `ClickFixState` (`open`, `view`, `unread`, `verified`, `visitor_id`, …) |
-| `clickfix:session` | `token` (≤2048) | Uygulamanın yerel çekirdekle (`@clickfix/visitor-core`, uygulama anahtarı) başlattığı ziyaretçi oturumunu devralır: belirteçle yeniden bootstrap olur, aynı ziyaretçi ve konuşmalar gelir; `identify` olayı yayınlanır. Geçersiz belirteç yabancı gibi yeni ziyaretçi başlatır (hata değil). Önizlemede yok sayılır | yok |
+| `clickfix:session` | `token` (≤2048) | Uygulamanın yerel çekirdekle (`@getclickfix/visitor-core`, uygulama anahtarı) başlattığı ziyaretçi oturumunu devralır: belirteçle yeniden bootstrap olur, aynı ziyaretçi ve konuşmalar gelir; `identify` olayı yayınlanır. Geçersiz belirteç yabancı gibi yeni ziyaretçi başlatır (hata değil). Önizlemede yok sayılır | yok |
 
 Doğrulama `parseCommand` içindedir: `user_id` (≤200) ve `user_hash` (≤128) zorunlu; `session.token` boş olamaz; `name/email/phone/company.*` ≤255; `attributes` yalnız düz değerler (string/number/boolean, anahtar ≤100); fazlalıklar atılır. Hatalı mesajda `id` varsa `clickfix:result` `ok:false` döner; **mesaj içeriği hiçbir zaman** sonuca, konsola ya da `error` olayına yazılmaz.
 
@@ -91,7 +93,7 @@ Mobil SDK'lar (CF-202 React Native, CF-203 Flutter) widget uçlarını webview o
 |---|---|
 | `frontend/widget-sdk/src/shared/bridge.ts` | Widget tarafı: `parseCommand`, `createBridge` (çalıştırır ve doğrular) |
 | `frontend/public/widget.d.ts` → `sdks/react-widget/src/clickfix.d.ts` | Entegratörün gördüğü `ClickFixBridgeCommand` / `ClickFixBridgeMessage` |
-| `sdks/visitor-core/src/bridge.ts` (`@clickfix/visitor-core`) | Uygulama tarafı: `BridgeCommand`, `BridgeMessage`, `encodeCommand`, `commandScript` (`injectJavaScript` için), `parseMessage` (widget dışı mesajları eler), `isSafeLink` |
+| `sdks/visitor-core/src/bridge.ts` (`@getclickfix/visitor-core`) | Uygulama tarafı: `BridgeCommand`, `BridgeMessage`, `encodeCommand`, `commandScript` (`injectJavaScript` için), `parseMessage` (widget dışı mesajları eler), `isSafeLink` |
 
 **Oturum devri, uygulama → webview.** Uygulama çekirdekle oturumu başlatır, webview'i açar ve belirteci devreder:
 

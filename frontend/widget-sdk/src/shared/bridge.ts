@@ -8,7 +8,7 @@
  * Host -> widget messages are "commands" (`type` starts with `clickfix:`);
  * widget -> host messages are `clickfix:ready`, `clickfix:event`,
  * `clickfix:link`, `clickfix:session` and, for commands that carry an
- * `id`, `clickfix:result`. The same types ship in @clickfix/visitor-core
+ * `id`, `clickfix:result`. The same types ship in @getclickfix/visitor-core
  * (sdks/visitor-core/src/bridge.ts) for native SDKs; a test keeps them equal.
  */
 
@@ -48,7 +48,7 @@ export type BridgeCommand =
   | { type: "clickfix:get-state"; id?: string }
   /**
    * Continue the visitor session the app started natively (CF-201: the
-   * app's `@clickfix/visitor-core` client with an app key). The widget
+   * app's `@getclickfix/visitor-core` client with an app key). The widget
    * resumes that visitor instead of starting a stranger.
    */
   | { type: "clickfix:session"; id?: string; token: string };

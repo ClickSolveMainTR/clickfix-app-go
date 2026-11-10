@@ -1,6 +1,6 @@
 'use client';
 // UI-free visitor client for React (CF-199). The transport lives in
-// @clickfix/visitor-core (CF-201): this package only binds it to React in
+// @getclickfix/visitor-core (CF-201): this package only binds it to React in
 // browser mode (same-origin BFF, the page origin is the credential).
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
@@ -9,11 +9,11 @@ import {
   type AbortSignalLike,
   type FileInput,
   type VisitorClientOptions,
-} from '@clickfix/visitor-core';
-export type { paths, components } from '@clickfix/visitor-core';
+} from '@getclickfix/visitor-core';
+export type { paths, components } from '@getclickfix/visitor-core';
 export type {
   Bootstrap, Visitor, Conversation, MessagePage, SendInput, IdentifyInput, HelpResult, Session,
-} from '@clickfix/visitor-core';
+} from '@getclickfix/visitor-core';
 /** Error of a visitor API call (`status`, `code`); the core's VisitorError. */
 export const WidgetError = VisitorError;
 export type WidgetError = VisitorError;
