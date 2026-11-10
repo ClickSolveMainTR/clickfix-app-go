@@ -117,13 +117,13 @@ T10 kapsamındaki ekranlar (her biri ayrı satır olarak taşınır):
 
 | # | Ekran ve rota | Dosya | Veri | Ek not | Durum |
 |---|---|---|---|---|---|
-| T10a | Abonelikler `/platform/billing` | `billing/components/platform/subscriptions-panel.tsx:214` | Sunucu, 20'şer, `q` + durum | Elle arama ve `Select` filtre | |
-| T10b | Ödemeler `/platform/billing` | `billing/components/platform/payments-panel.tsx:300` | Sunucu, 20'şer, durum | Satır işlemi: iade | |
-| T10c | Havaleler `/platform/billing` | `billing/components/platform/transfers-panel.tsx:238` | Sunucu, 20'şer, durum | Onayla / reddet elle `Dialog` | |
-| T10d | Planlar `/platform/billing` | `billing/components/platform/plans-panel.tsx:303` | Sunucu, 50'şer | Satıra tıkla → plan düzenleyici | |
-| T10e | Banka hesapları `/platform/billing` | `billing/components/platform/bank-accounts-panel.tsx:132` | Sayfasız | | |
-| T10f | Kredi ürünleri `/platform/billing` | `billing/components/platform/catalog/credit-products-panel.tsx:285` | Sayfasız; birime göre 3 ayrı tablo | Üç ayrı `DataTable` olarak kalabilir | |
-| T10g | Organizasyon cüzdanı `/platform/organizations/[uuid]` → Cüzdan | `billing/components/platform/organization-wallet-tab.tsx:355` | Sunucu sayfalı | | |
+| T10a | Abonelikler `/platform/billing` | `billing/components/platform/subscriptions-panel.tsx:214` | Sunucu, 20'şer, `q` + durum | Elle arama ve `Select` filtre | taşındı (PR #126) |
+| T10b | Ödemeler `/platform/billing` | `billing/components/platform/payments-panel.tsx:300` | Sunucu, 20'şer, durum | Satır işlemi: iade | taşındı (PR #126) |
+| T10c | Havaleler `/platform/billing` | `billing/components/platform/transfers-panel.tsx:238` | Sunucu, 20'şer, durum | Onayla / reddet elle `Dialog` | taşındı (PR #126) |
+| T10d | Planlar `/platform/billing` | `billing/components/platform/plans-panel.tsx:303` | Sunucu, 50'şer | Satıra tıkla → plan düzenleyici | taşındı (PR #126) |
+| T10e | Banka hesapları `/platform/billing` | `billing/components/platform/bank-accounts-panel.tsx:132` | Sayfasız | | taşındı (PR #126) |
+| T10f | Kredi ürünleri `/platform/billing` | `billing/components/platform/catalog/credit-products-panel.tsx:285` | Sayfasız; birime göre 3 ayrı tablo | Üç ayrı `DataTable` olarak kalabilir | taşındı (PR #126) |
+| T10g | Organizasyon cüzdanı `/platform/organizations/[uuid]` → Cüzdan | `billing/components/platform/organization-wallet-tab.tsx:355` | Sunucu sayfalı | | taşındı (PR #126) |
 | T10h | Faturalar `/billing` | `billing/components/portal/billing-portal-page.tsx:558` | Sunucu, 10'ar | Satır işlemi: öde, PDF | |
 | T10i | Kredi hareketleri `/billing` | `billing/components/portal/wallet/wallet-ledger-card.tsx:106` | Sunucu sayfalı | | |
 
