@@ -504,6 +504,13 @@ type AuthSetting struct {
 	SignupMode              string             `json:"signup_mode"`
 }
 
+type AutoReply struct {
+	OrganizationID int64              `json:"organization_id"`
+	Settings       []byte             `json:"settings"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AutomationExecution struct {
 	ID               int64              `json:"id"`
 	Uuid             uuid.UUID          `json:"uuid"`
@@ -1287,7 +1294,6 @@ type Brand struct {
 	HelpPath         string             `json:"help_path"`
 	WidgetDefaults   []byte             `json:"widget_defaults"`
 	Signature        string             `json:"signature"`
-	BusinessHours    []byte             `json:"business_hours"`
 	SlaPolicyID      pgtype.UUID        `json:"sla_policy_id"`
 	AiPersona        string             `json:"ai_persona"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`

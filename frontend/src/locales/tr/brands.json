@@ -70,5 +70,6 @@
   "article.hint": "Makaleyi seçilen markanın yardım merkezine atar.",
   "article.assign": "Markaya ata",
   "filter.title": "Marka",
-  "filter.all": "Tüm markalar"
+  "filter.all": "Tüm markalar",
+  "widget.hours_source": "Çalışma saatleri markaya göre değişmez: widget durumu, AI ve SLA aynı organizasyon takvimini kullanır (SLA > Çalışma saatleri)."
 }

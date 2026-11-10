@@ -1,22 +1,25 @@
 import {
+  BookOpen,
+  Bot,
   Building2,
-  Code2,
-  MessagesSquare,
   Plug,
-  UsersRound,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
 import type { OnboardingStepKey } from "../services/onboarding.service";
 
-/** Checklist steps in order, with their icon (copy: onboarding.steps.*). */
+/**
+ * Checklist steps in the set-up order (CF-198), with their icon (copy:
+ * onboarding.steps.*). The API decides the order; this is only the look.
+ */
 export const ONBOARDING_STEPS: { key: OnboardingStepKey; icon: LucideIcon }[] =
   [
-    { key: "organization", icon: Building2 },
-    { key: "channel", icon: Plug },
-    { key: "team", icon: UsersRound },
-    { key: "widget", icon: Code2 },
-    { key: "first_conversation", icon: MessagesSquare },
+    { key: "customer", icon: Building2 },
+    { key: "system", icon: Plug },
+    { key: "ai", icon: Bot },
+    { key: "knowledge", icon: BookOpen },
+    { key: "automation", icon: Workflow },
   ];
 
 export function stepIcon(key: OnboardingStepKey): LucideIcon {

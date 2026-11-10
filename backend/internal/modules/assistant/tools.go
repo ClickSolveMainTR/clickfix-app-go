@@ -33,7 +33,7 @@ func (s *Service) tools(surface string) []ai.Tool {
 		},
 		{
 			Name:        ToolSetupState,
-			Description: "Read what this organization has configured (channels, members, business hours, SLA, AI, widget, help center, mobile app) and the missing set-up steps.",
+			Description: "Read what this organization has configured and the missing set-up steps in the required order (customer, system, AI, knowledge base, automation and SLA): missing_steps are step.condition keys, skipped_steps were skipped on purpose and stay as warnings, next_step is what to do now.",
 			Schema:      map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{}},
 		},
 	}

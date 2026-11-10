@@ -7,6 +7,7 @@ import { DataTablePagination } from "@/components/tables/data-table-pagination";
 import { DataTableToolbar } from "@/components/tables/data-table-toolbar";
 import { GridView } from "@/components/tables/grid-view";
 import { tableEmptyPageFallback } from "@/components/tables/empty-page";
+import { createExpandColumnDef } from "@/components/tables/expand-column";
 import { createReorderColumnDef } from "@/components/tables/reorder-column";
 import { reorderRowsById } from "@/components/tables/reorder-rows";
 import { TableView } from "@/components/tables/table-view";
@@ -40,6 +41,8 @@ export function DataTable<TData>({
   onCellEdit,
   onExportReady,
   onRowClick,
+  renderSubRow,
+  getRowCanExpand,
   className,
 }: DataTableProps<TData>) {
   const { t } = useLocale();
@@ -66,10 +69,17 @@ export function DataTable<TData>({
     !forceMobileCardsPreview;
   const reorderMode = canReorder && reorderModeRequested;
 
+  // Detail rows close while rows are dragged: a row under a row would get in
+  // the way of the drop targets.
+  const expandable = Boolean(renderSubRow) && !reorderMode;
+
   const columnsWithReorder = useMemo(() => {
-    if (!reorderMode) return columns;
-    return [createReorderColumnDef<TData>(), ...columns];
-  }, [columns, reorderMode]);
+    const lead = [
+      ...(reorderMode ? [createReorderColumnDef<TData>()] : []),
+      ...(expandable ? [createExpandColumnDef<TData>()] : []),
+    ];
+    return lead.length ? [...lead, ...columns] : columns;
+  }, [columns, reorderMode, expandable]);
 
   const {
     table,
@@ -89,6 +99,7 @@ export function DataTable<TData>({
     initialState,
     pageCount,
     rowCount,
+    getRowCanExpand: expandable ? (getRowCanExpand ?? (() => true)) : undefined,
   });
 
   // An empty page past the first one (last row deleted, list shrank on
@@ -219,6 +230,7 @@ export function DataTable<TData>({
             mobile={forceMobileCards}
             onRowClick={reorderMode ? undefined : onRowClick}
             rowHintId={rowHintId}
+            renderSubRow={expandable ? renderSubRow : undefined}
           />
         )
       ) : (
@@ -247,6 +259,7 @@ export function DataTable<TData>({
           onCellEdit={onCellEdit}
           onRowClick={reorderMode ? undefined : onRowClick}
           rowHintId={rowHintId}
+          renderSubRow={expandable ? renderSubRow : undefined}
         />
       )}
 

@@ -1,15 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Award, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Plus } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
+import { EntityTable } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { isApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
@@ -43,7 +44,7 @@ export function RulesTab({
     queryKey: key,
     queryFn: () => coachingService.rules(slug),
   });
-  const list = rules.data ?? [];
+  const list = useMemo(() => rules.data ?? [], [rules.data]);
 
   const save = useMutation({
     mutationFn: (body: GameRuleInput) => coachingService.saveRule(slug, body),
@@ -56,29 +57,128 @@ export function RulesTab({
     },
   });
 
-  const toggle = (rule: GameRule, enabled: boolean) =>
-    save.mutate({
-      name: rule.name,
-      metric: rule.metric,
-      threshold: rule.threshold,
-      points: rule.points,
-      min_samples: rule.min_samples,
-      enabled,
-    });
+  const { mutate } = save;
+  const toggle = useCallback(
+    (rule: GameRule, enabled: boolean) =>
+      mutate({
+        name: rule.name,
+        metric: rule.metric,
+        threshold: rule.threshold,
+        points: rule.points,
+        min_samples: rule.min_samples,
+        enabled,
+      }),
+    [mutate],
+  );
 
-  if (rules.isLoading) return <Loading label={t("common.loading")} />;
-  if (rules.isError)
-    return (
-      <ErrorState
-        title={t("coaching.error.title")}
-        description={
-          isApiError(rules.error)
-            ? rules.error.message
-            : t("coaching.error.description")
-        }
-        onRetry={() => void rules.refetch()}
-      />
-    );
+  const columns = useMemo(() => {
+    // A switched-off rule stays listed, dimmed.
+    const dim = (r: GameRule) => cn(!r.enabled && "opacity-60");
+    return [
+      createColumn<GameRule>({
+        accessorKey: "name",
+        labelKey: "coaching.rules.name",
+        enableHiding: false,
+        gridPrimary: true,
+        cell: ({ row }) => (
+          <span
+            className={cn(
+              "block max-w-[14rem] truncate font-medium",
+              dim(row.original),
+            )}
+          >
+            {row.original.name}
+          </span>
+        ),
+      }),
+      createColumn<GameRule>({
+        id: "metric",
+        accessorFn: (r) => t(`coaching.metric.${r.metric}`),
+        labelKey: "coaching.rules.metric",
+        cell: ({ row, getValue }) => (
+          <span className={dim(row.original)}>{getValue() as string}</span>
+        ),
+      }),
+      createColumn<GameRule>({
+        accessorKey: "threshold",
+        labelKey: "coaching.rules.threshold",
+        searchable: false,
+        cell: ({ row }) => (
+          <span
+            className={cn("whitespace-nowrap tabular-nums", dim(row.original))}
+          >
+            {thresholdLabel(
+              row.original.metric,
+              row.original.threshold,
+              locale,
+            )}
+          </span>
+        ),
+      }),
+      createColumn<GameRule>({
+        accessorKey: "points",
+        labelKey: "coaching.rules.points",
+        searchable: false,
+        meta: {
+          headerClassName: "text-right",
+          cellClassName: "text-right tabular-nums",
+        },
+        cell: ({ row }) => (
+          <span className={dim(row.original)}>
+            {formatScore(row.original.points, locale, 0)}
+          </span>
+        ),
+      }),
+      createColumn<GameRule>({
+        accessorKey: "min_samples",
+        labelKey: "coaching.rules.min_samples",
+        searchable: false,
+        meta: {
+          headerClassName: "text-right",
+          cellClassName: "text-right tabular-nums",
+        },
+        cell: ({ row }) => (
+          <span className={dim(row.original)}>
+            {formatScore(row.original.min_samples, locale, 0)}
+          </span>
+        ),
+      }),
+      createColumn<GameRule>({
+        accessorKey: "enabled",
+        labelKey: "coaching.rules.enabled",
+        searchable: false,
+        cell: ({ row }) => (
+          <Switch
+            checked={row.original.enabled}
+            disabled={!canWrite || save.isPending}
+            aria-label={t("coaching.rules.enabled")}
+            onCheckedChange={(v) => toggle(row.original, v)}
+          />
+        ),
+      }),
+      ...(canWrite
+        ? [
+            createColumn<GameRule>({
+              id: "actions",
+              labelKey: "common.actions",
+              enableHiding: false,
+              enableSorting: false,
+              meta: { headerClassName: "w-12", cellClassName: "w-12" },
+              cell: ({ row }) => (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={t("coaching.rules.edit")}
+                  onClick={() => setEditing(row.original)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              ),
+            }),
+          ]
+        : []),
+    ] as ColumnDef<GameRule, unknown>[];
+  }, [canWrite, locale, save.isPending, t, toggle]);
 
   return (
     <div className="space-y-4">
@@ -97,82 +197,31 @@ export function RulesTab({
         )}
       </div>
 
-      {list.length === 0 ? (
-        <EmptyState
-          icon={<Award className="size-6" />}
-          title={t("coaching.rules.empty_title")}
-          description={t("coaching.rules.empty")}
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[40rem] text-sm">
-            <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  {t("coaching.rules.name")}
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  {t("coaching.rules.metric")}
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  {t("coaching.rules.threshold")}
-                </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
-                  {t("coaching.rules.points")}
-                </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
-                  {t("coaching.rules.min_samples")}
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  {t("coaching.rules.enabled")}
-                </th>
-                {canWrite && <th scope="col" className="w-12" />}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {list.map((r) => (
-                <tr key={r.uuid} className={r.enabled ? "" : "opacity-60"}>
-                  <td className="max-w-[14rem] truncate px-3 py-2 font-medium">
-                    {r.name}
-                  </td>
-                  <td className="px-3 py-2">
-                    {t(`coaching.metric.${r.metric}`)}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap tabular-nums">
-                    {thresholdLabel(r.metric, r.threshold, locale)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatScore(r.points, locale, 0)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatScore(r.min_samples, locale, 0)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Switch
-                      checked={r.enabled}
-                      disabled={!canWrite || save.isPending}
-                      aria-label={t("coaching.rules.enabled")}
-                      onCheckedChange={(v) => toggle(r, v)}
-                    />
-                  </td>
-                  {canWrite && (
-                    <td className="px-2 py-2">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t("coaching.rules.edit")}
-                        onClick={() => setEditing(r)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <EntityTable
+        columns={columns}
+        data={list}
+        getRowId={(r) => r.uuid}
+        isLoading={rules.isLoading}
+        isError={rules.isError}
+        errorTitle={t("coaching.error.title")}
+        errorDescription={
+          isApiError(rules.error)
+            ? rules.error.message
+            : t("coaching.error.description")
+        }
+        onRetry={() => void rules.refetch()}
+        emptyTitle={t("coaching.rules.empty_title")}
+        emptyDescription={t("coaching.rules.empty")}
+        // One unpaged list (at most 100 rules): search, sort and pages in the
+        // browser.
+        manual={{ filtering: false, sorting: false, pagination: false }}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+        features={{
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+      />
       <p className="text-muted-foreground text-xs">
         {t("coaching.rules.hint")}
       </p>

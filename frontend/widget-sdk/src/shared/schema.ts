@@ -63,16 +63,6 @@ export const URL_OPS = [
 ] as const;
 export const COUNTRY_MODES = ["all", "allow", "block"] as const;
 export const PERSISTENCES = ["local", "session", "memory"] as const;
-export const PRECHAT_TYPES = [
-  "text",
-  "textarea",
-  "email",
-  "phone",
-  "number",
-  "select",
-  "checkbox",
-] as const;
-export const FIELD_MODES = ["required", "optional", "hidden"] as const;
 export const DAY_KEYS = [
   "sun",
   "mon",
@@ -87,25 +77,14 @@ export const LIMITS = {
   triggers: 20,
   quickReplies: 8,
   homeCards: 12,
-  preChatFields: 10,
   mappings: 50,
   urlRules: 20,
   customCSS: 8000,
 } as const;
 
-export type FieldMode = (typeof FIELD_MODES)[number];
 export type DayKey = (typeof DAY_KEYS)[number];
 export type Period = { start: string; end: string };
 export type URLRule = { op: (typeof URL_OPS)[number]; value: string };
-
-export type PreChatField = {
-  key: string;
-  label: Localized;
-  type: (typeof PRECHAT_TYPES)[number];
-  required: boolean;
-  options: string[];
-  attribute: string;
-};
 
 export type Launcher = {
   icon: (typeof LAUNCHER_ICONS)[number];
@@ -214,23 +193,20 @@ export type WidgetSettings = {
   greeting_text: string;
   show_team: boolean;
   team_member_uuids: string[];
+  /**
+   * The pre-chat form is one of the organization's request forms (CF-198):
+   * `form_uuid` picks it ("" = the first active widget form); the bootstrap
+   * serves it as `request_form`. The widget keeps the switch and consent.
+   */
   prechat: {
     enabled: boolean;
-    name: FieldMode;
-    email: FieldMode;
-    phone: FieldMode;
-    fields: PreChatField[];
+    form_uuid: string;
     consent: {
       enabled: boolean;
       required: boolean;
       text: Localized;
       url: string;
     };
-  };
-  business_hours: {
-    enabled: boolean;
-    timezone: string;
-    days: Partial<Record<DayKey, Period[]>>;
   };
   offline_message: string;
   allowed_domains: string[];
@@ -321,13 +297,9 @@ export function defaults(): WidgetSettings {
     team_member_uuids: [],
     prechat: {
       enabled: true,
-      name: "optional",
-      email: "optional",
-      phone: "hidden",
-      fields: [],
+      form_uuid: "",
       consent: { enabled: false, required: true, text: {}, url: "" },
     },
-    business_hours: { enabled: false, timezone: "Europe/Istanbul", days: {} },
     offline_message: "",
     allowed_domains: [],
     require_identity: false,
@@ -423,6 +395,8 @@ type Obj = Record<string, unknown>;
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
 const CLOCK_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const KEY_RE = /^[a-z][a-z0-9_]{0,39}$/;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CC_RE = /^[A-Z]{2}$/;
 const HANDLE_RE = /^[A-Za-z0-9_.]{2,64}$/;
 
@@ -556,28 +530,8 @@ export function normalize(raw: unknown): WidgetSettings {
   const pc = obj(r.prechat);
   if (pc) {
     s.prechat.enabled = bool(pc.enabled, true);
-    s.prechat.name = oneOf(pc.name, FIELD_MODES, "optional");
-    s.prechat.email = oneOf(pc.email, FIELD_MODES, "optional");
-    s.prechat.phone = oneOf(pc.phone, FIELD_MODES, "hidden");
-    const seen = new Set(["name", "email", "phone", "message"]);
-    for (const f of arr(pc.fields).map(obj)) {
-      if (!f || s.prechat.fields.length >= LIMITS.preChatFields) continue;
-      const field: PreChatField = {
-        key: str(f.key, 40),
-        label: localized(f.label, 100),
-        type: oneOf(f.type, PRECHAT_TYPES, "text"),
-        required: bool(f.required, false),
-        options: strList(f.options, 30, 80),
-        attribute: str(f.attribute, 40),
-      };
-      if (!KEY_RE.test(field.key) || seen.has(field.key)) continue;
-      if (!Object.keys(field.label).length) continue;
-      if (field.type === "select" && !field.options.length) continue;
-      if (field.attribute && !KEY_RE.test(field.attribute))
-        field.attribute = "";
-      seen.add(field.key);
-      s.prechat.fields.push(field);
-    }
+    const id = str(pc.form_uuid, 36);
+    s.prechat.form_uuid = UUID_RE.test(id) ? id : "";
     const c = obj(pc.consent);
     if (c)
       s.prechat.consent = {
@@ -586,26 +540,6 @@ export function normalize(raw: unknown): WidgetSettings {
         text: localized(c.text, 500),
         url: safeURL(c.url),
       };
-  }
-
-  const bh = obj(r.business_hours);
-  if (bh) {
-    s.business_hours.enabled = bool(bh.enabled, false);
-    s.business_hours.timezone = str(bh.timezone, 64) || "Europe/Istanbul";
-    const days = obj(bh.days);
-    if (days)
-      for (const d of DAY_KEYS) {
-        const periods = arr(days[d])
-          .map(obj)
-          .filter((p): p is Obj => !!p)
-          .map((p) => ({ start: str(p.start, 5), end: str(p.end, 5) }))
-          .filter(
-            (p) =>
-              CLOCK_RE.test(p.start) && CLOCK_RE.test(p.end) && p.start < p.end,
-          )
-          .slice(0, 4);
-        if (periods.length) s.business_hours.days[d] = periods;
-      }
   }
 
   const a = obj(r.appearance);

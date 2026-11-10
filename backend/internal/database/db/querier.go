@@ -606,6 +606,8 @@ type Querier interface {
 	ContactCustomFieldsByID(ctx context.Context, arg ContactCustomFieldsByIDParams) ([]byte, error)
 	ContactUnknownValues(ctx context.Context, arg ContactUnknownValuesParams) ([]ContactUnknownValuesRow, error)
 	ContactsWithUnknownField(ctx context.Context, arg ContactsWithUnknownFieldParams) ([]ContactsWithUnknownFieldRow, error)
+	// Whether the AI agent answered the customer in this conversation.
+	ConversationHasAIReply(ctx context.Context, arg ConversationHasAIReplyParams) (bool, error)
 	ConversationHasParent(ctx context.Context, arg ConversationHasParentParams) (bool, error)
 	// Sidebar badges of the inbox for one agent (open work only).
 	ConversationInboxCounts(ctx context.Context, arg ConversationInboxCountsParams) (ConversationInboxCountsRow, error)
@@ -634,6 +636,9 @@ type Querier interface {
 	CountChannelVoiceCalls(ctx context.Context, arg CountChannelVoiceCallsParams) (int64, error)
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
 	CountCompaniesBySLAPolicy(ctx context.Context, organizationID int64) ([]CountCompaniesBySLAPolicyRow, error)
+	// Inbound messages the contact sent in a conversation (the first one gets
+	// the acknowledgement).
+	CountContactMessages(ctx context.Context, arg CountContactMessagesParams) (int64, error)
 	CountContacts(ctx context.Context, arg CountContactsParams) (int64, error)
 	CountConversations(ctx context.Context, arg CountConversationsParams) (int64, error)
 	CountCustomFieldDefinitions(ctx context.Context, arg CountCustomFieldDefinitionsParams) (int64, error)
@@ -940,6 +945,8 @@ type Querier interface {
 	GetAppSettings(ctx context.Context) (AppSetting, error)
 	GetAttachmentByUUID(ctx context.Context, arg GetAttachmentByUUIDParams) (Attachment, error)
 	GetAuthSettings(ctx context.Context) (GetAuthSettingsRow, error)
+	// Automatic customer replies (CF-198): one settings row per organization.
+	GetAutoReplySettings(ctx context.Context, organizationID int64) ([]byte, error)
 	GetAutomationExecution(ctx context.Context, arg GetAutomationExecutionParams) (AutomationExecution, error)
 	GetAutomationRule(ctx context.Context, arg GetAutomationRuleParams) (AutomationRule, error)
 	GetBrand(ctx context.Context, arg GetBrandParams) (Brand, error)
@@ -1271,6 +1278,9 @@ type Querier interface {
 	KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdateArticleParams) (KnowledgeArticle, error)
 	KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidChunksParams) ([]KnowledgeValidChunksRow, error)
 	KnowledgeVersions(ctx context.Context, arg KnowledgeVersionsParams) ([]KnowledgeArticleVersion, error)
+	// When the last automatic reply of one kind was posted in a conversation
+	// (NULL when none).
+	LastAutoReplyAt(ctx context.Context, arg LastAutoReplyAtParams) (pgtype.Timestamptz, error)
 	LastEmailDeliveryError(ctx context.Context) (string, error)
 	LastSideMessageExternalID(ctx context.Context, arg LastSideMessageExternalIDParams) (string, error)
 	LatestMessageID(ctx context.Context, arg LatestMessageIDParams) (int64, error)
@@ -1743,7 +1753,9 @@ type Querier interface {
 	OpsTranscript(ctx context.Context, arg OpsTranscriptParams) ([]OpsTranscriptRow, error)
 	OrganizationCounts(ctx context.Context, since pgtype.Timestamptz) (OrganizationCountsRow, error)
 	OrganizationMemberUserUUIDs(ctx context.Context, arg OrganizationMemberUserUUIDsParams) ([]uuid.UUID, error)
-	OrganizationOnboardingCounts(ctx context.Context, organizationID int64) (OrganizationOnboardingCountsRow, error)
+	// The facts behind the set-up checklist (CF-198): one row per
+	// organization, read by the onboarding checklist and the assistant.
+	OrganizationSetupCounts(ctx context.Context, organizationID int64) (OrganizationSetupCountsRow, error)
 	// Platform health (CF-14): platform-wide aggregates for staff. These read
 	// across organizations on purpose (platform.organizations.read).
 	OutboxHealth(ctx context.Context) (OutboxHealthRow, error)
@@ -2116,6 +2128,7 @@ type Querier interface {
 	UpdateWidgetContactProfile(ctx context.Context, arg UpdateWidgetContactProfileParams) error
 	UpdateWidgetSession(ctx context.Context, arg UpdateWidgetSessionParams) (WidgetSession, error)
 	UpsertAgentPresence(ctx context.Context, arg UpsertAgentPresenceParams) (AgentPresence, error)
+	UpsertAutoReplySettings(ctx context.Context, arg UpsertAutoReplySettingsParams) error
 	UpsertChannelVoiceCall(ctx context.Context, arg UpsertChannelVoiceCallParams) error
 	UpsertCompanyHealth(ctx context.Context, arg UpsertCompanyHealthParams) (CompanyHealth, error)
 	UpsertCompanyHealthSettings(ctx context.Context, arg UpsertCompanyHealthSettingsParams) (CompanyHealthSetting, error)

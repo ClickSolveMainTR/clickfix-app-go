@@ -7085,11 +7085,12 @@ paths:
       summary: Update the organization profile
       description: |
         `tenant.settings.write`. Any subset of `name`, `timezone`, `locale`,
-        `currency`, `country_code`, `company`, `business_hours`, `branding`;
-        objects are replaced whole. Slug, status and access window are
-        platform-managed. Invalid fields answer `422 VALIDATION_ERROR` with
-        `details[].field` paths such as `company.tax_number` or
-        `business_hours.days.2.end`.
+        `currency`, `country_code`, `company`, `branding`; objects are
+        replaced whole. Working hours are the SLA schedule
+        (`/v1/tenant/sla/business-hours`, CF-198). Slug, status and access
+        window are platform-managed. Invalid fields answer
+        `422 VALIDATION_ERROR` with `details[].field` paths such as
+        `company.tax_number`.
       security:
         - bearerAuth: []
       parameters:
@@ -7402,12 +7403,15 @@ paths:
       operationId: getTenantOnboarding
       summary: Set-up checklist of the organization
       description: |
-        Steps in order: `organization`, `channel`, `team`, `widget`,
-        `first_conversation`. Channels, members, invitations and
-        conversations tick their steps automatically; `manual` steps can
-        also be confirmed by hand. Organizations not opened through
-        self-serve have no checklist (`active=false`, empty `steps`).
-        Requires `tenant.settings.read`.
+        Steps in the set-up order (CF-198): `customer` (identity key,
+        external identity, package, company profile), `system` (connected
+        customer system), `ai` (AI on, a published procedure), `knowledge`
+        (articles), `automation` (an SLA policy and an automation rule or
+        workflow). Every step lists its `conditions`; a step is `done` when
+        all of them hold, and the product observes them itself. A skipped
+        step keeps `skipped=true` and stays as a warning. Organizations not
+        opened through self-serve have no checklist (`active=false`, empty
+        `steps`). Requires `tenant.settings.read`.
       security:
         - bearerAuth: []
       parameters:
@@ -7428,15 +7432,16 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /v1/tenant/onboarding/steps/{step}:
+  /v1/tenant/onboarding/steps/{step}/skip:
     post:
       tags: [Tenant]
-      operationId: completeTenantOnboardingStep
-      summary: Confirm a manual set-up step
+      operationId: skipTenantOnboardingStep
+      summary: Skip a set-up step
       description: |
-        Ticks a manual step (`widget`, `team`). Idempotent. Unknown or
-        automatic steps answer `400 ONBOARDING_UNKNOWN_STEP`; a finished or
-        missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
+        Marks a step as skipped: it stays as a warning in the checklist and
+        in the assistant's "what did you leave out" until its conditions
+        hold. Idempotent. Unknown steps answer `400 ONBOARDING_UNKNOWN_STEP`;
+        a finished or missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
         `tenant.settings.read` and `tenant.settings.write`.
       security:
         - bearerAuth: []
@@ -7447,7 +7452,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [widget, team]
+            enum: [customer, system, ai, knowledge, automation]
       responses:
         "200":
           description: Updated checklist
@@ -12948,6 +12953,60 @@ paths:
         "422": { $ref: "#/components/responses/ValidationError" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/auto-replies:
+    get:
+      tags: [Tenant]
+      operationId: getTenantAutoReplies
+      summary: Automatic customer replies
+      description: |
+        `tenant.settings.read`. The acknowledgement a new conversation gets inside
+        working hours ("we got it, estimated reply time ..."), the out-of-hours
+        message and the AI-to-human handoff notice (CF-198). Each text has this
+        one source; the hours they follow are the SLA schedule
+        (`/v1/tenant/sla/business-hours`). Organizations that never saved their
+        own texts get the defaults.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeAutoReplySettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantAutoReplies
+      summary: Replace the automatic customer replies
+      description: |
+        `tenant.settings.write`. Replaces every text; an empty text falls back to
+        the default. The acknowledgement may contain `{eta}`, replaced with the
+        estimated reply time from the matching SLA policy's first-response
+        target (removed when no policy applies).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutoReplySettings" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeAutoReplySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/sla/business-hours:
     get:
       tags: [Tenant]
@@ -42004,7 +42063,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     ValidationError:
-      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`)"
+      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:
@@ -42861,35 +42920,21 @@ components:
     # CF-55 web widget.
     WidgetPreChat:
       type: object
-      required: [enabled, name, email, phone, fields, consent]
+      description: |
+        The pre-chat form is one of the organization's request forms (CF-198,
+        `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+        active form offered on the widget channel. The bootstrap serves the
+        chosen form as `request_form`. The widget keeps only the switch, the
+        choice and the consent box; the fields live on the form.
+      required: [enabled, form_uuid, consent]
       properties:
         enabled: { type: boolean }
-        name: { type: string, enum: [required, optional, hidden] }
-        email: { type: string, enum: [required, optional, hidden] }
-        phone: { type: string, enum: [required, optional, hidden] }
-        fields: { type: array, items: { $ref: "#/components/schemas/WidgetPreChatField" } }
+        form_uuid: { type: string, description: "Request form uuid or \"\" (first active widget form)" }
         consent: { $ref: "#/components/schemas/WidgetConsent" }
-    WidgetBusinessHours:
-      type: object
-      required: [enabled, timezone, days]
-      properties:
-        enabled: { type: boolean }
-        timezone: { type: string, examples: [Europe/Istanbul] }
-        days:
-          type: object
-          description: Keys sun..sat; each a list of opening spans.
-          additionalProperties:
-            type: array
-            items:
-              type: object
-              required: [start, end]
-              properties:
-                start: { type: string, examples: ["09:00"] }
-                end: { type: string, examples: ["18:00"] }
     WidgetPublicSettings:
       type: object
       description: The visitor-safe part of WidgetSettings (no allowlist, member ids, attribute targets or handoff keywords).
-      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, prechat, business_hours, offline_message, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, mobile, attribute_keys]
+      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, prechat, offline_message, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, mobile, attribute_keys]
       properties:
         schema_version: { type: integer }
         color: { type: string, examples: ["#4f46e5"] }
@@ -42899,7 +42944,6 @@ components:
         greeting_text: { type: string }
         show_team: { type: boolean }
         prechat: { $ref: "#/components/schemas/WidgetPreChat" }
-        business_hours: { $ref: "#/components/schemas/WidgetBusinessHours" }
         offline_message: { type: string }
         require_identity: { type: boolean }
         file_upload: { type: boolean }
@@ -42951,16 +42995,6 @@ components:
       properties:
         tr: { type: string }
         en: { type: string }
-    WidgetPreChatField:
-      type: object
-      required: [key, label, type, required, options, attribute]
-      properties:
-        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
-        label: { $ref: "#/components/schemas/WidgetLocalized" }
-        type: { type: string, enum: [text, textarea, email, phone, number, select, checkbox] }
-        required: { type: boolean }
-        options: { type: array, items: { type: string } }
-        attribute: { type: string, description: "Attribute mapping key the answer is stored under (\"\" = none)" }
     WidgetConsent:
       type: object
       required: [enabled, required, text, url]
@@ -43127,7 +43161,7 @@ components:
       description: |
         Complete (normalized) widget settings, schema version 2. Version 1 keys
         stay at the top level; stored v1 JSON reads as v2 with defaults.
-      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, team_member_uuids, prechat, business_hours, offline_message, allowed_domains, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, rate_limit, mobile, attribute_mapping]
+      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, team_member_uuids, prechat, offline_message, allowed_domains, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, rate_limit, mobile, attribute_mapping]
       properties:
         schema_version: { type: integer, enum: [2] }
         color: { type: string }
@@ -43138,7 +43172,6 @@ components:
         show_team: { type: boolean }
         team_member_uuids: { type: array, items: { type: string } }
         prechat: { $ref: "#/components/schemas/WidgetPreChat" }
-        business_hours: { $ref: "#/components/schemas/WidgetBusinessHours" }
         offline_message: { type: string }
         allowed_domains: { type: array, items: { type: string } }
         require_identity: { type: boolean }
@@ -43505,13 +43538,12 @@ components:
       properties:
         text: { type: string, maxLength: 10000 }
         client_id: { type: string, format: uuid, description: Makes retries idempotent }
-        name: { type: string, description: Pre-chat name }
-        email: { type: string, description: Pre-chat e-mail }
+        name: { type: string, description: Visitor name (older SDKs; the pre-chat form's name field is preferred) }
+        email: { type: string, description: Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) }
         page_url: { type: string }
         profile: { $ref: "#/components/schemas/WidgetProfileInput" }
-        form: { $ref: "#/components/schemas/RequestFormSubmission" }
-        phone: { type: string, description: Pre-chat phone }
-        prechat: { type: object, additionalProperties: { type: [string, number, boolean] }, description: Answers to the custom pre-chat questions (first message) }
+        form: { $ref: "#/components/schemas/RequestFormSubmission", description: The pre-chat (request) form answers of a first message (CF-198) }
+        phone: { type: string, description: Visitor phone (older SDKs) }
         consent: { type: boolean, description: GDPR/KVKK checkbox of the pre-chat form }
         intent: { type: string, enum: ["", human, callback, video], description: "human asks for a person (the AI agent hands off)" }
         attributes: { type: object, additionalProperties: true, description: SDK attributes set before the contact existed }
@@ -43529,7 +43561,6 @@ components:
       type: object
       properties:
         form: { type: string, description: RequestFormSubmission as JSON }
-        prechat: { type: string, description: Pre-chat answers as JSON }
         attributes: { type: string, description: Attributes as JSON }
         consent: { type: string, enum: ["true", "false"] }
         intent: { type: string }
@@ -45693,27 +45724,9 @@ components:
             "en"
           ]
         },
-        "timezone": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "start_minute": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1439
-        },
-        "end_minute": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1440
-        },
-        "weekdays": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 6
-          }
+        "business_hours_only": {
+          "type": "boolean",
+          "description": "Outside the organization's working hours (the SLA schedule, CF-198) the agent hands off instead of answering."
         },
         "confidence_threshold": {
           "type": "number",
@@ -45735,10 +45748,7 @@ components:
         "channels",
         "categories",
         "locale",
-        "timezone",
-        "start_minute",
-        "end_minute",
-        "weekdays",
+        "business_hours_only",
         "confidence_threshold",
         "handoff_keywords"
       ]
@@ -49241,28 +49251,40 @@ components:
         data: { $ref: "#/components/schemas/OnboardingOrganizationResult" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
-    OnboardingStep:
+    OnboardingCondition:
       type: object
-      required: [key, done, manual]
+      description: One "is this step done" check (CF-198).
+      required: [key, done]
       properties:
         key:
           type: string
-          enum: [organization, channel, team, widget, first_conversation]
+          enum: [identity_key, external_identity, package, company, system, ai_enabled, procedure, articles, sla_policy, automation]
         done: { type: boolean }
-        manual:
-          type: boolean
-          description: Can be confirmed by hand.
+
+    OnboardingStep:
+      type: object
+      required: [key, done, skipped, conditions]
+      properties:
+        key:
+          type: string
+          enum: [customer, system, ai, knowledge, automation]
+        done: { type: boolean, description: Every condition holds. }
+        skipped: { type: boolean, description: Skipped on purpose and not done; stays as a warning. }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/OnboardingCondition" }
 
     OnboardingState:
       type: object
-      required: [active, finished_at, steps, completed, total]
+      required: [active, finished_at, steps, completed, skipped, total]
       properties:
         active: { type: boolean }
         finished_at: { type: [string, "null"], format: date-time }
         steps:
           type: array
           items: { $ref: "#/components/schemas/OnboardingStep" }
-        completed: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0, description: Done steps. }
+        skipped: { type: integer, minimum: 0, description: Skipped steps (warnings). }
         total: { type: integer, minimum: 0 }
 
     OnboardingLocalized:
@@ -50401,27 +50423,6 @@ components:
         email: { type: string, maxLength: 255 }
         website: { type: string, maxLength: 255 }
 
-    OrganizationBusinessDay:
-      type: object
-      required: [day, open, start, end]
-      properties:
-        day: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
-        open: { type: boolean }
-        start: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "09:00" }
-        end: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "18:00" }
-
-    OrganizationBusinessHours:
-      type: object
-      required: [enabled, days]
-      properties:
-        enabled: { type: boolean }
-        days:
-          type: array
-          description: Always seven days, `mon` .. `sun`
-          minItems: 7
-          maxItems: 7
-          items: { $ref: "#/components/schemas/OrganizationBusinessDay" }
-
     OrganizationBranding:
       type: object
       required: [primary_color]
@@ -50433,7 +50434,7 @@ components:
 
     OrganizationProfile:
       type: object
-      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at, timezone, locale, currency, country_code, company, business_hours, branding]
+      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at, timezone, locale, currency, country_code, company, branding]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -50448,12 +50449,11 @@ components:
         currency: { type: string, example: TRY, description: ISO 4217 code }
         country_code: { type: string, example: TR, description: ISO 3166-1 alpha-2 code }
         company: { $ref: "#/components/schemas/OrganizationCompany" }
-        business_hours: { $ref: "#/components/schemas/OrganizationBusinessHours" }
         branding: { $ref: "#/components/schemas/OrganizationBranding" }
 
     OrganizationProfilePatchRequest:
       type: object
-      description: Any subset; `company`, `business_hours` and `branding` are replaced whole
+      description: Any subset; `company` and `branding` are replaced whole. Working hours live in the SLA schedule (`/v1/tenant/sla/business-hours`, CF-198).
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 255 }
@@ -50462,7 +50462,6 @@ components:
         currency: { type: string, example: TRY }
         country_code: { type: string, example: TR }
         company: { $ref: "#/components/schemas/OrganizationCompany" }
-        business_hours: { $ref: "#/components/schemas/OrganizationBusinessHours" }
         branding: { $ref: "#/components/schemas/OrganizationBranding" }
 
     TenantRoleRef:
@@ -52560,8 +52559,6 @@ components:
         signature:
           type: string
           maxLength: 10000
-        business_hours:
-          $ref: '#/components/schemas/WidgetBusinessHours'
         sla_policy_id:
           type:
           - string
@@ -52611,8 +52608,6 @@ components:
         signature:
           type: string
           maxLength: 10000
-        business_hours:
-          $ref: '#/components/schemas/WidgetBusinessHours'
         sla_policy_id:
           type:
           - string
@@ -56822,6 +56817,38 @@ components:
       type: object
       description: Keys sun, mon, tue, wed, thu, fri, sat; a missing day is closed.
       additionalProperties: { $ref: "#/components/schemas/SLAWorkingDay" }
+
+    AutoReply:
+      type: object
+      description: One automatic customer reply (CF-198).
+      required: [enabled, text]
+      properties:
+        enabled: { type: boolean }
+        text:
+          type: object
+          description: Text per locale (`tr`, `en`); the acknowledgement may contain `{eta}`.
+          additionalProperties: { type: string, maxLength: 1000 }
+    AutoReplySettings:
+      type: object
+      description: The organization's automatic customer replies (CF-198).
+      required: [ack, offline, handoff]
+      properties:
+        ack:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent on the first message of a conversation inside working hours.
+        offline:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent on a message outside working hours (once per closed window).
+        handoff:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent when the AI agent hands the conversation to a person (once per conversation).
+    EnvelopeAutoReplySettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/AutoReplySettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     SLABusinessHours:
       type: object

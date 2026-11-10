@@ -2265,7 +2265,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     ValidationError:
-      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`)"
+      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:

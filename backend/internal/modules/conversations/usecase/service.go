@@ -16,6 +16,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/access"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -111,8 +112,27 @@ type Service struct {
 	indexer      SearchIndexer
 	finder       SearchFinder
 	settings     Settings
-	log          *slog.Logger
-	now          func() time.Time
+	// hours is the organization's working-hours source (CF-198).
+	hours businesshours.Source
+	log   *slog.Logger
+	now   func() time.Time
+}
+
+// WithHours sets the working-hours source (the SLA schedule, CF-198).
+func (s *Service) WithHours(h businesshours.Source) *Service { s.hours = h; return s }
+
+// open reports whether the organization is inside its working hours now;
+// without a source or on error it is open.
+func (s *Service) open(ctx context.Context, org int64) bool {
+	if s.hours == nil {
+		return true
+	}
+	st, err := s.hours.HoursState(ctx, org, s.now())
+	if err != nil {
+		s.log.Warn("hours_state_failed", "organization_id", org, "error", err)
+		return true
+	}
+	return st.Open
 }
 
 // New builds the service.
