@@ -7,6 +7,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
   useAuiState,
   type AssistantState,
   type ThreadSuggestion,
@@ -22,8 +23,17 @@ import {
   Paperclip,
   Pencil,
   RefreshCw,
+  X,
 } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 import {
   Attachment,
@@ -51,8 +61,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 
-import { errorKey } from "../lib/errors";
+import { errorKey, errorKeyForCode } from "../lib/errors";
 import { PROPOSE_TOOL, type AssistantCustom } from "../lib/messages";
+import { PendingMessages, shouldSendQueued } from "../lib/queue";
+import { DOCUMENT_ACCEPT } from "../runtime/attachments";
 import { useAssistantSurface } from "../runtime/surface";
 
 import { ActionCard, RouteLink } from "./action-card";
@@ -210,8 +222,50 @@ function FollowupSuggestions() {
   );
 }
 
+/**
+ * The composer. Two CF-207 (#150) rules live here:
+ * - The paperclip is a real `input[type=file]` in the DOM (assistant-ui's
+ *   AddAttachment builds a hidden input on click, which left the picker
+ *   closed on the live panel); the picked files go to the attachment
+ *   adapter like before.
+ * - Enter while a reply is streaming does not pile a second question into
+ *   the same box: the text is queued and sent as its own message once the
+ *   run settles. The queue is shown under the box and can be dropped.
+ */
 function Composer({ disabled }: { disabled: boolean }) {
   const { t } = useLocale();
+  const aui = useAui();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [queue] = useState(() => new PendingMessages());
+  const queued = useSyncExternalStore(
+    (listener) => queue.subscribe(listener),
+    () => queue.size,
+    () => 0,
+  );
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const wasRunning = useRef(isRunning);
+  useEffect(() => {
+    if (shouldSendQueued(wasRunning.current, isRunning, queue.size)) {
+      const next = queue.next();
+      if (next) void aui.thread().append(next);
+    }
+    wasRunning.current = isRunning;
+  }, [aui, isRunning, queue, queued]);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+    if (!aui.thread().getState().isRunning) return;
+    e.preventDefault();
+    const text = aui.composer().getState().text;
+    if (queue.push(text)) aui.composer().setText("");
+  };
+
+  const addFiles = (files: FileList | null) => {
+    for (const file of Array.from(files ?? []))
+      void aui.composer().addAttachment(file);
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
   return (
     <PromptInput>
       <PromptInputBody>
@@ -221,19 +275,31 @@ function Composer({ disabled }: { disabled: boolean }) {
           aria-label={t("assistant.placeholder")}
           maxLength={4000}
           disabled={disabled}
+          onKeyDown={onKeyDown}
           autoFocus
         />
         <PromptInputToolbar>
           <PromptInputTools>
-            <ComposerPrimitive.AddAttachment asChild>
-              <TooltipIconButton
-                tooltip={t("assistant.documents.add")}
-                className="size-8 rounded-full"
-                disabled={disabled}
-              >
-                <Paperclip className="size-4" />
-              </TooltipIconButton>
-            </ComposerPrimitive.AddAttachment>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={DOCUMENT_ACCEPT}
+              multiple
+              hidden
+              tabIndex={-1}
+              aria-hidden="true"
+              data-testid="assistant-file-input"
+              onChange={(e) => addFiles(e.target.files)}
+            />
+            <TooltipIconButton
+              type="button"
+              tooltip={t("assistant.documents.file")}
+              className="size-8 rounded-full"
+              disabled={disabled}
+              onClick={() => fileInput.current?.click()}
+            >
+              <Paperclip className="size-4" />
+            </TooltipIconButton>
           </PromptInputTools>
           <PromptInputSubmit
             sendLabel={t("assistant.send")}
@@ -241,6 +307,24 @@ function Composer({ disabled }: { disabled: boolean }) {
           />
         </PromptInputToolbar>
       </PromptInputBody>
+      {queued > 0 ? (
+        <div
+          role="status"
+          className="text-muted-foreground flex items-center justify-between gap-2 px-2 pt-1 text-[11px]"
+        >
+          <span className="truncate">
+            {t("assistant.queued", { count: queued })}
+          </span>
+          <button
+            type="button"
+            className="hover:text-foreground inline-flex shrink-0 items-center gap-1"
+            onClick={() => queue.clear()}
+          >
+            <X className="size-3" />
+            {t("assistant.queued_drop")}
+          </button>
+        </div>
+      ) : null}
     </PromptInput>
   );
 }
@@ -450,7 +534,14 @@ function AssistantMessage() {
               {t(errorKey(status.error))}
             </p>
           ) : null}
-          {cancelled || custom?.interrupted ? (
+          {/* History tells a failed turn (error code saved) from one the
+              user stopped; a live failure already shows the alert above. */}
+          {!failed && custom?.errorCode ? (
+            <p className="text-destructive mt-1 text-xs">
+              {t("assistant.failed_turn")}{" "}
+              {t(errorKeyForCode(custom.errorCode))}
+            </p>
+          ) : cancelled || custom?.interrupted ? (
             <p className="text-muted-foreground mt-1 text-xs">
               {t("assistant.interrupted")}
             </p>

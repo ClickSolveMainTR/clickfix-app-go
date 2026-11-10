@@ -41,6 +41,10 @@ export const assistantService = {
     signal: AbortSignal,
     emit: (name: string, data: unknown) => void,
   ) {
+    // The id travels to the API (X-Request-ID) and into its
+    // assistant_stream_failed log line, so a failure seen in the browser
+    // console can be matched with the server log (CF-207, #150).
+    const requestId = crypto.randomUUID();
     const response = await fetch(
       `/api/v1/tenant/assistant/threads/${encodeURIComponent(thread)}/messages/stream?locale=${encodeURIComponent(locale)}`,
       {
@@ -51,25 +55,43 @@ export const assistantService = {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
           "X-Organization": slug,
+          "X-Request-ID": requestId,
         },
         body: JSON.stringify({ content, context }),
       },
     );
     if (!response.ok || !response.body) {
       const payload = await response.json().catch(() => null);
+      const code = payload?.error?.code ?? "ASSISTANT_AI_UNAVAILABLE";
+      console.error("assistant stream request failed", {
+        status: response.status,
+        code,
+        requestId,
+      });
       throw new ApiError({
         status: response.status,
-        code: payload?.error?.code ?? "ASSISTANT_AI_UNAVAILABLE",
+        code,
         message: "Assistant request failed",
+        requestId,
       });
     }
     await readSSE(response.body, (name, data) => {
-      if (name === "error")
+      if (name === "error") {
+        const { code, request_id } = data as {
+          code: string;
+          request_id?: string;
+        };
+        console.error("assistant stream failed", {
+          code,
+          requestId: request_id || requestId,
+        });
         throw new ApiError({
           status: 503,
-          code: (data as { code: string }).code,
+          code,
           message: "Assistant stream failed",
+          requestId: request_id || requestId,
         });
+      }
       emit(name, data);
     });
   },

@@ -32,6 +32,8 @@ export type AssistantCustom = {
   role?: "assistant" | "tool";
   suggestions?: string[];
   interrupted?: boolean;
+  /** Stream error code of a turn that failed; absent when the user stopped it. */
+  errorCode?: string;
 };
 
 type Part = Exclude<ThreadMessageLike["content"], string>[number];
@@ -82,6 +84,7 @@ export function toThreadMessage(m: AssistantMessage): ThreadMessageLike {
     role: m.role === "tool" ? "tool" : "assistant",
     ...(m.suggestions?.length ? { suggestions: m.suggestions } : {}),
     ...(m.interrupted ? { interrupted: true } : {}),
+    ...(m.error_code ? { errorCode: m.error_code } : {}),
   };
   return {
     id: m.uuid,

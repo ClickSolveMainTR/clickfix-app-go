@@ -211,6 +211,22 @@ test("the assistant docks beside the page and opens as a full page", async ({
   ).toBeVisible();
 });
 
+test("the paperclip opens the file picker and the counter moves with each reply (CF-207)", async ({
+  page,
+}) => {
+  await openAssistant(page, "/channels");
+  const usage = drawer(page).getByText(/^Bugün \d+\/\d+$/);
+  const before = Number((await usage.innerText()).match(/\d+/)![0]);
+  // A real input[type=file] backs the paperclip: the browser's picker opens.
+  const chooser = page.waitForEvent("filechooser");
+  await drawer(page).getByRole("button", { name: "Dosya seç" }).click();
+  expect((await chooser).isMultiple()).toBe(true);
+  await ask(page, "Bu sayfada neler yapabilirim?");
+  await expect(drawer(page)).toContainText("Bu sayfada neler yapabilirim?");
+  // "Bugün N/100" is bumped as soon as the reply settles, without a reload.
+  await expect(usage).toHaveText(new RegExp(`^Bugün ${before + 1}/\\d+$`));
+});
+
 test("rejected: a card that is turned down changes nothing", async ({
   page,
 }) => {

@@ -27698,6 +27698,8 @@ export interface components {
         AssistantMessage: {
             /** @description Generation stopped or connection lost; content is a saved partial reply. */
             interrupted?: boolean;
+            /** @description Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped. */
+            error_code?: string;
             /** Format: uuid */
             uuid: string;
             /** @enum {string} */
@@ -27730,10 +27732,12 @@ export interface components {
             reply: components["schemas"]["AssistantMessage"];
             usage: components["schemas"]["AssistantStreamUsage"];
         };
-        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
+        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
         AssistantStreamError: {
             /** @enum {string} */
             code: "VALIDATION_ERROR" | "ASSISTANT_NOT_FOUND" | "ASSISTANT_DISABLED" | "ASSISTANT_DAILY_LIMIT" | "ASSISTANT_MESSAGE_REJECTED" | "ASSISTANT_AI_UNAVAILABLE" | "ASSISTANT_ACTION_FAILED" | "ASSISTANT_INTERNAL";
+            /** @description Correlation id of the request (the client's X-Request-ID when it sent one). */
+            request_id?: string;
         };
         AssistantSendInput: {
             content: string;

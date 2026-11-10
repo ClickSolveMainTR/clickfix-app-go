@@ -420,6 +420,9 @@ export function isForbiddenProxyPath(segments: string[]): boolean {
 /** Edge geo headers forwarded for the QR sign-in approval screen. */
 const QR_GEO_HEADERS = ["cf-ipcountry", "cf-ipcity", "cf-region"] as const;
 
+/** Same shape the API accepts (internal/platform/reqid). */
+const REQUEST_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+
 function isQRSessionCreatePath(path: string, method: string) {
   return method.toUpperCase() === "POST" && path === "auth/qr/sessions";
 }
@@ -490,6 +493,11 @@ export async function proxyToUpstream(
   // request would share the BFF's address (one global bucket).
   const clientIp = clientIpFromHeaders(request.headers);
   if (clientIp) headers.set("X-Forwarded-For", clientIp);
+  // A well-formed correlation id from the browser is kept so the API's log
+  // lines carry the id the console shows; anything else gets a server id.
+  const requestId = request.headers.get("x-request-id");
+  if (requestId && REQUEST_ID.test(requestId))
+    headers.set("X-Request-ID", requestId);
   if (isQRSessionCreatePath(path, request.method)) {
     // The phone shows which browser / where the sign-in request comes from.
     const userAgent = request.headers.get("user-agent");

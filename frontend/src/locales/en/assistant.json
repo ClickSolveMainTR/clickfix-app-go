@@ -157,5 +157,17 @@
   "mode.undock": "Back to the drawer",
   "mode.page": "Open full page",
   "close": "Close",
-  "page.description": "Answers questions and sets things up with you; your past chats are on the left."
+  "page.description": "Answers questions and sets things up with you; your past chats are on the left.",
+  "queued": "{{count}} message queued; sent when the reply finishes",
+  "queued_drop": "Drop",
+  "failed_turn": "The reply could not be produced.",
+  "fields_help.route": "Internal path, e.g. /settings/sla",
+  "fields_help.target": "Key of the field to highlight",
+  "fields_help.schedule_minutes": "Only used by the scheduled trigger",
+  "fields_help.channel_uuid": "The channel from the channel list",
+  "fields_help.name": "Inbox name shown to agents",
+  "fields_help.webhook_url": "HTTPS endpoint of your system where ClickFix posts agent replies",
+  "fields_help.days": "Opening and closing hours per day; days left out are closed",
+  "fields_help.timezone": "IANA time zone, default Europe/Istanbul",
+  "fields_help.holiday_country": "Country code of the public holidays (ISO 3166, default TR)"
 }
