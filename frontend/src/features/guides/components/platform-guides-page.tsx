@@ -1,6 +1,12 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowDown,
   ArrowUp,
@@ -11,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  useMemo,
   useState,
   useId,
   cloneElement,
@@ -19,7 +26,9 @@ import {
   type ReactNode,
 } from "react";
 
+import { EntityTable, useServerListState } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,7 +62,6 @@ import {
 import { useDialogs } from "@/providers/dialog-provider";
 
 const KEY = ["platform-guides"] as const;
-const LIMIT = 50;
 const ALL = "all";
 const PLACEMENTS = ["auto", "top", "bottom", "left", "right"] as const;
 
@@ -101,21 +109,24 @@ export function PlatformGuidesPage() {
   const qc = useQueryClient();
   const [surface, setSurface] = useState<string>(ALL);
   const [locale, setLocale] = useState<string>("tr");
-  const [q, setQ] = useState("");
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset, q } = listState.params;
   const [editing, setEditing] = useState<Editing | null>(null);
   const [generating, setGenerating] = useState(false);
   const params = {
     surface: surface === ALL ? undefined : surface,
     locale: locale === ALL ? undefined : locale,
-    q: q.trim() || undefined,
-    limit: LIMIT,
+    q,
+    limit,
     offset,
   };
   const list = useQuery({
     queryKey: [...KEY, params],
     queryFn: () => platformGuidesService.list(params),
+    placeholderData: keepPreviousData,
   });
+  const toFirstPage = () =>
+    listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
   const remove = useMutation({
     mutationFn: (uuid: string) => platformGuidesService.remove(uuid),
     onSuccess: () => {
@@ -123,7 +134,108 @@ export function PlatformGuidesPage() {
       void qc.invalidateQueries({ queryKey: KEY });
     },
   });
-  const total = list.data?.total ?? 0;
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<AdminGuide>({
+          accessorKey: "title",
+          labelKey: "guides.platform.col.title",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => {
+            const g = row.original;
+            return (
+              <div>
+                <p className="font-medium">{g.title}</p>
+                <p className="text-muted-foreground text-xs">
+                  {g.key} · {g.locale}
+                  {g.is_published ? "" : ` · ${t("guides.platform.draft")}`}
+                </p>
+              </div>
+            );
+          },
+        }),
+        createColumn<AdminGuide>({
+          id: "route",
+          accessorFn: (g) => `${g.surface}:${g.route}`,
+          labelKey: "guides.platform.col.route",
+          cell: ({ getValue }) => (
+            <span className="font-mono text-xs">{getValue() as string}</span>
+          ),
+        }),
+        createColumn<AdminGuide>({
+          accessorKey: "kind",
+          labelKey: "guides.platform.col.kind",
+          cell: ({ row }) => (
+            <Badge variant="secondary">
+              {row.original.setup_order > 0
+                ? t("guides.platform.setup_n", { n: row.original.setup_order })
+                : t(`guides.kind.${row.original.kind}`)}
+            </Badge>
+          ),
+        }),
+        createColumn<AdminGuide>({
+          id: "steps",
+          accessorFn: (g) => g.steps.length,
+          labelKey: "guides.platform.col.steps",
+          meta: { cellClassName: "tabular-nums" },
+        }),
+        createColumn<AdminGuide>({
+          accessorKey: "source",
+          labelKey: "guides.platform.col.source",
+          cell: ({ row }) => (
+            <span className="text-xs">
+              {t(`guides.source.${row.original.source}`)}
+            </span>
+          ),
+        }),
+        createColumn<AdminGuide>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right whitespace-nowrap",
+          },
+          cell: ({ row }) => (
+            <>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={t("guides.platform.edit")}
+                onClick={() =>
+                  setEditing({
+                    uuid: row.original.uuid,
+                    input: toInput(row.original),
+                  })
+                }
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={t("guides.platform.delete")}
+                disabled={remove.isPending}
+                onClick={async () => {
+                  if (
+                    await confirmDelete({
+                      title: t("guides.platform.delete_confirm"),
+                    })
+                  ) {
+                    remove.mutate(row.original.uuid);
+                  }
+                }}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </>
+          ),
+        }),
+      ] as ColumnDef<AdminGuide, unknown>[],
+    [confirmDelete, remove, t],
+  );
 
   return (
     <div className="space-y-6">
@@ -146,179 +258,69 @@ export function PlatformGuidesPage() {
           </>
         }
       />
-      <div className="flex flex-wrap gap-2">
-        <Input
-          className="w-64"
-          value={q}
-          placeholder={t("guides.platform.search")}
-          aria-label={t("guides.platform.search")}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOffset(0);
-          }}
-        />
-        <Select
-          value={surface}
-          onValueChange={(v) => {
-            setSurface(v);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger
-            className="w-32"
-            aria-label={t("guides.platform.field.surface")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t("guides.all")}</SelectItem>
-            <SelectItem value="web">{t("guides.surface.web")}</SelectItem>
-            <SelectItem value="mobile">{t("guides.surface.mobile")}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={locale}
-          onValueChange={(v) => {
-            setLocale(v);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger
-            className="w-32"
-            aria-label={t("guides.platform.field.locale")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t("guides.all")}</SelectItem>
-            <SelectItem value="tr">Türkçe</SelectItem>
-            <SelectItem value="en">English</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
-            <tr>
-              <th className="px-3 py-2">{t("guides.platform.col.title")}</th>
-              <th className="px-3 py-2">{t("guides.platform.col.route")}</th>
-              <th className="px-3 py-2">{t("guides.platform.col.kind")}</th>
-              <th className="px-3 py-2">{t("guides.platform.col.steps")}</th>
-              <th className="px-3 py-2">{t("guides.platform.col.source")}</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {list.isPending || list.isError || !list.data?.items.length ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
-                  {list.isPending ? (
-                    <p role="status" className="text-muted-foreground">
-                      {t("common.loading")}
-                    </p>
-                  ) : list.isError ? (
-                    <div role="alert" className="space-y-3">
-                      <p className="text-destructive">
-                        {t("common.error_generic")}
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void list.refetch()}
-                      >
-                        {t("common.retry")}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground space-y-2">
-                      <BookOpenCheck className="mx-auto size-8" />
-                      <p>{t("common.empty_title")}</p>
-                      <p className="text-xs">{t("common.empty_description")}</p>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ) : null}
-            {(list.data?.items ?? []).map((g) => (
-              <tr key={g.uuid}>
-                <td className="px-3 py-2">
-                  <p className="font-medium">{g.title}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {g.key} · {g.locale}
-                    {g.is_published ? "" : ` · ${t("guides.platform.draft")}`}
-                  </p>
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">
-                  {g.surface}:{g.route}
-                </td>
-                <td className="px-3 py-2">
-                  <Badge variant="secondary">
-                    {g.setup_order > 0
-                      ? t("guides.platform.setup_n", { n: g.setup_order })
-                      : t(`guides.kind.${g.kind}`)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2 tabular-nums">{g.steps.length}</td>
-                <td className="px-3 py-2 text-xs">
-                  {t(`guides.source.${g.source}`)}
-                </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("guides.platform.edit")}
-                    onClick={() =>
-                      setEditing({ uuid: g.uuid, input: toInput(g) })
-                    }
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("guides.platform.delete")}
-                    disabled={remove.isPending}
-                    onClick={async () => {
-                      if (
-                        await confirmDelete({
-                          title: t("guides.platform.delete_confirm"),
-                        })
-                      ) {
-                        remove.mutate(g.uuid);
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {total > LIMIT ? (
-        <div className="flex items-center justify-end gap-2">
-          <span className="text-muted-foreground text-xs">
-            {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - LIMIT))}
-          >
-            {t("guides.prev")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={offset + LIMIT >= total}
-            onClick={() => setOffset(offset + LIMIT)}
-          >
-            {t("guides.next")}
-          </Button>
-        </div>
-      ) : null}
+      <EntityTable
+        columns={columns}
+        data={list.data?.items ?? []}
+        getRowId={(g) => g.uuid}
+        isLoading={list.isPending}
+        isError={list.isError}
+        onRetry={() => void list.refetch()}
+        searchPlaceholder={t("guides.platform.search")}
+        total={list.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `q`, `surface`, `locale`, `limit` and `offset`.
+          sorting: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+          persistKey: "platform-guides-v1",
+        }}
+        toolbarExtra={
+          <div className="flex gap-2">
+            <Select
+              value={surface}
+              onValueChange={(v) => {
+                setSurface(v);
+                toFirstPage();
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-32"
+                aria-label={t("guides.platform.field.surface")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t("guides.all")}</SelectItem>
+                <SelectItem value="web">{t("guides.surface.web")}</SelectItem>
+                <SelectItem value="mobile">
+                  {t("guides.surface.mobile")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={locale}
+              onValueChange={(v) => {
+                setLocale(v);
+                toFirstPage();
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-32"
+                aria-label={t("guides.platform.field.locale")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t("guides.all")}</SelectItem>
+                <SelectItem value="tr">Türkçe</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
       {editing ? (
         <GuideEditor
           editing={editing}

@@ -1,13 +1,17 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
-import { EntityPage, EntitySectionCard } from "@/components/entity";
+import {
+  EntityPage,
+  EntitySectionCard,
+  EntityTable,
+} from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
@@ -39,16 +43,104 @@ export function PlatformSupportAccessPage() {
   const [entering, setEntering] = useState<string | null>(null);
   const items = query.data?.items ?? [];
 
-  const enter = async (grant: PlatformSupportGrant) => {
-    setEntering(grant.uuid);
-    try {
-      await hydrateProfile();
-      setActive(grant.organization.slug);
-      router.push(routes.cms.home);
-    } finally {
-      setEntering(null);
-    }
-  };
+  const enter = useCallback(
+    async (grant: PlatformSupportGrant) => {
+      setEntering(grant.uuid);
+      try {
+        await hydrateProfile();
+        setActive(grant.organization.slug);
+        router.push(routes.cms.home);
+      } finally {
+        setEntering(null);
+      }
+    },
+    [hydrateProfile, router, setActive],
+  );
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<PlatformSupportGrant>({
+          id: "organization",
+          // Search matches the organization name, its slug and the reason.
+          accessorFn: (g) =>
+            `${g.organization.name} ${g.organization.slug} ${g.reason ?? ""}`,
+          sortingFn: (a, b) =>
+            a.original.organization.name.localeCompare(
+              b.original.organization.name,
+              locale,
+            ),
+          labelKey: "support_access.platform.columns.organization",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => {
+            const grant = row.original;
+            return (
+              <div className="min-w-0 space-y-1">
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-medium">
+                    {grant.organization.name}
+                  </span>
+                  <code className="text-muted-foreground text-xs">
+                    {grant.organization.slug}
+                  </code>
+                </p>
+                {grant.reason ? (
+                  <p className="text-muted-foreground text-sm whitespace-normal">
+                    “{grant.reason}”
+                  </p>
+                ) : null}
+              </div>
+            );
+          },
+        }),
+        createColumn<PlatformSupportGrant>({
+          accessorKey: "mode",
+          labelKey: "support_access.platform.columns.mode",
+          searchable: false,
+          cell: ({ row }) => (
+            <Badge variant="warning">
+              {t(MODE_LABEL_KEYS[row.original.mode])}
+            </Badge>
+          ),
+        }),
+        createColumn<PlatformSupportGrant>({
+          accessorKey: "expires_at",
+          labelKey: "support_access.platform.columns.expires",
+          searchable: false,
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-sm whitespace-normal">
+              {t("support_access.platform.until", {
+                date: datetime(row.original.expires_at, undefined, locale),
+                remaining: remaining(t, row.original.expires_at, now),
+              })}
+            </span>
+          ),
+        }),
+        createColumn<PlatformSupportGrant>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: { headerClassName: "text-end", cellClassName: "text-end" },
+          cell: ({ row }) => (
+            <Button
+              type="button"
+              size="sm"
+              disabled={
+                entering !== null ||
+                row.original.organization.status === "suspended"
+              }
+              onClick={() => void enter(row.original)}
+            >
+              <LogIn className="size-4" />
+              {t("support_access.platform.enter")}
+            </Button>
+          ),
+        }),
+      ] as ColumnDef<PlatformSupportGrant, unknown>[],
+    [enter, entering, locale, now, t],
+  );
 
   return (
     <EntityPage
@@ -70,67 +162,28 @@ export function PlatformSupportAccessPage() {
         title={t("support_access.platform.list_title")}
         badge={query.data ? items.length : undefined}
       >
-        {query.isLoading ? <Loading label={t("common.loading")} /> : null}
-        {query.isError ? (
-          <ErrorState
-            title={t("common.error_generic")}
-            onRetry={() => void query.refetch()}
-            retryLabel={t("common.retry")}
-          />
-        ) : null}
-        {query.data && items.length === 0 ? (
-          <EmptyState
-            title={t("support_access.platform.empty_title")}
-            description={t("support_access.platform.empty_description")}
-          />
-        ) : null}
-        {items.length ? (
-          <ul className="divide-y rounded-lg border">
-            {items.map((grant) => (
-              <li
-                key={grant.uuid}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"
-              >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-medium">
-                      {grant.organization.name}
-                    </span>
-                    <code className="text-muted-foreground text-xs">
-                      {grant.organization.slug}
-                    </code>
-                    <Badge variant="warning">
-                      {t(MODE_LABEL_KEYS[grant.mode])}
-                    </Badge>
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    {t("support_access.platform.until", {
-                      date: datetime(grant.expires_at, undefined, locale),
-                      remaining: remaining(t, grant.expires_at, now),
-                    })}
-                  </p>
-                  {grant.reason ? (
-                    <p className="text-muted-foreground text-sm">
-                      “{grant.reason}”
-                    </p>
-                  ) : null}
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={
-                    entering !== null ||
-                    grant.organization.status === "suspended"
-                  }
-                  onClick={() => void enter(grant)}
-                >
-                  <LogIn className="size-4" />
-                  {t("support_access.platform.enter")}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <EntityTable
+          columns={columns}
+          data={items}
+          getRowId={(g) => g.uuid}
+          isLoading={query.isLoading}
+          isError={query.isError}
+          onRetry={() => void query.refetch()}
+          emptyTitle={t("support_access.platform.empty_title")}
+          emptyDescription={t("support_access.platform.empty_description")}
+          // A short, unpaged list: search, sort and pages in the browser.
+          // Soonest to expire first.
+          manual={{ filtering: false, sorting: false, pagination: false }}
+          initialState={{
+            pagination: { pageIndex: 0, pageSize: 20 },
+            sorting: [{ id: "expires_at", desc: false }],
+          }}
+          features={{
+            columnFilters: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
       </EntitySectionCard>
     </EntityPage>
   );
