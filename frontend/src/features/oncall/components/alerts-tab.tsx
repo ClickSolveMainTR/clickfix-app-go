@@ -1,14 +1,19 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { BellRing, Check, MessagesSquare, TriangleAlert } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
 import { StatusChip } from "@/components/common/status-chip";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Button } from "@/components/ui/button";
 import { cn, datetime, relativeDatetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
@@ -42,10 +47,13 @@ export function AlertsTab({
   const qc = useQueryClient();
   const onError = useOncallError();
   const key = ["tenant", slug, "oncall", "alerts"] as const;
+  const listState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset } = listState.params;
   const alerts = useQuery({
-    queryKey: key,
-    queryFn: () => oncallService.alerts(slug),
+    queryKey: [...key, limit, offset],
+    queryFn: () => oncallService.alertsPage(slug, { limit, offset }),
     refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
   });
   const policies = useQuery({
     queryKey: ["tenant", slug, "oncall", "policies"],
@@ -71,20 +79,93 @@ export function AlertsTab({
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focusIncident, incidents.data]);
 
-  if (alerts.isLoading) return <Loading label={t("common.loading")} />;
-  if (alerts.isError)
-    return (
-      <ErrorState
-        title={t("oncall.error.title")}
-        description={t("oncall.error.description")}
-        onRetry={() => void alerts.refetch()}
-      />
+  const policyName = useMemo(() => {
+    const names = new Map((policies.data ?? []).map((p) => [p.uuid, p.name]));
+    return (uuid: string) => names.get(uuid) ?? uuid.slice(0, 8);
+  }, [policies.data]);
+  const incidentTitle = useMemo(() => {
+    const titles = new Map(
+      (incidents.data ?? []).map((i) => [i.uuid, i.title]),
     );
-  const items = alerts.data ?? [];
-  const policyName = (uuid: string) =>
-    policies.data?.find((p) => p.uuid === uuid)?.name ?? uuid.slice(0, 8);
-  const incidentTitle = (uuid: string) =>
-    incidents.data?.find((i) => i.uuid === uuid)?.title ?? uuid.slice(0, 8);
+    return (uuid: string) => titles.get(uuid) ?? uuid.slice(0, 8);
+  }, [incidents.data]);
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<OncallAlert>({
+          id: "state",
+          labelKey: "oncall.alerts.columns.state",
+          cell: ({ row }) => <AlertState alert={row.original} />,
+        }),
+        createColumn<OncallAlert>({
+          id: "alert",
+          labelKey: "oncall.alerts.columns.alert",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => {
+            const a = row.original;
+            return (
+              <div className="min-w-0 space-y-1">
+                <span className="text-sm font-medium">
+                  {policyName(a.policy_uuid)}
+                </span>
+                <div className="text-sm">
+                  {a.incident_uuid ? (
+                    <button
+                      type="button"
+                      className="text-primary inline-flex items-center gap-1 hover:underline"
+                      onClick={() => onOpenIncident(a.incident_uuid!)}
+                    >
+                      <TriangleAlert className="size-3.5" />
+                      {incidentTitle(a.incident_uuid)}
+                    </button>
+                  ) : a.conversation_uuid ? (
+                    <Link
+                      href={`/inbox?c=${a.conversation_uuid}`}
+                      className="text-primary inline-flex items-center gap-1 hover:underline"
+                    >
+                      <MessagesSquare className="size-3.5" />
+                      {t("oncall.alerts.urgent_conversation")}
+                    </Link>
+                  ) : null}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {t("oncall.alerts.opened", {
+                    time: relativeDatetime(a.created_at, locale),
+                  })}
+                  {!a.acknowledged_at &&
+                    !a.resolved_at &&
+                    ` · ${t("oncall.alerts.next_step", {
+                      step: a.next_step + 1,
+                      time: datetime(a.next_notify_at, "HH:mm", locale),
+                    })}`}
+                </p>
+              </div>
+            );
+          },
+        }),
+        createColumn<OncallAlert>({
+          id: "actions",
+          labelKey: "common.actions",
+          enableHiding: false,
+          meta: { headerClassName: "text-end", cellClassName: "text-end" },
+          cell: ({ row }) =>
+            !row.original.acknowledged_at && !row.original.resolved_at ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={ack.isPending}
+                onClick={() => ack.mutate(row.original.uuid)}
+              >
+                <Check className="size-4" />
+                {t("oncall.alerts.acknowledge")}
+              </Button>
+            ) : null,
+        }),
+      ] as ColumnDef<OncallAlert, unknown>[],
+    [ack, incidentTitle, locale, onOpenIncident, policyName, t],
+  );
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">
@@ -93,70 +174,29 @@ export function AlertsTab({
           <BellRing className="size-4" />
           {t("oncall.alerts.title")}
         </h2>
-        {items.length === 0 ? (
-          <EmptyState
-            icon={<BellRing className="size-6" />}
-            title={t("oncall.alerts.empty_title")}
-            description={t("oncall.alerts.empty_description")}
-          />
-        ) : (
-          <ul className="divide-y rounded-md border">
-            {items.map((a) => (
-              <li key={a.uuid} className="flex flex-wrap items-start gap-3 p-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <AlertState alert={a} />
-                    <span className="text-sm font-medium">
-                      {policyName(a.policy_uuid)}
-                    </span>
-                  </div>
-                  <div className="text-sm">
-                    {a.incident_uuid ? (
-                      <button
-                        type="button"
-                        className="text-primary inline-flex items-center gap-1 hover:underline"
-                        onClick={() => onOpenIncident(a.incident_uuid!)}
-                      >
-                        <TriangleAlert className="size-3.5" />
-                        {incidentTitle(a.incident_uuid)}
-                      </button>
-                    ) : a.conversation_uuid ? (
-                      <Link
-                        href={`/inbox?c=${a.conversation_uuid}`}
-                        className="text-primary inline-flex items-center gap-1 hover:underline"
-                      >
-                        <MessagesSquare className="size-3.5" />
-                        {t("oncall.alerts.urgent_conversation")}
-                      </Link>
-                    ) : null}
-                  </div>
-                  <p className="text-muted-foreground text-xs">
-                    {t("oncall.alerts.opened", {
-                      time: relativeDatetime(a.created_at, locale),
-                    })}
-                    {!a.acknowledged_at &&
-                      !a.resolved_at &&
-                      ` · ${t("oncall.alerts.next_step", {
-                        step: a.next_step + 1,
-                        time: datetime(a.next_notify_at, "HH:mm", locale),
-                      })}`}
-                  </p>
-                </div>
-                {!a.acknowledged_at && !a.resolved_at && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={ack.isPending}
-                    onClick={() => ack.mutate(a.uuid)}
-                  >
-                    <Check className="size-4" />
-                    {t("oncall.alerts.acknowledge")}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <EntityTable
+          columns={columns}
+          data={alerts.data?.items ?? []}
+          getRowId={(a) => a.uuid}
+          isLoading={alerts.isLoading}
+          isError={alerts.isError}
+          errorTitle={t("oncall.error.title")}
+          errorDescription={t("oncall.error.description")}
+          onRetry={() => void alerts.refetch()}
+          emptyTitle={t("oncall.alerts.empty_title")}
+          emptyDescription={t("oncall.alerts.empty_description")}
+          total={alerts.data?.total ?? 0}
+          state={listState.tableState}
+          features={{
+            // The endpoint takes `limit` and `offset` only.
+            toolbar: false,
+            sorting: false,
+            globalFilter: false,
+            columnFilters: false,
+            rowSelection: false,
+            viewMode: false,
+          }}
+        />
       </section>
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
