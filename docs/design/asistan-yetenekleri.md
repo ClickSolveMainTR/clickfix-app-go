@@ -99,6 +99,16 @@ MCP kataloğu CF-192'de defterden üretilir; o zamana kadar iki sunum yan yana d
 
 Eski `Executor` eylemlerinin çoğu CF-184…CF-190'da gerçek yeteneklere çevrildi (`Aliases` eski adları taşır). Geriye `create_channel_email`, `install_widget` ve `escalate_to_support` kaldı; bunlar `propose_action` ile önerilir.
 
+### 1.6 Döngü sınırları ve hata davranışı (CF-207)
+
+Canlı testte (#150) görülen üç hata için `platform/ai.chat` ve `assistant.send` şöyle davranır:
+
+- **Paralel araç çağrısı.** Bir model turu istediği kadar aracı birlikte çağırabilir; sınır çağrı sayısı değil **tur** sayısıdır (`ai.MaxToolRounds` = 6). Turlar bitince model araçsız (`tool_choice: none`) son bir tur alır ve "şimdiye kadarki sonuçlarla yanıt ver" denir; `ai: too many tool rounds` ancak model bu turda da araç çağırırsa döner.
+- **Kesilme.** Sohbet bütçesi 4096 token'dır. Bir tur `max_tokens` ile durursa aynı yanıt içinde en fazla iki "devam et" turu açılır; akış kesilmeden sürer. Yine kesilirse metin korunur, `Result.Truncated` işaretlenir ve servis yanıtın sonuna "yanıt kısaltıldı" notunu ekler. Hata olayı üretilmez.
+- **Araç sonrası boş yanıt.** `suggest_replies`, yanıt metni (ya da bir kart) olmadan çağrılırsa hata sonucu döner ve turu bitirmez; model önce yanıtı yazar. Talimat sırası da "önce yanıt, sonra öneriler" olarak verilir. Kart-only kural (#115) korunur: yalnız kart öneren tur geçerli sayılır ve öneriler kaydedilir.
+- **Hata/iptal ayrımı.** Başarısız tur `assistant_messages.error_code` ile saklanır (`AssistantMessage.error_code`); geçmişte "Yanıt oluşturulamadı" olarak, kullanıcı iptali "Yanıt durduruldu" olarak görünür.
+- **İzlenebilirlik.** İstemci her akış isteğine `X-Request-ID` (uuid) ekler, BFF iletir; SSE `error` olayı `request_id` taşır ve istemci konsola `console.error` ile yazar; sunucu `assistant_stream_failed` satırında aynı id'yi loglar.
+
 ## 2. Sayfa bağlamı
 
 Rota → modül eşlemesi defterin `Routes` alanından gelir (`/channels` → `channels`, `/automation/workflows` → `automation`). Sayfa açıldığında asistanın bildikleri:

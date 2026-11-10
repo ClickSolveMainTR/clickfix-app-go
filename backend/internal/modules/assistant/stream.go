@@ -14,6 +14,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/reqid"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
 )
 
@@ -62,9 +63,28 @@ func (s *safeStream) write(end int) error {
 
 func (s *safeStream) flush() error { return s.write(len(s.pending)) }
 
+const suggestionToolName = "suggest_replies"
+
 func suggestionTool() ai.Tool {
-	return ai.Tool{Name: "suggest_replies", EndsTurn: true, Description: "After streaming your complete markdown answer, save 2-4 short quick replies in the user's language. This ends the turn; no further answer follows.",
+	return ai.Tool{Name: suggestionToolName, EndsTurn: true, Description: "After writing your complete markdown answer (also after tool results), save 2-4 short quick replies in the user's language. Refused while no answer text has been written. This ends the turn; no further answer follows.",
 		Schema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"replies"}, "properties": map[string]any{"replies": map[string]any{"type": "array", "maxItems": 4, "items": map[string]any{"type": "string", "maxLength": 80}}}}}
+}
+
+// suggestionResult handles a suggest_replies call. While the reply has no
+// answer text (nor a card) the call is refused with an error result, which
+// does not end the turn: the model reads it and writes the answer first, so
+// a lookup turn is never followed by an empty reply (#150).
+func suggestionResult(input json.RawMessage, answered bool) ([]string, ai.ToolResult) {
+	if !answered {
+		return nil, toolError("no answer text has been written yet: write your markdown answer for the user first, then call suggest_replies")
+	}
+	var in struct {
+		Replies []string `json:"replies"`
+	}
+	if err := json.Unmarshal(input, &in); err != nil {
+		return nil, toolError("invalid suggestions")
+	}
+	return in.Replies, toolJSON(map[string]string{"status": "saved"})
 }
 
 func toolStatus(tool, locale string) string {
@@ -90,7 +110,7 @@ func toolStatus(tool, locale string) string {
 			return "Preparing support handover…"
 		}
 		return "Destek ekibine devir hazırlanıyor…"
-	case "suggest_replies":
+	case suggestionToolName:
 		if en {
 			return "Preparing your answer…"
 		}
@@ -210,8 +230,11 @@ func serveStream(w http.ResponseWriter, r *http.Request, run func(context.Contex
 				code := streamErrorCode(err)
 				// The user only sees the code; the cause goes to the log (no
 				// message content, no secrets: errors here carry neither).
-				slog.WarnContext(ctx, "assistant_stream_failed", "code", code, "error", err.Error(), "route", r.URL.Path, "request_id", r.Header.Get("X-Request-Id"))
-				_ = write("error", map[string]string{"code": code})
+				// The request id is the one the client sent (or the server
+				// made) so the browser console and this line can be matched.
+				requestID := reqid.From(ctx)
+				slog.WarnContext(ctx, "assistant_stream_failed", "code", code, "error", err.Error(), "route", r.URL.Path, "request_id", requestID)
+				_ = write("error", map[string]string{"code": code, "request_id": requestID})
 			}
 			return
 		case <-ticker.C:
@@ -256,5 +279,5 @@ func (s *Service) saveInterrupted(ctx context.Context, t db.AssistantThread) {
 	if err != nil {
 		return
 	}
-	_ = s.Q.AssistantMessageInterrupted(saveCtx, db.AssistantMessageInterruptedParams{OrganizationID: t.OrganizationID, Uuid: msg.UUID})
+	_ = s.Q.AssistantMessageInterrupted(saveCtx, db.AssistantMessageInterruptedParams{OrganizationID: t.OrganizationID, Uuid: msg.UUID, ErrorCode: ""})
 }
