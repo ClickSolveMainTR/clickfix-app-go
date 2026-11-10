@@ -1,12 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { EmptyState } from "@/components/common/empty-state";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
+import { EntityTable } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { StatusChip } from "@/components/common/status-chip";
 import { DeleteDialog } from "@/components/dialogs/delete-dialog";
 import { Button } from "@/components/ui/button";
@@ -74,18 +74,99 @@ export function MonitorsTab({
     onError,
   });
 
-  if (monitors.isLoading) return <Loading label={t("common.loading")} />;
-  if (monitors.isError)
-    return (
-      <ErrorState
-        title={t("oncall.error.title")}
-        description={t("oncall.error.description")}
-        onRetry={() => void monitors.refetch()}
-      />
-    );
-  const items = monitors.data ?? [];
-  const componentName = (uuid: string) =>
-    components.data?.find((c) => c.uuid === uuid)?.name ?? "—";
+  const componentName = useMemo(() => {
+    const names = new Map((components.data ?? []).map((c) => [c.uuid, c.name]));
+    return (uuid: string) => names.get(uuid) ?? "—";
+  }, [components.data]);
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<UptimeMonitor>({
+          id: "monitor",
+          // Search matches the name and the address.
+          accessorFn: (m) => `${m.name} ${m.url}`,
+          sortingFn: (a, b) =>
+            a.original.name.localeCompare(b.original.name, locale),
+          labelKey: "oncall.monitors.columns.monitor",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => {
+            const m = row.original;
+            return (
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <MonitorStatus monitor={m} />
+                  <span className="font-medium">{m.name}</span>
+                </div>
+                <a
+                  href={m.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-muted-foreground block truncate font-mono text-xs hover:underline"
+                >
+                  {m.url}
+                </a>
+                <p className="text-muted-foreground text-xs whitespace-normal">
+                  {t("oncall.monitors.every", {
+                    interval: intervalLabel(m.interval_seconds, t),
+                  })}{" "}
+                  ·{" "}
+                  {t("oncall.monitors.expects", { status: m.expected_status })}
+                  {m.keyword && ` · "${m.keyword}"`} ·{" "}
+                  {componentName(m.component_uuid)}
+                  {m.last_checked_at &&
+                    ` · ${t("oncall.monitors.checked", {
+                      time: relativeDatetime(m.last_checked_at, locale),
+                    })}`}
+                </p>
+              </div>
+            );
+          },
+        }),
+        createColumn<UptimeMonitor>({
+          id: "checks",
+          labelKey: "oncall.monitors.columns.checks",
+          enableSorting: false,
+          cell: ({ row }) => <Sparkline slug={slug} monitor={row.original} />,
+        }),
+        ...(canWrite
+          ? [
+              createColumn<UptimeMonitor>({
+                id: "actions",
+                labelKey: "common.actions",
+                enableHiding: false,
+                enableSorting: false,
+                meta: {
+                  headerClassName: "text-end",
+                  cellClassName: "text-end",
+                },
+                cell: ({ row }) => (
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("oncall.monitors.edit")}
+                      onClick={() => setEditing(row.original)}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("oncall.monitors.delete")}
+                      onClick={() => setDeleting(row.original)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ),
+              }),
+            ]
+          : []),
+      ] as ColumnDef<UptimeMonitor, unknown>[],
+    [canWrite, componentName, locale, slug, t],
+  );
 
   return (
     <div className="space-y-4">
@@ -104,71 +185,27 @@ export function MonitorsTab({
           </Button>
         )}
       </div>
-      {items.length === 0 ? (
-        <EmptyState
-          icon={<Activity className="size-6" />}
-          title={t("oncall.monitors.empty_title")}
-          description={t("oncall.monitors.empty_description")}
-        />
-      ) : (
-        <ul className="divide-y rounded-md border">
-          {items.map((m) => (
-            <li
-              key={m.uuid}
-              className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
-            >
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <MonitorStatus monitor={m} />
-                  <span className="font-medium">{m.name}</span>
-                </div>
-                <a
-                  href={m.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-muted-foreground block truncate font-mono text-xs hover:underline"
-                >
-                  {m.url}
-                </a>
-                <p className="text-muted-foreground text-xs">
-                  {t("oncall.monitors.every", {
-                    interval: intervalLabel(m.interval_seconds, t),
-                  })}{" "}
-                  ·{" "}
-                  {t("oncall.monitors.expects", { status: m.expected_status })}
-                  {m.keyword && ` · "${m.keyword}"`} ·{" "}
-                  {componentName(m.component_uuid)}
-                  {m.last_checked_at &&
-                    ` · ${t("oncall.monitors.checked", {
-                      time: relativeDatetime(m.last_checked_at, locale),
-                    })}`}
-                </p>
-              </div>
-              <Sparkline slug={slug} monitor={m} />
-              {canWrite && (
-                <div className="flex gap-1 md:justify-end">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("oncall.monitors.edit")}
-                    onClick={() => setEditing(m)}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("oncall.monitors.delete")}
-                    onClick={() => setDeleting(m)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <EntityTable
+        columns={columns}
+        data={monitors.data ?? []}
+        getRowId={(m) => m.uuid}
+        isLoading={monitors.isLoading}
+        isError={monitors.isError}
+        errorTitle={t("oncall.error.title")}
+        errorDescription={t("oncall.error.description")}
+        onRetry={() => void monitors.refetch()}
+        emptyTitle={t("oncall.monitors.empty_title")}
+        emptyDescription={t("oncall.monitors.empty_description")}
+        // One unpaged list (up to 100): search, sort and pages in the browser,
+        // so only the visible rows load their check history.
+        manual={{ filtering: false, sorting: false, pagination: false }}
+        initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+        features={{
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+      />
       {editing && (
         <MonitorDialog
           slug={slug}

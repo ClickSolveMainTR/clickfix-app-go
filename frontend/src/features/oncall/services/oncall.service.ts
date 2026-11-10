@@ -82,8 +82,10 @@ export const oncallService = {
       `/v1/tenant/oncall/policies/${uuid}`,
     ),
 
-  alerts: (slug: string) =>
-    list<OncallAlert>(slug, "/v1/tenant/oncall/alerts", 50),
+  alertsPage: (slug: string, params: { limit: number; offset: number }) =>
+    tenantRequest<Page<OncallAlert>>(slug, "GET", "/v1/tenant/oncall/alerts", {
+      query: params,
+    }),
   acknowledge: (slug: string, uuid: string) =>
     tenantRequest<{ acknowledged: boolean }>(
       slug,
