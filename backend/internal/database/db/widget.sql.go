@@ -27,6 +27,55 @@ func (q *Queries) ClearWidgetIdentityRejection(ctx context.Context, arg ClearWid
 	return err
 }
 
+const createWidgetAppKey = `-- name: CreateWidgetAppKey :one
+
+INSERT INTO widget_app_keys (organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at
+`
+
+type CreateWidgetAppKeyParams struct {
+	OrganizationID    int64       `json:"organization_id"`
+	ChannelInstanceID int64       `json:"channel_instance_id"`
+	Platform          string      `json:"platform"`
+	PackageName       string      `json:"package_name"`
+	Label             string      `json:"label"`
+	KeyPrefix         string      `json:"key_prefix"`
+	KeyHash           string      `json:"key_hash"`
+	CreatedBy         pgtype.Int8 `json:"created_by"`
+}
+
+// CF-201: mobile app keys (hash only; the key is shown once on creation).
+func (q *Queries) CreateWidgetAppKey(ctx context.Context, arg CreateWidgetAppKeyParams) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, createWidgetAppKey,
+		arg.OrganizationID,
+		arg.ChannelInstanceID,
+		arg.Platform,
+		arg.PackageName,
+		arg.Label,
+		arg.KeyPrefix,
+		arg.KeyHash,
+		arg.CreatedBy,
+	)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const deleteWidgetDraft = `-- name: DeleteWidgetDraft :exec
 DELETE FROM widget_drafts
 WHERE organization_id = $1 AND channel_instance_id = $2
@@ -98,6 +147,34 @@ func (q *Queries) GetConversationRating(ctx context.Context, arg GetConversation
 		&i.Score,
 		&i.Comment,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getWidgetAppKeyByHash = `-- name: GetWidgetAppKeyByHash :one
+SELECT id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at FROM widget_app_keys WHERE key_hash = $1
+`
+
+// The visitor API looks the key up by its hash; the caller checks the
+// instance, the package name and revoked_at (a revoked key must fail the
+// same way as an unknown one).
+func (q *Queries) GetWidgetAppKeyByHash(ctx context.Context, keyHash string) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, getWidgetAppKeyByHash, keyHash)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -459,6 +536,52 @@ func (q *Queries) ListUnreadOutboundExternalIDs(ctx context.Context, arg ListUnr
 	return items, nil
 }
 
+const listWidgetAppKeys = `-- name: ListWidgetAppKeys :many
+SELECT id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at FROM widget_app_keys
+WHERE organization_id = $1 AND channel_instance_id = $2
+ORDER BY revoked_at IS NOT NULL, created_at DESC
+LIMIT 100
+`
+
+type ListWidgetAppKeysParams struct {
+	OrganizationID    int64 `json:"organization_id"`
+	ChannelInstanceID int64 `json:"channel_instance_id"`
+}
+
+func (q *Queries) ListWidgetAppKeys(ctx context.Context, arg ListWidgetAppKeysParams) ([]WidgetAppKey, error) {
+	rows, err := q.db.Query(ctx, listWidgetAppKeys, arg.OrganizationID, arg.ChannelInstanceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WidgetAppKey{}
+	for rows.Next() {
+		var i WidgetAppKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.ChannelInstanceID,
+			&i.Platform,
+			&i.PackageName,
+			&i.Label,
+			&i.KeyPrefix,
+			&i.KeyHash,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWidgetConversations = `-- name: ListWidgetConversations :many
 
 SELECT c.uuid, c.number, c.status, c.subject, c.last_message_at, c.last_message_preview,
@@ -778,6 +901,40 @@ func (q *Queries) MergeWidgetContactCustomFields(ctx context.Context, arg MergeW
 	return err
 }
 
+const revokeWidgetAppKey = `-- name: RevokeWidgetAppKey :one
+UPDATE widget_app_keys SET revoked_at = now()
+WHERE organization_id = $1 AND channel_instance_id = $2
+  AND uuid = $3 AND revoked_at IS NULL
+RETURNING id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at
+`
+
+type RevokeWidgetAppKeyParams struct {
+	OrganizationID    int64     `json:"organization_id"`
+	ChannelInstanceID int64     `json:"channel_instance_id"`
+	Uuid              uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) RevokeWidgetAppKey(ctx context.Context, arg RevokeWidgetAppKeyParams) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, revokeWidgetAppKey, arg.OrganizationID, arg.ChannelInstanceID, arg.Uuid)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const setContactCompanyIfEmpty = `-- name: SetContactCompanyIfEmpty :exec
 UPDATE contacts SET company_id = $1, updated_at = NOW()
 WHERE organization_id = $2 AND id = $3 AND company_id IS NULL
@@ -835,6 +992,17 @@ func (q *Queries) SetWidgetInstanceSettings(ctx context.Context, arg SetWidgetIn
 		&i.BrandID,
 	)
 	return i, err
+}
+
+const touchWidgetAppKey = `-- name: TouchWidgetAppKey :exec
+UPDATE widget_app_keys SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes')
+`
+
+// last_used_at is rewritten at most every five minutes (busy apps).
+func (q *Queries) TouchWidgetAppKey(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, touchWidgetAppKey, id)
+	return err
 }
 
 const touchWidgetIdentityRejection = `-- name: TouchWidgetIdentityRejection :exec

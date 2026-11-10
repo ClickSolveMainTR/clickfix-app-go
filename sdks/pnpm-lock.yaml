@@ -37,9 +37,14 @@ importers:
 
   react-widget:
     dependencies:
+      '@clickfix/visitor-core':
+        specifier: workspace:^
+        version: link:../visitor-core
       react:
         specifier: '>=18'
         version: 19.2.0
+
+  visitor-core: {}
 
 packages:
 

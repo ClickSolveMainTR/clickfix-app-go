@@ -2,6 +2,12 @@
 
 Sürümleme: [SemVer](https://semver.org). `0.x` sürümlerinde küçük sürüm (`0.N`) kırıcı değişiklik taşıyabilir; her kırıcı değişiklik burada **Kırıcı** başlığıyla yazılır. Sürüm `package.json` içindedir; `main`'e birleşen bir değişiklikte sürüm değiştiyse CI (`sdk-publish`) npm'e yayımlar.
 
+## 0.1.1 - 2026-11-13
+
+- Taşıma katmanı `@clickfix/visitor-core` paketine taşındı (CF-201); `createWidgetClient` artık çekirdeğin tarayıcı modudur, davranış ve API aynıdır. `WidgetError` çekirdeğin `VisitorError` sınıfıdır (`status`, `code`, ek olarak `requestId`).
+- Çekirdekten gelen yenilikler: `WIDGET_VISITOR_TOKEN_INVALID` cevabında otomatik oturum yenileme, GET ve `client_id` taşıyan gönderimlerde sınırlı yeniden deneme, `track` / `setScreen` / `setAttributes` / `markRead` / `getToken` / `adoptToken`.
+- `paths` ve `components` tipleri çekirdekten yeniden dışa aktarılır (`react-widget/src/schema.d.ts` kaldırıldı).
+
 ## 0.1.0 - 2026-11-12
 
 İlk yayın (CF-199).

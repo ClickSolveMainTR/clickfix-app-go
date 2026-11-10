@@ -22,15 +22,16 @@ make guide-examples-check    # yalnız derleme, tip kontrolü ve sayfa eşitliğ
 | Paket | Sürüm nerede | Yayın |
 |---|---|---|
 | `@clickfix/node` | `sdks/node/package.json`, `CHANGELOG.md` | `main`'de `sdk-publish` işi: npm'de olmayan sürümü `npm publish --access public` ile yayımlar |
+| `@clickfix/visitor-core` | `sdks/visitor-core/package.json`, `CHANGELOG.md` | aynı iş (CF-201; react-widget'tan önce yayımlanır) |
 | `@clickfix/react-widget` | `sdks/react-widget/package.json`, `CHANGELOG.md` | aynı iş |
 | `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go` | `sdks/go/VERSION`, `CHANGELOG.md` | `release-tag` işi `sdks/go/vX.Y.Z` etiketini basar (yoksa); elle etiket basılmaz |
 
-- PR'da `sdks` işi `npm pack --dry-run` ve `npm publish --dry-run` koşar; token gerekmez.
+- PR'da `sdks` işi `pnpm publish --dry-run` koşar; token gerekmez. `npm publish` değil `pnpm publish` kullanılır: react-widget'ın `workspace:^` bağımlılığı (`@clickfix/visitor-core`) ancak böyle gerçek sürüme çevrilir.
 - `sdk-publish` için **`NPM_TOKEN`** repository secret'ı gerekir (npm'de `@clickfix` kapsamının sahibi hesabın *automation* token'ı; Settings → Secrets and variables → Actions). Secret yoksa iş özet notuyla atlar, `main` kırılmaz.
 - Sürüm artırma: paketi değiştiren PR'da `package.json` / `VERSION` sürümünü yükseltin ve `CHANGELOG.md`'ye yazın; kılavuzun **Paketler** tablosundaki sürümleri de güncelleyin. `0.x`'te küçük sürüm kırıcı olabilir, günlükte **Kırıcı** başlığı zorunludur.
-- npm kapsam adı: `@clickfix/*` paket adları npm'de boştur (`npm view` 404, kapsam aramasında paket yok); kapsamın bir organizasyon olarak alınıp alınmadığı hesap olmadan doğrulanamaz. Alınamazsa yedek ad `@getclickfix/*`; o durumda iki `package.json`, kılavuzun Paketler tablosu ve `sdks/README.md` birlikte değişir, başka yerde paket adı geçmez.
+- npm kapsam adı: `@clickfix/*` paket adları npm'de boştur (`npm view` 404, kapsam aramasında paket yok); kapsamın bir organizasyon olarak alınıp alınmadığı hesap olmadan doğrulanamaz. Alınamazsa yedek ad `@getclickfix/*`; o durumda üç `package.json` (react-widget'ın bağımlılığı dahil), kılavuzun Paketler tablosu ve `sdks/README.md` birlikte değişir, başka yerde paket adı geçmez.
 - Go modülü repo private kaldığı sürece `GOPRIVATE=github.com/ClickSolveMainTR/*` ve git kimliği ister; README'de yazar. Repo herkese açık olunca `go get` doğrudan çalışır. Modül yolu `furkanmeclis` kökünden `ClickSolveMainTR` köküne taşındı; eski yol kullanılmaz.
 
 ## Mobil karar
 
-İssue #114 yorumu (9 Kas): mobil yol tam SDK değil, oturumu taşıyan güvenli webview. Köprü sözleşmesi [webview-bridge.md](./webview-bridge.md), uygulaması `frontend/widget-sdk/src/shared/bridge.ts` + `widget.ts`, barındırılan sayfa `frontend/public/widget-embed.html`, birim testi `frontend/widget-sdk/tests/bridge.test.mjs`. Yerel paketler (CF-201/202/203) bu sözleşmeyi kullanacak; bu işte Flutter paketi yazılmadı.
+İssue #114 yorumu (9 Kas): mobil yol tam SDK değil, oturumu taşıyan güvenli webview. Köprü sözleşmesi [webview-bridge.md](./webview-bridge.md), uygulaması `frontend/widget-sdk/src/shared/bridge.ts` + `widget.ts`, barındırılan sayfa `frontend/public/widget-embed.html`, birim testi `frontend/widget-sdk/tests/bridge.test.mjs`. Yerel paketler (CF-201/202/203) bu sözleşmeyi kullanır. CF-201 köprüye `clickfix:session` (iki yönlü oturum devri) ekledi, çekirdek `@clickfix/visitor-core` köprü tiplerini dışa aktarır ve bir test (`sdks/tests/visitor-core.test.mjs`) `widget.d.ts`, `shared/bridge.ts` ve çekirdeğin mesaj türlerini eşit tutar.

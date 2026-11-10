@@ -311,7 +311,9 @@ export type ClickFixBridgeCommand =
   | { type: "clickfix:update"; id?: string; update: ClickFixUpdate }
   | { type: "clickfix:consent"; id?: string; granted: boolean }
   | { type: "clickfix:reset"; id?: string }
-  | { type: "clickfix:get-state"; id?: string };
+  | { type: "clickfix:get-state"; id?: string }
+  /** Continue the session the app started natively (@clickfix/visitor-core, CF-201). */
+  | { type: "clickfix:session"; id?: string; token: string };
 
 /** Widget -> host messages of the webview bridge. */
 export type ClickFixBridgeMessage =
@@ -330,7 +332,9 @@ export type ClickFixBridgeMessage =
       ok: boolean;
       data?: unknown;
       error?: { code: string; message: string };
-    };
+    }
+  /** The webview's visitor token after ready, identify and reset. */
+  | { type: "clickfix:session"; token: string; visitor_id: string };
 
 export interface ClickFixBridge {
   version: 1;

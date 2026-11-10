@@ -32,6 +32,7 @@ import (
 const (
 	CodeWidgetNotFound        = "WIDGET_NOT_FOUND"
 	CodeOriginNotAllowed      = "WIDGET_ORIGIN_NOT_ALLOWED"
+	CodeAppKeyInvalid         = "WIDGET_APP_KEY_INVALID"
 	CodeVisitorToken          = "WIDGET_VISITOR_TOKEN_INVALID"
 	CodeIdentityDisabled      = usecase.RejectionIdentityDisabled
 	CodeIdentityInvalid       = usecase.RejectionIdentityInvalid
@@ -92,7 +93,7 @@ func CORS(next http.Handler) http.Handler {
 		if origin := r.Header.Get("Origin"); origin != "" {
 			h.Set("Access-Control-Allow-Origin", origin)
 			h.Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
-			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Widget-Page")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Widget-Page, "+AppKeyHeader+", "+AppPackageHeader)
 			h.Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions {
@@ -111,6 +112,13 @@ func (h *Handler) Preflight(w http.ResponseWriter, _ *http.Request) {
 // OriginHeader carries the page origin when the request is relayed by the
 // app's BFF (which never forwards the browser Origin header to the API).
 const OriginHeader = "X-Widget-Origin"
+
+// Mobile app identity headers (CF-201): a native app sends its app key and
+// package name instead of a page origin. The BFF relays both unchanged.
+const (
+	AppKeyHeader     = "X-ClickFix-App-Key"
+	AppPackageHeader = "X-ClickFix-App-Package"
+)
 
 // pageOrigin is the origin of the page the widget runs on: the relayed
 // origin, the Origin header, else the Referer's origin (same-origin GETs
@@ -164,7 +172,10 @@ func (h *Handler) allow(w http.ResponseWriter, r *http.Request, action, subject 
 	return true
 }
 
-// open resolves the widget of the path and checks the page origin.
+// open resolves the widget of the path and checks the page origin, or the
+// app key and package name when the request carries them (CF-201). The
+// per-widget request limit applies before either check, so a wrong key
+// costs the same as a wrong origin.
 func (h *Handler) open(w http.ResponseWriter, r *http.Request) (usecase.Widget, bool) {
 	id, err := uuid.Parse(r.PathValue("public_id"))
 	if err != nil {
@@ -174,7 +185,12 @@ func (h *Handler) open(w http.ResponseWriter, r *http.Request) (usecase.Widget, 
 	if !h.allow(w, r, "request", id.String()+":"+clientIP(r), defaultRequestsPerMinute) {
 		return usecase.Widget{}, false
 	}
-	wd, err := h.svc.Open(r.Context(), id, pageOrigin(r))
+	var wd usecase.Widget
+	if key := r.Header.Get(AppKeyHeader); key != "" {
+		wd, err = h.svc.OpenApp(r.Context(), id, key, r.Header.Get(AppPackageHeader))
+	} else {
+		wd, err = h.svc.Open(r.Context(), id, pageOrigin(r))
+	}
 	if err != nil {
 		h.fail(w, r, err)
 		return usecase.Widget{}, false
@@ -240,6 +256,10 @@ func (h *Handler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.UserAgent, in.Origin = r.UserAgent(), pageOrigin(r)
+	if wd.App != nil {
+		// The install checker lists the app in place of a page origin.
+		in.Origin = wd.App.InstallOrigin()
+	}
 	if h.country != nil {
 		in.Country = h.country(r)
 	}
@@ -589,6 +609,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		response.Error(w, r, http.StatusNotFound, CodeWidgetNotFound, "Not found")
 	case errors.Is(err, usecase.ErrOriginNotAllowed):
 		response.Error(w, r, http.StatusForbidden, CodeOriginNotAllowed, "This site may not use the widget")
+	case errors.Is(err, usecase.ErrAppKeyInvalid):
+		response.Error(w, r, http.StatusForbidden, CodeAppKeyInvalid, "This app may not use the widget")
 	case errors.Is(err, usecase.ErrUnauthorized):
 		response.Error(w, r, http.StatusUnauthorized, CodeVisitorToken, "Visitor token is missing or invalid")
 	case errors.Is(err, usecase.ErrIdentityDisabled):
