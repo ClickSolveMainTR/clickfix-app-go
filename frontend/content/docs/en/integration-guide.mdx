@@ -965,35 +965,34 @@ Widget → app: `clickfix:ready`, `clickfix:event` (every SDK event: `message`, 
 The host-side samples below set up the bridge, hand over the session when the widget is ready, send an app event and close the support screen on the widget's `close` event. They are not part of the guide's automated test; build and verify them in your own project.
 
 ```dart tab="Flutter"
-// webview_flutter ^4: the JavaScriptChannel must be named ClickFixFlutter.
-final controller = WebViewController()
-  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  ..setNavigationDelegate(NavigationDelegate(
-    onNavigationRequest: (req) =>
-        req.url.startsWith('https://getclickfix.com/')
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent, // other hosts never load inside the webview
-  ))
-  ..addJavaScriptChannel('ClickFixFlutter', onMessageReceived: (msg) async {
-    final data = jsonDecode(msg.message) as Map<String, dynamic>;
-    switch (data['type']) {
-      case 'clickfix:ready':
-        final s = await api.supportSession(); // { user_id, user_hash } from your server
-        send(controller, {'type': 'clickfix:identify', 'id': 'login',
-          'user': {'user_id': s.userId, 'user_hash': s.userHash, 'company': {'id': s.companyId}}});
-        send(controller, {'type': 'clickfix:track', 'name': 'app_screen', 'properties': {'screen': 'orders'}});
-      case 'clickfix:link':
-        launchUrl(Uri.parse(data['url'] as String), mode: LaunchMode.externalApplication);
-      case 'clickfix:event' when data['event'] == 'close':
-        Navigator.of(context).pop();
-      case 'clickfix:event' when data['event'] == 'unread':
-        badge.value = (data['payload'] as Map)['count'] as int;
-    }
-  })
-  ..loadRequest(Uri.parse('https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en'));
+// Package: clickfix_webview (sdks/flutter/clickfix_webview; a git dependency until the first release). The package sets up
+// the bridge, the origin lock and the ClickFixFlutter channel; you hand over the session.
+import 'package:clickfix_webview/clickfix_webview.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void send(WebViewController c, Map<String, Object?> m) =>
-    c.runJavaScript('window.ClickFixBridge && window.ClickFixBridge.receive(${jsonEncode(jsonEncode(m))})');
+final controller = ClickFixController(
+  widgetId: 'WIDGET_ID',
+  locale: 'en',
+  conversation: conversationUuid, // optional deep link
+);
+
+ClickFixWebView(
+  controller: controller,
+  onReady: (_) async {
+    final s = await api.supportSession(); // { user_id, user_hash } from your server
+    try {
+      await controller.identify(ClickFixIdentity(
+        userId: s.userId, userHash: s.userHash, company: ClickFixCompany(id: s.companyId)));
+      await controller.track('app_screen', properties: {'screen': 'orders'});
+    } on ClickFixBridgeError catch (e) {
+      debugPrint('identity rejected: ${e.code}'); // e.g. WIDGET_IDENTITY_INVALID; the visitor stays anonymous
+    }
+  },
+  onUnread: (count) => badge.value = count,
+  onLink: (link) => launchUrl(link.url, mode: LaunchMode.externalApplication), // https only
+  onClose: () => Navigator.of(context).pop(),
+);
+// On logout: controller.reset(); when the screen closes: controller.dispose().
 ```
 
 ```tsx tab="React Native"
@@ -1140,7 +1139,7 @@ class SupportActivity : AppCompatActivity() {
 - **Cookies and storage:** the session lives in the webview's storage; send `clickfix:reset` on account switch and logout. On shared devices clear the webview storage too.
 - **Consent:** if your app collects consent, add `consent=1` to the URL or send `clickfix:consent`; nothing is stored without it.
 
-The Flutter package and native SDKs are separate projects; when they ship they will use this same bridge contract.
+The Flutter package `clickfix_webview` (`sdks/flutter/clickfix_webview`; `ClickFixWebView` + `ClickFixController`, bridge contract v1, origin lock, deep links) will be published to pub.dev by the `sdk-publish` CI job with its first release; until then use it as a git dependency in `pubspec.yaml`: `clickfix_webview: { git: { url: https://github.com/ClickSolveMainTR/clickfix-app-go.git, path: sdks/flutter/clickfix_webview, ref: main } }`. The native Dart client (`clickfix_visitor`) and the other native SDKs are separate projects; when they ship they will use this same bridge contract.
 
 ## Laravel package [#laravel]
 

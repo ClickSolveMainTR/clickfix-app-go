@@ -62,6 +62,7 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
       infra: ${{ steps.filter.outputs.infra }}
       laravel: ${{ steps.filter.outputs.laravel }}
+      flutter: ${{ steps.filter.outputs.flutter }}
       full: ${{ steps.filter.outputs.full }}
     steps:
       - uses: actions/checkout@v7
@@ -75,7 +76,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; infra=false; laravel=false; full=false
+          mobile=false; infra=false; laravel=false; flutter=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -104,17 +105,18 @@ jobs:
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
               sdks/php/*|sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
+              sdks/flutter/*) flutter=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; infra=true; laravel=true
+            backend=true; frontend=true; contracts=true; mobile=true; infra=true; laravel=true; flutter=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "infra=$infra"; echo "laravel=$laravel"; echo "full=$full"
+            echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -369,8 +371,6 @@ jobs:
           - { laravel: "13.*", testbench: "11.*", php: "8.3" }
           - { laravel: "13.*", testbench: "11.*", php: "8.4" }
     env:
-      # The runners on one machine share $HOME; keep Composer's cache per job.
-      COMPOSER_CACHE_DIR: ${{ runner.temp }}/composer-cache
       COMPOSER_NO_INTERACTION: "1"
     steps:
       - uses: actions/checkout@v7
@@ -385,6 +385,9 @@ jobs:
         run: composer validate --strict --no-check-lock
       - name: Install Laravel ${{ matrix.laravel }} with Testbench ${{ matrix.testbench }}
         working-directory: sdks/laravel
+        env:
+          # The runners on one machine share $HOME; keep Composer's cache per job.
+          COMPOSER_CACHE_DIR: ${{ runner.temp }}/composer-cache
         run: |
           composer update --prefer-dist --no-progress \
             --with="laravel/framework:${{ matrix.laravel }}" \
@@ -393,6 +396,56 @@ jobs:
       - name: Tests
         working-directory: sdks/laravel
         run: vendor/bin/phpunit --no-coverage
+
+  # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
+  # formatter, unit + widget tests, the example app compiled to a Flutter
+  # bundle (no Android SDK / Xcode needed) and the pub.dev publish dry run.
+  # The toolchain is installed by subosito/flutter-action (the self-hosted
+  # runners have no Flutter); the version is pinned to what the package was
+  # developed with. The dry run needs a LICENSE file in the package root:
+  # while it is missing the step warns and skips instead of failing.
+  flutter:
+    needs: [changes]
+    if: needs.changes.outputs.flutter == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    env:
+      FLUTTER_PKG: sdks/flutter/clickfix_webview
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Dependencies
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: flutter pub get
+      - name: Analyze and format
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: |
+          dart analyze --fatal-infos
+          dart format --output=none --set-exit-if-changed .
+      - name: Tests
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: flutter test
+      - name: Example app compiles
+        working-directory: ${{ env.FLUTTER_PKG }}/example
+        run: |
+          flutter pub get
+          dart analyze --fatal-infos
+          dart format --output=none --set-exit-if-changed .
+          flutter build bundle
+      # What `sdk-publish` would ship from main; no credentials needed.
+      - name: pub.dev publish dry run
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: |
+          if [ ! -f LICENSE ]; then
+            echo "::warning::$FLUTTER_PKG/LICENSE is missing: pub.dev dry run skipped (pub refuses packages without a license)"
+            echo "pub.dev dry run skipped: $FLUTTER_PKG/LICENSE is missing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          dart pub publish --dry-run
+          echo "clickfix_webview $(sed -n 's/^version: *//p' pubspec.yaml) -> pub.dev" >> "$GITHUB_STEP_SUMMARY"
 
   # Lint, format, types, unit tests and the production build.
   frontend:
@@ -541,7 +594,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, laravel]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, laravel, flutter]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
@@ -705,6 +758,14 @@ jobs:
   # token of the account that owns the @clickfix scope); without it the job
   # skips with a summary note and never fails main. Versions and changelogs
   # live in sdks/<package>/CHANGELOG.md.
+  #
+  # The same job publishes the Flutter package clickfix_webview to pub.dev
+  # (CF-203) when its pubspec version is not on pub.dev yet. Needs the
+  # PUB_CREDENTIALS repository secret: the content of the pub-credentials.json
+  # file of the pub.dev publisher account (created by `dart pub token add
+  # https://pub.dev` / a first `dart pub publish` on that machine). Without
+  # it the Flutter steps skip with a summary note. The credentials file is
+  # written to a job-private config directory and removed afterwards.
   sdk-publish:
     needs: [ci]
     if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -760,6 +821,48 @@ jobs:
             (cd "$p" && npm publish --access public)
             echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
           done
+      - name: Flutter version to publish
+        id: pub
+        env:
+          HAS_PUB: ${{ secrets.PUB_CREDENTIALS != '' }}
+          PKG: sdks/flutter/clickfix_webview
+        run: |
+          if [ "$HAS_PUB" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "PUB_CREDENTIALS secret is not set: pub.dev publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if [ ! -f "$PKG/LICENSE" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "$PKG/LICENSE is missing: pub.dev publish skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          name=$(sed -n 's/^name: *//p' "$PKG/pubspec.yaml"); version=$(sed -n 's/^version: *//p' "$PKG/pubspec.yaml")
+          if curl -fsS "https://pub.dev/api/packages/$name" | jq -e --arg v "$version" 'any(.versions[].version; . == $v)' >/dev/null; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "$name $version is already on pub.dev" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "package=$name" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: subosito/flutter-action@v2
+        if: steps.pub.outputs.run == 'true'
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Publish to pub.dev
+        if: steps.pub.outputs.run == 'true'
+        working-directory: sdks/flutter/clickfix_webview
+        env:
+          PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
+          XDG_CONFIG_HOME: ${{ runner.temp }}/pub-config
+        run: |
+          mkdir -p "$XDG_CONFIG_HOME/dart"
+          printf '%s' "$PUB_CREDENTIALS" > "$XDG_CONFIG_HOME/dart/pub-credentials.json"
+          trap 'rm -rf "$XDG_CONFIG_HOME"' EXIT
+          flutter pub get
+          flutter test
+          dart pub publish --force
+          echo "published ${{ steps.pub.outputs.package }} ${{ steps.pub.outputs.version }} to pub.dev" >> "$GITHUB_STEP_SUMMARY"
 
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls

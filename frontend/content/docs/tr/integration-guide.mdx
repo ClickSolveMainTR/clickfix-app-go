@@ -965,35 +965,34 @@ Widget → uygulama: `clickfix:ready`, `clickfix:event` (her SDK olayı: `messag
 Aşağıdaki uygulama tarafı örnekleri köprüyü kurar, hazır olunca oturumu devreder, uygulama olayı gönderir ve widget'ın `close` olayında destek ekranını kapatır. Bunlar kılavuzun otomatik testine girmez; kendi projenizde derleyip doğrulayın.
 
 ```dart tab="Flutter"
-// webview_flutter ^4: JavaScriptChannel adı ClickFixFlutter olmalı.
-final controller = WebViewController()
-  ..setJavaScriptMode(JavaScriptMode.unrestricted)
-  ..setNavigationDelegate(NavigationDelegate(
-    onNavigationRequest: (req) =>
-        req.url.startsWith('https://getclickfix.com/')
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent, // başka adres: webview içinde açılmaz
-  ))
-  ..addJavaScriptChannel('ClickFixFlutter', onMessageReceived: (msg) async {
-    final data = jsonDecode(msg.message) as Map<String, dynamic>;
-    switch (data['type']) {
-      case 'clickfix:ready':
-        final s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
-        send(controller, {'type': 'clickfix:identify', 'id': 'login',
-          'user': {'user_id': s.userId, 'user_hash': s.userHash, 'company': {'id': s.companyId}}});
-        send(controller, {'type': 'clickfix:track', 'name': 'app_screen', 'properties': {'screen': 'orders'}});
-      case 'clickfix:link':
-        launchUrl(Uri.parse(data['url'] as String), mode: LaunchMode.externalApplication);
-      case 'clickfix:event' when data['event'] == 'close':
-        Navigator.of(context).pop();
-      case 'clickfix:event' when data['event'] == 'unread':
-        badge.value = (data['payload'] as Map)['count'] as int;
-    }
-  })
-  ..loadRequest(Uri.parse('https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr'));
+// Paket: clickfix_webview (sdks/flutter/clickfix_webview; ilk sürüme kadar git bağımlılığı). Köprüyü, kaynak
+// kilidini ve ClickFixFlutter kanalını paket kurar; siz oturumu devredersiniz.
+import 'package:clickfix_webview/clickfix_webview.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void send(WebViewController c, Map<String, Object?> m) =>
-    c.runJavaScript('window.ClickFixBridge && window.ClickFixBridge.receive(${jsonEncode(jsonEncode(m))})');
+final controller = ClickFixController(
+  widgetId: 'WIDGET_ID',
+  locale: 'tr',
+  conversation: conversationUuid, // isteğe bağlı derin bağlantı
+);
+
+ClickFixWebView(
+  controller: controller,
+  onReady: (_) async {
+    final s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
+    try {
+      await controller.identify(ClickFixIdentity(
+        userId: s.userId, userHash: s.userHash, company: ClickFixCompany(id: s.companyId)));
+      await controller.track('app_screen', properties: {'screen': 'orders'});
+    } on ClickFixBridgeError catch (e) {
+      debugPrint('kimlik reddedildi: ${e.code}'); // WIDGET_IDENTITY_INVALID gibi; ziyaretçi anonim kalır
+    }
+  },
+  onUnread: (count) => badge.value = count,
+  onLink: (link) => launchUrl(link.url, mode: LaunchMode.externalApplication), // yalnız https gelir
+  onClose: () => Navigator.of(context).pop(),
+);
+// Çıkışta: controller.reset(); ekran kapanınca: controller.dispose().
 ```
 
 ```tsx tab="React Native"
@@ -1140,7 +1139,7 @@ class SupportActivity : AppCompatActivity() {
 - **Çerez ve depolama:** oturum webview'in depolamasında kalır; hesap değişiminde ve çıkışta `clickfix:reset` gönderin. Cihaz paylaşımlıysa webview depolamasını da temizleyin.
 - **Onay:** uygulamanız onay topluyorsa adrese `consent=1` ekleyin ya da `clickfix:consent` gönderin; onaysız hiçbir şey saklanmaz.
 
-Flutter paketi ve yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.
+Flutter paketi `clickfix_webview` (`sdks/flutter/clickfix_webview`; `ClickFixWebView` + `ClickFixController`, köprü sözleşmesi v1, kaynak kilidi, derin bağlantı) ilk sürümünde CI'daki `sdk-publish` işiyle pub.dev'e yayımlanacaktır; o zamana kadar `pubspec.yaml` içinde git bağımlılığı olarak kullanın: `clickfix_webview: { git: { url: https://github.com/ClickSolveMainTR/clickfix-app-go.git, path: sdks/flutter/clickfix_webview, ref: main } }`. Yerel Dart istemcisi (`clickfix_visitor`) ve diğer yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.
 
 ## Laravel paketi [#laravel]
 
