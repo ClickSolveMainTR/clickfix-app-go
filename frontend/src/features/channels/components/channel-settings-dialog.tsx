@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,20 +48,14 @@ import type {
   ChannelInstance,
   ChannelOperationalSettings,
 } from "@/features/channels/types";
+import { routes } from "@/config/routes";
 import { useLocale } from "@/providers/locale-provider";
 
-const DAYS = [1, 2, 3, 4, 5, 6, 0];
-const DEFAULT_HOURS = {
-  timezone: "Europe/Istanbul",
-  start: "09:00",
-  end: "18:00",
-  days: [1, 2, 3, 4, 5],
-};
-
 /**
- * Per-inbox settings (CF-61): name, AI agent, automatic greeting and
- * business hours. They live in the instance settings next to the channel's
- * own keys, which are kept untouched. The webhook URL is shown
+ * Per-inbox settings (CF-61): name, brand and AI agent. They live in the
+ * instance settings next to the channel's own keys, which are kept
+ * untouched. Working hours and automatic replies are organization-wide
+ * (SLA schedule and auto replies, CF-198). The webhook URL is shown
  * for channels configured on the provider side. SMS, voice, Teams, Google
  * Chat and API channels can change credentials (secrets are write-only:
  * empty keeps the stored value); Slack and Google Chat edit their routed
@@ -87,14 +83,7 @@ export function ChannelSettingsDialog({
     brandId !== (channel.brand_id ?? null) ? { brand_id: brandId } : {};
   const [s, setS] = useState<ChannelOperationalSettings>({
     ai_enabled: initial.ai_enabled ?? false,
-    greeting_enabled: initial.greeting_enabled ?? false,
-    greeting: initial.greeting ?? "",
-    business_hours_enabled: initial.business_hours_enabled ?? false,
-    business_hours: initial.business_hours ?? DEFAULT_HOURS,
   });
-  const hours = s.business_hours ?? DEFAULT_HOURS;
-  const setHours = (patch: Partial<typeof hours>) =>
-    setS((prev) => ({ ...prev, business_hours: { ...hours, ...patch } }));
 
   const setup = SETUP_TYPES.has(channel.type);
   const provider = channel.credential_hints.provider;
@@ -252,86 +241,15 @@ export function ChannelSettingsDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="greeting-enabled">
-                {t("channels.settings.greeting")}
-              </Label>
-              <Switch
-                id="greeting-enabled"
-                checked={s.greeting_enabled}
-                onCheckedChange={(v) => setS({ ...s, greeting_enabled: v })}
-              />
-            </div>
-            {s.greeting_enabled ? (
-              <Textarea
-                value={s.greeting}
-                maxLength={1000}
-                placeholder={t("channels.settings.greeting_placeholder")}
-                onChange={(e) => setS({ ...s, greeting: e.target.value })}
-              />
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <Label htmlFor="hours-enabled">
-                {t("channels.settings.hours")}
-              </Label>
-              <Switch
-                id="hours-enabled"
-                checked={s.business_hours_enabled}
-                onCheckedChange={(v) =>
-                  setS({ ...s, business_hours_enabled: v })
-                }
-              />
-            </div>
-            {s.business_hours_enabled ? (
-              <div className="space-y-2 rounded-md border p-3">
-                <div className="flex flex-wrap gap-1">
-                  {DAYS.map((d) => {
-                    const on = hours.days.includes(d);
-                    return (
-                      <Button
-                        key={d}
-                        type="button"
-                        size="sm"
-                        variant={on ? "default" : "outline"}
-                        onClick={() =>
-                          setHours({
-                            days: on
-                              ? hours.days.filter((x) => x !== d)
-                              : [...hours.days, d],
-                          })
-                        }
-                      >
-                        {t(`channels.settings.day.${d}`)}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <Input
-                    type="time"
-                    aria-label={t("channels.settings.hours_start")}
-                    value={hours.start}
-                    onChange={(e) => setHours({ start: e.target.value })}
-                  />
-                  <Input
-                    type="time"
-                    aria-label={t("channels.settings.hours_end")}
-                    value={hours.end}
-                    onChange={(e) => setHours({ end: e.target.value })}
-                  />
-                  <Input
-                    aria-label={t("channels.settings.timezone")}
-                    value={hours.timezone}
-                    onChange={(e) => setHours({ timezone: e.target.value })}
-                  />
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <p className="text-muted-foreground text-xs">
+            {t("channels.settings.hours_source")}{" "}
+            <Link
+              href={`${routes.cms.settings.sla}?tab=hours`}
+              className="text-foreground underline underline-offset-4"
+            >
+              {t("channels.settings.hours_source_link")}
+            </Link>
+          </p>
 
           {mode !== "none" || !setup ? (
             <CopyField

@@ -679,7 +679,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`) */
+        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`) */
         ValidationError: {
             headers: {
                 [name: string]: unknown;

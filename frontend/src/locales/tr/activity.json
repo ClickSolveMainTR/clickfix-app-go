@@ -244,5 +244,7 @@
   "actions.channels.test_delivery": "Kanala test olayı gönderildi",
   "actions.webhooks.test_queued": "Webhook test olayı kuyruğa alındı",
   "actions.assistant.document_added": "Asistana belge paylaşıldı",
-  "actions.assistant.document_removed": "Asistandan belge kaldırıldı"
+  "actions.assistant.document_removed": "Asistandan belge kaldırıldı",
+  "actions.auto_replies.updated": "Otomatik yanıtlar güncellendi",
+  "resources.auto_replies": "Otomatik yanıtlar"
 }

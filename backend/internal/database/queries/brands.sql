@@ -5,10 +5,10 @@ SELECT * FROM brands WHERE organization_id=$1 AND uuid=$2;
 -- name: CountBrands :one
 SELECT count(*) FROM brands WHERE organization_id=$1;
 -- name: CreateBrand :one
-INSERT INTO brands(organization_id,name,logo_attachment_id,primary_color,secondary_color,support_email,sender_name,reply_to,help_subdomain,help_path,widget_defaults,signature,business_hours,sla_policy_id,ai_persona)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *;
+INSERT INTO brands(organization_id,name,logo_attachment_id,primary_color,secondary_color,support_email,sender_name,reply_to,help_subdomain,help_path,widget_defaults,signature,sla_policy_id,ai_persona)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *;
 -- name: UpdateBrand :one
-UPDATE brands SET name=$3,logo_attachment_id=$4,primary_color=$5,secondary_color=$6,support_email=$7,sender_name=$8,reply_to=$9,help_subdomain=$10,help_path=$11,widget_defaults=$12,signature=$13,business_hours=$14,sla_policy_id=$15,ai_persona=$16
+UPDATE brands SET name=$3,logo_attachment_id=$4,primary_color=$5,secondary_color=$6,support_email=$7,sender_name=$8,reply_to=$9,help_subdomain=$10,help_path=$11,widget_defaults=$12,signature=$13,sla_policy_id=$14,ai_persona=$15
 WHERE organization_id=$1 AND uuid=$2 RETURNING *;
 -- name: DeleteBrand :execrows
 DELETE FROM brands WHERE organization_id=$1 AND uuid=$2;

@@ -315,8 +315,7 @@ type sendBody struct {
 	Profile  *usecase.ProfileInput  `json:"profile"`
 	// Form is the request form (CF-52) submitted with a first message.
 	Form *formsmodel.Submission `json:"form"`
-	// CF-150: custom pre-chat answers, consent, intent and SDK attributes.
-	PreChat    map[string]any `json:"prechat"`
+	// CF-150: consent, intent and SDK attributes.
 	Consent    *bool          `json:"consent"`
 	Intent     string         `json:"intent"`
 	Attributes map[string]any `json:"attributes"`
@@ -340,12 +339,10 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 			given := v == "true"
 			in.Consent = &given
 		}
-		for key, dst := range map[string]*map[string]any{"prechat": &in.PreChat, "attributes": &in.Attributes} {
-			if v := r.FormValue(key); v != "" {
-				if err := json.Unmarshal([]byte(v), dst); err != nil {
-					response.BadRequest(w, r, response.CodeValidationError, key+" must be a JSON object")
-					return in, false
-				}
+		if v := r.FormValue("attributes"); v != "" {
+			if err := json.Unmarshal([]byte(v), &in.Attributes); err != nil {
+				response.BadRequest(w, r, response.CodeValidationError, "attributes must be a JSON object")
+				return in, false
 			}
 		}
 		if v := r.FormValue("form"); v != "" {
@@ -389,7 +386,7 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 	}
 	in.Text, in.PageURL, in.Events = body.Text, body.PageURL, body.Events
 	in.Profile = usecase.ProfileInput{Name: body.Name, Email: body.Email, Phone: body.Phone}
-	in.PreChat, in.Consent, in.Intent, in.Attributes = body.PreChat, body.Consent, body.Intent, body.Attributes
+	in.Consent, in.Intent, in.Attributes = body.Consent, body.Intent, body.Attributes
 	if body.Profile != nil {
 		in.Profile = *body.Profile
 	}

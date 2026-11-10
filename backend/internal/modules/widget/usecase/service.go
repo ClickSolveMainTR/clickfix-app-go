@@ -31,6 +31,7 @@ import (
 	convusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
 	formsengine "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/engine"
 	formsmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
@@ -111,6 +112,7 @@ type Service struct {
 	appOrigin    string
 	forms        FormSource
 	fields       FieldSource
+	hours        businesshours.Source
 	log          *slog.Logger
 	now          func() time.Time
 }
@@ -129,17 +131,32 @@ type Deps struct {
 	AppOrigin string
 	// Forms offers the widget's request form (CF-52); optional.
 	Forms FormSource
+	// Hours is the organization's working-hours source (the SLA schedule,
+	// CF-198); nil means always open.
+	Hours businesshours.Source
 	Log   *slog.Logger
 }
 
 // FormChannel is the request form channel of the web widget.
 const FormChannel = "widget"
 
-// FormSource is the request form use case (CF-52).
+// FormSource is the request form use case (CF-52). The widget's pre-chat
+// form is one of these forms (CF-198): preferred is the form the widget
+// settings pick (uuid.Nil = the first active widget form).
 type FormSource interface {
-	ForChannel(ctx context.Context, orgID int64, channel string) (*formsmodel.PublicForm, error)
-	Check(ctx context.Context, orgID int64, channel string, sub *formsmodel.Submission, optional ...string) (*formsengine.Submission, uuid.UUID, error)
+	Offered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID) (*formsmodel.PublicForm, error)
+	CheckOffered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID, sub *formsmodel.Submission, optional ...string) (*formsengine.Submission, uuid.UUID, error)
 	Apply(ctx context.Context, orgID, conversationID int64, formUUID uuid.UUID, sub formsengine.Submission) error
+}
+
+// preChatForm is the request form the widget settings pick (uuid.Nil = the
+// first active widget form).
+func preChatForm(set widget.Settings) uuid.UUID {
+	id, err := uuid.Parse(set.PreChat.FormUUID)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 // New builds the service.
@@ -151,12 +168,32 @@ func New(d Deps) *Service {
 	return &Service{
 		q: d.Queries, store: d.Store, instances: d.Instances, pipeline: d.Pipeline, files: d.Files,
 		signer: d.Signer, pub: d.Publisher, issuer: d.Issuer, appOrigin: strings.TrimRight(d.AppOrigin, "/"),
-		forms: d.Forms, log: log, now: func() time.Time { return time.Now().UTC() },
+		forms: d.Forms, hours: d.Hours, log: log, now: func() time.Time { return time.Now().UTC() },
 	}
+}
+
+// hoursState is the organization's working-hours state at now (CF-198). An
+// error or a missing source means open: hours never take the widget down.
+func (s *Service) hoursState(ctx context.Context, org int64, now time.Time) businesshours.State {
+	if s.hours == nil {
+		return businesshours.State{Open: true}
+	}
+	st, err := s.hours.HoursState(ctx, org, now)
+	if err != nil {
+		s.log.Warn("widget_hours_state_failed", "organization_id", org, "error", err)
+		return businesshours.State{Open: true}
+	}
+	return st
 }
 
 // WithClock replaces the clock (tests).
 func (s *Service) WithClock(now func() time.Time) *Service { s.now = now; return s }
+
+// WithForms sets the request form source (tests).
+func (s *Service) WithForms(f FormSource) *Service { s.forms = f; return s }
+
+// WithHours sets the working-hours source (CF-198).
+func (s *Service) WithHours(h businesshours.Source) *Service { s.hours = h; return s }
 
 // Widget is an opened widget instance for one request.
 type Widget struct {
@@ -184,11 +221,6 @@ func (s *Service) Open(ctx context.Context, publicID uuid.UUID, origin string) (
 			return Widget{}, err
 		}
 		defaults["color"] = b.PrimaryColor
-		var hours any
-		if err := json.Unmarshal(b.BusinessHours, &hours); err != nil {
-			return Widget{}, err
-		}
-		defaults["business_hours"] = hours
 		for k, v := range inst.Settings {
 			defaults[k] = v
 		}
@@ -239,7 +271,6 @@ type PublicSettings struct {
 	GreetingText    string                  `json:"greeting_text"`
 	ShowTeam        bool                    `json:"show_team"`
 	PreChat         widget.PreChat          `json:"prechat"`
-	BusinessHours   widget.BusinessHours    `json:"business_hours"`
 	OfflineMessage  string                  `json:"offline_message"`
 	RequireIdentity bool                    `json:"require_identity"`
 	FileUpload      bool                    `json:"file_upload"`
@@ -292,7 +323,7 @@ func Public(set widget.Settings) PublicSettings {
 	return PublicSettings{
 		SchemaVersion: set.SchemaVersion, Color: set.Color, Position: set.Position, Locale: set.Locale,
 		GreetingTitle: set.GreetingTitle, GreetingText: set.GreetingText, ShowTeam: set.ShowTeam, PreChat: set.PreChat,
-		BusinessHours: set.BusinessHours, OfflineMessage: set.OfflineMessage, RequireIdentity: set.RequireIdentity,
+		OfflineMessage: set.OfflineMessage, RequireIdentity: set.RequireIdentity,
 		FileUpload: set.FileUpload, CSAT: set.CSAT, Appearance: set.Appearance, Texts: set.Texts, ReplyTime: set.ReplyTime,
 		Home: set.Home, QuickReplies: set.QuickReplies, CSATOptions: set.CSATOptions, Offline: set.Offline,
 		AwayMode: set.AwayMode, Channels: set.Channels, AI: PublicAI{Enabled: set.AI.Enabled, HumanButton: set.AI.HumanButton},
@@ -372,8 +403,9 @@ func (s *Service) Bootstrap(ctx context.Context, w Widget, token string, in Boot
 	out.Widget.ID, out.Widget.Name = w.Instance.UUID, w.Instance.Name
 	out.Widget.BrandID = w.Instance.BrandID
 	out.Widget.Settings = Public(set)
-	out.Widget.Online = set.Online(now)
-	out.Widget.Reply = set.EstimateReply(now, s.medianFirstResponse(ctx, w))
+	hours := s.hoursState(ctx, w.Instance.OrganizationID, now)
+	out.Widget.Online = set.Online(hours.Open)
+	out.Widget.Reply = set.EstimateReply(hours, s.medianFirstResponse(ctx, w))
 	s.touchInstall(ctx, w, in)
 	out.Widget.Team = []TeamMember{}
 	if set.ShowTeam {
@@ -383,8 +415,9 @@ func (s *Service) Bootstrap(ctx context.Context, w Widget, token string, in Boot
 		}
 		out.Widget.Team = team
 	}
-	if s.forms != nil {
-		form, err := s.forms.ForChannel(ctx, w.Instance.OrganizationID, FormChannel)
+	// The pre-chat form is a request form (CF-198); off means no form.
+	if s.forms != nil && set.PreChat.Enabled {
+		form, err := s.forms.Offered(ctx, w.Instance.OrganizationID, FormChannel, preChatForm(set))
 		if err != nil {
 			return Bootstrap{}, err
 		}
@@ -882,8 +915,6 @@ type SendInput struct {
 	// Events are the visitor's recent ClickFix('track', ...) events, kept on
 	// the message for the agent (newest last, at most MaxTrackedEvents).
 	Events []TrackedEvent
-	// PreChat answers the custom pre-chat questions of a first message.
-	PreChat map[string]any
 	// Consent is the GDPR/KVKK checkbox of the pre-chat form.
 	Consent *bool
 	// Intent: "" (chat), "human" (talk to a person), "callback" or "video".
@@ -940,21 +971,19 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 	if !slices.Contains(intents, in.Intent) {
 		return Sent{}, fmt.Errorf("%w: unknown intent", ErrInvalid)
 	}
-	var prechat map[string]any
 	if in.ConversationUUID == nil {
-		var err error
-		if prechat, err = checkPreChat(w.Settings, in); err != nil {
+		if err := checkPreChat(w.Settings, in); err != nil {
 			return Sent{}, err
 		}
 	}
 	org, inst := w.Instance.OrganizationID, w.Instance
-	// A new conversation answers the widget's request form first (CF-52);
-	// the composer text is its message.
+	// A new conversation answers the widget's pre-chat form first (CF-52,
+	// CF-198: a request form); the composer text is its message.
 	var form *formsengine.Submission
 	var formUUID uuid.UUID
-	if in.ConversationUUID == nil && s.forms != nil {
+	if in.ConversationUUID == nil && s.forms != nil && w.Settings.PreChat.Enabled {
 		var err error
-		if form, formUUID, err = s.forms.Check(ctx, org, FormChannel, in.Form, "message"); err != nil {
+		if form, formUUID, err = s.forms.CheckOffered(ctx, org, FormChannel, preChatForm(w.Settings), in.Form, "message"); err != nil {
 			return Sent{}, err
 		}
 		if form != nil {
@@ -963,6 +992,9 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 			}
 			if in.Profile.Email == "" {
 				in.Profile.Email = form.Email
+			}
+			if in.Profile.Phone == "" {
+				in.Profile.Phone = form.Phone
 			}
 		}
 	}
@@ -998,9 +1030,6 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 	}
 	if in.PageURL != "" {
 		msg.Attributes["page_url"] = clip(in.PageURL, 500)
-	}
-	if len(prechat) > 0 {
-		msg.Attributes["prechat"] = prechat
 	}
 	if in.Consent != nil && *in.Consent {
 		msg.Attributes["consent"] = map[string]any{"given": true, "at": s.now()}
@@ -1057,22 +1086,11 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 			}
 		}
 	}
-	// Pre-chat answers mapped by the admin count as allowed for anonymous
-	// visitors; SDK attributes follow each mapping's anonymous flag.
-	answers := map[string]any{}
-	for _, f := range w.Settings.PreChat.Fields {
-		if v, ok := prechat[f.Key]; ok && f.Attribute != "" {
-			answers[f.Attribute] = v
-		}
-	}
-	for _, batch := range []struct {
-		attrs   map[string]any
-		trusted bool
-	}{{answers, true}, {in.Attributes, false}} {
-		if len(batch.attrs) == 0 {
-			continue
-		}
-		if _, err := s.applyAttributes(ctx, w, claims, batch.attrs, batch.trusted); err != nil {
+	// SDK attributes follow each mapping's anonymous flag (the pre-chat
+	// form's answers went onto the conversation and contact through the
+	// forms module above).
+	if len(in.Attributes) > 0 {
+		if _, err := s.applyAttributes(ctx, w, claims, in.Attributes, false); err != nil {
 			s.log.Warn("widget_attributes_failed", "instance", inst.UUID, "error", err)
 		}
 	}

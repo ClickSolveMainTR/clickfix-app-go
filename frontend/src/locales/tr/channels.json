@@ -297,5 +297,7 @@
   "health.detail.identity_secret_missing": "Kimlik anahtarı tanımlı değil: oturum açmış kullanıcılar doğrulanamıyor ve anonim kalıyor.",
   "health.detail.identity_rejected": "Son bir haftada kimlik doğrulama denemeleri reddedildi: {{reason}}",
   "health.identity_code.WIDGET_IDENTITY_DISABLED": "widget'ta kimlik anahtarı yok.",
-  "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash eşleşmiyor (anahtar veya imza hatalı)."
+  "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash eşleşmiyor (anahtar veya imza hatalı).",
+  "settings.hours_source": "Çalışma saatleri ve otomatik yanıtlar organizasyon genelinde tanımlıdır.",
+  "settings.hours_source_link": "Çalışma saatlerini aç"
 }

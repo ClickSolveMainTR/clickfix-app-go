@@ -165,9 +165,6 @@ export function BrandsPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {b.business_hours?.enabled && (
-                      <Badge variant="outline">{t("brands.badge.hours")}</Badge>
-                    )}
                     {b.sla_policy_id && (
                       <Badge variant="outline">{t("brands.badge.sla")}</Badge>
                     )}

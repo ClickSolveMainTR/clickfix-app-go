@@ -80,15 +80,12 @@ func TestNormalizeAndOrigins(t *testing.T) {
 	s := Normalize(map[string]any{
 		"color": "#ABCDEF", "position": "left", "locale": "xx", "show_team": false,
 		"allowed_domains": []any{"Example.com", "*.shop.example.org", "https://app.acme.io/path", "bad domain", "*"},
-		"prechat":         map[string]any{"enabled": true, "email": "required", "name": "nope"},
-		"business_hours": map[string]any{"enabled": true, "timezone": "Europe/Istanbul", "days": map[string]any{
-			"wed": []any{map[string]any{"start": "09:00", "end": "18:00"}, map[string]any{"start": "19:00", "end": "18:00"}},
-		}},
+		"prechat":         map[string]any{"enabled": true, "form_uuid": "0b2d3f6e-5c9a-4f1c-9d2e-1a2b3c4d5e6f"},
 	})
 	if s.Color != "#abcdef" || s.Position != "left" || s.Locale != "auto" || s.ShowTeam {
 		t.Fatalf("design: %+v", s)
 	}
-	if s.PreChat.Email != FieldRequired || s.PreChat.Name != FieldOptional {
+	if !s.PreChat.Enabled || s.PreChat.FormUUID != "0b2d3f6e-5c9a-4f1c-9d2e-1a2b3c4d5e6f" {
 		t.Fatalf("prechat: %+v", s.PreChat)
 	}
 	if len(s.AllowedDomains) != 3 {
@@ -111,16 +108,6 @@ func TestNormalizeAndOrigins(t *testing.T) {
 	}
 	if !Normalize(nil).OriginAllowed("https://anything.test") {
 		t.Fatal("empty allowlist must allow any origin")
-	}
-	// Wednesday 28 Oct 2026, 10:00 Istanbul = 07:00 UTC.
-	if !s.Online(time.Date(2026, 10, 28, 7, 0, 0, 0, time.UTC)) {
-		t.Fatal("should be online inside hours")
-	}
-	if s.Online(time.Date(2026, 10, 28, 16, 0, 0, 0, time.UTC)) {
-		t.Fatal("should be offline at 19:00")
-	}
-	if s.Online(time.Date(2026, 10, 29, 7, 0, 0, 0, time.UTC)) {
-		t.Fatal("thursday has no hours")
 	}
 }
 

@@ -1,14 +1,19 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Medal } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { AppChart, buildChartConfig } from "@/components/charts";
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -24,9 +29,8 @@ import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
 import { formatScore } from "../lib/format";
-import { coachingService } from "../services/coaching.service";
+import { coachingService, type Standing } from "../services/coaching.service";
 
-const PAGE = 50;
 const MEDAL = ["text-amber-500", "text-slate-400", "text-orange-700"];
 
 /**
@@ -38,7 +42,8 @@ export function LeaderboardTab({ slug }: { slug: string }) {
   const directory = useMemberDirectory();
   const [range, setRange] = useState(() => defaultRange(30));
   const [team, setTeam] = useState("");
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
   const valid = Boolean(range.from && range.to && range.from <= range.to);
   const span = valid ? windowFromDays(range.from, range.to) : null;
 
@@ -50,6 +55,7 @@ export function LeaderboardTab({ slug }: { slug: string }) {
       "leaderboard",
       span,
       team,
+      limit,
       offset,
     ],
     queryFn: () =>
@@ -57,13 +63,13 @@ export function LeaderboardTab({ slug }: { slug: string }) {
         since: span!.from,
         until: span!.to,
         team: team || undefined,
-        limit: PAGE,
+        limit,
         offset,
       }),
     enabled: span !== null,
+    placeholderData: keepPreviousData,
   });
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
-  const total = query.data?.total ?? 0;
 
   const chartData = useMemo(
     () =>
@@ -88,8 +94,78 @@ export function LeaderboardTab({ slug }: { slug: string }) {
     <T,>(set: (v: T) => void) =>
     (v: T) => {
       set(v);
-      setOffset(0);
+      listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
     };
+
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<Standing>({
+          accessorKey: "rank",
+          labelKey: "coaching.leaderboard.rank",
+          enableHiding: false,
+          meta: { headerClassName: "w-16", cellClassName: "w-16" },
+          cell: ({ row }) => {
+            const s = row.original;
+            return (
+              <span className="inline-flex items-center gap-1 font-medium tabular-nums">
+                {s.rank <= 3 && s.points > 0 && (
+                  <Medal
+                    className={cn("size-4", MEDAL[s.rank - 1])}
+                    aria-hidden
+                  />
+                )}
+                {s.rank}
+              </span>
+            );
+          },
+        }),
+        createColumn<Standing>({
+          id: "agent",
+          accessorFn: (s) => directory.memberName(s.agent_uuid),
+          labelKey: "coaching.leaderboard.agent",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ getValue }) => (
+            <span className="block max-w-[14rem] truncate">
+              {getValue() as string}
+            </span>
+          ),
+        }),
+        createColumn<Standing>({
+          id: "badges",
+          labelKey: "coaching.leaderboard.badges",
+          cell: ({ row }) => (
+            <div className="flex flex-wrap gap-1">
+              {row.original.badges.length === 0 && (
+                <span className="text-muted-foreground">—</span>
+              )}
+              {row.original.badges.map((b) => (
+                <Badge
+                  key={b.uuid}
+                  variant="secondary"
+                  title={t("coaching.leaderboard.badge_points", {
+                    points: b.points,
+                  })}
+                >
+                  {b.name}
+                </Badge>
+              ))}
+            </div>
+          ),
+        }),
+        createColumn<Standing>({
+          accessorKey: "points",
+          labelKey: "coaching.leaderboard.points",
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right font-semibold tabular-nums",
+          },
+          cell: ({ row }) => formatScore(row.original.points, locale, 0),
+        }),
+      ] as ColumnDef<Standing, unknown>[],
+    [directory, locale, t],
+  );
 
   return (
     <div className="space-y-4">
@@ -117,134 +193,48 @@ export function LeaderboardTab({ slug }: { slug: string }) {
         </CardContent>
       </Card>
 
-      {query.isLoading ? (
-        <Loading label={t("common.loading")} />
-      ) : query.isError ? (
-        <ErrorState
-          title={t("coaching.error.title")}
-          description={
-            isApiError(query.error)
-              ? query.error.message
-              : t("coaching.error.description")
-          }
-          onRetry={() => void query.refetch()}
+      {chartData.length > 0 && (
+        <AppChart
+          type="bar-horizontal"
+          data={chartData}
+          config={config}
+          series={["points"]}
+          height={Math.max(160, chartData.length * 32)}
+          title={t("coaching.leaderboard.top")}
+          valueFormatter={(v) => formatScore(v, locale, 0)}
         />
-      ) : (
-        <>
-          {chartData.length > 0 && (
-            <AppChart
-              type="bar-horizontal"
-              data={chartData}
-              config={config}
-              series={["points"]}
-              height={Math.max(160, chartData.length * 32)}
-              title={t("coaching.leaderboard.top")}
-              valueFormatter={(v) => formatScore(v, locale, 0)}
-            />
-          )}
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[32rem] text-sm">
-              <thead className="bg-muted/50 text-muted-foreground text-left text-xs">
-                <tr>
-                  <th scope="col" className="w-16 px-3 py-2 font-medium">
-                    {t("coaching.leaderboard.rank")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t("coaching.leaderboard.agent")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    {t("coaching.leaderboard.badges")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
-                    {t("coaching.leaderboard.points")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {items.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="text-muted-foreground px-3 py-8 text-center"
-                    >
-                      {t("coaching.leaderboard.empty")}
-                    </td>
-                  </tr>
-                )}
-                {items.map((s) => (
-                  <tr key={s.agent_uuid}>
-                    <td className="px-3 py-2 font-medium tabular-nums">
-                      <span className="inline-flex items-center gap-1">
-                        {s.rank <= 3 && s.points > 0 && (
-                          <Medal
-                            className={cn("size-4", MEDAL[s.rank - 1])}
-                            aria-hidden
-                          />
-                        )}
-                        {s.rank}
-                      </span>
-                    </td>
-                    <td className="max-w-[14rem] truncate px-3 py-2">
-                      {directory.memberName(s.agent_uuid)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {s.badges.length === 0 && (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                        {s.badges.map((b) => (
-                          <Badge
-                            key={b.uuid}
-                            variant="secondary"
-                            title={t("coaching.leaderboard.badge_points", {
-                              points: b.points,
-                            })}
-                          >
-                            {b.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                      {formatScore(s.points, locale, 0)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {total > PAGE && (
-            <div className="flex items-center justify-end gap-2 text-sm">
-              <span className="text-muted-foreground">
-                {t("coaching.pagination", {
-                  from: offset + 1,
-                  to: Math.min(offset + PAGE, total),
-                  total,
-                })}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - PAGE))}
-              >
-                {t("coaching.previous")}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={offset + PAGE >= total}
-                onClick={() => setOffset(offset + PAGE)}
-              >
-                {t("coaching.next")}
-              </Button>
-            </div>
-          )}
-          <p className="text-muted-foreground text-xs">
-            {t("coaching.leaderboard.hint")}
-          </p>
-        </>
       )}
+      <EntityTable
+        columns={columns}
+        data={items}
+        getRowId={(s) => s.agent_uuid}
+        isLoading={query.isLoading}
+        isError={query.isError}
+        errorTitle={t("coaching.error.title")}
+        errorDescription={
+          isApiError(query.error)
+            ? query.error.message
+            : t("coaching.error.description")
+        }
+        onRetry={() => void query.refetch()}
+        emptyTitle={t("coaching.leaderboard.empty")}
+        emptyDescription=""
+        total={query.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // Rank order is the content; the endpoint takes the window, team,
+          // `limit` and `offset` only.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+      />
+      <p className="text-muted-foreground text-xs">
+        {t("coaching.leaderboard.hint")}
+      </p>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { useActiveOrganization } from "@/features/organizations";
 import {
   onboardingService,
   type OnboardingState,
+  type OnboardingStepKey,
 } from "../services/onboarding.service";
 
 export const onboardingKeys = {
@@ -44,9 +45,9 @@ export function useOnboarding() {
 
 export function useOnboardingActions(slug: string) {
   const qc = useQueryClient();
-  const completeStep = useMutation({
-    mutationFn: (step: "widget" | "team") =>
-      onboardingService.completeStep(slug, step),
+  const skipStep = useMutation({
+    mutationFn: (step: OnboardingStepKey) =>
+      onboardingService.skipStep(slug, step),
     onSuccess: (state) => store(qc, slug, state),
   });
   const finish = useMutation({
@@ -55,7 +56,7 @@ export function useOnboardingActions(slug: string) {
   });
   const refresh = () =>
     qc.invalidateQueries({ queryKey: onboardingKeys.state(slug) });
-  return { completeStep, finish, refresh };
+  return { skipStep, finish, refresh };
 }
 
 export function useChannelTypes(slug: string, enabled = true) {

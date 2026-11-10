@@ -77,5 +77,19 @@
   "profile.validation.name_required": "Enter the organization name.",
   "profile.validation.name_too_long": "Organization name can be at most 255 characters.",
   "profile.toast.logo_uploaded": "Logo uploaded.",
-  "profile.toast.logo_removed": "Logo removed."
+  "profile.toast.logo_removed": "Logo removed.",
+  "sections.business_hours_single_source": "Working hours are defined in one place: the widget's online state, the AI's out-of-hours message and SLA timers all follow the schedule in SLA settings.",
+  "sections.business_hours_open": "Open working hours",
+  "auto_replies.title": "Automatic replies",
+  "auto_replies.description": "Never leave the customer waiting: an acknowledgement on the first message inside working hours, a single out-of-hours text, and a notice when the AI hands over to a person. Hours come from the SLA schedule.",
+  "auto_replies.ack": "Acknowledgement",
+  "auto_replies.ack_hint": "Sent within 10 seconds on the first message of a new conversation inside working hours. {eta} becomes the SLA first-response target.",
+  "auto_replies.offline": "Out-of-hours message",
+  "auto_replies.offline_hint": "Sent on a message outside working hours; once per closed window.",
+  "auto_replies.handoff": "Handoff notice",
+  "auto_replies.handoff_hint": "Sent to the customer when the AI agent hands the conversation to a person or the customer asks for one; once per conversation.",
+  "auto_replies.text_tr": "Turkish text",
+  "auto_replies.text_en": "English text",
+  "auto_replies.eta_hint": "An empty text falls back to the default. Texts are sent in the organization's language.",
+  "auto_replies.saved": "Automatic replies saved."
 }

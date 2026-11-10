@@ -77,5 +77,19 @@
   "profile.validation.name_required": "Organizasyon adını girin.",
   "profile.validation.name_too_long": "Organizasyon adı en fazla 255 karakter olabilir.",
   "profile.toast.logo_uploaded": "Logo yüklendi.",
-  "profile.toast.logo_removed": "Logo kaldırıldı."
+  "profile.toast.logo_removed": "Logo kaldırıldı.",
+  "sections.business_hours_single_source": "Çalışma saatleri tek yerde tanımlanır: widget'ın çevrimiçi durumu, AI'ın mesai mesajı ve SLA süreleri SLA ayarlarındaki takvimden beslenir.",
+  "sections.business_hours_open": "Çalışma saatlerini aç",
+  "auto_replies.title": "Otomatik yanıtlar",
+  "auto_replies.description": "Müşteri boşlukta kalmasın: mesai içi ilk mesaja 'aldık' yanıtı, mesai dışı mesaja tek kaynaklı metin, AI insana devrederken bildirim. Mesai saatleri SLA takviminden gelir.",
+  "auto_replies.ack": "Alındı yanıtı",
+  "auto_replies.ack_hint": "Çalışma saatleri içinde yeni bir konuşmanın ilk mesajına 10 saniye içinde gider. {eta} yerine SLA ilk yanıt hedefi yazılır.",
+  "auto_replies.offline": "Mesai dışı mesajı",
+  "auto_replies.offline_hint": "Çalışma saatleri dışında gelen mesaja gider; aynı kapalı dönemde bir kez.",
+  "auto_replies.handoff": "Temsilciye devir bildirimi",
+  "auto_replies.handoff_hint": "AI ajanı konuşmayı bir kişiye devrederken veya müşteri insan istediğinde müşteriye gider; konuşma başına bir kez.",
+  "auto_replies.text_tr": "Türkçe metin",
+  "auto_replies.text_en": "İngilizce metin",
+  "auto_replies.eta_hint": "Boş bırakılan metin varsayılana döner. Metinler organizasyon dilinde gönderilir.",
+  "auto_replies.saved": "Otomatik yanıtlar kaydedildi."
 }

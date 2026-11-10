@@ -82,7 +82,7 @@
   "agent.timezone": "Time zone",
   "agent.timezone_hint": "Working hours are evaluated in this time zone.",
   "agent.hours": "Working hours",
-  "agent.hours_hint": "The agent only acts on the selected days and within this time range.",
+  "agent.hours_hint": "The agent can follow the organization's working hours; the schedule comes from SLA settings.",
   "agent.all_day": "All day (24 hours)",
   "agent.start": "Start",
   "agent.end": "End",
@@ -289,5 +289,8 @@
   "security.injection_data": "Customer messages, knowledge content and tool results are always marked as \"untrusted data\"; the model does not follow instructions inside them and never reveals system instructions or keys.",
   "security.injection_guard": "Input or output containing patterns like \"ignore previous instructions\" or \"reveal the system prompt\" is rejected; the run shows as \"Blocked\" in the log.",
   "security.injection_tools": "Tool permissions are enforced outside the model: tools only act on the current organization and conversation, and approval tools (internal note, status change and HTTP tools marked for approval) never run without an agent's approval.",
-  "security.injection_preferences": "Persona and procedures are passed as preferences; they cannot override safety rules or grant tool rights."
+  "security.injection_preferences": "Persona and procedures are passed as preferences; they cannot override safety rules or grant tool rights.",
+  "agent.business_hours_only": "Reply only during working hours",
+  "agent.hours_source": "Outside working hours the agent does not answer; the customer gets the out-of-hours message.",
+  "agent.hours_source_link": "Edit working hours"
 }

@@ -3,7 +3,7 @@ import type {
   WeekDay,
 } from "@/features/tenant-settings/types";
 
-/** API order of `business_hours.days` (always seven entries). */
+/** Order of `working_hours.days` rows (always seven entries). */
 export const WEEK_DAYS: WeekDay[] = [
   "mon",
   "tue",

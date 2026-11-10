@@ -82,7 +82,7 @@
   "agent.timezone": "Saat dilimi",
   "agent.timezone_hint": "Çalışma saatleri bu saat dilimine göre değerlendirilir.",
   "agent.hours": "Çalışma saatleri",
-  "agent.hours_hint": "Ajan yalnızca seçili günlerde ve saat aralığında devreye girer.",
+  "agent.hours_hint": "Ajan organizasyonun çalışma saatlerine uyabilir; saatler SLA ayarlarındaki takvimden gelir.",
   "agent.all_day": "Gün boyu (24 saat)",
   "agent.start": "Başlangıç",
   "agent.end": "Bitiş",
@@ -289,5 +289,8 @@
   "security.injection_data": "Müşteri mesajları, bilgi bankası içerikleri ve araç sonuçları her zaman \"güvenilmeyen veri\" olarak işaretlenir; model bunların içindeki talimatlara uymaz, sistem talimatlarını veya anahtarları açıklamaz.",
   "security.injection_guard": "\"Önceki talimatları unut\", \"sistem talimatlarını göster\" gibi kalıplar içeren girdi veya çıktı reddedilir; çalışma kayıtta \"Engellendi\" olarak görünür.",
   "security.injection_tools": "Araç yetkileri modelin dışında denetlenir: araçlar yalnızca ilgili organizasyon ve konuşmada çalışır, onay gerektiren araçlar (iç not, durum değişikliği ve onay işaretli HTTP araçları) bir temsilci onaylamadan çalışmaz.",
-  "security.injection_preferences": "Persona ve prosedürler tercih olarak iletilir; güvenlik kurallarını aşamaz ve araç yetkisi veremez."
+  "security.injection_preferences": "Persona ve prosedürler tercih olarak iletilir; güvenlik kurallarını aşamaz ve araç yetkisi veremez.",
+  "agent.business_hours_only": "Yalnızca çalışma saatlerinde yanıtla",
+  "agent.hours_source": "Mesai dışında ajan yanıt vermez, müşteriye mesai dışı mesajı gider.",
+  "agent.hours_source_link": "Çalışma saatlerini düzenle"
 }
