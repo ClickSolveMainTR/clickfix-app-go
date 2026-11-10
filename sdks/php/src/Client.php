@@ -41,7 +41,7 @@ final class Client
     private readonly int $baseDelayMs;
 
     /**
-     * @var callable(int $milliseconds): void
+     * @var callable(int): void
      */
     private $sleep;
 
@@ -239,7 +239,7 @@ final class Client
      */
     public static function sendWith(ClientInterface $http, \Psr\Http\Message\RequestInterface $request, bool $safe, int $attempts, int $baseDelayMs, callable $sleep): ResponseInterface
     {
-        for ($attempt = 0; ; ++$attempt) {
+        for ($attempt = 0;; ++$attempt) {
             if ($attempt > 0 && $request->getBody()->isSeekable()) {
                 $request->getBody()->rewind();
             }
@@ -250,7 +250,7 @@ final class Client
                 if (!$safe || !$retryable || $attempt + 1 >= $attempts) {
                     throw new TransportException('ClickFix request failed: '.$e->getMessage(), 0, $e);
                 }
-                $sleep(min($baseDelayMs * (2 ** $attempt), self::MAX_DELAY_MS));
+                $sleep((int) min($baseDelayMs * (2 ** $attempt), self::MAX_DELAY_MS));
                 continue;
             }
             $status = $response->getStatusCode();
@@ -268,12 +268,12 @@ final class Client
      */
     public static function retryDelay(string $retryAfter, int $baseDelayMs, int $attempt): int
     {
-        $wait = min($baseDelayMs * (2 ** $attempt), self::MAX_DELAY_MS);
+        $wait = (int) min($baseDelayMs * (2 ** $attempt), self::MAX_DELAY_MS);
         if ($retryAfter === '') {
             return $wait;
         }
         if (preg_match('/^\d+$/', $retryAfter) === 1) {
-            return min((int) $retryAfter * 1000, self::MAX_DELAY_MS);
+            return (int) min((int) $retryAfter * 1000, self::MAX_DELAY_MS);
         }
         $at = strtotime($retryAfter);
         if ($at !== false) {
@@ -293,8 +293,7 @@ final class Client
         $status = $response->getStatusCode();
         $raw = (string) $response->getBody();
         $decoded = $raw === '' ? [] : json_decode($raw, true);
-        /** @var array<string, mixed>|null $body */
-        $body = is_array($decoded) && !array_is_list($decoded) ? $decoded : null;
+        $body = self::object($decoded);
         $requestIdHeader = $response->getHeaderLine('X-Request-ID');
         if ($status < 200 || $status >= 300) {
             $e = ApiException::fromResponse($status, $body, $requestIdHeader !== '' ? $requestIdHeader : null);
@@ -311,6 +310,24 @@ final class Client
         $requestId = is_string($meta['request_id'] ?? null) ? $meta['request_id'] : ($requestIdHeader !== '' ? $requestIdHeader : null);
 
         return new ApiResponse($status, is_array($data) ? $data : null, $meta, $body, $requestId);
+    }
+
+    /**
+     * A decoded JSON object, or null for anything else (lists, scalars, invalid JSON).
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function object(mixed $decoded): ?array
+    {
+        if (!is_array($decoded) || array_is_list($decoded)) {
+            return null;
+        }
+        $out = [];
+        foreach ($decoded as $key => $value) {
+            $out[(string) $key] = $value;
+        }
+
+        return $out;
     }
 
     /**

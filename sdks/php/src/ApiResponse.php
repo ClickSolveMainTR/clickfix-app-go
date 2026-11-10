@@ -10,13 +10,13 @@ namespace ClickFix;
 final class ApiResponse
 {
     /**
-     * @param array<string, mixed>|list<mixed>|null $data the `data` member (object, list or null)
+     * @param array<array-key, mixed>|null $data the `data` member (object, list or null)
      * @param array<string, mixed>                  $meta the `meta` member (`request_id`, ...)
      * @param array<string, mixed>                  $body the whole decoded body
      */
     public function __construct(
         public readonly int $status,
-        public readonly array|null $data,
+        public readonly ?array $data,
         public readonly array $meta,
         public readonly array $body,
         public readonly ?string $requestId,

@@ -16,7 +16,7 @@ final class Paginator implements \IteratorAggregate
     public const PAGE_SIZE = 100;
 
     /**
-     * @var callable(int $limit, int $offset): Page
+     * @var callable(int, int): Page
      */
     private $fetch;
 

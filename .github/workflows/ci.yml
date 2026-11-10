@@ -48,7 +48,8 @@ jobs:
   #   backend/**                  -> backend, contracts
   #   backend/migrations/**       -> backend, contracts, infra
   #   mobile/**                   -> mobile
-  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile
+  #   sdks/php/**, sdks/examples/** -> backend, contracts, php
+  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile, php
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
   #   Makefile, scripts/, other   -> backend, frontend, contracts
@@ -59,6 +60,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       contracts: ${{ steps.filter.outputs.contracts }}
       mobile: ${{ steps.filter.outputs.mobile }}
+      php: ${{ steps.filter.outputs.php }}
       infra: ${{ steps.filter.outputs.infra }}
       full: ${{ steps.filter.outputs.full }}
     steps:
@@ -73,7 +75,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; infra=false; full=false
+          mobile=false; php=false; infra=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -94,24 +96,25 @@ jobs:
               .github/workflows/ci.yml) full=true ;;
               .github/*) ;;
               backend/docs/openapi.yaml)
-                backend=true; frontend=true; contracts=true; mobile=true ;;
+                backend=true; frontend=true; contracts=true; mobile=true; php=true ;;
               *.md|docs/*) ;;
               backend/Dockerfile|frontend/Dockerfile|compose.prod.yml|deploy/*|.dockerignore|*/.dockerignore)
                 infra=true ;;
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
+              sdks/php/*|sdks/examples/*) backend=true; contracts=true; php=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; infra=true
+            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "infra=$infra"; echo "full=$full"
+            echo "php=$php"; echo "infra=$infra"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -341,6 +344,61 @@ jobs:
           done
           echo "sdks/go version $(cat go/VERSION) -> tag sdks/go/v$(cat go/VERSION)"
 
+  # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
+  # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
+  # then the guide's PHP examples against the stub API (the sdks job also runs
+  # them when the runner has php; here they are required). The mirror publishes
+  # sdks/php to Packagist as clickfix/sdk (tag php/vX.Y.Z from composer.json).
+  php:
+    needs: [changes]
+    if: needs.changes.outputs.php == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+      - name: Package metadata (composer validate, name, license, version)
+        working-directory: sdks/php
+        run: |
+          composer validate --strict --no-check-lock
+          [ "$(jq -r .name composer.json)" = "clickfix/sdk" ] || { echo "::error::composer.json name must be clickfix/sdk"; exit 1; }
+          [ "$(jq -r .license composer.json)" = "MIT" ] && [ -s LICENSE ] || { echo "::error::MIT license missing"; exit 1; }
+          version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' CHANGELOG.md | head -1)
+          [ -n "$version" ] || { echo "::error::CHANGELOG.md has no '## X.Y.Z - date' entry"; exit 1; }
+          grep -q "'clickfix-php-sdk/$version'" src/Client.php || { echo "::error::Client::USER_AGENT must carry version $version"; exit 1; }
+          echo "clickfix/sdk $version -> mirror tag php/v$version"
+      - name: Install
+        working-directory: sdks/php
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Code style (php-cs-fixer)
+        working-directory: sdks/php
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
+        run: composer cs
+      - name: Static analysis (PHPStan level 8)
+        working-directory: sdks/php
+        run: composer stan
+      - name: Unit tests (PHPUnit)
+        working-directory: sdks/php
+        run: composer test
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Guide PHP examples against the stub API
+        working-directory: sdks
+        env:
+          CLICKFIX_EXAMPLES_PHP: required
+        run: |
+          node examples/run.mjs --check --only=php
+          node examples/run.mjs --only=php
+
   # Lint, format, types, unit tests and the production build.
   frontend:
     needs: [changes]
@@ -488,7 +546,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
@@ -707,6 +765,50 @@ jobs:
             (cd "$p" && npm publish --access public)
             echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
           done
+
+  # PHP SDK on Packagist (CF-204): Packagist and Composer's VCS repositories
+  # read composer.json from the repository root and version tags like v0.1.0,
+  # so a php/ subdirectory of the sdks mirror cannot be registered. This job
+  # publishes the history of sdks/php (git subtree split) to the public
+  # repository ClickSolveMainTR/clickfix-sdk-php and tags vX.Y.Z there (the
+  # version is the newest entry of sdks/php/CHANGELOG.md); Packagist's GitHub
+  # hook on that repository updates clickfix/sdk. Needs the SDKS_PHP_KEY
+  # repository secret (private half of that repository's write deploy key);
+  # without it the job skips with a note and never fails main. History is
+  # never rewritten and tags are never moved.
+  sdk-php-publish:
+    needs: [release-tag]
+    if: ${{ !failure() && needs.release-tag.result == 'success' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Split sdks/php and push to clickfix-sdk-php
+        env:
+          SDKS_PHP_KEY: ${{ secrets.SDKS_PHP_KEY }}
+          SPLIT: git@github.com:ClickSolveMainTR/clickfix-sdk-php.git
+        run: |
+          if [ -z "$SDKS_PHP_KEY" ]; then
+            echo "SDKS_PHP_KEY secret is not set: PHP SDK publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+          printf '%s\n' "$SDKS_PHP_KEY" > "$work/key"; chmod 600 "$work/key"
+          ssh-keyscan -t ed25519 github.com > "$work/known_hosts" 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i $work/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$work/known_hosts"
+          version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' sdks/php/CHANGELOG.md | head -1)
+          [ -n "$version" ] || { echo "::error::sdks/php/CHANGELOG.md has no version entry"; exit 1; }
+          git config user.name "clickfix-ci"; git config user.email "ci@getclickfix.com"
+          head=$(git subtree split --prefix=sdks/php HEAD)
+          git push --quiet "$SPLIT" "$head:refs/heads/main"
+          echo "published sdks/php history to clickfix-sdk-php ($head)" >> "$GITHUB_STEP_SUMMARY"
+          if git ls-remote --tags "$SPLIT" "refs/tags/v$version" | grep -q .; then
+            echo "clickfix-sdk-php v$version already exists" >> "$GITHUB_STEP_SUMMARY"
+          else
+            git tag "v$version" "$head"
+            git push --quiet "$SPLIT" "refs/tags/v$version"
+            echo "tagged clickfix-sdk-php v$version (composer require clickfix/sdk:^$version)" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls

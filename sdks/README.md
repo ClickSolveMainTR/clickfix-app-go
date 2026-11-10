@@ -2,8 +2,9 @@
 
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
+- `php`: `clickfix/sdk`, PHP 8.1+ PSR-18 client with resource classes, typed errors, pagination, `UserHash` and `Webhooks` helpers (same bytes as Node and Go); `src/Endpoints.php` is generated from `public-api.yaml` and the hand-written layer is checked against it (CF-204).
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
-- `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
+- `examples`: the integration guide's samples (widget JS, Node, Go, PHP, curl) and the runner that verifies them (`examples/README.md`).
 
 The source of truth is `backend/docs/openapi.yaml`. `make sdks` selects only
 `/v1/public-api/*` for server clients and `/v1/widget/*` for the visitor client,
@@ -15,13 +16,14 @@ JWT-authenticated key administration is deliberately outside a server SDK.
 The existing API has some generic response envelopes; their payloads remain unknown
 until the canonical contract gives them a concrete schema. Do not cast unvalidated input.
 
-Requires Go matching `backend/go.mod`, Node 22+ and pnpm 11.22.0.
+Requires Go matching `backend/go.mod`, Node 22+ and pnpm 11.22.0; the PHP package and examples need PHP 8.1+ and Composer (the example runner skips them when `php` is missing).
 
 ```sh
 make sdks
 make sdks-check                 # generated files current + guide pages current
 (cd sdks && pnpm test)
 (cd sdks/go && go test -p 2 ./...)
+(cd sdks/php && composer install && composer check)   # php-cs-fixer, PHPStan 8, PHPUnit
 make guide-examples             # run the guide samples (stub API, or CLICKFIX_BASE_URL)
 ```
 
@@ -32,13 +34,16 @@ in the required `security` job.
 ## Yayın (CF-199)
 
 Versions live in each package (`node/package.json`, `react-widget/package.json`,
-`go/VERSION`) next to its `CHANGELOG.md`. On every PR the `sdks` job runs
+`go/VERSION`, the newest `php/CHANGELOG.md` entry) next to its `CHANGELOG.md`. On every PR the `sdks` job runs
 `npm pack --dry-run` and `npm publish --dry-run`. On a green `main` the
 `sdk-publish` job publishes any npm version that is not on the registry yet
 (needs the `NPM_TOKEN` repository secret, an npm automation token for the
 `@clickfix` scope; without it the job skips with a note), and the `release-tag`
 job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
-tags by hand. Details: `docs/entegrasyon-kilavuzu.md`.
+tags by hand. The PHP package goes to Packagist through the `sdk-php-publish` job: Packagist
+reads `composer.json` from a repository root, so `sdks/php` is split (`git subtree split`) into the
+public repository `ClickSolveMainTR/clickfix-sdk-php` and tagged `vX.Y.Z` there (needs the
+`SDKS_PHP_KEY` repository secret; without it the job skips with a note). Details: `docs/entegrasyon-kilavuzu.md`.
 
 References: existing ClickFix widget routes/types and Laravel
 `resources/js/widget/lib/widget-api.ts` for the headless transport approach;
