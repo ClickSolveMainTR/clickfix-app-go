@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
@@ -7,11 +9,11 @@ import {
   AppCombobox,
   AppInput,
   AppSelect,
-  AppSwitch,
   AppTextarea,
   FormSection,
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { routes } from "@/config/routes";
 import {
   COUNTRIES,
   CURRENCIES,
@@ -20,7 +22,6 @@ import {
   displayName,
   timeZones,
 } from "@/features/tenant-settings/constants";
-import { WeekHoursEditor } from "@/features/tenant-settings/components/week-hours-editor";
 import type { SettingsFormValues } from "@/features/tenant-settings/schemas/settings-form";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -177,27 +178,20 @@ export function CompanySection({ disabled }: SectionProps) {
   );
 }
 
-/** Çalışma saatleri: on / off and one row per weekday. */
-export function BusinessHoursSection({ disabled }: SectionProps) {
+/** Çalışma saatleri live in the SLA schedule (CF-198): one source for the widget, AI and SLA. */
+export function BusinessHoursSection() {
   const { t } = useLocale();
-  const enabled = useWatch<SettingsFormValues, "business_hours.enabled">({
-    name: "business_hours.enabled",
-  });
-
   return (
     <FormSection
       title={t("tenant_settings.sections.business_hours")}
-      description={t("tenant_settings.sections.business_hours_desc")}
+      description={t("tenant_settings.sections.business_hours_single_source")}
     >
-      <AppSwitch
-        name="business_hours.enabled"
-        label={t("tenant_settings.fields.business_hours_enabled")}
-        description={t("tenant_settings.fields.business_hours_enabled_hint")}
-        disabled={disabled}
-      />
-      {enabled ? (
-        <WeekHoursEditor name="business_hours.days" disabled={disabled} />
-      ) : null}
+      <Button asChild variant="outline" className="w-fit">
+        <Link href={`${routes.cms.settings.sla}?tab=hours`}>
+          {t("tenant_settings.sections.business_hours_open")}
+          <ArrowRight />
+        </Link>
+      </Button>
     </FormSection>
   );
 }

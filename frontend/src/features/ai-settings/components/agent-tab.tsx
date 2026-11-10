@@ -15,7 +15,8 @@ import { useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import Link from "next/link";
+
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -29,13 +30,13 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { routes } from "@/config/routes";
 import { channelsService } from "@/features/channels/services/channels.service";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
 import { aiErrorMessage, isConflict } from "../lib/errors";
-import { minuteToTime, timeToMinute } from "../lib/format";
 import {
   aiSettingsService,
   type AIAgentConfig,
@@ -52,23 +53,13 @@ const MODES: { value: AIAgentMode; icon: typeof Bot }[] = [
   { value: "autonomous", icon: Bot },
 ];
 
-/** Monday-first display order; values follow Go's time.Weekday (0 = Sunday). */
-const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0];
-
 export const agentKey = (slug: string) =>
   ["tenant", slug, "ai", "agent"] as const;
 
-function timezones(current: string) {
-  const list =
-    typeof Intl.supportedValuesOf === "function"
-      ? Intl.supportedValuesOf("timeZone")
-      : ["Europe/Istanbul", "UTC"];
-  return list.includes(current) ? list : [current, ...list];
-}
-
 /**
- * "Ajan" tab (CF-64): mode, triage, persona, channel/category scope, working
- * hours, confidence threshold and handoff keywords. The config endpoint has no
+ * "Ajan" tab (CF-64): mode, triage, persona, channel/category scope,
+ * working-hours restriction (the SLA schedule, CF-198), confidence
+ * threshold and handoff keywords. The config endpoint has no
  * server-side revision check, so the form re-reads the revision right before
  * saving and asks before overwriting someone else's change.
  */
@@ -121,8 +112,6 @@ export function AgentTab({ slug, canWrite, canRun }: AISettingsTabProps) {
     key: K,
     value: AIAgentConfig[K],
   ) => setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  const allDay = form.start_minute === 0 && form.end_minute === 1440;
-  const hoursInvalid = form.start_minute >= form.end_minute;
   const readOnly = !canWrite;
 
   const connectedTypes = new Set((channels.data ?? []).map((c) => c.type));
@@ -150,7 +139,7 @@ export function AgentTab({ slug, canWrite, canRun }: AISettingsTabProps) {
   };
 
   const save = async (force = false) => {
-    if (!form || hoursInvalid) return;
+    if (!form) return;
     setSaving(true);
     try {
       if (!force) {
@@ -429,24 +418,6 @@ export function AgentTab({ slug, canWrite, canRun }: AISettingsTabProps) {
                   </SelectContent>
                 </Select>
               </SettingRow>
-              <SettingRow
-                label={t("ai_settings.agent.timezone")}
-                hint={t("ai_settings.agent.timezone_hint")}
-                htmlFor="ai-timezone"
-              >
-                <Input
-                  id="ai-timezone"
-                  list="ai-timezones"
-                  value={form.timezone}
-                  disabled={readOnly}
-                  onChange={(event) => set("timezone", event.target.value)}
-                />
-                <datalist id="ai-timezones">
-                  {timezones(form.timezone).map((zone) => (
-                    <option key={zone} value={zone} />
-                  ))}
-                </datalist>
-              </SettingRow>
             </div>
 
             <SettingRow
@@ -455,103 +426,26 @@ export function AgentTab({ slug, canWrite, canRun }: AISettingsTabProps) {
             >
               <div className="flex items-center gap-3">
                 <Switch
-                  id="ai-all-day"
-                  checked={allDay}
+                  id="ai-business-hours-only"
+                  checked={form.business_hours_only}
                   disabled={readOnly}
                   onCheckedChange={(checked) =>
-                    setForm((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            start_minute: checked ? 0 : 540,
-                            end_minute: checked ? 1440 : 1080,
-                          }
-                        : prev,
-                    )
+                    set("business_hours_only", checked)
                   }
                 />
-                <Label htmlFor="ai-all-day" className="font-normal">
-                  {t("ai_settings.agent.all_day")}
+                <Label htmlFor="ai-business-hours-only" className="font-normal">
+                  {t("ai_settings.agent.business_hours_only")}
                 </Label>
               </div>
-              {!allDay && (
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="ai-start" className="text-xs">
-                      {t("ai_settings.agent.start")}
-                    </Label>
-                    <Input
-                      id="ai-start"
-                      type="time"
-                      className="w-32"
-                      value={minuteToTime(form.start_minute)}
-                      disabled={readOnly}
-                      onChange={(event) => {
-                        const minute = timeToMinute(event.target.value);
-                        if (minute !== null) set("start_minute", minute);
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="ai-end" className="text-xs">
-                      {t("ai_settings.agent.end")}
-                    </Label>
-                    <Input
-                      id="ai-end"
-                      type="time"
-                      className="w-32"
-                      value={
-                        form.end_minute >= 1440
-                          ? "00:00"
-                          : minuteToTime(form.end_minute)
-                      }
-                      disabled={readOnly}
-                      onChange={(event) => {
-                        const minute = timeToMinute(event.target.value);
-                        // 00:00 as the end means "until midnight".
-                        if (minute !== null)
-                          set("end_minute", minute === 0 ? 1440 : minute);
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {hoursInvalid && (
-                <p className="text-destructive text-sm" role="alert">
-                  {t("ai_settings.agent.hours_invalid")}
-                </p>
-              )}
-              <ToggleGroup
-                type="multiple"
-                variant="outline"
-                spacing={2}
-                className="flex flex-wrap justify-start"
-                value={form.weekdays.map(String)}
-                disabled={readOnly}
-                aria-label={t("ai_settings.agent.weekdays")}
-                onValueChange={(next) =>
-                  set(
-                    "weekdays",
-                    next.map(Number).sort((a, b) => a - b),
-                  )
-                }
-              >
-                {WEEKDAYS.map((day) => (
-                  <ToggleGroupItem
-                    key={day}
-                    value={String(day)}
-                    aria-label={t(`ai_settings.weekday.${day}`)}
-                    className="min-w-12"
-                  >
-                    {t(`ai_settings.weekday_short.${day}`)}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              {form.weekdays.length === 0 && (
-                <p className="text-muted-foreground text-xs">
-                  {t("ai_settings.agent.weekdays_empty")}
-                </p>
-              )}
+              <p className="text-muted-foreground text-xs">
+                {t("ai_settings.agent.hours_source")}{" "}
+                <Link
+                  href={`${routes.cms.settings.sla}?tab=hours`}
+                  className="text-foreground underline underline-offset-4"
+                >
+                  {t("ai_settings.agent.hours_source_link")}
+                </Link>
+              </p>
             </SettingRow>
           </CardContent>
         </Card>
@@ -572,10 +466,7 @@ export function AgentTab({ slug, canWrite, canRun }: AISettingsTabProps) {
             >
               {t("ai_settings.discard")}
             </Button>
-            <Button
-              disabled={!dirty || saving || hoursInvalid}
-              onClick={() => void save()}
-            >
+            <Button disabled={!dirty || saving} onClick={() => void save()}>
               <Save className="size-4" />
               {saving ? t("ai_settings.saving") : t("ai_settings.save")}
             </Button>

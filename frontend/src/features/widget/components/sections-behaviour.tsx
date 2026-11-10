@@ -1,13 +1,14 @@
 "use client";
 
 import { Check, Plus, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { routes } from "@/config/routes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   FieldIssues,
@@ -21,14 +22,7 @@ import {
   UrlRulesRow,
   useEditor,
 } from "@/features/widget/components/fields";
-import {
-  DAYS,
-  isValidClock,
-  LIMITS,
-  newId,
-  type DayKey,
-  type Trigger,
-} from "@/features/widget/lib/settings";
+import { LIMITS, newId, type Trigger } from "@/features/widget/lib/settings";
 import { useLocale } from "@/providers/locale-provider";
 import { eligible, visible } from "@widget/shared/targeting";
 
@@ -147,6 +141,15 @@ export function ConversationSection() {
         title={t("widget.g.offline")}
         description={t("widget.g.offline_hint")}
       >
+        <p className="text-muted-foreground text-sm">
+          {t("widget.g.hours_source")}{" "}
+          <Link
+            href={`${routes.cms.settings.sla}?tab=hours`}
+            className="text-foreground underline underline-offset-4"
+          >
+            {t("widget.g.hours_source_link")}
+          </Link>
+        </p>
         <SwitchRow
           path="away_mode"
           label={t("widget.f.away_mode")}
@@ -590,130 +593,6 @@ export function TargetingSection() {
             </div>
           </div>
         ) : null}
-      </Group>
-    </div>
-  );
-}
-
-export function HoursSection() {
-  const { t } = useLocale();
-  const ed = useEditor();
-  const bh = ed.settings.business_hours;
-  const days = bh.days;
-  const setDay = (
-    day: DayKey,
-    periods: { start: string; end: string }[] | null,
-  ) => {
-    const next = { ...days };
-    if (periods && periods.length) next[day] = periods;
-    else delete next[day];
-    ed.set("business_hours.days", next);
-  };
-  const off = ed.disabled || !bh.enabled;
-  return (
-    <div className="space-y-4">
-      <Group title={t("widget.tabs.hours")}>
-        <SwitchRow
-          path="business_hours.enabled"
-          label={t("widget.fields.hours")}
-          hint={t("widget.fields.hours_hint")}
-        />
-        <TextRow
-          path="business_hours.timezone"
-          label={t("widget.fields.timezone")}
-          placeholder="Europe/Istanbul"
-          disabled={!bh.enabled}
-        />
-        <div className="divide-y rounded-lg border">
-          {DAYS.map((day) => {
-            const periods = days[day] ?? [];
-            return (
-              <div key={day} className="flex flex-wrap items-start gap-3 p-3">
-                <Switch
-                  aria-label={t(`widget.days.${day}`)}
-                  checked={periods.length > 0}
-                  disabled={off}
-                  onCheckedChange={(v) =>
-                    setDay(day, v ? [{ start: "09:00", end: "18:00" }] : null)
-                  }
-                />
-                <Label className="w-24 pt-1 text-sm font-medium">
-                  {t(`widget.days.${day}`)}
-                </Label>
-                <div className="flex-1 space-y-2">
-                  {periods.length === 0 ? (
-                    <span className="text-muted-foreground text-sm">
-                      {t("widget.fields.closed")}
-                    </span>
-                  ) : null}
-                  {periods.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      {(["start", "end"] as const).map((field) => (
-                        <Input
-                          key={field}
-                          className="w-24"
-                          aria-label={t(
-                            field === "start"
-                              ? "widget.fields.opens"
-                              : "widget.fields.closes",
-                          )}
-                          value={p[field]}
-                          disabled={off}
-                          aria-invalid={
-                            !isValidClock(p[field]) || p.start >= p.end
-                          }
-                          onChange={(e) =>
-                            setDay(
-                              day,
-                              periods.map((x, n) =>
-                                n === i ? { ...x, [field]: e.target.value } : x,
-                              ),
-                            )
-                          }
-                        />
-                      ))}
-                      {periods.length > 1 ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t("widget.editor.remove")}
-                          disabled={off}
-                          onClick={() =>
-                            setDay(
-                              day,
-                              periods.filter((_, n) => n !== i),
-                            )
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))}
-                  {periods.length > 0 && periods.length < 4 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={off}
-                      onClick={() =>
-                        setDay(day, [
-                          ...periods,
-                          { start: "13:00", end: "17:00" },
-                        ])
-                      }
-                    >
-                      <Plus className="size-4" />
-                      {t("widget.editor.add_period")}
-                    </Button>
-                  ) : null}
-                  <FieldIssues path={`business_hours.days.${day}`} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </Group>
     </div>
   );

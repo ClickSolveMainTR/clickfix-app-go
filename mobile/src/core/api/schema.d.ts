@@ -3937,11 +3937,12 @@ export interface paths {
         /**
          * Update the organization profile
          * @description `tenant.settings.write`. Any subset of `name`, `timezone`, `locale`,
-         *     `currency`, `country_code`, `company`, `business_hours`, `branding`;
-         *     objects are replaced whole. Slug, status and access window are
-         *     platform-managed. Invalid fields answer `422 VALIDATION_ERROR` with
-         *     `details[].field` paths such as `company.tax_number` or
-         *     `business_hours.days.2.end`.
+         *     `currency`, `country_code`, `company`, `branding`; objects are
+         *     replaced whole. Working hours are the SLA schedule
+         *     (`/v1/tenant/sla/business-hours`, CF-198). Slug, status and access
+         *     window are platform-managed. Invalid fields answer
+         *     `422 VALIDATION_ERROR` with `details[].field` paths such as
+         *     `company.tax_number`.
          */
         patch: operations["patchTenantOrganizationProfile"];
         trace?: never;
@@ -4119,12 +4120,15 @@ export interface paths {
         };
         /**
          * Set-up checklist of the organization
-         * @description Steps in order: `organization`, `channel`, `team`, `widget`,
-         *     `first_conversation`. Channels, members, invitations and
-         *     conversations tick their steps automatically; `manual` steps can
-         *     also be confirmed by hand. Organizations not opened through
-         *     self-serve have no checklist (`active=false`, empty `steps`).
-         *     Requires `tenant.settings.read`.
+         * @description Steps in the set-up order (CF-198): `customer` (identity key,
+         *     external identity, package, company profile), `system` (connected
+         *     customer system), `ai` (AI on, a published procedure), `knowledge`
+         *     (articles), `automation` (an SLA policy and an automation rule or
+         *     workflow). Every step lists its `conditions`; a step is `done` when
+         *     all of them hold, and the product observes them itself. A skipped
+         *     step keeps `skipped=true` and stays as a warning. Organizations not
+         *     opened through self-serve have no checklist (`active=false`, empty
+         *     `steps`). Requires `tenant.settings.read`.
          */
         get: operations["getTenantOnboarding"];
         put?: never;
@@ -4135,7 +4139,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenant/onboarding/steps/{step}": {
+    "/v1/tenant/onboarding/steps/{step}/skip": {
         parameters: {
             query?: never;
             header?: never;
@@ -4145,13 +4149,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Confirm a manual set-up step
-         * @description Ticks a manual step (`widget`, `team`). Idempotent. Unknown or
-         *     automatic steps answer `400 ONBOARDING_UNKNOWN_STEP`; a finished or
-         *     missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
+         * Skip a set-up step
+         * @description Marks a step as skipped: it stays as a warning in the checklist and
+         *     in the assistant's "what did you leave out" until its conditions
+         *     hold. Idempotent. Unknown steps answer `400 ONBOARDING_UNKNOWN_STEP`;
+         *     a finished or missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
          *     `tenant.settings.read` and `tenant.settings.write`.
          */
-        post: operations["completeTenantOnboardingStep"];
+        post: operations["skipTenantOnboardingStep"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6355,6 +6360,38 @@ export interface paths {
          * @description Requires `tenant.conversations.reply`. Sent to every participant (CF-98).
          */
         post: operations["replyTenantSideConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/auto-replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Automatic customer replies
+         * @description `tenant.settings.read`. The acknowledgement a new conversation gets inside
+         *     working hours ("we got it, estimated reply time ..."), the out-of-hours
+         *     message and the AI-to-human handoff notice (CF-198). Each text has this
+         *     one source; the hours they follow are the SLA schedule
+         *     (`/v1/tenant/sla/business-hours`). Organizations that never saved their
+         *     own texts get the defaults.
+         */
+        get: operations["getTenantAutoReplies"];
+        /**
+         * Replace the automatic customer replies
+         * @description `tenant.settings.write`. Replaces every text; an empty text falls back to
+         *     the default. The acknowledgement may contain `{eta}`, replaced with the
+         *     estimated reply time from the matching SLA policy's first-response
+         *     target (removed when no policy applies).
+         */
+        put: operations["putTenantAutoReplies"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -17246,30 +17283,18 @@ export interface components {
             /** Format: int64 */
             companies: number;
         };
+        /**
+         * @description The pre-chat form is one of the organization's request forms (CF-198,
+         *     `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+         *     active form offered on the widget channel. The bootstrap serves the
+         *     chosen form as `request_form`. The widget keeps only the switch, the
+         *     choice and the consent box; the fields live on the form.
+         */
         WidgetPreChat: {
             enabled: boolean;
-            /** @enum {string} */
-            name: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            email: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            phone: "required" | "optional" | "hidden";
-            fields: components["schemas"]["WidgetPreChatField"][];
+            /** @description Request form uuid or "" (first active widget form) */
+            form_uuid: string;
             consent: components["schemas"]["WidgetConsent"];
-        };
-        WidgetBusinessHours: {
-            enabled: boolean;
-            /** @example Europe/Istanbul */
-            timezone: string;
-            /** @description Keys sun..sat; each a list of opening spans. */
-            days: {
-                [key: string]: {
-                    /** @example 09:00 */
-                    start: string;
-                    /** @example 18:00 */
-                    end: string;
-                }[];
-            };
         };
         /** @description The visitor-safe part of WidgetSettings (no allowlist, member ids, attribute targets or handoff keywords). */
         WidgetPublicSettings: {
@@ -17284,7 +17309,6 @@ export interface components {
             greeting_text: string;
             show_team: boolean;
             prechat: components["schemas"]["WidgetPreChat"];
-            business_hours: components["schemas"]["WidgetBusinessHours"];
             offline_message: string;
             require_identity: boolean;
             file_upload: boolean;
@@ -17323,16 +17347,6 @@ export interface components {
         WidgetLocalized: {
             tr?: string;
             en?: string;
-        };
-        WidgetPreChatField: {
-            key: string;
-            label: components["schemas"]["WidgetLocalized"];
-            /** @enum {string} */
-            type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "checkbox";
-            required: boolean;
-            options: string[];
-            /** @description Attribute mapping key the answer is stored under ("" = none) */
-            attribute: string;
         };
         WidgetConsent: {
             enabled: boolean;
@@ -17500,7 +17514,6 @@ export interface components {
             show_team: boolean;
             team_member_uuids: string[];
             prechat: components["schemas"]["WidgetPreChat"];
-            business_hours: components["schemas"]["WidgetBusinessHours"];
             offline_message: string;
             allowed_domains: string[];
             require_identity: boolean;
@@ -17913,19 +17926,16 @@ export interface components {
              * @description Makes retries idempotent
              */
             client_id?: string;
-            /** @description Pre-chat name */
+            /** @description Visitor name (older SDKs; the pre-chat form's name field is preferred) */
             name?: string;
-            /** @description Pre-chat e-mail */
+            /** @description Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) */
             email?: string;
             page_url?: string;
             profile?: components["schemas"]["WidgetProfileInput"];
+            /** @description The pre-chat (request) form answers of a first message (CF-198) */
             form?: components["schemas"]["RequestFormSubmission"];
-            /** @description Pre-chat phone */
+            /** @description Visitor phone (older SDKs) */
             phone?: string;
-            /** @description Answers to the custom pre-chat questions (first message) */
-            prechat?: {
-                [key: string]: string | number | boolean;
-            };
             /** @description GDPR/KVKK checkbox of the pre-chat form */
             consent?: boolean;
             /**
@@ -17950,8 +17960,6 @@ export interface components {
         WidgetSendMultipart: {
             /** @description RequestFormSubmission as JSON */
             form?: string;
-            /** @description Pre-chat answers as JSON */
-            prechat?: string;
             /** @description Attributes as JSON */
             attributes?: string;
             /** @enum {string} */
@@ -18612,10 +18620,8 @@ export interface components {
             categories: string[];
             /** @enum {string} */
             locale: "tr" | "en";
-            timezone: string;
-            start_minute: number;
-            end_minute: number;
-            weekdays: number[];
+            /** @description Outside the organization's working hours (the SLA schedule, CF-198) the agent hands off instead of answering. */
+            business_hours_only: boolean;
             confidence_threshold: number;
             handoff_keywords: string[];
         };
@@ -19789,19 +19795,30 @@ export interface components {
             data: components["schemas"]["OnboardingOrganizationResult"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @description One "is this step done" check (CF-198). */
+        OnboardingCondition: {
+            /** @enum {string} */
+            key: "identity_key" | "external_identity" | "package" | "company" | "system" | "ai_enabled" | "procedure" | "articles" | "sla_policy" | "automation";
+            done: boolean;
+        };
         OnboardingStep: {
             /** @enum {string} */
-            key: "organization" | "channel" | "team" | "widget" | "first_conversation";
+            key: "customer" | "system" | "ai" | "knowledge" | "automation";
+            /** @description Every condition holds. */
             done: boolean;
-            /** @description Can be confirmed by hand. */
-            manual: boolean;
+            /** @description Skipped on purpose and not done; stays as a warning. */
+            skipped: boolean;
+            conditions: components["schemas"]["OnboardingCondition"][];
         };
         OnboardingState: {
             active: boolean;
             /** Format: date-time */
             finished_at: string | null;
             steps: components["schemas"]["OnboardingStep"][];
+            /** @description Done steps. */
             completed: number;
+            /** @description Skipped steps (warnings). */
+            skipped: number;
             total: number;
         };
         OnboardingLocalized: {
@@ -20655,20 +20672,6 @@ export interface components {
             email: string;
             website: string;
         };
-        OrganizationBusinessDay: {
-            /** @enum {string} */
-            day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
-            open: boolean;
-            /** @example 09:00 */
-            start: string;
-            /** @example 18:00 */
-            end: string;
-        };
-        OrganizationBusinessHours: {
-            enabled: boolean;
-            /** @description Always seven days, `mon` .. `sun` */
-            days: components["schemas"]["OrganizationBusinessDay"][];
-        };
         OrganizationBranding: {
             /**
              * @description `#RRGGBB` or `""` for the product default
@@ -20709,10 +20712,9 @@ export interface components {
              */
             country_code: string;
             company: components["schemas"]["OrganizationCompany"];
-            business_hours: components["schemas"]["OrganizationBusinessHours"];
             branding: components["schemas"]["OrganizationBranding"];
         };
-        /** @description Any subset; `company`, `business_hours` and `branding` are replaced whole */
+        /** @description Any subset; `company` and `branding` are replaced whole. Working hours live in the SLA schedule (`/v1/tenant/sla/business-hours`, CF-198). */
         OrganizationProfilePatchRequest: {
             name?: string;
             /** @example Europe/Istanbul */
@@ -20724,7 +20726,6 @@ export interface components {
             /** @example TR */
             country_code?: string;
             company?: components["schemas"]["OrganizationCompany"];
-            business_hours?: components["schemas"]["OrganizationBusinessHours"];
             branding?: components["schemas"]["OrganizationBranding"];
         };
         TenantRoleRef: {
@@ -22320,7 +22321,6 @@ export interface components {
                 [key: string]: unknown;
             };
             signature?: string;
-            business_hours?: components["schemas"]["WidgetBusinessHours"];
             /** Format: uuid */
             sla_policy_id?: string | null;
             ai_persona?: string;
@@ -22344,7 +22344,6 @@ export interface components {
                 [key: string]: unknown;
             };
             signature?: string;
-            business_hours?: components["schemas"]["WidgetBusinessHours"];
             /** Format: uuid */
             sla_policy_id?: string | null;
             ai_persona?: string;
@@ -25435,6 +25434,29 @@ export interface components {
         SLAWeek: {
             [key: string]: components["schemas"]["SLAWorkingDay"];
         };
+        /** @description One automatic customer reply (CF-198). */
+        AutoReply: {
+            enabled: boolean;
+            /** @description Text per locale (`tr`, `en`); the acknowledgement may contain `{eta}`. */
+            text: {
+                [key: string]: string;
+            };
+        };
+        /** @description The organization's automatic customer replies (CF-198). */
+        AutoReplySettings: {
+            /** @description Sent on the first message of a conversation inside working hours. */
+            ack: components["schemas"]["AutoReply"];
+            /** @description Sent on a message outside working hours (once per closed window). */
+            offline: components["schemas"]["AutoReply"];
+            /** @description Sent when the AI agent hands the conversation to a person (once per conversation). */
+            handoff: components["schemas"]["AutoReply"];
+        };
+        EnvelopeAutoReplySettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AutoReplySettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         SLABusinessHours: {
             /** Format: uuid */
             uuid: string;
@@ -28270,7 +28292,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`) */
+        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`) */
         ValidationError: {
             headers: {
                 [name: string]: unknown;
@@ -36264,7 +36286,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    completeTenantOnboardingStep: {
+    skipTenantOnboardingStep: {
         parameters: {
             query?: never;
             header: {
@@ -36275,7 +36297,7 @@ export interface operations {
                 "X-Organization": components["parameters"]["XOrganization"];
             };
             path: {
-                step: "widget" | "team";
+                step: "customer" | "system" | "ai" | "knowledge" | "automation";
             };
             cookie?: never;
         };
@@ -41534,6 +41556,70 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantAutoReplies: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAutoReplySettings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantAutoReplies: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoReplySettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAutoReplySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
             422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };

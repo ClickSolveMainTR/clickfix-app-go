@@ -27,6 +27,7 @@ import (
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
 	attachmentsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/attachments/repository"
 	attachmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/attachments/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	billingmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	billingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
@@ -180,6 +181,9 @@ func main() {
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
 	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
+	agentSvc.Hours = slaSvc
+	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
+	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(pool, queries), Resolver: orguc.New(orgrepo.NewPostgres(pool, queries), nil), Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
 	consumerReg, err := eventconsumers.New(eventconsumers.Deps{
@@ -188,6 +192,7 @@ func main() {
 		Notifications:       notifSvc,
 		NotificationsLookup: notifmodule.DBLookup{Q: queries},
 		SLA:                 slaSvc,
+		AutoReply:           autoReplySvc,
 		Knowledge:           aiCore.RAG,
 		Agents:              agentSvc,
 		Analytics:           analyticsSvc,
@@ -272,6 +277,8 @@ func main() {
 		Realtime: publisher, Secret: cfg.Encryption.Key, BaseURL: cfg.Auth.FrontendURL, Log: log,
 	})
 	routingAssign.Conversations = inboxCore.Conversations
+	inboxCore.Conversations.WithHours(slaSvc)
+	autoReplySvc.WithPoster(inboxCore.Conversations)
 	surveysSvc.WithSender(inboxCore.Conversations)
 	statusSvc.WithSender(inboxCore.Conversations)
 

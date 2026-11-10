@@ -631,8 +631,8 @@ func (a *Applier) applyPersona(ctx context.Context, st *applyState) (result, err
 	case errors.Is(err, pgx.ErrNoRows):
 		prev = []byte(`{"config":null}`)
 		// Same defaults as aiagents/model.DefaultConfig (mode stays off).
-		cfg = agentConfig{"mode": "off", "locale": "tr", "timezone": "Europe/Istanbul", "confidence_threshold": 0.85,
-			"channels": []string{}, "categories": []string{}, "weekdays": []int{0, 1, 2, 3, 4, 5, 6}, "end_minute": 1440,
+		cfg = agentConfig{"mode": "off", "locale": "tr", "confidence_threshold": 0.85,
+			"channels": []string{}, "categories": []string{}, "business_hours_only": false,
 			"handoff_keywords": []string{"insan", "temsilci", "human", "agent"}}
 	default:
 		return result{}, err
@@ -893,6 +893,7 @@ func timezoneOf(p *SetupPlan) string {
 	return ""
 }
 
+// workingHours is the SLA schedule shape ({"mon": {closed, open, close}}).
 func workingHours(days []PlanDay) map[string]any {
 	out := map[string]any{}
 	for _, d := range days {
@@ -901,11 +902,34 @@ func workingHours(days []PlanDay) map[string]any {
 	return out
 }
 
+// teamWorkingHours is the teams.working_hours shape the teams module and the
+// SLA clock read ({"days": [{day, open, start, end}]}, Monday first); the
+// plan's schedule used to be written in the SLA shape, which both ignored.
+func teamWorkingHours(days []PlanDay) map[string]any {
+	byDay := map[string]PlanDay{}
+	for _, d := range days {
+		byDay[d.Day] = d
+	}
+	out := make([]map[string]any, 0, 7)
+	for _, key := range []string{"mon", "tue", "wed", "thu", "fri", "sat", "sun"} {
+		d, ok := byDay[key]
+		start, end := d.Open, d.Close
+		if start == "" {
+			start = "09:00"
+		}
+		if end == "" {
+			end = "18:00"
+		}
+		out = append(out, map[string]any{"day": key, "open": ok && !d.Closed, "start": start, "end": end})
+	}
+	return map[string]any{"days": out}
+}
+
 func workingHoursOrNull(p *SetupPlan) []byte {
 	if p.BusinessHours == nil {
 		return nil
 	}
-	return mustJSON(workingHours(p.BusinessHours.Days))
+	return mustJSON(teamWorkingHours(p.BusinessHours.Days))
 }
 
 func mustJSON(v any) []byte {

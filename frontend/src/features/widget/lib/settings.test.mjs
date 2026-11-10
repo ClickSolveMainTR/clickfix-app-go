@@ -28,13 +28,15 @@ test("setPath copies along the path and creates missing objects", () => {
   assert.equal(lib.getPath(listed, "list.1.v"), 9);
 });
 
-test("readSettings keeps replay and default hours", () => {
+test("readSettings keeps replay and drops legacy hours", () => {
   const s = lib.readSettings({
     replay: { replay_enabled: true, retention_days: 99 },
+    business_hours: { enabled: true, days: { mon: [] } },
   });
   assert.equal(s.replay.replay_enabled, true);
   assert.equal(s.replay.retention_days, 7);
-  assert.ok(s.business_hours.days.mon?.length);
+  // Working hours come from the SLA schedule (CF-198), not the widget.
+  assert.equal("business_hours" in s, false);
   assert.equal(s.schema_version, 2);
 });
 
@@ -74,7 +76,13 @@ test("section search folds Turkish characters and counts issues", () => {
   const titles = Object.fromEntries(lib.SECTIONS.map((s) => [s.id, s.id]));
   assert.ok(lib.searchSections("CEREZ", titles).includes("privacy"));
   assert.ok(lib.searchSections("whatsapp", titles).includes("channels"));
-  assert.ok(lib.searchSections("çalışma", titles).includes("hours"));
+  // Working hours are no longer a widget section (CF-198); the search
+  // still lands on the section that explains where they come from.
+  assert.ok(lib.searchSections("çalışma", titles).includes("conversation"));
+  assert.equal(
+    lib.SECTIONS.some((s) => s.id === "hours"),
+    false,
+  );
   assert.equal(lib.searchSections("", titles).length, lib.SECTIONS.length);
   const issues = [
     { path: "appearance.launcher.size", code: "out_of_range", message: "" },
@@ -129,4 +137,25 @@ test("identity warning follows the last rejected identify (CF-176)", () => {
   assert.equal(lib.identityWarning(disabled, true), null);
   assert.equal(lib.identityWarning(invalid, true), "invalid");
   assert.equal(lib.identityWarning({ code: "OTHER" }, false), null);
+});
+
+test("basic set-up steps are a subset of the advanced editor", () => {
+  assert.deepEqual(
+    lib.BASIC_STEPS.map((s) => s.id),
+    ["appearance", "identity", "channel"],
+  );
+  for (const step of lib.BASIC_STEPS)
+    for (const path of step.paths)
+      assert.ok(
+        lib.advancedSectionFor(path),
+        `${path} has no advanced section`,
+      );
+  const issues = [
+    { path: "appearance.launcher.size", code: "out_of_range", message: "" },
+    { path: "prechat.form_uuid", code: "invalid", message: "" },
+    { path: "color", code: "contrast", message: "", level: "warning" },
+  ];
+  assert.equal(lib.basicStepIssues(issues, "appearance"), 1);
+  assert.equal(lib.basicStepIssues(issues, "channel"), 1);
+  assert.equal(lib.basicStepIssues(issues, "identity"), 0);
 });

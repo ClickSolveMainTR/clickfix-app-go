@@ -244,5 +244,7 @@
   "actions.channels.test_delivery": "Test event sent to the channel",
   "actions.webhooks.test_queued": "Webhook test event queued",
   "actions.assistant.document_added": "Document shared with the assistant",
-  "actions.assistant.document_removed": "Document removed from the assistant"
+  "actions.assistant.document_removed": "Document removed from the assistant",
+  "actions.auto_replies.updated": "Automatic replies updated",
+  "resources.auto_replies": "Automatic replies"
 }

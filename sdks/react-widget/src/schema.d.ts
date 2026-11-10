@@ -580,7 +580,6 @@ export interface components {
             greeting_text: string;
             show_team: boolean;
             prechat: components["schemas"]["WidgetPreChat"];
-            business_hours: components["schemas"]["WidgetBusinessHours"];
             offline_message: string;
             require_identity: boolean;
             file_upload: boolean;
@@ -615,31 +614,18 @@ export interface components {
                 anonymous: boolean;
             }[];
         };
+        /**
+         * @description The pre-chat form is one of the organization's request forms (CF-198,
+         *     `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+         *     active form offered on the widget channel. The bootstrap serves the
+         *     chosen form as `request_form`. The widget keeps only the switch, the
+         *     choice and the consent box; the fields live on the form.
+         */
         WidgetPreChat: {
             enabled: boolean;
-            /** @enum {string} */
-            name: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            email: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            phone: "required" | "optional" | "hidden";
-            fields: components["schemas"]["WidgetPreChatField"][];
+            /** @description Request form uuid or "" (first active widget form) */
+            form_uuid: string;
             consent: components["schemas"]["WidgetConsent"];
-        };
-        WidgetPreChatField: {
-            key: string;
-            label: components["schemas"]["WidgetLocalized"];
-            /** @enum {string} */
-            type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "checkbox";
-            required: boolean;
-            options: string[];
-            /** @description Attribute mapping key the answer is stored under ("" = none) */
-            attribute: string;
-        };
-        /** @description Text per language; a missing language falls back to the other. */
-        WidgetLocalized: {
-            tr?: string;
-            en?: string;
         };
         WidgetConsent: {
             enabled: boolean;
@@ -648,19 +634,10 @@ export interface components {
             /** @description Privacy notice (https) */
             url: string;
         };
-        WidgetBusinessHours: {
-            enabled: boolean;
-            /** @example Europe/Istanbul */
-            timezone: string;
-            /** @description Keys sun..sat; each a list of opening spans. */
-            days: {
-                [key: string]: {
-                    /** @example 09:00 */
-                    start: string;
-                    /** @example 18:00 */
-                    end: string;
-                }[];
-            };
+        /** @description Text per language; a missing language falls back to the other. */
+        WidgetLocalized: {
+            tr?: string;
+            en?: string;
         };
         WidgetAppearance: {
             /** @enum {string} */
@@ -934,19 +911,16 @@ export interface components {
              * @description Makes retries idempotent
              */
             client_id?: string;
-            /** @description Pre-chat name */
+            /** @description Visitor name (older SDKs; the pre-chat form's name field is preferred) */
             name?: string;
-            /** @description Pre-chat e-mail */
+            /** @description Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) */
             email?: string;
             page_url?: string;
             profile?: components["schemas"]["WidgetProfileInput"];
+            /** @description The pre-chat (request) form answers of a first message (CF-198) */
             form?: components["schemas"]["RequestFormSubmission"];
-            /** @description Pre-chat phone */
+            /** @description Visitor phone (older SDKs) */
             phone?: string;
-            /** @description Answers to the custom pre-chat questions (first message) */
-            prechat?: {
-                [key: string]: string | number | boolean;
-            };
             /** @description GDPR/KVKK checkbox of the pre-chat form */
             consent?: boolean;
             /**
@@ -979,8 +953,6 @@ export interface components {
         WidgetSendMultipart: {
             /** @description RequestFormSubmission as JSON */
             form?: string;
-            /** @description Pre-chat answers as JSON */
-            prechat?: string;
             /** @description Attributes as JSON */
             attributes?: string;
             /** @enum {string} */
@@ -1165,7 +1137,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`) */
+        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`) */
         ValidationError: {
             headers: {
                 [name: string]: unknown;

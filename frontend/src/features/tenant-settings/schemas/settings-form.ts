@@ -62,8 +62,6 @@ export function defaultWeekDays() {
  * `business_hours.days.2.end`) land on the same form paths.
  */
 export function createSettingsSchema(t: Translate) {
-  const day = createWeekDaySchema(t);
-
   return z
     .object({
       name: z
@@ -99,10 +97,6 @@ export function createSettingsSchema(t: Translate) {
           t("tenant_settings.validation.website"),
         ),
       }),
-      business_hours: z.object({
-        enabled: z.boolean(),
-        days: z.array(day).length(7),
-      }),
       branding: z.object({
         primary_color: z
           .string()
@@ -135,19 +129,10 @@ export type SettingsFormValues = z.infer<
   ReturnType<typeof createSettingsSchema>
 >;
 
-/** API profile → form values (always seven days, `mon` .. `sun`). */
+/** API profile → form values. Working hours live in the SLA schedule (CF-198). */
 export function profileToForm(
   profile: OrganizationProfile,
 ): SettingsFormValues {
-  const days = WEEK_DAYS.map((day) => {
-    const stored = profile.business_hours.days.find((d) => d.day === day);
-    return {
-      day,
-      open: stored?.open ?? false,
-      start: stored?.start || "09:00",
-      end: stored?.end || "18:00",
-    };
-  });
   return {
     name: profile.name,
     timezone: profile.timezone,
@@ -155,7 +140,6 @@ export function profileToForm(
     currency: profile.currency,
     country_code: profile.country_code,
     company: { ...profile.company },
-    business_hours: { enabled: profile.business_hours.enabled, days },
     branding: { primary_color: profile.branding.primary_color ?? "" },
   };
 }
@@ -177,7 +161,6 @@ export function formToPatch(
       ...trimmed,
       tax_number: trimmed.tax_number.replace(/\s/g, ""),
     },
-    business_hours: values.business_hours,
     branding: {
       primary_color: values.branding.primary_color.trim().toUpperCase(),
     },

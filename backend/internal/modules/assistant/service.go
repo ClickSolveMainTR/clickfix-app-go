@@ -25,6 +25,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/guides"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/onboarding"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -148,7 +149,15 @@ type Service struct {
 	// Instances opens the support widget's instance (identity secret).
 	Instances InstanceLoader
 	Help      HelpSearcher
-	Now       func() time.Time
+	// Setup is the set-up checklist (CF-198): the assistant's "what did
+	// you leave out" follows its order.
+	Setup SetupChecklist
+	Now   func() time.Time
+}
+
+// SetupChecklist evaluates the organization's set-up steps in order.
+type SetupChecklist interface {
+	Checklist(ctx context.Context, orgID int64) (onboarding.State, error)
 }
 
 // GetSettings reads the platform settings.
@@ -698,22 +707,25 @@ func (s *Service) setupState(ctx context.Context, org int64) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
-	missing := []string{}
-	add := func(cond bool, step string) {
-		if cond {
-			missing = append(missing, step)
+	// The missing steps follow the set-up order (CF-198): customer,
+	// system, AI, knowledge base, automation and SLA. A skipped step is a
+	// warning, listed separately.
+	missing, skipped, next := []string{}, []string{}, ""
+	if s.Setup != nil {
+		cl, err := s.Setup.Checklist(ctx, org)
+		if err != nil {
+			return nil, err
+		}
+		missing = onboarding.MissingKeys(cl.Steps)
+		next = onboarding.Next(cl.Steps)
+		for _, st := range cl.Steps {
+			if st.Skipped {
+				skipped = append(skipped, st.Key)
+			}
 		}
 	}
-	add(r.Channels == 0, "connect_channel")
-	add(r.EmailChannels == 0, "email_channel")
-	add(r.Members <= 1 && r.PendingInvitations == 0, "invite_team")
-	add(r.BusinessHours == 0, "business_hours")
-	add(r.SlaPolicies == 0, "sla_policy")
-	add(!r.AiEnabled, "enable_ai")
-	add(r.Widgets == 0, "web_widget")
-	add(r.PublicArticles == 0, "help_center")
-	add(r.MobileDevices == 0, "mobile_app")
 	return map[string]any{
+		"setup_order": onboarding.StepOrder, "next_step": next, "skipped_steps": skipped,
 		"channels": r.Channels, "email_channels": r.EmailChannels, "web_widgets": r.Widgets, "members": r.Members,
 		"pending_invitations": r.PendingInvitations, "teams": r.Teams, "business_hours": r.BusinessHours,
 		"sla_policies": r.SlaPolicies, "ai_enabled": r.AiEnabled, "ai_agents": r.AiAgents,

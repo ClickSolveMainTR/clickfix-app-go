@@ -350,17 +350,14 @@ func TestOrganizationProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Timezone != "Europe/Istanbul" || p.Locale != "tr" || p.Currency != "TRY" || p.CountryCode != "TR" ||
-		len(p.BusinessHours.Days) != 7 || p.BusinessHours.Days[0].Day != "mon" || p.BusinessHours.Days[6].Open {
+	if p.Timezone != "Europe/Istanbul" || p.Locale != "tr" || p.Currency != "TRY" || p.CountryCode != "TR" {
 		t.Fatalf("defaults = %+v", p)
 	}
 
 	// Invalid values come back as field errors, nothing is saved.
 	badTZ, badLocale := "Mars/Base", "de"
-	hours := orgmodel.DefaultBusinessHours()
-	hours.Days[2].End = "08:00"
 	_, _, err = mgmt.PatchProfile(ctx, org.ID, orgmodel.PatchProfileInput{
-		Timezone: &badTZ, Locale: &badLocale, BusinessHours: &hours,
+		Timezone: &badTZ, Locale: &badLocale,
 		Company:  &orgmodel.Company{TaxNumber: "12AB", Email: "nope", Website: "ftp://x"},
 		Branding: &orgmodel.Branding{PrimaryColor: "red"},
 	})
@@ -372,25 +369,23 @@ func TestOrganizationProfile(t *testing.T) {
 	for _, d := range ve.Details {
 		fields[d.Field] = true
 	}
-	for _, f := range []string{"timezone", "locale", "business_hours.days.2.end", "company.tax_number", "company.email", "company.website", "branding.primary_color"} {
+	for _, f := range []string{"timezone", "locale", "company.tax_number", "company.email", "company.website", "branding.primary_color"} {
 		if !fields[f] {
 			t.Fatalf("missing field error %s in %v", f, ve.Details)
 		}
 	}
 
 	name, cur, cc, loc := "Yeni Ad", "eur", "de", "en"
-	hours = orgmodel.DefaultBusinessHours()
-	hours.Enabled = true
 	saved, changed, err := mgmt.PatchProfile(ctx, org.ID, orgmodel.PatchProfileInput{
-		Name: &name, Currency: &cur, CountryCode: &cc, Locale: &loc, BusinessHours: &hours,
+		Name: &name, Currency: &cur, CountryCode: &cc, Locale: &loc,
 		Company:  &orgmodel.Company{LegalName: "Yeni Ad A.Ş.", TaxNumber: "1234567890", Email: "Info@Example.com", Website: "https://example.com"},
 		Branding: &orgmodel.Branding{PrimaryColor: "#112233"},
 	})
 	if err != nil {
 		t.Fatalf("patch: %v", err)
 	}
-	if len(changed) != 7 || saved.Name != name || saved.Currency != "EUR" || saved.CountryCode != "DE" || saved.Locale != "en" ||
-		!saved.BusinessHours.Enabled || saved.Company.Email != "info@example.com" || saved.Branding.PrimaryColor != "#112233" {
+	if len(changed) != 6 || saved.Name != name || saved.Currency != "EUR" || saved.CountryCode != "DE" || saved.Locale != "en" ||
+		saved.Company.Email != "info@example.com" || saved.Branding.PrimaryColor != "#112233" {
 		t.Fatalf("saved = %+v changed %v", saved, changed)
 	}
 	// Other settings keys survive a profile save.

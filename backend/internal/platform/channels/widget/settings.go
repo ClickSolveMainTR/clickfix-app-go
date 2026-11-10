@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"regexp"
-	"slices"
 	"strings"
-	"time"
 )
 
 // SchemaVersion is the current settings schema (CF-150). Version 1 is the
@@ -25,21 +23,20 @@ var Locales = []string{"tr", "en"}
 // admin preview never disagree. The SDK and the editor share the TypeScript
 // mirror in frontend/widget-sdk/src/shared/schema.ts.
 type Settings struct {
-	SchemaVersion   int           `json:"schema_version"`
-	Color           string        `json:"color"`
-	Position        string        `json:"position"`
-	Locale          string        `json:"locale"`
-	GreetingTitle   string        `json:"greeting_title"`
-	GreetingText    string        `json:"greeting_text"`
-	ShowTeam        bool          `json:"show_team"`
-	TeamMemberUUIDs []string      `json:"team_member_uuids"`
-	PreChat         PreChat       `json:"prechat"`
-	BusinessHours   BusinessHours `json:"business_hours"`
-	OfflineMessage  string        `json:"offline_message"`
-	AllowedDomains  []string      `json:"allowed_domains"`
-	RequireIdentity bool          `json:"require_identity"`
-	FileUpload      bool          `json:"file_upload"`
-	CSAT            bool          `json:"csat"`
+	SchemaVersion   int      `json:"schema_version"`
+	Color           string   `json:"color"`
+	Position        string   `json:"position"`
+	Locale          string   `json:"locale"`
+	GreetingTitle   string   `json:"greeting_title"`
+	GreetingText    string   `json:"greeting_text"`
+	ShowTeam        bool     `json:"show_team"`
+	TeamMemberUUIDs []string `json:"team_member_uuids"`
+	PreChat         PreChat  `json:"prechat"`
+	OfflineMessage  string   `json:"offline_message"`
+	AllowedDomains  []string `json:"allowed_domains"`
+	RequireIdentity bool     `json:"require_identity"`
+	FileUpload      bool     `json:"file_upload"`
+	CSAT            bool     `json:"csat"`
 
 	Appearance       Appearance          `json:"appearance"`
 	Texts            map[string]Texts    `json:"texts"`
@@ -77,26 +74,17 @@ func (l Localized) Get(locale string) string {
 	return ""
 }
 
-// PreChat is the form shown before the first message.
+// PreChat is the form shown before the first message (CF-198): one of the
+// organization's request forms (the forms module), picked by FormUUID or,
+// when empty, the first active form offered on the widget channel. The
+// widget keeps only the switch, the choice and the consent checkbox; the
+// fields (name, e-mail, phone, custom fields) live on the form.
 type PreChat struct {
 	Enabled bool `json:"enabled"`
-	// Name / Email / Phone: "required", "optional" or "hidden".
-	Name    string         `json:"name"`
-	Email   string         `json:"email"`
-	Phone   string         `json:"phone"`
-	Fields  []PreChatField `json:"fields"`
-	Consent Consent        `json:"consent"`
-}
-
-// PreChatField is a custom question of the pre-chat form; Attribute maps
-// the answer to a contact attribute (AttributeMapping key).
-type PreChatField struct {
-	Key       string    `json:"key"`
-	Label     Localized `json:"label"`
-	Type      string    `json:"type"`
-	Required  bool      `json:"required"`
-	Options   []string  `json:"options"`
-	Attribute string    `json:"attribute"`
+	// FormUUID is the request form to show ("" = the first active widget
+	// form).
+	FormUUID string  `json:"form_uuid"`
+	Consent  Consent `json:"consent"`
 }
 
 // Consent is the GDPR/KVKK checkbox of the pre-chat form.
@@ -105,20 +93,6 @@ type Consent struct {
 	Required bool      `json:"required"`
 	Text     Localized `json:"text"`
 	URL      string    `json:"url"`
-}
-
-// BusinessHours limits when the widget shows as online. Outside them the
-// widget shows the offline form (e-mail required) instead of live chat.
-type BusinessHours struct {
-	Enabled  bool                `json:"enabled"`
-	Timezone string              `json:"timezone"`
-	Days     map[string][]Period `json:"days"`
-}
-
-// Period is one opening span of a day ("09:00"–"18:00").
-type Period struct {
-	Start string `json:"start"`
-	End   string `json:"end"`
 }
 
 // Appearance is the visual design.
@@ -315,13 +289,6 @@ type AttributeMapEntry struct {
 	Anonymous bool   `json:"anonymous"`
 }
 
-// Field modes of the pre-chat form.
-const (
-	FieldRequired = "required"
-	FieldOptional = "optional"
-	FieldHidden   = "hidden"
-)
-
 // Defaults.
 const (
 	DefaultColor    = "#4f46e5"
@@ -350,27 +317,23 @@ var (
 	URLOps           = []string{"contains", "equals", "starts_with", "ends_with", "glob", "not_contains"}
 	CountryModes     = []string{"all", "allow", "block"}
 	Persistences     = []string{"local", "session", "memory"}
-	PreChatTypes     = []string{"text", "textarea", "email", "phone", "number", "select", "checkbox"}
 	defaultCardTypes = []string{"conversation", "help_search", "articles", "booking", "channels"}
 )
 
 // Bounds.
 const (
-	MaxTriggers      = 20
-	MaxQuickReplies  = 8
-	MaxHomeCards     = 12
-	MaxPreChatFields = 10
-	MaxMappings      = 50
-	MaxURLRules      = 20
-	MaxCustomCSS     = 8000
+	MaxTriggers     = 20
+	MaxQuickReplies = 8
+	MaxHomeCards    = 12
+	MaxMappings     = 50
+	MaxURLRules     = 20
+	MaxCustomCSS    = 8000
 )
 
 var (
 	colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-	clockRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
 	keyRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 	ccRe    = regexp.MustCompile(`^[A-Z]{2}$`)
-	dayKeys = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 )
 
 // DefaultCards is the home screen of a new widget.
@@ -387,11 +350,7 @@ func Defaults() Settings {
 	return Settings{
 		SchemaVersion: SchemaVersion,
 		Color:         DefaultColor, Position: "right", Locale: "auto", ShowTeam: true,
-		PreChat: PreChat{
-			Enabled: true, Name: FieldOptional, Email: FieldOptional, Phone: FieldHidden,
-			Fields: []PreChatField{}, Consent: Consent{Required: true, Text: Localized{}},
-		},
-		BusinessHours:   BusinessHours{Timezone: DefaultTimezone, Days: map[string][]Period{}},
+		PreChat:         PreChat{Enabled: true, Consent: Consent{Required: true, Text: Localized{}}},
 		FileUpload:      true,
 		CSAT:            true,
 		TeamMemberUUIDs: []string{},
@@ -444,64 +403,12 @@ func (s Settings) Text(locale, field string) string {
 	return legacy
 }
 
-// Online reports whether the widget is inside its business hours at now
-// (always true when business hours are off) and not in away mode.
-func (s Settings) Online(now time.Time) bool {
-	if s.AwayMode {
-		return false
-	}
-	return s.BusinessHours.Open(now)
-}
-
-// Open reports whether now is inside the opening hours (always true when
-// business hours are off).
-func (h BusinessHours) Open(now time.Time) bool {
-	if !h.Enabled {
-		return true
-	}
-	local := now.In(h.location())
-	clock := local.Format("15:04")
-	for _, p := range h.Days[dayKeys[local.Weekday()]] {
-		if clock >= p.Start && clock < p.End {
-			return true
-		}
-	}
-	return false
-}
-
-func (h BusinessHours) location() *time.Location {
-	loc, err := time.LoadLocation(h.Timezone)
-	if err != nil {
-		return time.UTC
-	}
-	return loc
-}
-
-// NextOpening returns the start of the next opening period after now (nil
-// when business hours are off, open now or have no periods).
-func (h BusinessHours) NextOpening(now time.Time) *time.Time {
-	if !h.Enabled || h.Open(now) {
-		return nil
-	}
-	loc := h.location()
-	local := now.In(loc)
-	for d := 0; d < 8; d++ {
-		day := local.AddDate(0, 0, d)
-		periods := slices.Clone(h.Days[dayKeys[day.Weekday()]])
-		slices.SortFunc(periods, func(a, b Period) int { return strings.Compare(a.Start, b.Start) })
-		for _, p := range periods {
-			clock, err := time.Parse("15:04", p.Start)
-			if err != nil {
-				continue
-			}
-			at := time.Date(day.Year(), day.Month(), day.Day(), clock.Hour(), clock.Minute(), 0, 0, loc)
-			if at.After(now) {
-				utc := at.UTC()
-				return &utc
-			}
-		}
-	}
-	return nil
+// Online reports whether the widget shows as online: inside the
+// organization's working hours (the SLA module's default schedule, CF-198;
+// open is its answer, true without a schedule) and not in away mode. The
+// widget has no hours of its own.
+func (s Settings) Online(open bool) bool {
+	return !s.AwayMode && open
 }
 
 // OriginAllowed reports whether a page origin ("https://shop.example.com")

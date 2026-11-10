@@ -9,6 +9,7 @@
 package businesshours
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -312,4 +313,38 @@ func (c *Calendar) Spans(from, to time.Time) []Span {
 		day = day.AddDate(0, 0, 1)
 	}
 	return out
+}
+
+// State is whether a schedule is open at one instant (CF-198: the widget,
+// the AI agent and the automatic replies all read the same answer).
+type State struct {
+	// Open: the instant is working time (always true without a schedule).
+	Open bool `json:"open"`
+	// NextOpenAt is when the schedule next opens while closed; nil when
+	// open or without a schedule.
+	NextOpenAt *time.Time `json:"next_open_at"`
+	// Scheduled: a schedule exists (false: open around the clock).
+	Scheduled bool `json:"scheduled"`
+}
+
+// State evaluates the calendar at t. A nil calendar is always open.
+func (c *Calendar) State(t time.Time) State {
+	if c == nil {
+		return State{Open: true}
+	}
+	st := State{Open: c.IsOpen(t), Scheduled: true}
+	if !st.Open {
+		next := c.Add(t, 0)
+		if next.After(t) {
+			st.NextOpenAt = &next
+		}
+	}
+	return st
+}
+
+// Source answers whether an organization is inside its working hours. The
+// SLA module implements it from the organization's default schedule; other
+// modules depend on this interface instead of each other.
+type Source interface {
+	HoursState(ctx context.Context, orgID int64, at time.Time) (State, error)
 }

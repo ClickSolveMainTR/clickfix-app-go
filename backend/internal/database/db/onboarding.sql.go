@@ -94,39 +94,70 @@ func (q *Queries) GetOrganizationOnboarding(ctx context.Context, organizationID 
 	return i, err
 }
 
-const organizationOnboardingCounts = `-- name: OrganizationOnboardingCounts :one
+const organizationSetupCounts = `-- name: OrganizationSetupCounts :one
 SELECT
-    (SELECT COUNT(*) FROM channel_instances ci
-        WHERE ci.organization_id = $1 AND ci.deleted_at IS NULL)::bigint AS channels,
     (SELECT COUNT(*) FROM channel_instances ci
         WHERE ci.organization_id = $1 AND ci.deleted_at IS NULL
           AND ci.channel_type IN ('widget', 'web_widget', 'webchat'))::bigint AS widgets,
-    (SELECT COUNT(*) FROM organization_members om
-        WHERE om.organization_id = $1)::bigint AS members,
-    (SELECT COUNT(*) FROM organization_invitations oi
-        WHERE oi.organization_id = $1
-          AND oi.revoked_at IS NULL)::bigint AS invitations,
-    (SELECT COUNT(*) FROM conversations c
-        WHERE c.organization_id = $1)::bigint AS conversations
+    (SELECT COUNT(*) FROM contacts ct
+        WHERE ct.organization_id = $1 AND ct.deleted_at IS NULL
+          AND ct.external_id IS NOT NULL)::bigint AS external_contacts,
+    (SELECT COUNT(*) FROM companies co
+        WHERE co.organization_id = $1 AND co.deleted_at IS NULL
+          AND co.external_id IS NOT NULL)::bigint AS external_companies,
+    (SELECT COUNT(*) FROM companies co
+        LEFT JOIN company_revenue r ON r.organization_id = co.organization_id AND r.company_id = co.id
+        WHERE co.organization_id = $1 AND co.deleted_at IS NULL
+          AND (co.tier <> '' OR COALESCE(r.plan, '') <> ''))::bigint AS packaged_companies,
+    (SELECT COALESCE(
+        NULLIF(o.settings->'company'->>'legal_name', '') IS NOT NULL
+        OR NULLIF(o.settings->'company'->>'website', '') IS NOT NULL
+        OR NULLIF(o.settings->'company'->>'phone', '') IS NOT NULL, FALSE)
+        FROM organizations o WHERE o.id = $1)::boolean AS company_profile,
+    (SELECT COUNT(*) FROM integration_connections ic
+        WHERE ic.organization_id = $1)::bigint AS systems,
+    COALESCE((SELECT ap.enabled FROM ai_policies ap WHERE ap.organization_id = $1), FALSE)::boolean AS ai_enabled,
+    (SELECT COUNT(*) FROM ai_procedures p
+        WHERE p.organization_id = $1 AND p.published IS NOT NULL)::bigint AS procedures,
+    (SELECT COUNT(*) FROM knowledge_articles ka
+        WHERE ka.organization_id = $1 AND ka.deleted_at IS NULL)::bigint AS articles,
+    (SELECT COUNT(*) FROM sla_policies sp
+        WHERE sp.organization_id = $1 AND sp.is_active)::bigint AS sla_policies,
+    ((SELECT COUNT(*) FROM automation_rules ar WHERE ar.organization_id = $1)
+        + (SELECT COUNT(*) FROM workflows w WHERE w.organization_id = $1))::bigint AS automations
 `
 
-type OrganizationOnboardingCountsRow struct {
-	Channels      int64 `json:"channels"`
-	Widgets       int64 `json:"widgets"`
-	Members       int64 `json:"members"`
-	Invitations   int64 `json:"invitations"`
-	Conversations int64 `json:"conversations"`
+type OrganizationSetupCountsRow struct {
+	Widgets           int64 `json:"widgets"`
+	ExternalContacts  int64 `json:"external_contacts"`
+	ExternalCompanies int64 `json:"external_companies"`
+	PackagedCompanies int64 `json:"packaged_companies"`
+	CompanyProfile    bool  `json:"company_profile"`
+	Systems           int64 `json:"systems"`
+	AiEnabled         bool  `json:"ai_enabled"`
+	Procedures        int64 `json:"procedures"`
+	Articles          int64 `json:"articles"`
+	SlaPolicies       int64 `json:"sla_policies"`
+	Automations       int64 `json:"automations"`
 }
 
-func (q *Queries) OrganizationOnboardingCounts(ctx context.Context, organizationID int64) (OrganizationOnboardingCountsRow, error) {
-	row := q.db.QueryRow(ctx, organizationOnboardingCounts, organizationID)
-	var i OrganizationOnboardingCountsRow
+// The facts behind the set-up checklist (CF-198): one row per
+// organization, read by the onboarding checklist and the assistant.
+func (q *Queries) OrganizationSetupCounts(ctx context.Context, organizationID int64) (OrganizationSetupCountsRow, error) {
+	row := q.db.QueryRow(ctx, organizationSetupCounts, organizationID)
+	var i OrganizationSetupCountsRow
 	err := row.Scan(
-		&i.Channels,
 		&i.Widgets,
-		&i.Members,
-		&i.Invitations,
-		&i.Conversations,
+		&i.ExternalContacts,
+		&i.ExternalCompanies,
+		&i.PackagedCompanies,
+		&i.CompanyProfile,
+		&i.Systems,
+		&i.AiEnabled,
+		&i.Procedures,
+		&i.Articles,
+		&i.SlaPolicies,
+		&i.Automations,
 	)
 	return i, err
 }
