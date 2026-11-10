@@ -4,7 +4,6 @@ package model
 import (
 	"errors"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -12,23 +11,25 @@ import (
 var ErrInvalid = errors.New("aiagents: invalid input")
 var ErrConflict = errors.New("aiagents: conflicting state")
 
+// Config is the organization's AI agent policy. The agent has no schedule
+// of its own (CF-198): BusinessHoursOnly limits it to the organization's
+// working hours, which the SLA module's schedule defines.
 type Config struct {
-	Mode            string   `json:"mode"`
-	TriageEnabled   bool     `json:"triage_enabled"`
-	Persona         string   `json:"persona"`
-	Channels        []string `json:"channels"`
-	Categories      []string `json:"categories"`
-	Locale          string   `json:"locale"`
-	Timezone        string   `json:"timezone"`
-	StartMinute     int      `json:"start_minute"`
-	EndMinute       int      `json:"end_minute"`
-	Weekdays        []int    `json:"weekdays"`
-	Confidence      float64  `json:"confidence_threshold"`
-	HandoffKeywords []string `json:"handoff_keywords"`
+	Mode          string   `json:"mode"`
+	TriageEnabled bool     `json:"triage_enabled"`
+	Persona       string   `json:"persona"`
+	Channels      []string `json:"channels"`
+	Categories    []string `json:"categories"`
+	Locale        string   `json:"locale"`
+	// BusinessHoursOnly: outside the organization's working hours the agent
+	// hands off instead of answering (false: around the clock).
+	BusinessHoursOnly bool     `json:"business_hours_only"`
+	Confidence        float64  `json:"confidence_threshold"`
+	HandoffKeywords   []string `json:"handoff_keywords"`
 }
 
 func DefaultConfig() Config {
-	return Config{Mode: "off", Locale: "tr", Timezone: "Europe/Istanbul", Confidence: 0.85, Channels: []string{}, Categories: []string{}, Weekdays: []int{0, 1, 2, 3, 4, 5, 6}, EndMinute: 1440, HandoffKeywords: []string{"insan", "temsilci", "human", "agent"}}
+	return Config{Mode: "off", Locale: "tr", Confidence: 0.85, Channels: []string{}, Categories: []string{}, HandoffKeywords: []string{"insan", "temsilci", "human", "agent"}}
 }
 func (c Config) Validate() error {
 	if !slices.Contains([]string{"off", "summary", "draft", "autonomous"}, c.Mode) || len(c.Persona) > 3000 || len(c.Channels) > 20 || len(c.Categories) > 50 || len(c.HandoffKeywords) > 30 {
@@ -37,16 +38,8 @@ func (c Config) Validate() error {
 	if c.Locale != "tr" && c.Locale != "en" {
 		return ErrInvalid
 	}
-	if c.Confidence < 0.5 || c.Confidence > 1 || c.StartMinute < 0 || c.EndMinute > 1440 || c.StartMinute >= c.EndMinute {
+	if c.Confidence < 0.5 || c.Confidence > 1 {
 		return ErrInvalid
-	}
-	if _, err := time.LoadLocation(c.Timezone); err != nil {
-		return ErrInvalid
-	}
-	for _, day := range c.Weekdays {
-		if day < 0 || day > 6 {
-			return ErrInvalid
-		}
 	}
 	for _, value := range append(append(append([]string{}, c.Channels...), c.Categories...), c.HandoffKeywords...) {
 		if len(value) == 0 || len(value) > 100 {
@@ -55,14 +48,15 @@ func (c Config) Validate() error {
 	}
 	return nil
 }
-func (c Config) Active(at time.Time, channel string) bool {
-	loc, err := time.LoadLocation(c.Timezone)
-	if err != nil || !slices.Contains(c.Channels, channel) {
+
+// Active reports whether the agent handles channel now. open is the
+// organization's working-hours state (businesshours.Source); it only
+// matters with BusinessHoursOnly.
+func (c Config) Active(channel string, open bool) bool {
+	if !slices.Contains(c.Channels, channel) {
 		return false
 	}
-	now := at.In(loc)
-	minute := now.Hour()*60 + now.Minute()
-	return slices.Contains(c.Weekdays, int(now.Weekday())) && minute >= c.StartMinute && minute < c.EndMinute
+	return open || !c.BusinessHoursOnly
 }
 
 type Triage struct {

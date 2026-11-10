@@ -6,17 +6,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 )
 
 func TestNormalizeV1KeepsLegacyValues(t *testing.T) {
 	s := Normalize(map[string]any{
 		"color": "#FF0000", "position": "left", "locale": "en", "greeting_title": "Hi",
-		"prechat": map[string]any{"enabled": false, "name": "required"}, "csat": false,
+		"prechat": map[string]any{"enabled": false, "name": "required"}, "csat": false, // "name" is the pre-CF-198 shape
 	})
 	if s.SchemaVersion != SchemaVersion || s.Color != "#ff0000" || s.Position != "left" || s.Locale != "en" {
 		t.Fatalf("legacy values lost: %+v", s)
 	}
-	if s.PreChat.Enabled || s.PreChat.Name != FieldRequired || s.PreChat.Email != FieldOptional || s.PreChat.Phone != FieldHidden {
+	if s.PreChat.Enabled || s.PreChat.FormUUID != "" {
 		t.Fatalf("prechat: %+v", s.PreChat)
 	}
 	if s.CSAT || s.Appearance.Launcher.Size != 56 || len(s.Home.Cards) == 0 || s.Privacy.Persistence != "local" {
@@ -36,11 +38,12 @@ func TestValidateReportsPaths(t *testing.T) {
 			map[string]any{"id": "t1", "message": "dup"},
 			map[string]any{"id": "t3"},
 		},
-		"prechat":           map[string]any{"fields": []any{map[string]any{"key": "plan", "label": "Plan", "type": "select"}}},
+		"prechat":           map[string]any{"form_uuid": "not-a-uuid"},
 		"channels":          map[string]any{"whatsapp": "abc"},
 		"attribute_mapping": []any{map[string]any{"key": "plan", "target": "custom:Plan"}},
 		"texts":             map[string]any{"de": map[string]any{}},
-		"business_hours":    map[string]any{"days": map[string]any{"mon": []any{map[string]any{"start": "18:00", "end": "09:00"}}}},
+		// Pre-CF-198 widgets stored their own hours; the key is ignored.
+		"business_hours": map[string]any{"days": map[string]any{"mon": []any{map[string]any{"start": "18:00", "end": "09:00"}}}},
 	}
 	got := map[string]string{}
 	for _, i := range Validate(raw) {
@@ -54,15 +57,19 @@ func TestValidateReportsPaths(t *testing.T) {
 		"appearance.bogus":              IssueUnknownKey,
 		"triggers.1.id":                 IssueDuplicate,
 		"triggers.2.message":            IssueRequired,
-		"prechat.fields.0.options":      IssueRequired,
+		"prechat.form_uuid":             IssueInvalid,
 		"channels.whatsapp":             IssueInvalid,
 		"attribute_mapping.0.target":    IssueInvalid,
 		"texts.de":                      IssueUnknownKey,
-		"business_hours.days.mon.0":     IssueRange,
 	}
 	for path, code := range want {
 		if got[path] != code {
 			t.Errorf("%s: got %q want %q (all: %v)", path, got[path], code, got)
+		}
+	}
+	for path := range got {
+		if strings.HasPrefix(path, "business_hours") {
+			t.Errorf("legacy business_hours must be ignored, got issue at %s", path)
 		}
 	}
 	if issues := Validate(map[string]any{}); len(issues) != 0 {
@@ -95,32 +102,26 @@ func TestCookielessForcesMemory(t *testing.T) {
 	}
 }
 
-func TestAwayModeAndNextOpening(t *testing.T) {
-	s := Normalize(map[string]any{"business_hours": map[string]any{
-		"enabled": true, "timezone": "Europe/Istanbul",
-		"days": map[string]any{"mon": []any{map[string]any{"start": "09:00", "end": "18:00"}}},
-	}})
-	// Sunday 12:00 in Istanbul: closed until Monday 09:00 (06:00 UTC).
-	sunday := time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)
-	if s.Online(sunday) {
-		t.Fatal("closed on Sunday")
-	}
-	next := s.BusinessHours.NextOpening(sunday)
-	if next == nil || !next.Equal(time.Date(2026, 11, 2, 6, 0, 0, 0, time.UTC)) {
-		t.Fatalf("next opening: %v", next)
-	}
-	monday := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
-	if !s.Online(monday) || s.BusinessHours.NextOpening(monday) != nil {
-		t.Fatal("open on Monday 11:00")
+func TestOnlineFollowsOrganizationHours(t *testing.T) {
+	// The widget has no hours of its own (CF-198): online is the
+	// organization's working-hours state unless away mode is on.
+	s := Normalize(map[string]any{"business_hours": map[string]any{"enabled": true, "days": map[string]any{}}})
+	if !s.Online(true) || s.Online(false) {
+		t.Fatal("online must follow the organization's hours")
 	}
 	s.AwayMode = true
-	if s.Online(monday) {
+	if s.Online(true) {
 		t.Fatal("away mode is offline")
+	}
+	next := time.Date(2026, 11, 2, 6, 0, 0, 0, time.UTC)
+	est := Defaults().EstimateReply(businesshours.State{Open: false, NextOpenAt: &next, Scheduled: true}, nil)
+	if est.NextOpenAt == nil || !est.NextOpenAt.Equal(next) || est.Value != "day" {
+		t.Fatalf("closed estimate: %+v", est)
 	}
 }
 
 func TestEstimateReply(t *testing.T) {
-	now := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
+	now := businesshours.State{Open: true}
 	s := Defaults()
 	d := 30 * time.Minute
 	if v := s.EstimateReply(now, &d).Value; v != "hour" {

@@ -32,8 +32,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { BrandSelect } from "@/features/brands/components/brand-select";
+import { BasicSetup } from "@/features/widget/components/basic-setup";
 import { EditorProvider, issueText } from "@/features/widget/components/fields";
 import {
   AppearanceSection,
@@ -48,7 +50,6 @@ import {
   AISection,
   ChannelsSection,
   ConversationSection,
-  HoursSection,
   TargetingSection,
   TriggersSection,
 } from "@/features/widget/components/sections-behaviour";
@@ -164,6 +165,11 @@ function Editor({
     config.draft?.updated_at ?? null,
   );
   const [section, setSection] = useState<SectionId>("appearance");
+  // Basic (three-step first set-up) until the widget is published once;
+  // the advanced editor stays one click away (CF-198).
+  const [mode, setMode] = useState<"basic" | "advanced">(
+    config.version === 0 ? "basic" : "advanced",
+  );
   const [query, setQuery] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
   const [note, setNote] = useState("");
@@ -320,8 +326,6 @@ function Editor({
         return <TriggersSection />;
       case "targeting":
         return <TargetingSection />;
-      case "hours":
-        return <HoursSection />;
       case "privacy":
         return <PrivacySection />;
       case "security":
@@ -453,85 +457,124 @@ function Editor({
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_minmax(380px,0.9fr)]">
-          {/* Section navigation with search. */}
-          <nav aria-label={t("widget.editor.sections")} className="space-y-3">
-            <div className="relative">
-              <Search className="text-muted-foreground absolute start-2.5 top-2.5 size-4" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("widget.editor.search")}
-                aria-label={t("widget.editor.search")}
-                className="ps-8"
+        <Tabs
+          value={mode}
+          onValueChange={(v) => setMode(v as "basic" | "advanced")}
+        >
+          <TabsList>
+            <TabsTrigger value="basic">
+              {t("widget.mode_tab.basic")}
+            </TabsTrigger>
+            <TabsTrigger value="advanced">
+              {t("widget.mode_tab.advanced")}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {mode === "basic" ? (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)]">
+            <BasicSetup
+              widgetId={widget.uuid}
+              hasSecret={Boolean(widget.credential_hints?.identity_secret)}
+              issues={issues}
+              canPublish={canPublish && canPublishNow}
+              onPublish={() => setPublishOpen(true)}
+              onOpenAdvanced={() => {
+                setSection("security");
+                setMode("advanced");
+              }}
+            />
+            <div className="xl:sticky xl:top-4 xl:self-start">
+              <WidgetPreview
+                settings={previewOf?.settings ?? settings}
+                name={name || widget.name}
               />
             </div>
-            {GROUPS.map((g) => {
-              const items = SECTIONS.filter(
-                (s) => s.group === g && visibleSections.includes(s.id),
-              );
-              if (!items.length) return null;
-              return (
-                <div key={g} className="space-y-1">
-                  <p className="text-muted-foreground px-2 text-[11px] font-semibold tracking-wide uppercase">
-                    {t(`widget.group.${g}`)}
-                  </p>
-                  {items.map((s) => {
-                    const count = sectionIssues(issues, s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        aria-current={section === s.id ? "page" : undefined}
-                        onClick={() => setSection(s.id)}
-                        className={cn(
-                          "hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-start text-sm",
-                          section === s.id && "bg-accent font-medium",
-                        )}
-                      >
-                        {titles[s.id]}
-                        {count ? (
-                          <span className="bg-destructive text-destructive-foreground rounded-full px-1.5 text-[10px] font-semibold">
-                            {count}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-            {visibleSections.length === 0 ? (
-              <p className="text-muted-foreground px-2 text-sm">
-                {t("widget.editor.no_match")}
-              </p>
-            ) : null}
-          </nav>
+          </div>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)_minmax(380px,0.9fr)]">
+            {/* Section navigation with search. */}
+            <nav aria-label={t("widget.editor.sections")} className="space-y-3">
+              <div className="relative">
+                <Search className="text-muted-foreground absolute start-2.5 top-2.5 size-4" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("widget.editor.search")}
+                  aria-label={t("widget.editor.search")}
+                  className="ps-8"
+                />
+              </div>
+              {GROUPS.map((g) => {
+                const items = SECTIONS.filter(
+                  (s) => s.group === g && visibleSections.includes(s.id),
+                );
+                if (!items.length) return null;
+                return (
+                  <div key={g} className="space-y-1">
+                    <p className="text-muted-foreground px-2 text-[11px] font-semibold tracking-wide uppercase">
+                      {t(`widget.group.${g}`)}
+                    </p>
+                    {items.map((s) => {
+                      const count = sectionIssues(issues, s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          aria-current={section === s.id ? "page" : undefined}
+                          onClick={() => setSection(s.id)}
+                          className={cn(
+                            "hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-start text-sm",
+                            section === s.id && "bg-accent font-medium",
+                          )}
+                        >
+                          {titles[s.id]}
+                          {count ? (
+                            <span className="bg-destructive text-destructive-foreground rounded-full px-1.5 text-[10px] font-semibold">
+                              {count}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {visibleSections.length === 0 ? (
+                <p className="text-muted-foreground px-2 text-sm">
+                  {t("widget.editor.no_match")}
+                </p>
+              ) : null}
+            </nav>
 
-          <div className="min-w-0 space-y-4" data-testid={`section-${section}`}>
-            <div>
-              <h2 className="text-lg font-semibold">{titles[section]}</h2>
-              <p className="text-muted-foreground text-sm">
-                {t(`widget.section_hint.${section}`)}
-              </p>
+            <div
+              className="min-w-0 space-y-4"
+              data-testid={`section-${section}`}
+            >
+              <div>
+                <h2 className="text-lg font-semibold">{titles[section]}</h2>
+                <p className="text-muted-foreground text-sm">
+                  {t(`widget.section_hint.${section}`)}
+                </p>
+              </div>
+              {body}
             </div>
-            {body}
-          </div>
 
-          <div className="xl:sticky xl:top-4 xl:self-start">
-            <WidgetPreview
-              settings={previewOf?.settings ?? settings}
-              name={name || widget.name}
-              label={
-                previewOf
-                  ? t("widget.editor.previewing_version", {
-                      version: previewOf.version,
-                    })
-                  : undefined
-              }
-            />
+            <div className="xl:sticky xl:top-4 xl:self-start">
+              <WidgetPreview
+                settings={previewOf?.settings ?? settings}
+                name={name || widget.name}
+                label={
+                  previewOf
+                    ? t("widget.editor.previewing_version", {
+                        version: previewOf.version,
+                      })
+                    : undefined
+                }
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <Dialog open={publishOpen} onOpenChange={setPublishOpen}>

@@ -33,14 +33,5 @@ export type OAuthChannelType = "instagram" | "messenger" | "slack";
  */
 export type ChannelOperationalSettings = {
   ai_enabled?: boolean;
-  greeting_enabled?: boolean;
-  greeting?: string;
-  business_hours_enabled?: boolean;
-  business_hours?: {
-    timezone: string;
-    start: string;
-    end: string;
-    days: number[];
-  };
   default_team_uuid?: string;
 };

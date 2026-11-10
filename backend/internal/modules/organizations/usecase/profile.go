@@ -86,7 +86,7 @@ func (m *Management) PatchProfile(ctx context.Context, orgID int64, in orgmodel.
 		params.CountryCode = pgtype.Text{String: v, Valid: true}
 		changed = append(changed, "country_code")
 	}
-	if in.Company != nil || in.BusinessHours != nil || in.Branding != nil {
+	if in.Company != nil || in.Branding != nil {
 		doc := map[string]json.RawMessage{}
 		if len(row.Settings) > 0 {
 			_ = json.Unmarshal(row.Settings, &doc)
@@ -96,12 +96,6 @@ func (m *Management) PatchProfile(ctx context.Context, orgID int64, in orgmodel.
 			validateCompany(ve, c)
 			doc["company"], _ = json.Marshal(c)
 			changed = append(changed, "company")
-		}
-		if in.BusinessHours != nil {
-			bh := normalizeBusinessHours(*in.BusinessHours)
-			validateBusinessHours(ve, bh)
-			doc["business_hours"], _ = json.Marshal(bh)
-			changed = append(changed, "business_hours")
 		}
 		if in.Branding != nil {
 			b := orgmodel.Branding{PrimaryColor: strings.TrimSpace(in.Branding.PrimaryColor)}
@@ -133,19 +127,15 @@ func (m *Management) PatchProfile(ctx context.Context, orgID int64, in orgmodel.
 // ProfileFromRow maps an organizations row to the profile, filling defaults
 // for settings that were never saved.
 func ProfileFromRow(row db.Organization) orgmodel.OrganizationProfile {
-	settings := orgmodel.ProfileSettings{BusinessHours: orgmodel.DefaultBusinessHours()}
+	settings := orgmodel.ProfileSettings{}
 	if len(row.Settings) > 0 {
 		var parsed struct {
-			Company       *orgmodel.Company       `json:"company"`
-			BusinessHours *orgmodel.BusinessHours `json:"business_hours"`
-			Branding      *orgmodel.Branding      `json:"branding"`
+			Company  *orgmodel.Company  `json:"company"`
+			Branding *orgmodel.Branding `json:"branding"`
 		}
 		if json.Unmarshal(row.Settings, &parsed) == nil {
 			if parsed.Company != nil {
 				settings.Company = *parsed.Company
-			}
-			if parsed.BusinessHours != nil && len(parsed.BusinessHours.Days) == len(orgmodel.Weekdays) {
-				settings.BusinessHours = *parsed.BusinessHours
 			}
 			if parsed.Branding != nil {
 				settings.Branding = *parsed.Branding
@@ -159,7 +149,7 @@ func ProfileFromRow(row db.Organization) orgmodel.OrganizationProfile {
 		AccessStartsAt: row.AccessStartsAt.Time.UTC().Format(layout),
 		UpdatedAt:      row.UpdatedAt.Time.UTC().Format(layout),
 		Timezone:       row.Timezone, Locale: row.Locale, Currency: row.Currency, CountryCode: row.CountryCode,
-		Company: settings.Company, BusinessHours: settings.BusinessHours, Branding: settings.Branding,
+		Company: settings.Company, Branding: settings.Branding,
 	}
 	if row.AccessEndsAt.Valid {
 		v := row.AccessEndsAt.Time.UTC().Format(layout)
@@ -203,41 +193,6 @@ func validateCompany(ve *ValidationError, c orgmodel.Company) {
 		u, err := url.Parse(c.Website)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			ve.add("company.website", "invalid", "website must be an http(s) URL")
-		}
-	}
-}
-
-// normalizeBusinessHours orders the days Monday first; unknown or missing
-// days are reported by validateBusinessHours.
-func normalizeBusinessHours(bh orgmodel.BusinessHours) orgmodel.BusinessHours {
-	out := orgmodel.BusinessHours{Enabled: bh.Enabled, Days: make([]orgmodel.BusinessDay, 0, len(bh.Days))}
-	for _, d := range bh.Days {
-		out.Days = append(out.Days, orgmodel.BusinessDay{
-			Day: strings.ToLower(strings.TrimSpace(d.Day)), Open: d.Open,
-			Start: strings.TrimSpace(d.Start), End: strings.TrimSpace(d.End),
-		})
-	}
-	return out
-}
-
-func validateBusinessHours(ve *ValidationError, bh orgmodel.BusinessHours) {
-	if len(bh.Days) != len(orgmodel.Weekdays) {
-		ve.add("business_hours.days", "invalid", "days must list the seven weekdays, Monday first")
-		return
-	}
-	for i, d := range bh.Days {
-		prefix := fmt.Sprintf("business_hours.days.%d", i)
-		if d.Day != orgmodel.Weekdays[i] {
-			ve.add(prefix+".day", "invalid", "day must be "+orgmodel.Weekdays[i])
-		}
-		if !hhmmRE.MatchString(d.Start) {
-			ve.add(prefix+".start", "invalid", "start must be HH:MM")
-		}
-		if !hhmmRE.MatchString(d.End) {
-			ve.add(prefix+".end", "invalid", "end must be HH:MM")
-		}
-		if d.Open && hhmmRE.MatchString(d.Start) && hhmmRE.MatchString(d.End) && d.End <= d.Start {
-			ve.add(prefix+".end", "invalid", "end must be after start")
 		}
 	}
 }

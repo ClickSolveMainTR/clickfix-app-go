@@ -135,8 +135,8 @@ func (q *Queries) CountBrands(ctx context.Context, organizationID int64) (int64,
 }
 
 const createBrand = `-- name: CreateBrand :one
-INSERT INTO brands(organization_id,name,logo_attachment_id,primary_color,secondary_color,support_email,sender_name,reply_to,help_subdomain,help_path,widget_defaults,signature,business_hours,sla_policy_id,ai_persona)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, business_hours, sla_policy_id, ai_persona, created_at, updated_at
+INSERT INTO brands(organization_id,name,logo_attachment_id,primary_color,secondary_color,support_email,sender_name,reply_to,help_subdomain,help_path,widget_defaults,signature,sla_policy_id,ai_persona)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, sla_policy_id, ai_persona, created_at, updated_at
 `
 
 type CreateBrandParams struct {
@@ -152,7 +152,6 @@ type CreateBrandParams struct {
 	HelpPath         string      `json:"help_path"`
 	WidgetDefaults   []byte      `json:"widget_defaults"`
 	Signature        string      `json:"signature"`
-	BusinessHours    []byte      `json:"business_hours"`
 	SlaPolicyID      pgtype.UUID `json:"sla_policy_id"`
 	AiPersona        string      `json:"ai_persona"`
 }
@@ -171,7 +170,6 @@ func (q *Queries) CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand
 		arg.HelpPath,
 		arg.WidgetDefaults,
 		arg.Signature,
-		arg.BusinessHours,
 		arg.SlaPolicyID,
 		arg.AiPersona,
 	)
@@ -191,7 +189,6 @@ func (q *Queries) CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand
 		&i.HelpPath,
 		&i.WidgetDefaults,
 		&i.Signature,
-		&i.BusinessHours,
 		&i.SlaPolicyID,
 		&i.AiPersona,
 		&i.CreatedAt,
@@ -218,7 +215,7 @@ func (q *Queries) DeleteBrand(ctx context.Context, arg DeleteBrandParams) (int64
 }
 
 const getBrand = `-- name: GetBrand :one
-SELECT id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, business_hours, sla_policy_id, ai_persona, created_at, updated_at FROM brands WHERE organization_id=$1 AND uuid=$2
+SELECT id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, sla_policy_id, ai_persona, created_at, updated_at FROM brands WHERE organization_id=$1 AND uuid=$2
 `
 
 type GetBrandParams struct {
@@ -244,7 +241,6 @@ func (q *Queries) GetBrand(ctx context.Context, arg GetBrandParams) (Brand, erro
 		&i.HelpPath,
 		&i.WidgetDefaults,
 		&i.Signature,
-		&i.BusinessHours,
 		&i.SlaPolicyID,
 		&i.AiPersona,
 		&i.CreatedAt,
@@ -320,7 +316,7 @@ func (q *Queries) ListBrandEmailTemplates(ctx context.Context, arg ListBrandEmai
 }
 
 const listBrands = `-- name: ListBrands :many
-SELECT id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, business_hours, sla_policy_id, ai_persona, created_at, updated_at FROM brands WHERE organization_id=$1 ORDER BY name
+SELECT id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, sla_policy_id, ai_persona, created_at, updated_at FROM brands WHERE organization_id=$1 ORDER BY name
 `
 
 func (q *Queries) ListBrands(ctx context.Context, organizationID int64) ([]Brand, error) {
@@ -347,7 +343,6 @@ func (q *Queries) ListBrands(ctx context.Context, organizationID int64) ([]Brand
 			&i.HelpPath,
 			&i.WidgetDefaults,
 			&i.Signature,
-			&i.BusinessHours,
 			&i.SlaPolicyID,
 			&i.AiPersona,
 			&i.CreatedAt,
@@ -364,7 +359,7 @@ func (q *Queries) ListBrands(ctx context.Context, organizationID int64) ([]Brand
 }
 
 const resolvePublicBrand = `-- name: ResolvePublicBrand :one
-SELECT b.id, b.uuid, b.organization_id, b.name, b.logo_attachment_id, b.primary_color, b.secondary_color, b.support_email, b.sender_name, b.reply_to, b.help_subdomain, b.help_path, b.widget_defaults, b.signature, b.business_hours, b.sla_policy_id, b.ai_persona, b.created_at, b.updated_at FROM brands b JOIN organizations o ON o.id=b.organization_id
+SELECT b.id, b.uuid, b.organization_id, b.name, b.logo_attachment_id, b.primary_color, b.secondary_color, b.support_email, b.sender_name, b.reply_to, b.help_subdomain, b.help_path, b.widget_defaults, b.signature, b.sla_policy_id, b.ai_persona, b.created_at, b.updated_at FROM brands b JOIN organizations o ON o.id=b.organization_id
 WHERE o.slug=$1 AND b.uuid=$2 AND o.deleted_at IS NULL AND o.status='active' AND (o.access_ends_at IS NULL OR o.access_ends_at>now())
 `
 
@@ -392,7 +387,6 @@ func (q *Queries) ResolvePublicBrand(ctx context.Context, arg ResolvePublicBrand
 		&i.HelpPath,
 		&i.WidgetDefaults,
 		&i.Signature,
-		&i.BusinessHours,
 		&i.SlaPolicyID,
 		&i.AiPersona,
 		&i.CreatedAt,
@@ -402,7 +396,7 @@ func (q *Queries) ResolvePublicBrand(ctx context.Context, arg ResolvePublicBrand
 }
 
 const resolvePublicBrandIdentity = `-- name: ResolvePublicBrandIdentity :one
-SELECT b.id, b.uuid, b.organization_id, b.name, b.logo_attachment_id, b.primary_color, b.secondary_color, b.support_email, b.sender_name, b.reply_to, b.help_subdomain, b.help_path, b.widget_defaults, b.signature, b.business_hours, b.sla_policy_id, b.ai_persona, b.created_at, b.updated_at FROM brands b JOIN organizations o ON o.id=b.organization_id
+SELECT b.id, b.uuid, b.organization_id, b.name, b.logo_attachment_id, b.primary_color, b.secondary_color, b.support_email, b.sender_name, b.reply_to, b.help_subdomain, b.help_path, b.widget_defaults, b.signature, b.sla_policy_id, b.ai_persona, b.created_at, b.updated_at FROM brands b JOIN organizations o ON o.id=b.organization_id
 WHERE o.deleted_at IS NULL AND o.status='active' AND (o.access_ends_at IS NULL OR o.access_ends_at>now())
 AND (($1::text<>'' AND b.help_subdomain=$1::text)
 OR ($1::text='' AND o.slug=$2::text AND b.help_path=$3::text AND b.help_path<>''))
@@ -433,7 +427,6 @@ func (q *Queries) ResolvePublicBrandIdentity(ctx context.Context, arg ResolvePub
 		&i.HelpPath,
 		&i.WidgetDefaults,
 		&i.Signature,
-		&i.BusinessHours,
 		&i.SlaPolicyID,
 		&i.AiPersona,
 		&i.CreatedAt,
@@ -520,8 +513,8 @@ func (q *Queries) SetChannelBrand(ctx context.Context, arg SetChannelBrandParams
 }
 
 const updateBrand = `-- name: UpdateBrand :one
-UPDATE brands SET name=$3,logo_attachment_id=$4,primary_color=$5,secondary_color=$6,support_email=$7,sender_name=$8,reply_to=$9,help_subdomain=$10,help_path=$11,widget_defaults=$12,signature=$13,business_hours=$14,sla_policy_id=$15,ai_persona=$16
-WHERE organization_id=$1 AND uuid=$2 RETURNING id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, business_hours, sla_policy_id, ai_persona, created_at, updated_at
+UPDATE brands SET name=$3,logo_attachment_id=$4,primary_color=$5,secondary_color=$6,support_email=$7,sender_name=$8,reply_to=$9,help_subdomain=$10,help_path=$11,widget_defaults=$12,signature=$13,sla_policy_id=$14,ai_persona=$15
+WHERE organization_id=$1 AND uuid=$2 RETURNING id, uuid, organization_id, name, logo_attachment_id, primary_color, secondary_color, support_email, sender_name, reply_to, help_subdomain, help_path, widget_defaults, signature, sla_policy_id, ai_persona, created_at, updated_at
 `
 
 type UpdateBrandParams struct {
@@ -538,7 +531,6 @@ type UpdateBrandParams struct {
 	HelpPath         string      `json:"help_path"`
 	WidgetDefaults   []byte      `json:"widget_defaults"`
 	Signature        string      `json:"signature"`
-	BusinessHours    []byte      `json:"business_hours"`
 	SlaPolicyID      pgtype.UUID `json:"sla_policy_id"`
 	AiPersona        string      `json:"ai_persona"`
 }
@@ -558,7 +550,6 @@ func (q *Queries) UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand
 		arg.HelpPath,
 		arg.WidgetDefaults,
 		arg.Signature,
-		arg.BusinessHours,
 		arg.SlaPolicyID,
 		arg.AiPersona,
 	)
@@ -578,7 +569,6 @@ func (q *Queries) UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand
 		&i.HelpPath,
 		&i.WidgetDefaults,
 		&i.Signature,
-		&i.BusinessHours,
 		&i.SlaPolicyID,
 		&i.AiPersona,
 		&i.CreatedAt,

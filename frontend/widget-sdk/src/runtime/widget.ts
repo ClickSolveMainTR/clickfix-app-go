@@ -126,7 +126,6 @@ export class Widget {
   private unread = 0;
   private draft = "";
   private profile = { name: "", email: "", phone: "" };
-  private prechat: Record<string, string | boolean> = {};
   private consentChecked = false;
   private formValues: Record<string, unknown> = {};
   private error = "";
@@ -756,7 +755,6 @@ export class Widget {
     this.active = null;
     this.messages = [];
     this.profile = { name: "", email: "", phone: "" };
-    this.prechat = {};
     this.pendingAttrs = {};
     this.outbox = [];
     this.realtime?.stop();
@@ -956,22 +954,22 @@ export class Widget {
     return !this.boot!.widget.online;
   }
 
-  private needsPreChat(): { name: boolean; email: boolean; phone: boolean } {
+  /**
+   * The pre-chat questions are the request form (CF-198). The widget only
+   * adds an e-mail field of its own while offline with "leave a message"
+   * on, when the form does not already ask for one.
+   */
+  private needsOfflineEmail(): boolean {
     const s = this.s!;
-    if (this.active) return { name: false, email: false, phone: false };
+    if (this.active) return false;
     const contact = this.boot!.visitor.contact;
-    const pc = s.prechat;
     const form = new Set(this.formFields().map((f) => f.key));
-    const show = (mode: string) => pc.enabled && mode !== "hidden";
-    const emailForOffline = this.offline() && s.offline.collect_email;
-    return {
-      name: show(pc.name) && !contact?.name && !form.has("name"),
-      email:
-        (emailForOffline || show(pc.email)) &&
-        !contact?.email &&
-        !form.has("email"),
-      phone: show(pc.phone) && !contact?.phone && !form.has("phone"),
-    };
+    return (
+      this.offline() &&
+      s.offline.collect_email &&
+      !contact?.email &&
+      !form.has("email")
+    );
   }
 
   private formFields(): FormField[] {
@@ -1025,26 +1023,12 @@ export class Widget {
   /** First problem of the new-conversation form, "" when it can be sent. */
   private preChatError(): string {
     const s = this.s!;
-    const pre = this.needsPreChat();
     const pc = s.prechat;
-    if (pre.name && pc.name === "required" && !this.profile.name.trim())
-      return `${this.t("name")} (${this.t("required")})`;
-    const emailRequired =
-      (this.offline() && s.offline.collect_email) || pc.email === "required";
     if (
-      pre.email &&
-      ((emailRequired && !this.profile.email.trim()) ||
-        (this.profile.email.trim() && !validEmail(this.profile.email)))
+      this.needsOfflineEmail() &&
+      (!this.profile.email.trim() || !validEmail(this.profile.email))
     )
       return this.t("invalidEmail");
-    if (pre.phone && pc.phone === "required" && !this.profile.phone.trim())
-      return `${this.t("phone")} (${this.t("required")})`;
-    if (pc.enabled)
-      for (const f of pc.fields) {
-        const v = this.prechat[f.key];
-        if (f.required && (v === undefined || v === "" || v === false))
-          return `${pick(f.label, this.locale as Locale) || f.key} (${this.t("required")})`;
-      }
     if (
       pc.enabled &&
       pc.consent.enabled &&
@@ -1193,7 +1177,6 @@ export class Widget {
     if (intent) fields.intent = intent;
     let form: { form_uuid: string; values: Record<string, unknown> } | null =
       null;
-    let prechat: Record<string, string | boolean> | undefined;
     let consent: boolean | undefined;
     if (first) {
       if (this.boot?.request_form) {
@@ -1207,9 +1190,8 @@ export class Widget {
       if (this.profile.name) fields.name = this.profile.name;
       if (this.profile.email) fields.email = this.profile.email;
       if (this.profile.phone) fields.phone = this.profile.phone;
-      if (this.s!.prechat.enabled && this.s!.prechat.fields.length)
-        prechat = { ...this.prechat };
-      if (this.s!.prechat.consent.enabled) consent = this.consentChecked;
+      if (this.s!.prechat.enabled && this.s!.prechat.consent.enabled)
+        consent = this.consentChecked;
     }
     const attributes = Object.keys(this.pendingAttrs).length
       ? { ...this.pendingAttrs }
@@ -1226,7 +1208,6 @@ export class Widget {
         const fd = new FormData();
         for (const [k, v] of Object.entries(fields)) fd.append(k, v);
         if (form) fd.append("form", JSON.stringify(form));
-        if (prechat) fd.append("prechat", JSON.stringify(prechat));
         if (consent !== undefined) fd.append("consent", String(consent));
         if (attributes) fd.append("attributes", JSON.stringify(attributes));
         fd.append("file", file, file.name);
@@ -1235,7 +1216,6 @@ export class Widget {
         body = {
           ...fields,
           form: form ?? undefined,
-          prechat,
           consent,
           attributes,
           events: events.length ? events : undefined,
@@ -3085,86 +3065,24 @@ export class Widget {
   private preChatFields(): Node[] {
     const s = this.s!;
     const pc = s.prechat;
-    const pre = this.needsPreChat();
     const out: Node[] = [];
     const req = (on: boolean) => (on ? ` (${this.t("required")})` : "");
-    const input = (
-      key: "name" | "email" | "phone",
-      type: string,
-      label: string,
-      required: boolean,
-    ) => {
+    if (this.needsOfflineEmail()) {
       const node = el("input", {
-        type,
-        autocomplete: key === "phone" ? "tel" : key,
-        value: this.profile[key],
-        maxlength: key === "email" ? 254 : 120,
+        type: "email",
+        autocomplete: "email",
+        value: this.profile.email,
+        maxlength: 254,
       });
-      node.addEventListener("input", () => (this.profile[key] = node.value));
+      node.addEventListener("input", () => (this.profile.email = node.value));
       out.push(
         el("label", { class: "field" }, [
-          el("span", { text: label + req(required) }),
+          el("span", { text: this.t("email") + req(true) }),
           node,
         ]),
       );
-    };
-    if (pre.name) input("name", "text", this.t("name"), pc.name === "required");
-    if (pre.email)
-      input(
-        "email",
-        "email",
-        this.t("email"),
-        (this.offline() && s.offline.collect_email) || pc.email === "required",
-      );
-    if (pre.phone)
-      input("phone", "tel", this.t("phone"), pc.phone === "required");
-    if (!pc.enabled) return out;
-    for (const f of pc.fields) {
-      const label =
-        (pick(f.label, this.locale as Locale) || f.key) + req(f.required);
-      const cur = this.prechat[f.key];
-      if (f.type === "checkbox") {
-        const box = el("input", { type: "checkbox" });
-        box.checked = cur === true;
-        box.addEventListener(
-          "change",
-          () => (this.prechat[f.key] = box.checked),
-        );
-        out.push(
-          el("label", { class: "field check" }, [
-            box,
-            el("span", { text: label }),
-          ]),
-        );
-        continue;
-      }
-      let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      if (f.type === "select") {
-        control = el("select", {}, [
-          el("option", { value: "", text: this.t("choose") }),
-          ...f.options.map((o) => el("option", { value: o, text: o })),
-        ]);
-      } else if (f.type === "textarea")
-        control = el("textarea", { rows: 2, maxlength: 500 });
-      else
-        control = el("input", {
-          type:
-            (
-              { email: "email", phone: "tel", number: "number" } as Record<
-                string,
-                string
-              >
-            )[f.type] ?? "text",
-          maxlength: 500,
-        });
-      control.value = typeof cur === "string" ? cur : "";
-      const c = control;
-      c.addEventListener("input", () => (this.prechat[f.key] = c.value));
-      c.addEventListener("change", () => (this.prechat[f.key] = c.value));
-      out.push(
-        el("label", { class: "field" }, [el("span", { text: label }), control]),
-      );
     }
+    if (!pc.enabled) return out;
     if (pc.consent.enabled) {
       const box = el("input", { type: "checkbox" });
       box.checked = this.consentChecked;

@@ -95,6 +95,7 @@ billing_webhook_receipts
 
 # SLA (CF-46)
 business_hours
+auto_replies
 business_holidays
 sla_policies
 sla_policy_targets

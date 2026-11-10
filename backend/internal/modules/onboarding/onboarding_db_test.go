@@ -59,33 +59,51 @@ func TestOnboardingAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Active || st.Completed != 1 {
+	if !st.Active || st.Completed != 0 || len(st.Steps) != 5 || st.Steps[0].Key != onboarding.StepCustomer {
 		t.Fatalf("fresh: %+v", st)
 	}
 
+	// The facts come from the tables they live in: a company profile, a
+	// contact with an external id, a company with a tier, a published
+	// procedure and an article tick their conditions; the identity key
+	// comes from the channels module (here: a stub).
+	if _, err := pool.Exec(ctx, `UPDATE organizations SET settings = settings || '{"company":{"legal_name":"Onboarding A.Ş."}}'::jsonb WHERE id = $1`, org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO contacts (organization_id, name, external_id) VALUES ($1, 'Ada', 'crm-1')", org.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO companies (organization_id, name, tier) VALUES ($1, 'Acme', 'gold')", org.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, "INSERT INTO channel_instances (organization_id, channel_type, name, external_id) VALUES ($1, 'widget', 'Web sitesi', $2)", org.ID, uuid.NewString()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, "INSERT INTO organization_members (organization_id, user_id, role_id) SELECT $1, $2, id FROM roles WHERE scope = 'tenant' AND slug = 'member' AND organization_id IS NULL LIMIT 1", org.ID, peerID); err != nil {
+	if _, err := pool.Exec(ctx, "INSERT INTO knowledge_articles (organization_id, slug, locale, title, body, visibility, author_id) VALUES ($1, 'iade', 'tr', 'İade', 'İade adımları', 'internal', $2)", org.ID, userID); err != nil {
 		t.Fatal(err)
 	}
+	svc.WithIdentityKeys(func(context.Context, int64) (bool, error) { return true, nil })
 	st, err = svc.Get(ctx, org.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// organization + channel + team + widget (widget channel type).
-	if st.Completed != 4 {
-		t.Fatalf("after channel and member: %+v", st)
+	// customer (all four conditions) + knowledge.
+	if st.Completed != 2 || !st.Steps[0].Done || !st.Steps[3].Done || onboarding.Next(st.Steps) != onboarding.StepSystem {
+		t.Fatalf("after facts: %+v", st)
 	}
 
 	for range 2 {
-		if _, err := svc.CompleteStep(ctx, org.ID, onboarding.StepTeam); err != nil {
+		if _, err := svc.SkipStep(ctx, org.ID, onboarding.StepSystem); err != nil {
 			t.Fatal(err)
 		}
 	}
 	row, err := q.GetOrganizationOnboarding(ctx, org.ID)
 	if err != nil || len(row.Steps) != 1 {
-		t.Fatalf("manual steps must be idempotent: %+v %v", row.Steps, err)
+		t.Fatalf("skips must be idempotent: %+v %v", row.Steps, err)
+	}
+	st, _ = svc.Get(ctx, org.ID)
+	if !st.Steps[1].Skipped || st.Skipped != 1 || onboarding.Next(st.Steps) != onboarding.StepAI {
+		t.Fatalf("skipped system: %+v", st)
 	}
 
 	st, err = svc.Finish(ctx, org.ID)

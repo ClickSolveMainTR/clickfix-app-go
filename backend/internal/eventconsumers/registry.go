@@ -7,6 +7,7 @@ import (
 	agentusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	kbusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	mobileextusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mobileext/usecase"
 	notifmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications"
@@ -41,6 +42,9 @@ type Deps struct {
 	NotificationsLookup notifmodule.Lookup
 	// SLA keeps conversation SLA clocks in step with the inbox (CF-46).
 	SLA *slausecase.Service
+	// AutoReply acknowledges inbound messages and posts out-of-hours
+	// notices (CF-198).
+	AutoReply *autoreply.Service
 	// Routing assigns conversations automatically (CF-53).
 	Routing *routingusecase.Service
 	// LiveActivities sends iOS Live Activity pushes (CF-152); registered
@@ -77,6 +81,9 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 	}
 	if deps.SLA != nil {
 		consumers = append(consumers, slamodule.EventConsumer(deps.SLA))
+	}
+	if deps.AutoReply != nil {
+		consumers = append(consumers, deps.AutoReply.Consumer())
 	}
 	if deps.Routing != nil {
 		consumers = append(consumers, routingmodule.EventConsumer(deps.Routing))

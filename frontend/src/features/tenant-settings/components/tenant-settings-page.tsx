@@ -9,6 +9,7 @@ import { AppForm, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
+import { AutoRepliesSection } from "@/features/tenant-settings/components/auto-replies-section";
 import { OrganizationLogoCard } from "@/features/tenant-settings/components/organization-logo-card";
 import {
   BrandingSection,
@@ -34,8 +35,9 @@ import { usePermission } from "@/providers/permission-provider";
 
 /**
  * Organization settings (`/v1/tenant/organization`): logo, then one form for
- * name, regional defaults, company identity, business hours and branding
- * with a save bar. API validation errors (`details[].field`) are shown on
+ * name, regional defaults, company identity and branding with a save bar,
+ * then the automatic customer replies (their own form, CF-198). Working
+ * hours live in the SLA schedule. API validation errors (`details[].field`) are shown on
  * the matching fields by `AppForm`.
  */
 export function TenantSettingsPage() {
@@ -96,7 +98,7 @@ export function TenantSettingsPage() {
                   <GeneralSection disabled={disabled} slug={profile.slug} />
                   <RegionalSection disabled={disabled} />
                   <CompanySection disabled={disabled} />
-                  <BusinessHoursSection disabled={disabled} />
+                  <BusinessHoursSection />
                   <BrandingSection disabled={disabled} />
                   {canWrite ? (
                     <FormActions className="justify-between">
@@ -133,6 +135,7 @@ export function TenantSettingsPage() {
               );
             }}
           </AppForm>
+          <AutoRepliesSection disabled={disabled} />
           <LeaveOrganizationCard />
         </div>
       )}

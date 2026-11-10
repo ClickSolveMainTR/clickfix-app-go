@@ -2,11 +2,11 @@ package widget
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 )
 
 // Issue is one rejected settings value. Path is the dotted JSON path
@@ -46,12 +46,14 @@ func Validate(raw map[string]any) []Issue {
 }
 
 // topKeys are the settings keys this package (or replay.go) reads.
+// "business_hours" is accepted and ignored: widgets stored before CF-198
+// carry it; the hours now come from the SLA module's schedule.
 var topKeys = []string{
 	"schema_version", "color", "position", "locale", "greeting_title", "greeting_text", "show_team",
-	"team_member_uuids", "prechat", "business_hours", "offline_message", "allowed_domains", "require_identity",
+	"team_member_uuids", "prechat", "offline_message", "allowed_domains", "require_identity",
 	"file_upload", "csat", "replay", "appearance", "texts", "reply_time", "home", "quick_replies", "csat_options",
 	"offline", "away_mode", "channels", "ai", "attachments", "features", "triggers", "targeting", "privacy",
-	"rate_limit", "mobile", "attribute_mapping",
+	"rate_limit", "mobile", "attribute_mapping", "business_hours",
 }
 
 type norm struct{ issues []Issue }
@@ -271,9 +273,6 @@ func normalize(raw map[string]any) (Settings, []Issue) {
 	if m, ok := n.obj("prechat", raw["prechat"]); ok {
 		n.preChat(&s.PreChat, m)
 	}
-	if m, ok := n.obj("business_hours", raw["business_hours"]); ok {
-		n.hours(&s.BusinessHours, m)
-	}
 	if m, ok := n.obj("appearance", raw["appearance"]); ok {
 		n.appearance(&s.Appearance, m)
 	}
@@ -445,11 +444,6 @@ func normalize(raw map[string]any) (Settings, []Issue) {
 		}
 	}
 	// Cross-field rules.
-	for i, f := range s.PreChat.Fields {
-		if f.Attribute != "" && !s.hasMapping(f.Attribute) {
-			n.add(fmt.Sprintf("prechat.fields.%d.attribute", i), IssueInvalid, "add %q to the attribute mapping first", f.Attribute)
-		}
-	}
 	if s.PreChat.Consent.Enabled && len(s.PreChat.Consent.Text) == 0 {
 		n.add("prechat.consent.text", IssueRequired, "write the consent text")
 	}
@@ -468,50 +462,18 @@ func (s Settings) hasMapping(key string) bool {
 	return false
 }
 
+// preChat reads the pre-chat switch, the request form choice and the
+// consent box. "name", "email", "phone" and "fields" are the pre-CF-198
+// shape (the fields now live on the request form); they are accepted and
+// ignored so stored settings keep normalizing.
 func (n *norm) preChat(p *PreChat, m map[string]any) {
-	n.keys("prechat", m, "enabled", "name", "email", "phone", "fields", "consent")
+	n.keys("prechat", m, "enabled", "form_uuid", "consent", "name", "email", "phone", "fields")
 	p.Enabled = n.bool("prechat.enabled", m["enabled"], p.Enabled)
-	modes := []string{FieldRequired, FieldOptional, FieldHidden}
-	p.Name = n.enum("prechat.name", m["name"], modes, p.Name)
-	p.Email = n.enum("prechat.email", m["email"], modes, p.Email)
-	p.Phone = n.enum("prechat.phone", m["phone"], modes, p.Phone)
-	if list, ok := n.list("prechat.fields", m["fields"]); ok {
-		seen := map[string]bool{"name": true, "email": true, "phone": true, "message": true}
-		for i, item := range list {
-			path := join("prechat.fields", i)
-			fm, ok := n.obj(path, item)
-			if !ok {
-				continue
-			}
-			n.keys(path, fm, "key", "label", "type", "required", "options", "attribute")
-			f := PreChatField{
-				Key: n.str(join(path, "key"), fm["key"], 40), Label: n.localized(join(path, "label"), fm["label"], 100),
-				Type: n.enum(join(path, "type"), fm["type"], PreChatTypes, "text"), Required: n.bool(join(path, "required"), fm["required"], false),
-				Options: n.strs(join(path, "options"), fm["options"], 30, 80), Attribute: n.str(join(path, "attribute"), fm["attribute"], 40),
-			}
-			switch {
-			case !keyRe.MatchString(f.Key):
-				n.add(join(path, "key"), IssueInvalid, "use lowercase letters, digits and _")
-				continue
-			case seen[f.Key]:
-				n.add(join(path, "key"), IssueDuplicate, "field keys must be unique")
-				continue
-			case len(f.Label) == 0:
-				n.add(join(path, "label"), IssueRequired, "write a label")
-				continue
-			case f.Type == "select" && len(f.Options) == 0:
-				n.add(join(path, "options"), IssueRequired, "add at least one option")
-				continue
-			case len(p.Fields) >= MaxPreChatFields:
-				n.add("prechat.fields", IssueLimit, "at most %d fields", MaxPreChatFields)
-				continue
-			}
-			if f.Attribute != "" && !keyRe.MatchString(f.Attribute) {
-				n.add(join(path, "attribute"), IssueInvalid, "not an attribute key")
-				f.Attribute = ""
-			}
-			seen[f.Key] = true
-			p.Fields = append(p.Fields, f)
+	if v := n.str("prechat.form_uuid", m["form_uuid"], 36); v != "" {
+		if _, err := uuid.Parse(v); err != nil {
+			n.add("prechat.form_uuid", IssueInvalid, "not a form id")
+		} else {
+			p.FormUUID = v
 		}
 	}
 	if c, ok := n.obj("prechat.consent", m["consent"]); ok {
@@ -520,44 +482,6 @@ func (n *norm) preChat(p *PreChat, m map[string]any) {
 		p.Consent.Required = n.bool("prechat.consent.required", c["required"], p.Consent.Required)
 		p.Consent.Text = n.localized("prechat.consent.text", c["text"], 500)
 		p.Consent.URL = n.url("prechat.consent.url", c["url"])
-	}
-}
-
-func (n *norm) hours(h *BusinessHours, m map[string]any) {
-	n.keys("business_hours", m, "enabled", "timezone", "days")
-	h.Enabled = n.bool("business_hours.enabled", m["enabled"], false)
-	if tz := n.str("business_hours.timezone", m["timezone"], 64); tz != "" {
-		if _, err := time.LoadLocation(tz); err == nil {
-			h.Timezone = tz
-		} else {
-			n.add("business_hours.timezone", IssueInvalid, "unknown time zone")
-		}
-	}
-	days, ok := n.obj("business_hours.days", m["days"])
-	if !ok {
-		return
-	}
-	n.keys("business_hours.days", days, dayKeys...)
-	for _, key := range dayKeys {
-		list, _ := n.list(join("business_hours.days", key), days[key])
-		for i, p := range list {
-			path := join(join("business_hours.days", key), i)
-			pm, ok := n.obj(path, p)
-			if !ok {
-				continue
-			}
-			start, end := n.str(join(path, "start"), pm["start"], 5), n.str(join(path, "end"), pm["end"], 5)
-			switch {
-			case !clockRe.MatchString(start) || !clockRe.MatchString(end):
-				n.add(path, IssueInvalid, "times must be HH:MM")
-			case start >= end:
-				n.add(path, IssueRange, "must close after it opens")
-			case len(h.Days[key]) >= 4:
-				n.add(join("business_hours.days", key), IssueLimit, "at most 4 periods a day")
-			default:
-				h.Days[key] = append(h.Days[key], Period{Start: start, End: end})
-			}
-		}
 	}
 }
 

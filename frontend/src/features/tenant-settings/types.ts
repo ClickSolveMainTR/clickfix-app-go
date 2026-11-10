@@ -7,8 +7,7 @@ export type OrganizationProfile = Schemas["OrganizationProfile"];
 export type OrganizationProfilePatchRequest =
   Schemas["OrganizationProfilePatchRequest"];
 export type OrganizationCompany = Schemas["OrganizationCompany"];
-export type OrganizationBusinessHours = Schemas["OrganizationBusinessHours"];
-export type OrganizationBusinessDay = Schemas["OrganizationBusinessDay"];
 export type OrganizationBranding = Schemas["OrganizationBranding"];
-export type WeekDay = OrganizationBusinessDay["day"];
+/** Weekday keys of the team working-hours editor, Monday first. */
+export type WeekDay = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 export type OrganizationLocale = OrganizationProfile["locale"];

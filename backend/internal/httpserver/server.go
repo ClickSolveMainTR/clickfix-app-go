@@ -65,6 +65,7 @@ import (
 	authsettingsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/authsettings"
 	authsettingshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/authsettings/handler"
 	authsettingsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/authsettings/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	billingmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing"
 	billinghandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/handler"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
@@ -196,6 +197,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/appleauth"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine/adapters"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/clientip"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
@@ -489,6 +491,20 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// values and the "required before resolving" check.
 	formsSvc := formsusecase.New(deps.DB, deps.Queries)
 	inboxCore.Conversations.WithResolveGuard(formsSvc)
+	// The set-up checklist's "identity key" condition reads the widget's
+	// encrypted credentials through the channels module (CF-198).
+	onboardingSvc.WithIdentityKeys(func(ctx context.Context, org int64) (bool, error) {
+		items, err := inboxCore.Channels.List(ctx, org, channels.TypeWidget)
+		if err != nil {
+			return false, err
+		}
+		for _, it := range items {
+			if it.CredentialHints[widget.IdentitySecretField] != "" {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
 	formsmodule.RegisterRoutes(mux, formshandler.New(formsSvc, activityRec), tokens, loader, tenantResolver)
 	convH := conversationshandler.New(inboxCore.Conversations, activityRec)
 	conversationsmodule.RegisterRoutes(mux, convH, tokens, loader, tenantResolver)
@@ -505,6 +521,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		slaSvc.WithResyncer(deps.Queue)
 	}
 	slamodule.RegisterRoutes(mux, slahandler.New(slaSvc, activityRec), tokens, loader, tenantResolver)
+	// The SLA schedule is the one working-hours source (CF-198): the inbox
+	// (automatic replies, AI delivery), the AI agent and the widget read it.
+	inboxCore.Conversations.WithHours(slaSvc)
 	// Automatic routing and agent capacity (CF-53, CF-54).
 	routingSvc := routingusecase.New(deps.DB, deps.Queries, inbox.RoutingAssigner{Conversations: inboxCore.Conversations}, log)
 	routingmodule.RegisterRoutes(mux, routinghandler.New(routingSvc, activityRec), tokens, loader, tenantResolver)
@@ -536,7 +555,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	widgetService := widgetusecase.New(widgetusecase.Deps{
 		Queries: deps.Queries, Store: convrepository.New(deps.DB, deps.Queries), Instances: inboxCore.Channels,
 		Pipeline: inboxCore.Conversations, Files: attachmentsSvc, Signer: widget.NewSigner(cfg.Encryption.Key),
-		Publisher: deps.Realtime, Issuer: rtIssuer, AppOrigin: cfg.Auth.FrontendURL, Forms: formsSvc, Log: log,
+		Publisher: deps.Realtime, Issuer: rtIssuer, AppOrigin: cfg.Auth.FrontendURL, Forms: formsSvc, Hours: slaSvc, Log: log,
 	})
 	widgetService.WithReplay(deps.Storage, entitlementService, cfg.Encryption.Key)
 	widgetH := widgethandler.New(widgetService, func(r *http.Request, action, subject string, limit int) (bool, time.Duration) {
@@ -576,6 +595,12 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
 	agentSvc.Fields = customFieldsSvc
+	agentSvc.Hours = slaSvc
+	// Automatic customer replies (CF-198): settings here, the consumer runs
+	// in the worker; the AI agent's handoff notice posts from the API too.
+	autoReplySvc := autoreply.New(deps.Queries, inboxCore.Conversations, slaSvc, slaSvc, log)
+	agentSvc.Notices = autoReplySvc
+	autoreply.RegisterRoutes(mux, autoreply.NewHandler(autoReplySvc, activityRec), tokens, loader, tenantResolver)
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
@@ -701,6 +726,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Register(systemsmodule.Capabilities()...).
 		Register(systemsmodule.SetupCapabilities()...).
 		RegisterPages(assistantmodule.CorePages(deps.Queries)...).
+		RegisterPages(onboardingmodule.Pages(onboardingSvc)...).
 		RegisterPages(channelsmodule.Pages()...).
 		RegisterPages(automationmodule.Pages()...).
 		RegisterPages(slamodule.Pages()...).
@@ -708,6 +734,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		RegisterPages(webhooksmodule.Pages()...).
 		AllowOn(capability.SurfaceWidget, assistantmodule.WidgetAllowed)
 	assistantSvc.Instances = inboxCore.Channels
+	assistantSvc.Setup = onboardingSvc
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {
 		return capability.Bridge{API: assistantBridge, User: user, Org: org}
 	}

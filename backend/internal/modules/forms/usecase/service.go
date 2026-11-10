@@ -228,13 +228,39 @@ func (s *Service) Delete(ctx context.Context, orgID int64, id uuid.UUID) error {
 	return nil
 }
 
-// ForChannel returns the form a channel offers (nil when none is active).
-func (s *Service) ForChannel(ctx context.Context, orgID int64, channel string) (*model.PublicForm, error) {
+// offered picks the form a channel shows: preferred when it is active and
+// lists the channel (CF-198: the widget settings pick their pre-chat form),
+// else the first active form of the channel. ok is false without one.
+func (s *Service) offered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID) (db.RequestForm, bool, error) {
+	if preferred != uuid.Nil {
+		r, err := s.q.GetRequestFormByUUID(ctx, db.GetRequestFormByUUIDParams{OrganizationID: orgID, Uuid: preferred})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return db.RequestForm{}, false, err
+		}
+		if err == nil && r.IsActive && slices.Contains(r.Channels, channel) {
+			return r, true, nil
+		}
+	}
 	r, err := s.q.FirstActiveRequestFormForChannel(ctx, db.FirstActiveRequestFormForChannelParams{OrganizationID: orgID, Channel: channel})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			return db.RequestForm{}, false, nil
 		}
+		return db.RequestForm{}, false, err
+	}
+	return r, true, nil
+}
+
+// ForChannel returns the form a channel offers (nil when none is active).
+func (s *Service) ForChannel(ctx context.Context, orgID int64, channel string) (*model.PublicForm, error) {
+	return s.Offered(ctx, orgID, channel, uuid.Nil)
+}
+
+// Offered returns the form a channel offers, preferring one by id (nil when
+// none is active).
+func (s *Service) Offered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID) (*model.PublicForm, error) {
+	r, ok, err := s.offered(ctx, orgID, channel, preferred)
+	if err != nil || !ok {
 		return nil, err
 	}
 	fields, err := s.resolved(ctx, s.q, r)
@@ -248,11 +274,13 @@ func (s *Service) ForChannel(ctx context.Context, orgID int64, channel string) (
 // are never required (the widget's message comes from its composer). A
 // channel without an active form accepts no submission (nil, nil).
 func (s *Service) Check(ctx context.Context, orgID int64, channel string, sub *model.Submission, optional ...string) (*engine.Submission, uuid.UUID, error) {
-	r, err := s.q.FirstActiveRequestFormForChannel(ctx, db.FirstActiveRequestFormForChannelParams{OrganizationID: orgID, Channel: channel})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, uuid.Nil, nil
-		}
+	return s.CheckOffered(ctx, orgID, channel, uuid.Nil, sub, optional...)
+}
+
+// CheckOffered is Check for the form Offered picks.
+func (s *Service) CheckOffered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID, sub *model.Submission, optional ...string) (*engine.Submission, uuid.UUID, error) {
+	r, ok, err := s.offered(ctx, orgID, channel, preferred)
+	if err != nil || !ok {
 		return nil, uuid.Nil, err
 	}
 	values := map[string]any{}

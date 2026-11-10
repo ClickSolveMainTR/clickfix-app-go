@@ -16,19 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Permission } from "@/config/permissions";
 import { storageConfig } from "@/config/storage";
 import { useActiveOrganization } from "@/features/organizations";
 import { slaService } from "@/features/sla/services/sla.service";
-import {
-  DAYS,
-  isValidClock,
-  isValidColor,
-  type DayKey,
-} from "@/features/widget/lib/settings";
+import { isValidColor } from "@/features/widget/lib/settings";
 import { isApiError } from "@/lib/api";
 import { resolveLogoSrc } from "@/lib/branding/logo-url";
 import { useLocale } from "@/providers/locale-provider";
@@ -37,7 +31,6 @@ import { appToast } from "@/providers/toast-provider";
 import {
   brandsService,
   type Brand,
-  type BrandBusinessHours,
   type BrandInput,
 } from "../services/brands.service";
 
@@ -54,17 +47,6 @@ const WIDGET_TEXT_KEYS = [
   "offline_message",
 ] as const;
 
-const DEFAULT_HOURS: BrandBusinessHours = {
-  enabled: false,
-  timezone: "Europe/Istanbul",
-  days: Object.fromEntries(
-    (["mon", "tue", "wed", "thu", "fri"] as DayKey[]).map((d) => [
-      d,
-      [{ start: "09:00", end: "18:00" }],
-    ]),
-  ),
-};
-
 function toInput(b: Brand | null): BrandInput {
   return {
     name: b?.name ?? "",
@@ -78,7 +60,6 @@ function toInput(b: Brand | null): BrandInput {
     help_path: b?.help_path ?? "",
     widget_defaults: b?.widget_defaults ?? {},
     signature: b?.signature ?? "",
-    business_hours: b?.business_hours ?? DEFAULT_HOURS,
     sla_policy_id: b?.sla_policy_id ?? null,
     ai_persona: b?.ai_persona ?? "",
   };
@@ -86,8 +67,9 @@ function toInput(b: Brand | null): BrandInput {
 
 /**
  * Create or edit a brand (CF-124): identity and logo, e-mail sender and
- * signature, help center host/path, widget defaults and hours, SLA override
- * and AI persona. Saves the whole configuration (PUT replaces).
+ * signature, help center host/path, widget defaults, SLA override and AI
+ * persona. Working hours are the SLA schedule (CF-198). Saves the whole
+ * configuration (PUT replaces).
  */
 export function BrandDialog({
   open,
@@ -130,22 +112,6 @@ export function BrandDialog({
     else next[key] = value;
     patch({ widget_defaults: next });
   };
-  const hours = form.business_hours ?? DEFAULT_HOURS;
-  const setHours = (p: Partial<BrandBusinessHours>) =>
-    patch({ business_hours: { ...hours, ...p } });
-  const setPeriod = (day: DayKey, field: "start" | "end", value: string) => {
-    const current = hours.days[day]?.[0] ?? { start: "09:00", end: "18:00" };
-    setHours({
-      days: { ...hours.days, [day]: [{ ...current, [field]: value }] },
-    });
-  };
-  const toggleDay = (day: DayKey, on: boolean) => {
-    const days = { ...hours.days };
-    if (on) days[day] = [{ start: "09:00", end: "18:00" }];
-    else delete days[day];
-    setHours({ days });
-  };
-
   const uploadLogo = async (file: File | undefined) => {
     if (!file) return;
     if (
@@ -188,17 +154,6 @@ export function BrandDialog({
         .split(".")
         .every((label) => SUBDOMAIN_RE.test(label)),
     path: !!form.help_path && !PATH_RE.test(form.help_path),
-    hours:
-      hours.enabled &&
-      (!hours.timezone.trim() ||
-        Object.values(hours.days).some((list) =>
-          (list ?? []).some(
-            (p) =>
-              !isValidClock(p.start) ||
-              !isValidClock(p.end) ||
-              p.start >= p.end,
-          ),
-        )),
   };
   const invalid = Object.values(errors).some(Boolean);
 
@@ -507,93 +462,9 @@ export function BrandDialog({
               </div>
             ))}
 
-            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-              <div>
-                <Label htmlFor="brand-hours">{t("widget.fields.hours")}</Label>
-                <p className="text-muted-foreground text-xs">
-                  {t("brands.widget.hours_hint")}
-                </p>
-              </div>
-              <Switch
-                id="brand-hours"
-                checked={hours.enabled}
-                disabled={disabled}
-                onCheckedChange={(v) => setHours({ enabled: v })}
-              />
-            </div>
-            {hours.enabled && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="brand-timezone">
-                    {t("widget.fields.timezone")}
-                  </Label>
-                  <Input
-                    id="brand-timezone"
-                    value={hours.timezone}
-                    disabled={disabled}
-                    onChange={(e) =>
-                      setHours({ timezone: e.target.value.trim() })
-                    }
-                  />
-                </div>
-                <div className="divide-y rounded-lg border">
-                  {DAYS.map((day) => {
-                    const period = hours.days[day]?.[0];
-                    return (
-                      <div
-                        key={day}
-                        className="flex flex-wrap items-center gap-3 p-3"
-                      >
-                        <Switch
-                          aria-label={t(`widget.days.${day}`)}
-                          checked={Boolean(period)}
-                          disabled={disabled}
-                          onCheckedChange={(v) => toggleDay(day, v)}
-                        />
-                        <span className="w-24 text-sm font-medium">
-                          {t(`widget.days.${day}`)}
-                        </span>
-                        {period ? (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              className="w-24"
-                              aria-label={t("widget.fields.opens")}
-                              value={period.start}
-                              disabled={disabled}
-                              aria-invalid={
-                                !isValidClock(period.start) ||
-                                period.start >= period.end
-                              }
-                              onChange={(e) =>
-                                setPeriod(day, "start", e.target.value)
-                              }
-                            />
-                            <span className="text-muted-foreground">–</span>
-                            <Input
-                              className="w-24"
-                              aria-label={t("widget.fields.closes")}
-                              value={period.end}
-                              disabled={disabled}
-                              aria-invalid={
-                                !isValidClock(period.end) ||
-                                period.start >= period.end
-                              }
-                              onChange={(e) =>
-                                setPeriod(day, "end", e.target.value)
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">
-                            {t("widget.fields.closed")}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+            <p className="text-muted-foreground text-sm">
+              {t("brands.widget.hours_source")}
+            </p>
           </TabsContent>
 
           <TabsContent value="sla" className="mt-4 space-y-4">
