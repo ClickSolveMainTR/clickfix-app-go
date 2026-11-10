@@ -208,6 +208,10 @@ useClickFixEvent("message", (m) => console.log(m.text));
 Kendi arayüzünüzü yazmak için başsız istemci (`createWidgetClient`) de aynı pakettedir:
 [sdks/react-widget/README.md](../sdks/react-widget/README.md).
 
+## Platform bağımsız çekirdek ve mobil uygulama anahtarı (CF-201)
+
+`@getclickfix/visitor-core` (`sdks/visitor-core`) widget uçlarının DOM'suz istemcisidir: React Native (Hermes), Node 22+ ve tarayıcıda çalışır; `react-widget` bunun tarayıcı modudur. `app` modunda sayfa kaynağı yerine **uygulama anahtarı** gönderir: Web widget → Gelişmiş → Mobil uygulamalar bölümünde platform (iOS/Android) ve paket adıyla oluşturulur, hash'li saklanır, bir kez gösterilir, iptal edilebilir (`/v1/tenant/widgets/{uuid}/app-keys`). `/v1/widget/{public_id}/*` uçları `X-ClickFix-App-Key` + `X-ClickFix-App-Package` başlıklarını Origin yerine kabul eder; ziyaretçi belirteci, `user_hash`, hız sınırı aynıdır. Kurulum denetimi uygulamayı `app://android/com.ornek.magaza` biçiminde listeler. Webview ile oturum devri (`clickfix:session`) [webview-bridge.md](webview-bridge.md) içindedir; paket belgesi [sdks/visitor-core/README.md](../sdks/visitor-core/README.md).
+
 ## Geliştirme
 
 ```bash

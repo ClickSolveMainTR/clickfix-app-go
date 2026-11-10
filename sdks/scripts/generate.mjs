@@ -44,7 +44,7 @@ try {
   const server = subset(p => p.startsWith('/v1/public-api/'));
   const widget = subset(p => p.startsWith('/v1/widget/'));
   await output('node/src/schema.d.ts', astToString(await openapiTS(server)));
-  await output('react-widget/src/schema.d.ts', astToString(await openapiTS(widget)));
+  await output('visitor-core/src/schema.d.ts', astToString(await openapiTS(widget)));
   await output('php/src/Endpoints.php', renderPhpEndpoints(parse(await readFile(new URL('../../backend/docs/public-api.yaml', import.meta.url), 'utf8'))));
   const input = join(temp, 'public-api.json');
   await writeFile(input, JSON.stringify(server));

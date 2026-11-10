@@ -722,6 +722,8 @@ type Querier interface {
 	CreateTenantRole(ctx context.Context, arg CreateTenantRoleParams) (CreateTenantRoleRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWebAuthnCredential(ctx context.Context, arg CreateWebAuthnCredentialParams) (WebauthnCredential, error)
+	// CF-201: mobile app keys (hash only; the key is shown once on creation).
+	CreateWidgetAppKey(ctx context.Context, arg CreateWidgetAppKeyParams) (WidgetAppKey, error)
 	CreateWidgetToken(ctx context.Context, arg CreateWidgetTokenParams) (WidgetToken, error)
 	CustomFieldsOfCompany(ctx context.Context, arg CustomFieldsOfCompanyParams) (CustomFieldsOfCompanyRow, error)
 	CustomFieldsOfContact(ctx context.Context, arg CustomFieldsOfContactParams) (CustomFieldsOfContactRow, error)
@@ -1096,6 +1098,10 @@ type Querier interface {
 	GetValidWidgetToken(ctx context.Context, tokenHash string) (GetValidWidgetTokenRow, error)
 	GetWebAuthnCredentialByCredentialID(ctx context.Context, credentialID string) (WebauthnCredential, error)
 	GetWebAuthnCredentialByUUID(ctx context.Context, arg GetWebAuthnCredentialByUUIDParams) (WebauthnCredential, error)
+	// The visitor API looks the key up by its hash; the caller checks the
+	// instance, the package name and revoked_at (a revoked key must fail the
+	// same way as an unknown one).
+	GetWidgetAppKeyByHash(ctx context.Context, keyHash string) (WidgetAppKey, error)
 	GetWidgetConversation(ctx context.Context, arg GetWidgetConversationParams) (Conversation, error)
 	// CF-150: editor drafts, published versions and install detection.
 	GetWidgetDraft(ctx context.Context, arg GetWidgetDraftParams) (WidgetDraft, error)
@@ -1518,6 +1524,7 @@ type Querier interface {
 	ListWaitingConversationsOfAgent(ctx context.Context, arg ListWaitingConversationsOfAgentParams) ([]int64, error)
 	ListWebAuthnCredentialsByUserID(ctx context.Context, userID int64) ([]WebauthnCredential, error)
 	ListWebAuthnCredentialsForUserIDs(ctx context.Context, userIds []int64) ([]WebauthnCredential, error)
+	ListWidgetAppKeys(ctx context.Context, arg ListWidgetAppKeysParams) ([]WidgetAppKey, error)
 	// CF-55: public web widget (visitor API). Every query is scoped to the
 	// organization and, for visitor data, to the visitor's contact and widget.
 	ListWidgetConversations(ctx context.Context, arg ListWidgetConversationsParams) ([]ListWidgetConversationsRow, error)
@@ -1874,6 +1881,7 @@ type Querier interface {
 	RevokeRefreshTokenByUUIDForUser(ctx context.Context, arg RevokeRefreshTokenByUUIDForUserParams) (int64, error)
 	RevokeStorageLink(ctx context.Context, argUuid uuid.UUID) (StorageLink, error)
 	RevokeSupportGrant(ctx context.Context, arg RevokeSupportGrantParams) (SupportAccessGrant, error)
+	RevokeWidgetAppKey(ctx context.Context, arg RevokeWidgetAppKeyParams) (WidgetAppKey, error)
 	// CF-152: widget tokens, Live Activity push tokens and the Live Activity switch.
 	RevokeWidgetTokensForDevice(ctx context.Context, arg RevokeWidgetTokensForDeviceParams) (int64, error)
 	RoadmapCount(ctx context.Context, arg RoadmapCountParams) (int64, error)
@@ -2046,6 +2054,8 @@ type Querier interface {
 	TouchMCPOAuthToken(ctx context.Context, id int64) error
 	TouchMacro(ctx context.Context, arg TouchMacroParams) error
 	TouchSideConversation(ctx context.Context, arg TouchSideConversationParams) (SideConversation, error)
+	// last_used_at is rewritten at most every five minutes (busy apps).
+	TouchWidgetAppKey(ctx context.Context, id int64) error
 	// A rejected identify call (CF-176). The request is not authenticated as a
 	// user, so only a fixed code and the time are stored, and the row is
 	// rewritten at most once a minute unless the code changed (which only

@@ -127,6 +127,8 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
           return w.reset();
         case "clickfix:get-state":
           return w.state();
+        case "clickfix:session":
+          return w.adoptSession(c.token);
       }
     };
     bridge = createBridge({ send, run });
@@ -145,6 +147,9 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
             },
           );
         b.forward(event, payload);
+        // The host may continue the session natively (CF-201).
+        if (event === "ready" || event === "identify" || event === "reset")
+          b.session({ token: w.api.token, visitor_id: w.state().visitor_id });
       };
       w.on(event, handler);
       handlers.push([event, handler]);

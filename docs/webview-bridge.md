@@ -10,6 +10,11 @@ Uygulama: `frontend/widget-sdk/src/shared/bridge.ts` (saf, birim testli: `fronte
 
 `bridge_version: 1`. Sözleşmede yalnız geriye uyumlu değişiklik yapılır (yeni komut, yeni alan, yeni olay); uygulama tanımadığı alan ve olayları yok saymalıdır. Kırıcı değişiklik yeni bir `bridge_version` ile gelir ve `clickfix:ready` içinde duyurulur.
 
+| Belge sürümü | İş | Değişiklik |
+|---|---|---|
+| 1.0 | CF-199 | İlk sözleşme: sekiz komut, `ready` / `event` / `link` / `result` mesajları. |
+| 1.1 | CF-201 | Geriye uyumlu ekleme, `bridge_version` 1 kaldı: `clickfix:session` komutu ve mesajı (yerel SDK ile iki yönlü oturum devri); tipler `@getclickfix/visitor-core` paketinde de yayımlanır ("SDK çekirdeği ile paylaşım"). |
+
 ## Açma
 
 Köprü üç yoldan açılır; hepsi aynı davranır:
@@ -60,8 +65,9 @@ Her komut bir JSON nesnesidir; `type` zorunlu, `id` isteğe bağlıdır (≤128 
 | `clickfix:consent` | `granted` (boolean) | `ClickFix("consent", granted)`; `false` saklanan her şeyi siler | yok |
 | `clickfix:reset` | – | `ClickFix("reset")`: ziyaretçi unutulur (çıkışta) | yok |
 | `clickfix:get-state` | – | – | `ClickFixState` (`open`, `view`, `unread`, `verified`, `visitor_id`, …) |
+| `clickfix:session` | `token` (≤2048) | Uygulamanın yerel çekirdekle (`@getclickfix/visitor-core`, uygulama anahtarı) başlattığı ziyaretçi oturumunu devralır: belirteçle yeniden bootstrap olur, aynı ziyaretçi ve konuşmalar gelir; `identify` olayı yayınlanır. Geçersiz belirteç yabancı gibi yeni ziyaretçi başlatır (hata değil). Önizlemede yok sayılır | yok |
 
-Doğrulama `parseCommand` içindedir: `user_id` (≤200) ve `user_hash` (≤128) zorunlu; `name/email/phone/company.*` ≤255; `attributes` yalnız düz değerler (string/number/boolean, anahtar ≤100); fazlalıklar atılır. Hatalı mesajda `id` varsa `clickfix:result` `ok:false` döner; **mesaj içeriği hiçbir zaman** sonuca, konsola ya da `error` olayına yazılmaz.
+Doğrulama `parseCommand` içindedir: `user_id` (≤200) ve `user_hash` (≤128) zorunlu; `session.token` boş olamaz; `name/email/phone/company.*` ≤255; `attributes` yalnız düz değerler (string/number/boolean, anahtar ≤100); fazlalıklar atılır. Hatalı mesajda `id` varsa `clickfix:result` `ok:false` döner; **mesaj içeriği hiçbir zaman** sonuca, konsola ya da `error` olayına yazılmaz.
 
 Hata kodları (`result.error.code`): `INVALID_JSON`, `INVALID_MESSAGE`, `UNKNOWN_COMMAND`, `TOO_LARGE`, komut çalışırken oluşan SDK hataları (`WIDGET_IDENTITY_DISABLED`, `WIDGET_IDENTITY_INVALID`, `RATE_LIMITED`, `NETWORK_ERROR`, …) ve bilinmeyen hatalar için `COMMAND_FAILED`. `error.message` yalnız kodu tekrarlar (`command failed (KOD)`).
 
@@ -73,8 +79,36 @@ Hata kodları (`result.error.code`): `INVALID_JSON`, `INVALID_MESSAGE`, `UNKNOWN
 | `clickfix:event` | `event`, `payload` | Her SDK olayında: `ready`, `open`, `close`, `view`, `message`, `message:sent`, `conversation:started`, `conversation:ended`, `unread`, `identify`, `csat`, `trigger`, `attributes`, `consent`, `visibility`, `reset`, `track`, `error`. Yükler `widget.d.ts` → `ClickFixEventMap` ile aynıdır |
 | `clickfix:link` | `url` | Kullanıcı bir yardım makalesine ya da mesajdaki dış bağlantıya dokunduğunda; widget `window.open` **çağırmaz**, uygulama sistem tarayıcısında açar. Uygulama `url`'yi açmadan önce **yeniden doğrular**: yalnız `https:` (geliştirmede `http://localhost`), asla derin bağlantı / intent işleyicisine vermez. Köprü taşıması yoksa eski davranış (`window.open`) sürer |
 | `clickfix:result` | `id`, `ok`, `data?`, `error?: { code, message }` | `id` taşıyan her komuttan sonra |
+| `clickfix:session` | `token`, `visitor_id` | `ready`, `identify` ve `reset` olaylarından hemen sonra: webview'in o anki ziyaretçi belirteci. Uygulama bunu `client.adoptToken(token)` ile yerel çekirdeğe verebilir (webview kapandıktan sonra aynı oturumla okunmamış sayısı, bildirim vb.). `reset` sonrası gelen belirteç yeni anonim ziyaretçinindir |
 
-Uygulamanın tipik akışı: `ready` → `identify` gönder → `result` bekle → `unread` olayıyla rozet → `close` olayında ekranı kapat → `link` olayında tarayıcı aç → çıkışta `reset`.
+Uygulamanın tipik akışı: `ready` → `identify` gönder → `result` bekle → `unread` olayıyla rozet → `close` olayında ekranı kapat → `link` olayında tarayıcı aç → çıkışta `reset`. Yerel çekirdek kullanan uygulamada `identify` yerine `session` gönderilir (aşağıda).
+
+## SDK çekirdeği ile paylaşım (CF-201)
+
+Mobil SDK'lar (CF-202 React Native, CF-203 Flutter) widget uçlarını webview olmadan da çağırır. Bunun için widget ayarlarında **Mobil uygulamalar** (gelişmiş sekme) bölümünde platform + paket adı ile bir **uygulama anahtarı** oluşturulur; anahtar hash'li saklanır, bir kez gösterilir, iptal edilebilir. `/v1/widget/{public_id}/*` uçları `Origin` yerine `X-ClickFix-App-Key` + `X-ClickFix-App-Package` başlıklarını da kabul eder (`WIDGET_APP_KEY_INVALID` 403: bilinmeyen, iptal edilmiş, başka widget'ın anahtarı ya da uyuşmayan paket adı). Ziyaretçi belirteci, `user_hash` ve hız sınırı tarayıcıdakiyle aynıdır; belirteç kaynağa ya da anahtara bağlı değildir, bu yüzden aynı oturum webview'de de sürer.
+
+**Tip paylaşımı.** Köprü mesaj ve komut tipleri üç yerde aynıdır ve bir test (`sdks/tests/visitor-core.test.mjs`) `clickfix:*` türlerinin kümesini eşit tutar:
+
+| Yer | Ne |
+|---|---|
+| `frontend/widget-sdk/src/shared/bridge.ts` | Widget tarafı: `parseCommand`, `createBridge` (çalıştırır ve doğrular) |
+| `frontend/public/widget.d.ts` → `sdks/react-widget/src/clickfix.d.ts` | Entegratörün gördüğü `ClickFixBridgeCommand` / `ClickFixBridgeMessage` |
+| `sdks/visitor-core/src/bridge.ts` (`@getclickfix/visitor-core`) | Uygulama tarafı: `BridgeCommand`, `BridgeMessage`, `encodeCommand`, `commandScript` (`injectJavaScript` için), `parseMessage` (widget dışı mesajları eler), `isSafeLink` |
+
+**Oturum devri, uygulama → webview.** Uygulama çekirdekle oturumu başlatır, webview'i açar ve belirteci devreder:
+
+```ts
+const client = createVisitorClient({ mode: "app", baseURL: "https://<app>/api", publicId, app: { key, packageName } });
+await client.init(); await client.identify({ user_id, user_hash });
+// clickfix:ready gelince:
+webview.injectJavaScript(commandScript({ type: "clickfix:session", id: "s1", token: client.getToken() }));
+```
+
+Widget belirteçle yeniden bootstrap olur, aynı ziyaretçi (ve `identify` edilmişse aynı kullanıcı) ile açılır; `identify` tekrar gönderilmez, `user_hash` webview'e inmez.
+
+**Oturum devri, webview → uygulama.** Widget `ready`, `identify` ve `reset` sonrasında `clickfix:session` mesajı gönderir; uygulama `client.adoptToken(message.token)` ile yerel çekirdeği aynı oturuma geçirir (örneğin webview kapanınca okunmamış sayısını çekirdekten izlemek için). `parseMessage(onMessageData)` yalnız widget mesajlarını döndürür.
+
+Uygulama anahtarı webview'e **girmez**: widget sayfası uygulamanın kendi kaynağında (`https://<app>`) çalıştığı için zaten izinlidir; anahtar yalnız yerel çekirdeğin HTTP başlığındadır.
 
 ## Derin bağlantı
 
@@ -88,10 +122,12 @@ Uygulamanın tipik akışı: `ready` → `identify` gönder → `result` bekle �
 2. Webview yalnız uygulama kaynağını (`https://<app>`) yükler; başka adrese gezinme engellenir (`shouldOverrideUrlLoading`, `decidePolicyFor`, `onShouldStartLoadWithRequest`, `NavigationDelegate`). Dosya ve içerik erişimi kapalı; üçüncü taraf çerez yok.
 3. Köprü `"*"` kaynağını hiçbir yönde kabul etmez; çerçeve dışı sayfada üst pencereden gelen mesajlar işlenmez. `clickfix:link` ile gelen adres uygulamada yeniden doğrulanır (yalnız `https:`), intent/derin bağlantı işleyicisine verilmez.
 4. Reddedilen komutlar içerik sızdırmaz (`parseCommand` ve `errorOf` yalnız kod üretir).
-5. Oturum webview depolamasındadır: hesap değişimi ve çıkışta `clickfix:reset`; paylaşılan cihazlarda depolama temizliği.
+5. Oturum webview depolamasındadır: hesap değişimi ve çıkışta `clickfix:reset`; paylaşılan cihazlarda depolama temizliği. `clickfix:session` ile alınan belirteç uygulamanın güvenli depolamasında tutulur (çıkışta silinir); belirteç tek widget ve ziyaretçiye bağlı imzalı bir değerdir, `user_hash` ya da uygulama anahtarı değildir.
+7. Uygulama anahtarı (`X-ClickFix-App-Key`) yalnız yerel çekirdekte, uygulamanın yapılandırmasındadır; webview'e ya da sayfaya verilmez, sızdığında panelden iptal edilir ve yenisi oluşturulur. API, anahtarla birlikte `Origin` ya da `Referer` gelen isteği reddeder ve bu başlıklar CORS'ta izinli değildir: sızmış bir anahtar bir web sayfasını allowlist'ten geçiremez.
 6. `consent` olmadan hiçbir şey saklanmaz; onayı uygulama iletir. `widget-embed.html?consent=1` adresi onayı kullanıcıya sormadan verir: bu adresi yalnız uygulamanın kendisi, onayı gerçekten aldıktan sonra kurar; dışarıdan gelen bir bağlantıyı olduğu gibi webview'de açmayın.
 
 ## Test
 
-- Birim: `cd frontend && pnpm widget:test` (`tests/bridge.test.mjs`: ayrıştırma ve kırpma, taşıma sırası, kaynak kuralı, sonuçlar, olay yönlendirme).
+- Birim: `cd frontend && pnpm widget:test` (`tests/bridge.test.mjs`: ayrıştırma ve kırpma, taşıma sırası, kaynak kuralı, sonuçlar, olay yönlendirme, `session`).
+- Çekirdek: `cd sdks && pnpm test` (`tests/visitor-core.test.mjs`: köprü yardımcıları, tip kümesi eşitliği, uygulama anahtarı başlıkları, oturum yenileme).
 - Elle: `widget-embed.html?widget=<id>` sayfasını masaüstü tarayıcıda açıp konsolda `window.ClickFixBridge.receive({type:"clickfix:get-state",id:"1"})` çağırın; taşıma yokken sonuç gitmez ama Promise çözülür. Bir iframe'den denemek için üst sayfada `bridge: { origin }` ile `boot` edin.

@@ -2,7 +2,19 @@ export interface paths {
     "/v1/widget/{public_id}/replay-policy": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -19,7 +31,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -36,7 +60,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/consent": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -53,7 +89,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/chunks": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -70,7 +118,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/live-token": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -87,7 +147,19 @@ export interface paths {
     "/v1/widget/{public_id}/attributes": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -119,7 +191,19 @@ export interface paths {
     "/v1/widget/{public_id}/bootstrap": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -145,7 +229,19 @@ export interface paths {
     "/v1/widget/{public_id}/identify": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -175,7 +271,19 @@ export interface paths {
     "/v1/widget/{public_id}/profile": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -198,7 +306,19 @@ export interface paths {
     "/v1/widget/{public_id}/realtime-token": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -218,7 +338,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -242,7 +374,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/messages": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -267,7 +411,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/read": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -288,7 +444,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/typing": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -332,7 +500,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/rating": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -358,7 +538,19 @@ export interface paths {
     "/v1/widget/{public_id}/booking": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -384,7 +576,19 @@ export interface paths {
     "/v1/widget/{public_id}/help/search": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1148,6 +1352,17 @@ export interface components {
         };
     };
     parameters: {
+        /**
+         * @description Mobile app key (CF-201): a native app sends it with
+         *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+         *     origin allowlist is then not consulted. Unknown, revoked or
+         *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+         *     that arrives together with an `Origin` or `Referer` (a page never
+         *     holds an app key; the headers are not CORS-allowed).
+         */
+        WidgetAppKey: string;
+        /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+        WidgetAppPackage: string;
         /** @description Public widget id (the widget's channel instance uuid) */
         WidgetPublicID: string;
         WidgetConversation: string;
@@ -1161,7 +1376,19 @@ export interface operations {
     GetreplayprivacypolicyCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
             };
@@ -1222,7 +1449,19 @@ export interface operations {
     StartconsentedreplayCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -1291,7 +1530,19 @@ export interface operations {
     ChangevisitorsessionconsentCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -1361,7 +1612,19 @@ export interface operations {
     UploadmaskedcompressedDOMeventsCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -1437,7 +1700,19 @@ export interface operations {
     VisitorlivestreamtokenCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -1500,7 +1775,19 @@ export interface operations {
     widgetSetAttributes: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1531,7 +1818,19 @@ export interface operations {
     widgetBootstrap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1562,7 +1861,19 @@ export interface operations {
     widgetIdentify: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1594,7 +1905,19 @@ export interface operations {
     widgetUpdateProfile: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1624,7 +1947,19 @@ export interface operations {
     widgetRealtimeToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1656,7 +1991,19 @@ export interface operations {
     widgetListConversations: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1681,7 +2028,19 @@ export interface operations {
     widgetCreateConversation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1726,7 +2085,19 @@ export interface operations {
                 /** @description Only messages before this message (history) */
                 before?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1753,7 +2124,19 @@ export interface operations {
     widgetSendMessage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1795,7 +2178,19 @@ export interface operations {
     widgetMarkRead: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1828,7 +2223,19 @@ export interface operations {
     widgetTyping: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1928,7 +2335,19 @@ export interface operations {
     widgetRateConversation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -1964,7 +2383,19 @@ export interface operations {
     widgetBookingLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -2001,7 +2432,19 @@ export interface operations {
                 q?: string;
                 locale?: "tr" | "en";
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
