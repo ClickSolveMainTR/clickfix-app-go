@@ -212,6 +212,14 @@ export type DataTableProps<TData> = {
         table: Table<TData>,
       ) => DataTableBulkAction<TData>[] | ReactNode);
   rowActions?: (row: TData, table: Table<TData>) => ReactNode;
+  /**
+   * Detail of a row, opened with a chevron column in front of the columns:
+   * a full-width row under the row (table view) or the bottom of the card
+   * (grid view). Without `onRowClick`, clicking the row also toggles it.
+   */
+  renderSubRow?: (row: TData) => ReactNode;
+  /** Rows that have a detail to open; every row by default. */
+  getRowCanExpand?: (row: TData) => boolean;
   /** Custom card renderer for grid view */
   renderGridItem?: (row: TData, table: Table<TData>) => ReactNode;
 
@@ -252,4 +260,5 @@ export type UseDataTableOptions<TData> = Pick<
   | "initialState"
   | "pageCount"
   | "rowCount"
+  | "getRowCanExpand"
 >;
