@@ -41,10 +41,10 @@ Versions live in each package (`node/package.json`, `react-widget/package.json`,
 (needs the `NPM_TOKEN` repository secret, an npm automation token for the
 `@clickfix` scope; without it the job skips with a note), and the `release-tag`
 job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
-tags by hand. The PHP package goes to Packagist through the `sdk-php-publish` job: Packagist
-reads `composer.json` from a repository root, so `sdks/php` is split (`git subtree split`) into the
-public repository `ClickSolveMainTR/clickfix-sdk-php` and tagged `vX.Y.Z` there (needs the
-`SDKS_PHP_KEY` repository secret; without it the job skips with a note). Details: `docs/entegrasyon-kilavuzu.md`.
+tags by hand. The PHP package (`sdks/php`, version = newest `CHANGELOG.md` entry and
+`Client::USER_AGENT`) is pushed by the same `sdks-mirror` job to the public repository
+`ClickSolveMainTR/clickfix-php` and tagged `vX.Y.Z` there; Packagist (`clickfix/sdk`) watches that
+repository. Details: `docs/entegrasyon-kilavuzu.md`.
 
 References: existing ClickFix widget routes/types and Laravel
 `resources/js/widget/lib/widget-api.ts` for the headless transport approach;

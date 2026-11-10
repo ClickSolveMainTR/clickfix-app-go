@@ -38,4 +38,6 @@ $ok = Webhooks::verify($secret, $headers['ClickFix-Webhook-Timestamp'], $headers
 
 Webhook verification is HMAC-SHA256 over the exact `timestamp.body` bytes with a five-minute window on both sides; verify before JSON decoding and deduplicate on `ClickFix-Webhook-Id` before acting. The identity hash and the webhook check produce the same bytes as `@clickfix/node` and the Go module.
 
+Source of truth is `sdks/php` in the ClickFix monorepo; the public [ClickSolveMainTR/clickfix-php](https://github.com/ClickSolveMainTR/clickfix-php) repository is a read-only mirror tagged `vX.Y.Z` for Packagist.
+
 `ClickFix\Endpoints` is generated from `backend/docs/public-api.yaml` (`make sdks`); the resource classes are checked against it. Develop with `composer install && composer check` (php-cs-fixer, PHPStan level 8, PHPUnit).

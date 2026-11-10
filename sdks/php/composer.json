@@ -4,10 +4,11 @@
     "type": "library",
     "license": "MIT",
     "keywords": ["clickfix", "customer-support", "api-client", "webhooks", "psr-18"],
-    "homepage": "https://getclickfix.com/docs/integration-guide",
+    "homepage": "https://github.com/ClickSolveMainTR/clickfix-php",
     "support": {
         "issues": "https://github.com/ClickSolveMainTR/clickfix-app-go/issues",
-        "source": "https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/php"
+        "source": "https://github.com/ClickSolveMainTR/clickfix-php",
+        "docs": "https://getclickfix.com/docs/integration-guide"
     },
     "require": {
         "php": ">=8.1",

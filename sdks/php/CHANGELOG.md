@@ -1,6 +1,6 @@
 # clickfix/sdk
 
-Sürümleme: [SemVer](https://semver.org). `0.x` sürümlerinde küçük sürüm (`0.N`) kırıcı değişiklik taşıyabilir; her kırıcı değişiklik burada **Kırıcı** başlığıyla yazılır. Sürüm `composer.json` içindedir; `main`'e birleşen bir değişiklikte sürüm değiştiyse CI (`sdks-mirror`) ayna repoya `php/vX.Y.Z` etiketini basar ve Packagist bunu otomatik alır.
+Sürümleme: [SemVer](https://semver.org). `0.x` sürümlerinde küçük sürüm (`0.N`) kırıcı değişiklik taşıyabilir; her kırıcı değişiklik burada **Kırıcı** başlığıyla yazılır. Sürüm, bu dosyadaki en yeni `## X.Y.Z` başlığı ve `Client::USER_AGENT` değeridir (`composer.json`'a `version` yazılmaz). `main`'e birleşen bir değişiklikte CI'daki `sdks-mirror` işi `sdks/php`'yi [ClickSolveMainTR/clickfix-php](https://github.com/ClickSolveMainTR/clickfix-php) reposuna iter ve orada `vX.Y.Z` etiketini basar; Packagist (`clickfix/sdk`) bu repoyu izler.
 
 ## 0.1.0 - 2026-11-12
 

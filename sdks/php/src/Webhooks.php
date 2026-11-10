@@ -25,7 +25,7 @@ final class Webhooks
      * @param int      $toleranceSeconds accepted clock skew on either side
      */
     public static function verify(
-        string $secret,
+        #[\SensitiveParameter] string $secret,
         string $timestamp,
         string $signature,
         string $body,
@@ -53,7 +53,7 @@ final class Webhooks
     /**
      * Sign a payload the way ClickFix signs deliveries (useful for tests and local stubs).
      */
-    public static function sign(string $secret, string $timestamp, string $body): string
+    public static function sign(#[\SensitiveParameter] string $secret, string $timestamp, string $body): string
     {
         return 'v1='.hash_hmac('sha256', $timestamp.'.'.$body, $secret);
     }

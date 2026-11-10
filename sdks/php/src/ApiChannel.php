@@ -43,6 +43,16 @@ final class ApiChannel
     }
 
     /**
+     * Keeps the channel secret out of var_dump() and exception dumps.
+     *
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return ['baseUrl' => $this->baseUrl, 'instance' => $this->instance, 'secret' => '***'];
+    }
+
+    /**
      * The X-ClickFix-Signature value for a body at a timestamp (unix seconds).
      */
     public static function signature(#[\SensitiveParameter] string $secret, string $timestamp, string $body): string

@@ -349,8 +349,10 @@ jobs:
   # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
   # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
   # then the guide's PHP examples against the stub API (the sdks job also runs
-  # them when the runner has php; here they are required). The mirror publishes
-  # sdks/php to Packagist as clickfix/sdk (tag php/vX.Y.Z from composer.json).
+  # them when the runner has php; here they are required). The version is the
+  # newest `## X.Y.Z` heading of sdks/php/CHANGELOG.md and Client::USER_AGENT;
+  # the sdks-mirror job pushes sdks/php to ClickSolveMainTR/clickfix-php and
+  # tags vX.Y.Z there, which Packagist (clickfix/sdk) watches.
   php:
     needs: [changes]
     if: needs.changes.outputs.php == 'true'
@@ -375,7 +377,7 @@ jobs:
           version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' CHANGELOG.md | head -1)
           [ -n "$version" ] || { echo "::error::CHANGELOG.md has no '## X.Y.Z - date' entry"; exit 1; }
           grep -q "'clickfix-php-sdk/$version'" src/Client.php || { echo "::error::Client::USER_AGENT must carry version $version"; exit 1; }
-          echo "clickfix/sdk $version -> mirror tag php/v$version"
+          echo "clickfix/sdk $version -> clickfix-php tag v$version"
       - name: Install
         working-directory: sdks/php
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -867,50 +869,6 @@ jobs:
           flutter test
           dart pub publish --force
           echo "published ${{ steps.pub.outputs.package }} ${{ steps.pub.outputs.version }} to pub.dev" >> "$GITHUB_STEP_SUMMARY"
-
-  # PHP SDK on Packagist (CF-204): Packagist and Composer's VCS repositories
-  # read composer.json from the repository root and version tags like v0.1.0,
-  # so a php/ subdirectory of the sdks mirror cannot be registered. This job
-  # publishes the history of sdks/php (git subtree split) to the public
-  # repository ClickSolveMainTR/clickfix-sdk-php and tags vX.Y.Z there (the
-  # version is the newest entry of sdks/php/CHANGELOG.md); Packagist's GitHub
-  # hook on that repository updates clickfix/sdk. Needs the SDKS_PHP_KEY
-  # repository secret (private half of that repository's write deploy key);
-  # without it the job skips with a note and never fails main. History is
-  # never rewritten and tags are never moved.
-  sdk-php-publish:
-    needs: [release-tag]
-    if: ${{ !failure() && needs.release-tag.result == 'success' }}
-    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Split sdks/php and push to clickfix-sdk-php
-        env:
-          SDKS_PHP_KEY: ${{ secrets.SDKS_PHP_KEY }}
-          SPLIT: git@github.com:ClickSolveMainTR/clickfix-sdk-php.git
-        run: |
-          if [ -z "$SDKS_PHP_KEY" ]; then
-            echo "SDKS_PHP_KEY secret is not set: PHP SDK publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
-          fi
-          work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-          printf '%s\n' "$SDKS_PHP_KEY" > "$work/key"; chmod 600 "$work/key"
-          ssh-keyscan -t ed25519 github.com > "$work/known_hosts" 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i $work/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$work/known_hosts"
-          version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' sdks/php/CHANGELOG.md | head -1)
-          [ -n "$version" ] || { echo "::error::sdks/php/CHANGELOG.md has no version entry"; exit 1; }
-          git config user.name "clickfix-ci"; git config user.email "ci@getclickfix.com"
-          head=$(git subtree split --prefix=sdks/php HEAD)
-          git push --quiet "$SPLIT" "$head:refs/heads/main"
-          echo "published sdks/php history to clickfix-sdk-php ($head)" >> "$GITHUB_STEP_SUMMARY"
-          if git ls-remote --tags "$SPLIT" "refs/tags/v$version" | grep -q .; then
-            echo "clickfix-sdk-php v$version already exists" >> "$GITHUB_STEP_SUMMARY"
-          else
-            git tag "v$version" "$head"
-            git push --quiet "$SPLIT" "refs/tags/v$version"
-            echo "tagged clickfix-sdk-php v$version (composer require clickfix/sdk:^$version)" >> "$GITHUB_STEP_SUMMARY"
-          fi
 
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls

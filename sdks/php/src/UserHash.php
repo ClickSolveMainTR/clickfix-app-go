@@ -11,7 +11,7 @@ namespace ClickFix;
  */
 final class UserHash
 {
-    public static function make(string $secret, string $userId): string
+    public static function make(#[\SensitiveParameter] string $secret, string $userId): string
     {
         return hash_hmac('sha256', $userId, $secret);
     }

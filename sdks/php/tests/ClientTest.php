@@ -127,12 +127,27 @@ final class ClientTest extends TestCase
         self::assertCount(3, $http->calls);
     }
 
-    public function testNetworkErrorAfterBudgetIsTransportException(): void
+    public function testNetworkErrorAfterBudgetIsTransportExceptionWithoutTheRequest(): void
     {
-        $req = new Request('GET', '/');
+        $req = new Request('GET', '/', ['Authorization' => 'Bearer cf_sk_test']);
         [$client] = $this->client([new FakeNetworkException($req), new FakeNetworkException($req)], 2);
-        $this->expectException(TransportException::class);
-        $client->contacts()->list();
+        try {
+            $client->contacts()->list();
+            self::fail('expected TransportException');
+        } catch (TransportException $e) {
+            self::assertStringContainsString('connection reset', $e->getMessage());
+            self::assertNotNull($e->getPrevious());
+            self::assertNotInstanceOf(FakeNetworkException::class, $e->getPrevious(), 'the PSR-18 exception (and its request) must not be chained');
+            self::assertStringContainsString(FakeNetworkException::class, $e->getPrevious()->getMessage());
+        }
+    }
+
+    public function testDebugInfoHidesSecrets(): void
+    {
+        [$client] = $this->client([]);
+        $dump = print_r($client, true);
+        self::assertStringNotContainsString('cf_sk_test', $dump);
+        self::assertStringNotContainsString('chan-secret', print_r($client->apiChannel('inst', 'chan-secret'), true));
     }
 
     /**

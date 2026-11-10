@@ -103,6 +103,16 @@ final class Client
         return $this->baseUrl;
     }
 
+    /**
+     * Keeps the API key out of var_dump() and exception dumps.
+     *
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        return ['baseUrl' => $this->baseUrl, 'apiKey' => '***', 'attempts' => $this->attempts, 'baseDelayMs' => $this->baseDelayMs];
+    }
+
     public function contacts(): Resources\Contacts
     {
         return new Resources\Contacts($this);
@@ -248,7 +258,7 @@ final class Client
             } catch (ClientExceptionInterface $e) {
                 $retryable = $e instanceof NetworkExceptionInterface || !($e instanceof \Psr\Http\Client\RequestExceptionInterface);
                 if (!$safe || !$retryable || $attempt + 1 >= $attempts) {
-                    throw new TransportException('ClickFix request failed: '.$e->getMessage(), 0, $e);
+                    throw TransportException::wrap($e);
                 }
                 $sleep((int) min($baseDelayMs * (2 ** $attempt), self::MAX_DELAY_MS));
                 continue;
