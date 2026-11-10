@@ -17283,15 +17283,17 @@ export interface components {
             /** Format: int64 */
             companies: number;
         };
+        /**
+         * @description The pre-chat form is one of the organization's request forms (CF-198,
+         *     `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+         *     active form offered on the widget channel. The bootstrap serves the
+         *     chosen form as `request_form`. The widget keeps only the switch, the
+         *     choice and the consent box; the fields live on the form.
+         */
         WidgetPreChat: {
             enabled: boolean;
-            /** @enum {string} */
-            name: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            email: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            phone: "required" | "optional" | "hidden";
-            fields: components["schemas"]["WidgetPreChatField"][];
+            /** @description Request form uuid or "" (first active widget form) */
+            form_uuid: string;
             consent: components["schemas"]["WidgetConsent"];
         };
         /** @description The visitor-safe part of WidgetSettings (no allowlist, member ids, attribute targets or handoff keywords). */
@@ -17345,16 +17347,6 @@ export interface components {
         WidgetLocalized: {
             tr?: string;
             en?: string;
-        };
-        WidgetPreChatField: {
-            key: string;
-            label: components["schemas"]["WidgetLocalized"];
-            /** @enum {string} */
-            type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "checkbox";
-            required: boolean;
-            options: string[];
-            /** @description Attribute mapping key the answer is stored under ("" = none) */
-            attribute: string;
         };
         WidgetConsent: {
             enabled: boolean;
@@ -17934,19 +17926,16 @@ export interface components {
              * @description Makes retries idempotent
              */
             client_id?: string;
-            /** @description Pre-chat name */
+            /** @description Visitor name (older SDKs; the pre-chat form's name field is preferred) */
             name?: string;
-            /** @description Pre-chat e-mail */
+            /** @description Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) */
             email?: string;
             page_url?: string;
             profile?: components["schemas"]["WidgetProfileInput"];
+            /** @description The pre-chat (request) form answers of a first message (CF-198) */
             form?: components["schemas"]["RequestFormSubmission"];
-            /** @description Pre-chat phone */
+            /** @description Visitor phone (older SDKs) */
             phone?: string;
-            /** @description Answers to the custom pre-chat questions (first message) */
-            prechat?: {
-                [key: string]: string | number | boolean;
-            };
             /** @description GDPR/KVKK checkbox of the pre-chat form */
             consent?: boolean;
             /**
@@ -17971,8 +17960,6 @@ export interface components {
         WidgetSendMultipart: {
             /** @description RequestFormSubmission as JSON */
             form?: string;
-            /** @description Pre-chat answers as JSON */
-            prechat?: string;
             /** @description Attributes as JSON */
             attributes?: string;
             /** @enum {string} */
