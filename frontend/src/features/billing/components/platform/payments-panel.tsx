@@ -1,8 +1,12 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,10 +29,6 @@ import {
 } from "@/components/ui/select";
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
-import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
 import { PaymentProviderLabel } from "@/features/billing/components/payment-provider-label";
 import { BillingStatus } from "@/features/billing/components/billing-status";
 import {
@@ -46,7 +46,6 @@ import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
 const STATUSES = ["failed", "unknown", "pending", "succeeded", "all"] as const;
-const LIMIT = 20;
 
 function RefundDialog({
   payment,
@@ -169,138 +168,144 @@ export function PaymentsPanel() {
   const { can } = usePermission();
   const canWrite = can(permissions.billing.subscriptionsWrite);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("failed");
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: 20 });
+  const { limit, offset } = listState.params;
   const [refunding, setRefunding] = useState<BillingAdminPayment | null>(null);
   const query = useAdminPayments({
-    limit: LIMIT,
+    limit,
     offset,
     status: status === "all" ? undefined : status,
   });
 
-  const columns: BillingColumn<BillingAdminPayment>[] = [
-    {
-      key: "org",
-      header: t("billing.payments.columns.organization"),
-      cell: (row) => (
-        <Link
-          href={`${routes.platform.organizations.detail(row.organization_uuid)}?tab=billing`}
-          className="font-medium hover:underline"
-        >
-          {row.organization_name}
-        </Link>
-      ),
-    },
-    {
-      key: "reference",
-      header: t("billing.payments.columns.reference"),
-      cell: (row) => <code className="text-xs">{row.invoice_reference}</code>,
-    },
-    {
-      key: "provider",
-      header: t("billing.payments.columns.provider"),
-      cell: (row) => (
-        <span className="flex flex-col">
-          <PaymentProviderLabel
-            provider={row.provider}
-            className="self-start"
-          />
-          <span className="text-muted-foreground text-xs">
-            {t(`billing.payments.kind.${row.kind}`)}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "amount",
-      header: t("billing.payments.columns.amount"),
-      align: "end",
-      cell: (row) => (
-        <span className={row.kind === "refund" ? "text-muted-foreground" : ""}>
-          {row.kind === "refund" ? "−" : ""}
-          {formatMinor(row.amount_minor, row.currency, locale)}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: t("billing.payments.columns.status"),
-      cell: (row) => (
-        <span className="flex flex-col items-start gap-0.5">
-          <BillingStatus kind="payment" status={row.status} />
-          {row.failure_code ? (
-            <code className="text-muted-foreground text-xs">
-              {row.failure_code}
-            </code>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      key: "date",
-      header: t("billing.payments.columns.date"),
-      cell: (row) => (
-        <span className="text-muted-foreground tabular-nums">
-          {datetime(row.completed_at ?? row.created_at, undefined, locale)}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">{t("billing.common.actions")}</span>,
-      align: "end",
-      cell: (row) =>
-        canWrite &&
-        row.status === "succeeded" &&
-        row.kind !== "refund" &&
-        row.provider !== "bank_transfer" ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8"
-            onClick={() => setRefunding(row)}
-          >
-            <Undo2 className="size-3.5" />
-            {t("billing.payments.refund")}
-          </Button>
-        ) : null,
-    },
-  ];
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<BillingAdminPayment>({
+          id: "org",
+          accessorKey: "organization_name",
+          labelKey: "billing.payments.columns.organization",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <Link
+              href={`${routes.platform.organizations.detail(row.original.organization_uuid)}?tab=billing`}
+              className="font-medium hover:underline"
+            >
+              {row.original.organization_name}
+            </Link>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "reference",
+          accessorKey: "invoice_reference",
+          labelKey: "billing.payments.columns.reference",
+          cell: ({ row }) => (
+            <code className="text-xs">{row.original.invoice_reference}</code>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "provider",
+          accessorKey: "provider",
+          labelKey: "billing.payments.columns.provider",
+          cell: ({ row }) => (
+            <span className="flex flex-col">
+              <PaymentProviderLabel
+                provider={row.original.provider}
+                className="self-start"
+              />
+              <span className="text-muted-foreground text-xs">
+                {t(`billing.payments.kind.${row.original.kind}`)}
+              </span>
+            </span>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "amount",
+          accessorKey: "amount_minor",
+          labelKey: "billing.payments.columns.amount",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row }) => (
+            <span
+              className={
+                row.original.kind === "refund" ? "text-muted-foreground" : ""
+              }
+            >
+              {row.original.kind === "refund" ? "−" : ""}
+              {formatMinor(
+                row.original.amount_minor,
+                row.original.currency,
+                locale,
+              )}
+            </span>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "status",
+          accessorKey: "status",
+          labelKey: "billing.payments.columns.status",
+          cell: ({ row }) => (
+            <span className="flex flex-col items-start gap-0.5">
+              <BillingStatus kind="payment" status={row.original.status} />
+              {row.original.failure_code ? (
+                <code className="text-muted-foreground text-xs">
+                  {row.original.failure_code}
+                </code>
+              ) : null}
+            </span>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "date",
+          accessorFn: (row) => row.completed_at ?? row.created_at,
+          labelKey: "billing.payments.columns.date",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground tabular-nums">
+              {datetime(
+                row.original.completed_at ?? row.original.created_at,
+                undefined,
+                locale,
+              )}
+            </span>
+          ),
+        }),
+        createColumn<BillingAdminPayment>({
+          id: "actions",
+          labelKey: "billing.common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: { headerClassName: "text-end", cellClassName: "text-end" },
+          cell: ({ row }) =>
+            canWrite &&
+            row.original.status === "succeeded" &&
+            row.original.kind !== "refund" &&
+            row.original.provider !== "bank_transfer" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8"
+                onClick={() => setRefunding(row.original)}
+              >
+                <Undo2 className="size-3.5" />
+                {t("billing.payments.refund")}
+              </Button>
+            ) : null,
+        }),
+      ] as ColumnDef<BillingAdminPayment, unknown>[],
+    [canWrite, locale, t],
+  );
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground text-sm">
-          {t("billing.payments.hint")}
-        </p>
-        <Select
-          value={status}
-          onValueChange={(v) => {
-            setStatus(v as (typeof STATUSES)[number]);
-            setOffset(0);
-          }}
-        >
-          <SelectTrigger
-            className="w-44"
-            aria-label={t("billing.payments.filter")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUSES.map((value) => (
-              <SelectItem key={value} value={value}>
-                {value === "all"
-                  ? t("billing.common.all")
-                  : t(`billing.status.payment.${value}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <BillingTable
-        caption={t("billing.admin.tabs.payments")}
+      <p className="text-muted-foreground text-sm">
+        {t("billing.payments.hint")}
+      </p>
+      <EntityTable
         columns={columns}
-        rows={query.data?.items}
+        data={query.data?.items ?? []}
         getRowId={(row) => row.uuid}
         isLoading={query.isLoading}
         isError={query.isError}
@@ -310,15 +315,41 @@ export function PaymentsPanel() {
             ? t("billing.payments.empty_failed")
             : t("billing.payments.empty")
         }
-        page={
-          query.data
-            ? {
-                total: query.data.total,
-                limit: LIMIT,
-                offset,
-                onOffsetChange: setOffset,
-              }
-            : undefined
+        emptyDescription=""
+        total={query.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `status`, `limit` and `offset` only.
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
+        toolbarExtra={
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              setStatus(v as (typeof STATUSES)[number]);
+              listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
+            }}
+          >
+            <SelectTrigger
+              className="h-8 w-44"
+              aria-label={t("billing.payments.filter")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUSES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value === "all"
+                    ? t("billing.common.all")
+                    : t(`billing.status.payment.${value}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         }
       />
       <RefundDialog payment={refunding} onClose={() => setRefunding(null)} />

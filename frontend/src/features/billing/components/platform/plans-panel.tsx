@@ -1,5 +1,6 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -12,6 +13,8 @@ import {
   AppTextarea,
   FormActions,
 } from "@/components/forms";
+import { EntityTable, useServerListState } from "@/components/entity";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,10 +27,6 @@ import {
 import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
-import {
   useCreatePlan,
   usePlans,
 } from "@/features/billing/hooks/use-platform-billing";
@@ -38,7 +37,6 @@ import { date } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
-const LIMIT = 50;
 export const PLAN_VISIBILITIES = ["public", "hidden", "custom"] as const;
 
 export function createPlanSchema(t: (key: string) => string, create: boolean) {
@@ -183,109 +181,121 @@ export function PlansPanel() {
   const { t, locale } = useLocale();
   const { can } = usePermission();
   const router = useRouter();
-  const [offset, setOffset] = useState(0);
+  const listState = useServerListState({ initialPageSize: 50 });
+  const { limit, offset } = listState.params;
   const [creating, setCreating] = useState(false);
-  const query = usePlans({ limit: LIMIT, offset });
+  const query = usePlans({ limit, offset });
 
-  const columns: BillingColumn<BillingPlan>[] = [
-    {
-      key: "name",
-      header: t("billing.plans.columns.name"),
-      cell: (row) => (
-        <span className="flex flex-col">
-          <span className="font-medium">{row.name}</span>
-          <code className="text-muted-foreground text-xs">{row.code}</code>
-        </span>
-      ),
-    },
-    {
-      key: "visibility",
-      header: t("billing.plans.columns.visibility"),
-      cell: (row) =>
-        row.archived_at ? (
-          <Badge variant="outline">{t("billing.plans.archived")}</Badge>
-        ) : (
-          <Badge
-            variant={row.visibility === "public" ? "success" : "secondary"}
-          >
-            {t(`billing.plans.visibility.${row.visibility ?? "public"}`)}
-          </Badge>
-        ),
-    },
-    {
-      key: "version",
-      header: t("billing.plans.columns.version"),
-      cell: (row) => {
-        const published = latestPublished(row);
-        const draft = latestDraft(row);
-        return (
-          <span className="flex flex-wrap items-center gap-1.5">
-            {published ? (
-              <span className="flex flex-col">
-                <span className="tabular-nums">
-                  {t("credit_products.plans.live_version", {
-                    version: published.version,
-                  })}
-                </span>
-                {published.published_at ? (
-                  <span className="text-muted-foreground text-xs">
-                    {date(published.published_at, undefined, locale)}
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<BillingPlan>({
+          id: "name",
+          labelKey: "billing.plans.columns.name",
+          cell: ({ row: { original: row } }) => (
+            <span className="flex flex-col">
+              <span className="font-medium">{row.name}</span>
+              <code className="text-muted-foreground text-xs">{row.code}</code>
+            </span>
+          ),
+        }),
+        createColumn<BillingPlan>({
+          id: "visibility",
+          labelKey: "billing.plans.columns.visibility",
+          cell: ({ row: { original: row } }) =>
+            row.archived_at ? (
+              <Badge variant="outline">{t("billing.plans.archived")}</Badge>
+            ) : (
+              <Badge
+                variant={row.visibility === "public" ? "success" : "secondary"}
+              >
+                {t(`billing.plans.visibility.${row.visibility ?? "public"}`)}
+              </Badge>
+            ),
+        }),
+        createColumn<BillingPlan>({
+          id: "version",
+          labelKey: "billing.plans.columns.version",
+          cell: ({ row: { original: row } }) => {
+            const published = latestPublished(row);
+            const draft = latestDraft(row);
+            return (
+              <span className="flex flex-wrap items-center gap-1.5">
+                {published ? (
+                  <span className="flex flex-col">
+                    <span className="tabular-nums">
+                      {t("credit_products.plans.live_version", {
+                        version: published.version,
+                      })}
+                    </span>
+                    {published.published_at ? (
+                      <span className="text-muted-foreground text-xs">
+                        {date(published.published_at, undefined, locale)}
+                      </span>
+                    ) : null}
                   </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {t("billing.plans.unpublished")}
+                  </span>
+                )}
+                {draft ? (
+                  <Badge variant="warning">
+                    {t("billing.plans.draft_badge", { version: draft.version })}
+                  </Badge>
                 ) : null}
               </span>
+            );
+          },
+        }),
+        ...(["monthly", "yearly"] as const).map((interval) =>
+          createColumn<BillingPlan>({
+            id: interval,
+            labelKey: `credit_products.plans.price_${interval}`,
+            meta: {
+              headerClassName: "text-end",
+              cellClassName: "text-end tabular-nums",
+            },
+            cell: ({ row: { original: row } }) => {
+              const price = latestPublished(row)?.prices.find(
+                (p) => p.currency === "TRY" && p.interval === interval,
+              );
+              if (!price)
+                return <span className="text-muted-foreground">—</span>;
+              return (
+                <span className="flex flex-col items-end">
+                  <span>{formatMinor(price.amount_minor, "TRY", locale)}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {price.tax_inclusive
+                      ? t("credit_products.price.vat_included")
+                      : t("credit_products.price.vat_excluded")}
+                  </span>
+                </span>
+              );
+            },
+          }),
+        ),
+        createColumn<BillingPlan>({
+          id: "trial",
+          labelKey: "billing.plans.columns.trial",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row: { original: row } }) => {
+            const v = latestPublished(row);
+            return v?.trial_days ? (
+              t("billing.plans.trial_days", { days: v.trial_days })
             ) : (
               <span className="text-muted-foreground">
-                {t("billing.plans.unpublished")}
+                {t("credit_products.plans.no_trial")}
               </span>
-            )}
-            {draft ? (
-              <Badge variant="warning">
-                {t("billing.plans.draft_badge", { version: draft.version })}
-              </Badge>
-            ) : null}
-          </span>
-        );
-      },
-    },
-    ...(["monthly", "yearly"] as const).map(
-      (interval): BillingColumn<BillingPlan> => ({
-        key: interval,
-        header: t(`credit_products.plans.price_${interval}`),
-        align: "end",
-        cell: (row) => {
-          const price = latestPublished(row)?.prices.find(
-            (p) => p.currency === "TRY" && p.interval === interval,
-          );
-          if (!price) return <span className="text-muted-foreground">—</span>;
-          return (
-            <span className="flex flex-col items-end">
-              <span>{formatMinor(price.amount_minor, "TRY", locale)}</span>
-              <span className="text-muted-foreground text-xs">
-                {price.tax_inclusive
-                  ? t("credit_products.price.vat_included")
-                  : t("credit_products.price.vat_excluded")}
-              </span>
-            </span>
-          );
-        },
-      }),
-    ),
-    {
-      key: "trial",
-      header: t("billing.plans.columns.trial"),
-      align: "end",
-      cell: (row) => {
-        const v = latestPublished(row);
-        return v?.trial_days ? (
-          t("billing.plans.trial_days", { days: v.trial_days })
-        ) : (
-          <span className="text-muted-foreground">
-            {t("credit_products.plans.no_trial")}
-          </span>
-        );
-      },
-    },
-  ];
+            );
+          },
+        }),
+      ] as ColumnDef<BillingPlan, unknown>[],
+    [locale, t],
+  );
 
   return (
     <div className="space-y-3">
@@ -300,10 +310,9 @@ export function PlansPanel() {
           </Button>
         ) : null}
       </div>
-      <BillingTable
-        caption={t("billing.admin.tabs.plans")}
+      <EntityTable
         columns={columns}
-        rows={query.data?.items}
+        data={query.data?.items ?? []}
         getRowId={(row) => row.uuid}
         isLoading={query.isLoading}
         isError={query.isError}
@@ -313,16 +322,17 @@ export function PlansPanel() {
         onRowClick={(row) =>
           router.push(routes.platform.billing.plan(row.uuid))
         }
-        page={
-          query.data
-            ? {
-                total: query.data.total,
-                limit: LIMIT,
-                offset,
-                onOffsetChange: setOffset,
-              }
-            : undefined
-        }
+        total={query.data?.total ?? 0}
+        state={listState.tableState}
+        features={{
+          // The endpoint takes `limit` and `offset` only.
+          toolbar: false,
+          sorting: false,
+          globalFilter: false,
+          columnFilters: false,
+          rowSelection: false,
+          viewMode: false,
+        }}
       />
       <CreatePlanDialog open={creating} onClose={() => setCreating(false)} />
     </div>
