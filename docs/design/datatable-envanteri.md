@@ -169,8 +169,8 @@ T10 kapsamındaki ekranlar (her biri ayrı satır olarak taşınır):
 | M16 | AI prosedürleri `/settings/ai` → Prosedürler | `features/ai-settings/components/procedures-tab.tsx:178` | `Card` satırları | Servis sabit `limit 100` | Arama, dil ve yayın durumu filtresi | **Taşı**: `DataTable` istemci modu | küçük | P3 | taşındı (PR #64): uç sayfaladığı için sunucu modu |
 | M17 | Özel alanlar `/settings/custom-fields` | `features/custom-fields/components/settings/field-list.tsx:174` | Liste satırı; yukarı / aşağı ok ile sıralama | Hepsi çekilir; onlarca | Sürükle-sırala, arama | **Taşı**: `DataTable` istemci modu + `rowReorder` | orta | P3 | |
 | M18 | Talep formları `/settings/request-forms` | `features/request-forms/components/request-forms-page.tsx:108` | `Card` satırları; düzenle / sil | Hepsi çekilir; birkaç–onlarca | Arama, kanal filtresi; boş durum elle | **Taşı**: `DataTable` istemci modu | küçük | P3 | |
-| M19 | Tatiller `/settings/sla` → Tatiller | `features/sla/components/sla-settings-page.tsx:536` | `<li>`; sil | Hepsi çekilir; yılda 5–30 | Yükleniyor / hata, tarih sıralaması, **silme onayı** (`:553`) | **Taşı**: `DataTable` istemci modu | küçük | P3 | |
-| M20 | Sözleşmeli firmalar `/settings/sla` → Politikalar altı | `features/sla/components/contracted-companies.tsx:127` | `<li>`; kaldır | Hepsi çekilir; onlarca–yüzlerce | Arama, politika filtresi, sayfalama, yükleniyor / hata, **kaldırma onayı** (`:149`) | **Taşı**: `DataTable` istemci modu | küçük | P3 | |
+| M19 | Tatiller `/settings/sla` → Tatiller | `features/sla/components/sla-settings-page.tsx:536` | `<li>`; sil | Hepsi çekilir; yılda 5–30 | Yükleniyor / hata, tarih sıralaması, **silme onayı** (`:553`) | **Taşı**: `DataTable` istemci modu | küçük | P3 | taşındı (PR #132) |
+| M20 | Sözleşmeli firmalar `/settings/sla` → Politikalar altı | `features/sla/components/contracted-companies.tsx:127` | `<li>`; kaldır | Hepsi çekilir; onlarca–yüzlerce | Arama, politika filtresi, sayfalama, yükleniyor / hata, **kaldırma onayı** (`:149`) | **Taşı**: `DataTable` istemci modu | küçük | P3 | taşındı (PR #132) |
 | M21 | Destek erişimi `/platform/support-access` | `features/support-access/platform-support-access-page.tsx:89` | `<li>`; sayfa zaten `EntityPage` | Parametresiz; birkaç–onlarca | Arama, bitişe göre sıralama | **Taşı**: yalnız liste gövdesi değişir | küçük | P3 | |
 | M22 | Ürün geri bildirimi `/platform/product-feedback` | `features/guides/components/platform-feedback-page.tsx:120` | Kart; satır içi durum `Select`; elle 2 filtre, elle önceki/sonraki | Sunucu: `limit 25`, `offset`, tür, durum | Arama, sayfa göstergesi | **Taşı**: `EntityTable` + `EntityFilters`; mesaj kısaltılmış sütun + ayrıntı çekmecesi. Mesajın tamamı listede kalacaksa 7.2'ye bağlıdır | orta | P3 | |
 | M23 | Video paketleri `/platform/video` → Paketler | `features/video/components/platform-video-page.tsx:278` | Hizasız `flex-wrap` satırlar | Hepsi çekilir; <10 | Sütun hizası, yükleniyor / hata | **Taşı**: `DataTable` istemci modu | küçük | P3 | taşındı (PR #52) |
@@ -275,8 +275,8 @@ CF-179 kuralı gereği tek ekrana özel çözüm çekirdeğe konmaz; aşağıdak
 | WhatsApp şablonu sil: **onay eklendi (PR #66)** | `channels/components/whatsapp-templates-dialog.tsx` |
 | Video kaydı sil: **onay eklendi (PR #52)**; katılımcı çıkar (hâlâ onaysız) | `video/components/video-room-page.tsx` |
 | Plan geçersiz kılmasını sil | `video/components/platform-video-page.tsx:175` |
-| Tatil sil | `sla/components/sla-settings-page.tsx:553` |
-| Sözleşmeli firmayı kaldır | `sla/components/contracted-companies.tsx:149` |
+| Tatil sil: **onay eklendi (PR #132)** | `sla/components/sla-settings-page.tsx:553` |
+| Sözleşmeli firmayı kaldır: **onay eklendi (PR #132)** | `sla/components/contracted-companies.tsx:149` |
 | Paylaşım bağlantısını iptal et | `storage/components/storage-share-dialog.tsx:373`, `storage-details.tsx:360` |
 | Hesap notu sil | `contacts/components/account-page.tsx:413` |
 | Konuşma bağlantısını kaldır; kayıtlı görünüm sil; hatırlatıcı iptal | `inbox/components/conversation-links.tsx:124`, `filter-bar.tsx:324`, `reminder-menu.tsx:109` |
