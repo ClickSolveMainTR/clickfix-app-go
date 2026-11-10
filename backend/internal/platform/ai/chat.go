@@ -16,6 +16,8 @@ const (
 	// MaxToolRounds bounds the model turns that may call tools in one reply.
 	// A turn may carry any number of parallel calls; they run in order.
 	MaxToolRounds = 6
+	// maxCallsPerTurn bounds the parallel calls of one turn (cost and latency).
+	maxCallsPerTurn = 8
 	// maxContinuations bounds the automatic "continue" turns after max_tokens.
 	maxContinuations = 2
 	// maxTurnsBytes bounds the transcript the loop keeps sending back.
@@ -109,7 +111,7 @@ func chat(ctx context.Context, req Request, rounds int, run ToolRunner, generate
 		if len(next.Calls) == 0 {
 			return out, nil
 		}
-		if final {
+		if final || len(next.Calls) > maxCallsPerTurn {
 			return out, ErrTooManyRounds
 		}
 		toolRounds++
