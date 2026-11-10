@@ -19,7 +19,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fromPersistedState,
@@ -190,6 +190,27 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     }
   }, [controlled?.globalFilter]);
 
+  // Controlled pagination (`useServerListState`): the stored page size is
+  // handed to the owner once, on mount. The local state above only feeds the
+  // uncontrolled case.
+  const restoredPageSize = useRef(false);
+  const onControlledPagination = controlled?.onPaginationChange;
+  const controlledPageSize = controlled?.pagination?.pageSize;
+  const storedPageSize = persisted?.pagination?.pageSize;
+  useEffect(() => {
+    if (restoredPageSize.current) return;
+    restoredPageSize.current = true;
+    if (
+      onControlledPagination &&
+      storedPageSize &&
+      storedPageSize !== controlledPageSize
+    ) {
+      onControlledPagination({ pageIndex: 0, pageSize: storedPageSize });
+    }
+  }, [onControlledPagination, storedPageSize, controlledPageSize]);
+
+  const effectivePagination = controlled?.pagination ?? pagination;
+
   useEffect(() => {
     writePersisted(features.persistKey, {
       sorting,
@@ -199,7 +220,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       columnOrder,
       columnPinning,
       columnSizing,
-      pagination,
+      pagination: effectivePagination,
       density,
       viewMode,
     });
@@ -212,7 +233,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     columnOrder,
     columnPinning,
     columnSizing,
-    pagination,
+    effectivePagination,
     density,
     viewMode,
   ]);
