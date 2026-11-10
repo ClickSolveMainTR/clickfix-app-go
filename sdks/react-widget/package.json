@@ -1,6 +1,6 @@
 {
   "name": "@clickfix/react-widget",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ClickFix web widget for React: typed hooks around widget.js and a UI-free visitor client for your own support UI.",
   "keywords": [
     "clickfix",
@@ -34,6 +34,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "dependencies": {
+    "@getclickfix/visitor-core": "workspace:^"
   },
   "peerDependencies": {
     "react": ">=18"

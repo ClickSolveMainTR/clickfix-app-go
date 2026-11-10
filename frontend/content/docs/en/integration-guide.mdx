@@ -20,12 +20,13 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 
 ### Packages [#packages]
 
-| Package                                                                          | Version                                                                             | Install                                                                                   |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1)                                                            | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                 | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                   |
-| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget) | 0.1.0                                                                               | `npm install @clickfix/react-widget` (React 18+)                                          |
-| Go module                                                                        | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
+| Package                                                                                | Version                                                                             | Install                                                                                   |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                   |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)        |
+| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                               | `npm install @clickfix/react-widget` (React 18+)                                          |
+| Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
 
 Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
 
@@ -954,6 +955,8 @@ The path for mobile apps is not a separate native SDK but a **secure webview tha
 4. On logout send `{"type":"clickfix:reset"}`; the visitor is forgotten and the next launch is a new visitor.
 
 The webview's cookies and storage carry the session across reloads; never switch accounts without sending `reset`.
+
+**Session handover with the native core (CF-201).** An app can also call the widget endpoints without a webview: create an **app key** with the platform and package name under Web widget → Advanced → **Mobile apps**; `@getclickfix/visitor-core` with `mode: "app"` sends it in the `X-ClickFix-App-Key` and `X-ClickFix-App-Package` headers, so no page origin is needed. Hand the native session to the webview with `{"type":"clickfix:session","token":client.getToken()}`; the widget answers with its own token in a `clickfix:session` message after `ready`, `identify` and `reset` (`client.adoptToken`). The key is shown only when created and can be revoked in the panel; `user_hash` verification is the same as in the browser.
 
 ### The bridge: app to widget and widget to app [#mobile-bridge]
 

@@ -43,7 +43,7 @@ try {
   const server = subset(p => p.startsWith('/v1/public-api/'));
   const widget = subset(p => p.startsWith('/v1/widget/'));
   await output('node/src/schema.d.ts', astToString(await openapiTS(server)));
-  await output('react-widget/src/schema.d.ts', astToString(await openapiTS(widget)));
+  await output('visitor-core/src/schema.d.ts', astToString(await openapiTS(widget)));
   const input = join(temp, 'public-api.json');
   await writeFile(input, JSON.stringify(server));
   const generated = execFileSync('go', ['run', 'github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0', '-package', 'clickfix', '-generate', 'types,client', input], {encoding:'utf8', env:{...process.env,GOMAXPROCS:'2'}});

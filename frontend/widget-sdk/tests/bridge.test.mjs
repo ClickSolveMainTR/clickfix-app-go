@@ -68,7 +68,9 @@ test("every command type parses; unknown, oversized and malformed messages are r
             ? { update: { locale: "en" } }
             : type === "clickfix:consent"
               ? { granted: true }
-              : {};
+              : type === "clickfix:session"
+                ? { token: "visitor-token" }
+                : {};
     const r = parseCommand({ type, ...extra });
     assert.equal(r.ok, true, type);
   }
@@ -87,6 +89,19 @@ test("every command type parses; unknown, oversized and malformed messages are r
   assert.equal(
     parseCommand({ type: "clickfix:consent", granted: "yes" }).code,
     "INVALID_MESSAGE",
+  );
+  // CF-201: the session handover carries a bounded, non-empty token only.
+  assert.equal(
+    parseCommand({ type: "clickfix:session", id: "s" }).code,
+    "INVALID_MESSAGE",
+  );
+  assert.equal(
+    parseCommand({ type: "clickfix:session", token: "t".repeat(2049) }).code,
+    "INVALID_MESSAGE",
+  );
+  assert.deepEqual(
+    parseCommand({ type: "clickfix:session", token: "tok", junk: 1 }).command,
+    { type: "clickfix:session", id: undefined, token: "tok" },
   );
   const open = parseCommand({
     type: "clickfix:open",
@@ -303,6 +318,12 @@ test("ready, events and links are forwarded; unknown events are not", () => {
   assert.deepEqual(out.at(-1), {
     type: "clickfix:link",
     url: "https://help.example/article",
+  });
+  bridge.session({ token: "tok", visitor_id: "v" });
+  assert.deepEqual(out.at(-1), {
+    type: "clickfix:session",
+    token: "tok",
+    visitor_id: "v",
   });
   assert.ok(
     FORWARDED_EVENTS.includes("message") &&

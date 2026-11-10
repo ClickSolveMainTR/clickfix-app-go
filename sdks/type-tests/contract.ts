@@ -22,3 +22,15 @@ const unread:number=clickFix().getUnreadCount();void unread;
 sdk('on','nope',()=>{});
 // @ts-expect-error locale is tr or en
 loadClickFix({appOrigin:'x',widgetId:'id',locale:'de'});
+import { createVisitorClient, parseMessage, type BridgeCommand } from '../visitor-core/dist/index.js';
+const core=createVisitorClient({publicId:'id',mode:'app',app:{key:'cf_app_x',packageName:'com.example.app'},baseURL:'https://support.example.test/api'});
+void core.identify({user_id:'user',user_hash:'signed-on-server',company:{id:'F-1'}});
+void core.sendMessage('c',{text:'hi'},{uri:'file:///a.png',name:'a.png',type:'image/png'});
+// @ts-expect-error identification always requires a server-signed HMAC
+void core.identify({user_id:'user'});
+// @ts-expect-error attributes are scalars
+void core.setAttributes({nested:{a:1}});
+const cmd:BridgeCommand={type:'clickfix:session',token:core.getToken()};void cmd;
+// @ts-expect-error unknown bridge command
+const bad:BridgeCommand={type:'clickfix:nope'};void bad;
+const msg=parseMessage('{}');if(msg&&msg.type==='clickfix:session'){const t:string=msg.token;void t;}

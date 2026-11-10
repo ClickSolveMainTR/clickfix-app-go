@@ -334,12 +334,14 @@ jobs:
         run: |
           pnpm examples:check
           pnpm examples
-      # What `sdk-publish` would ship from main: pack + publish dry run, no token needed.
-      - name: npm pack and publish dry run
+      # What `sdk-publish` would ship from main: publish dry run, no token
+      # needed. pnpm (not npm) so `workspace:` dependencies are rewritten to
+      # real versions (react-widget depends on visitor-core, CF-201).
+      - name: npm publish dry run
         working-directory: sdks
         run: |
-          for p in node react-widget; do
-            (cd "$p" && npm pack --dry-run && npm publish --dry-run --access public)
+          for p in node visitor-core react-widget; do
+            (cd "$p" && pnpm publish --dry-run --no-git-checks --access public)
           done
           echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
 
@@ -698,12 +700,12 @@ jobs:
             echo "pushed $image:main ($short)" >> "$GITHUB_STEP_SUMMARY"
           done
 
-  # SDK release (CF-199): a green main run publishes @clickfix/node and
-  # @clickfix/react-widget to npm when the version in package.json is not on
-  # the registry yet. Needs the NPM_TOKEN repository secret (an npm automation
-  # token of the account that owns the @clickfix scope); without it the job
-  # skips with a summary note and never fails main. Versions and changelogs
-  # live in sdks/<package>/CHANGELOG.md.
+  # SDK release (CF-199): a green main run publishes @clickfix/node,
+  # @getclickfix/visitor-core (CF-201) and @clickfix/react-widget to npm when
+  # the version in package.json is not on the registry yet. Needs the
+  # NPM_TOKEN repository secret (an npm automation token of the account that
+  # owns the scopes); without it the job skips with a summary note and never
+  # fails main. Versions and changelogs live in sdks/<package>/CHANGELOG.md.
   #
   # The same job publishes the Flutter package clickfix_webview to pub.dev
   # (CF-203) when its pubspec version is not on pub.dev yet. Needs the
@@ -730,7 +732,7 @@ jobs:
             echo "NPM_TOKEN secret is not set: npm publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           list=""
-          for p in node react-widget; do
+          for p in node visitor-core react-widget; do
             name=$(jq -r .name "sdks/$p/package.json"); version=$(jq -r .version "sdks/$p/package.json")
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY"
@@ -764,7 +766,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for p in ${{ steps.todo.outputs.packages }}; do
-            (cd "$p" && npm publish --access public)
+            (cd "$p" && pnpm publish --no-git-checks --access public)
             echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
           done
       - name: Flutter version to publish
