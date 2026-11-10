@@ -866,6 +866,7 @@ jobs:
           fi
           work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
           printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"
+          export GIT_CONFIG_GLOBAL="$work/gitconfig"   # job-private: the runner's own git config stays untouched
           git config --global credential.helper "store --file=$work/cred"
           release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
           changelog_version() { sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' "$1/CHANGELOG.md" | head -1; }
