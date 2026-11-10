@@ -754,6 +754,27 @@ export class Widget {
     }
   }
 
+  /**
+   * Continue a visitor session another surface started (CF-201: the host
+   * app's native core client with an app key hands its token over the
+   * bridge). Bootstrap resumes that visitor; an invalid token simply starts
+   * a stranger, like an expired stored token.
+   */
+  async adoptSession(token: string) {
+    if (this.preview || !token) return;
+    await this.capture.stopCapture(true);
+    this.realtime?.stop();
+    this.api.token = token;
+    this.active = null;
+    this.messages = [];
+    this.outbox = [];
+    await this.bootstrap();
+    this.startRealtime();
+    await this.refresh();
+    this.emit("identify", { verified: Boolean(this.boot?.visitor.verified) });
+    this.render();
+  }
+
   /** Forget the visitor (e.g. on logout): the next bootstrap is a stranger. */
   async reset() {
     await this.capture.stopCapture(true);

@@ -223,6 +223,7 @@ export type SectionId =
   | "targeting"
   | "privacy"
   | "security"
+  | "mobile_apps"
   | "replay"
   | "install";
 
@@ -349,6 +350,13 @@ export const SECTIONS: {
     paths: ["allowed_domains", "require_identity"],
     keywords:
       "güvenlik security alan adı domain kimlik identity hmac hash gizli secret",
+  },
+  {
+    id: "mobile_apps",
+    group: "security",
+    paths: [],
+    keywords:
+      "mobil mobile uygulama app ios android anahtar key paket package bundle react native flutter sdk",
   },
   {
     id: "replay",

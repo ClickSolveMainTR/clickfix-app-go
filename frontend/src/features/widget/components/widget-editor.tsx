@@ -57,6 +57,7 @@ import {
   InstallSection,
   PrivacySection,
   ReplaySection,
+  MobileAppsSection,
   SecuritySection,
 } from "@/features/widget/components/sections-security";
 import { VersionHistory } from "@/features/widget/components/version-history";
@@ -338,6 +339,10 @@ function Editor({
               onInstanceSave({ identitySecret: secret })
             }
           />
+        );
+      case "mobile_apps":
+        return (
+          <MobileAppsSection widgetId={widget.uuid} canManage={canManage} />
         );
       case "replay":
         return <ReplaySection />;

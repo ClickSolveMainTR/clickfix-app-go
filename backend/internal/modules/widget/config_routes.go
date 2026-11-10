@@ -12,8 +12,9 @@ import (
 )
 
 // RegisterConfigRoutes mounts the widget editor (CF-150): reading needs
-// tenant.channels.read, editing the draft and duplicating
-// tenant.channels.manage, publishing and rollback tenant.widgets.publish.
+// tenant.channels.read, editing the draft, duplicating and managing mobile
+// app keys (CF-201) tenant.channels.manage, publishing and rollback
+// tenant.widgets.publish.
 func RegisterConfigRoutes(mux *http.ServeMux, h *handler.ConfigHandler, tokens *jwt.Manager, loader middleware.IdentityLoader, resolver orgctx.Resolver, ent entitlement.Engine) {
 	if resolver == nil {
 		return
@@ -34,6 +35,9 @@ func RegisterConfigRoutes(mux *http.ServeMux, h *handler.ConfigHandler, tokens *
 	get("GET /v1/tenant/widgets/{uuid}/versions", h.Versions)
 	get("GET /v1/tenant/widgets/{uuid}/versions/{version}", h.Version)
 	get("GET /v1/tenant/widgets/{uuid}/installs", h.Installs)
+	get("GET /v1/tenant/widgets/{uuid}/app-keys", h.AppKeys)
+	write("POST /v1/tenant/widgets/{uuid}/app-keys", h.CreateAppKey, manage)
+	write("DELETE /v1/tenant/widgets/{uuid}/app-keys/{key}", h.RevokeAppKey, manage)
 	write("PUT /v1/tenant/widgets/{uuid}/draft", h.SaveDraft, manage)
 	write("DELETE /v1/tenant/widgets/{uuid}/draft", h.DiscardDraft, manage)
 	write("POST /v1/tenant/widgets/{uuid}/duplicate", h.Duplicate, manage)

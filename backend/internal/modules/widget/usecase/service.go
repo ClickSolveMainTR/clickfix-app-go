@@ -199,11 +199,26 @@ func (s *Service) WithHours(h businesshours.Source) *Service { s.hours = h; retu
 type Widget struct {
 	Instance channels.Instance
 	Settings widget.Settings
+	// App is set when the request came from a native app with an app key
+	// (CF-201) instead of a page origin.
+	App *AppIdentity
 }
 
 // Open loads a live widget by public id and checks the page origin against
 // its allowlist.
 func (s *Service) Open(ctx context.Context, publicID uuid.UUID, origin string) (Widget, error) {
+	w, err := s.load(ctx, publicID)
+	if err != nil {
+		return Widget{}, err
+	}
+	if !s.originAllowed(w.Settings, origin) {
+		return Widget{}, ErrOriginNotAllowed
+	}
+	return w, nil
+}
+
+// load resolves a live widget and its (brand-merged, normalized) settings.
+func (s *Service) load(ctx context.Context, publicID uuid.UUID) (Widget, error) {
 	inst, _, err := s.instances.ForWebhook(ctx, channels.TypeWidget, publicID)
 	if err != nil {
 		return Widget{}, ErrNotFound
@@ -226,11 +241,7 @@ func (s *Service) Open(ctx context.Context, publicID uuid.UUID, origin string) (
 		}
 		inst.Settings = defaults
 	}
-	w := Widget{Instance: inst, Settings: widget.Normalize(inst.Settings)}
-	if !s.originAllowed(w.Settings, origin) {
-		return Widget{}, ErrOriginNotAllowed
-	}
-	return w, nil
+	return Widget{Instance: inst, Settings: widget.Normalize(inst.Settings)}, nil
 }
 
 func (s *Service) originAllowed(set widget.Settings, origin string) bool {

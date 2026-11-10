@@ -59,6 +59,9 @@ export type WidgetVersionDetail = components["schemas"]["WidgetVersionDetail"];
 export type WidgetInstall = components["schemas"]["WidgetInstall"];
 export type WidgetIdentityRejection =
   components["schemas"]["WidgetIdentityRejection"];
+export type WidgetAppKey = components["schemas"]["WidgetAppKey"];
+export type WidgetAppKeyCreated = components["schemas"]["WidgetAppKeyCreated"];
+export type WidgetAppKeyCreate = components["schemas"]["WidgetAppKeyCreate"];
 
 /** Editor API (CF-150): drafts, publishing, versions and installs. */
 export const widgetConfigService = {
@@ -153,6 +156,33 @@ export const widgetConfigService = {
     }>(
       await apiClient.GET("/v1/tenant/widgets/{uuid}/installs", {
         params: { header: orgHeader(), path: { uuid } },
+      }),
+    );
+  },
+
+  /** Mobile app keys (CF-201): list, create (key shown once) and revoke. */
+  async appKeys(uuid: string) {
+    const data = await unwrap<{ items: WidgetAppKey[] }>(
+      await apiClient.GET("/v1/tenant/widgets/{uuid}/app-keys", {
+        params: { header: orgHeader(), path: { uuid } },
+      }),
+    );
+    return data.items;
+  },
+
+  async createAppKey(uuid: string, body: WidgetAppKeyCreate) {
+    return unwrap<WidgetAppKeyCreated>(
+      await apiClient.POST("/v1/tenant/widgets/{uuid}/app-keys", {
+        params: { header: orgHeader(), path: { uuid } },
+        body,
+      }),
+    );
+  },
+
+  async revokeAppKey(uuid: string, key: string) {
+    return unwrap<WidgetAppKey>(
+      await apiClient.DELETE("/v1/tenant/widgets/{uuid}/app-keys/{key}", {
+        params: { header: orgHeader(), path: { uuid, key } },
       }),
     );
   },
