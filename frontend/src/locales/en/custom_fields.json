@@ -15,6 +15,8 @@
   "actions.archive": "Archive",
   "actions.restore": "Restore",
   "actions.move_up": "Move up",
+  "columns.order": "Order",
+  "columns.field": "Field",
   "actions.move_down": "Move down",
   "badges.required": "Required",
   "badges.conditional": "Conditional",

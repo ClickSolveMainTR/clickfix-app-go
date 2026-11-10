@@ -47,6 +47,9 @@
   "channel.web": "Web form",
   "channel.email": "Email",
   "channel.agent": "Agent",
+  "columns.name": "Form",
+  "columns.channels": "Channels",
+  "columns.fields": "Fields",
   "toast.saved": "Saved",
   "toast.deleted": "Deleted",
   "toast.failed": "Could not complete the action. Try again."
