@@ -59,6 +59,7 @@ function CardShell({
         <div className="absolute end-3 top-3 z-10">
           <Checkbox
             checked={selected}
+            disabled={!onToggleSelect}
             onCheckedChange={(value) => onToggleSelect?.(Boolean(value))}
             aria-label="Select row"
             className="border-muted-foreground/40 size-5"
@@ -109,7 +110,11 @@ function DefaultCard<TData>({
       selected={row.getIsSelected()}
       mobile={mobile}
       selectable={Boolean(table.options.enableRowSelection)}
-      onToggleSelect={(checked) => row.toggleSelected(checked)}
+      onToggleSelect={
+        row.getCanSelect()
+          ? (checked) => row.toggleSelected(checked)
+          : undefined
+      }
       clickProps={rowClickProps<TData, HTMLElement>(
         row.original,
         onRowClick,
@@ -201,7 +206,11 @@ export function GridView<TData>({
               selected={row.getIsSelected()}
               mobile={mobile}
               selectable={Boolean(table.options.enableRowSelection)}
-              onToggleSelect={(checked) => row.toggleSelected(checked)}
+              onToggleSelect={
+                row.getCanSelect()
+                  ? (checked) => row.toggleSelected(checked)
+                  : undefined
+              }
               clickProps={rowClickProps<TData, HTMLElement>(
                 row.original,
                 onRowClick,

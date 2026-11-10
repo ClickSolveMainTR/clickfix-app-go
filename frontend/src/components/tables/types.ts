@@ -171,6 +171,17 @@ export type DataTableProps<TData> = {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
   getRowId?: (originalRow: TData, index: number) => string;
+  /**
+   * With `features.rowSelection`: rows that can be selected (the others get a
+   * disabled checkbox). Every row by default.
+   */
+  getRowCanSelect?: (row: TData) => boolean;
+  /**
+   * With `features.rowSelection`: most rows selectable at once. At the
+   * ceiling the other checkboxes are disabled; "select all" takes the first
+   * rows of the page up to it.
+   */
+  maxSelection?: number;
 
   isLoading?: boolean;
   /**
@@ -246,6 +257,8 @@ export type UseDataTableOptions<TData> = Pick<
   | "columns"
   | "data"
   | "getRowId"
+  | "getRowCanSelect"
+  | "maxSelection"
   | "features"
   | "manual"
   | "state"

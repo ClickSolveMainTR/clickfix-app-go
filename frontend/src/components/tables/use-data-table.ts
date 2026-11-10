@@ -25,6 +25,7 @@ import {
   toPersistedState,
 } from "@/components/tables/persist-state";
 import { searchTextIncludes } from "@/components/tables/search-text";
+import { capSelection, selectedCount } from "@/components/tables/selection-cap";
 import type {
   DataTableFeatures,
   DataTableState,
@@ -99,6 +100,8 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     columns,
     data,
     getRowId,
+    getRowCanSelect,
+    maxSelection,
     features: featuresProp,
     manual,
     state: controlled,
@@ -210,6 +213,20 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     viewMode,
   ]);
 
+  const currentSelection = controlled?.rowSelection ?? rowSelection;
+  const atSelectionCap =
+    maxSelection !== undefined &&
+    selectedCount(currentSelection) >= maxSelection;
+  const onRowSelectionChange = (
+    updater: Parameters<typeof setRowSelection>[0],
+  ) => {
+    const set = controlled?.onRowSelectionChange ?? setRowSelection;
+    if (maxSelection === undefined) return set(updater);
+    const next =
+      typeof updater === "function" ? updater(currentSelection) : updater;
+    set(capSelection(currentSelection, next, maxSelection));
+  };
+
   // Uncontrolled pagination only: a controlled list (`useServerListState`)
   // resets its own page when search, filters or sorting change.
   const toFirstPage = () => {
@@ -256,7 +273,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onColumnPinningChange:
       controlled?.onColumnPinningChange ?? setColumnPinning,
     onColumnSizingChange: controlled?.onColumnSizingChange ?? setColumnSizing,
-    onRowSelectionChange: controlled?.onRowSelectionChange ?? setRowSelection,
+    onRowSelectionChange,
     onPaginationChange: controlled?.onPaginationChange ?? setPagination,
 
     enableSorting: features.sorting,
@@ -268,7 +285,12 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     enableFilters: features.columnFilters || features.globalFilter,
     enableColumnFilters: features.columnFilters,
     enableGlobalFilter: features.globalFilter,
-    enableRowSelection: features.rowSelection,
+    enableRowSelection:
+      features.rowSelection && (getRowCanSelect || atSelectionCap)
+        ? (row) =>
+            (!getRowCanSelect || getRowCanSelect(row.original)) &&
+            (!atSelectionCap || row.getIsSelected())
+        : features.rowSelection,
     enableColumnResizing: features.columnResizing,
     columnResizeMode: "onChange",
     enableColumnPinning: features.columnPinning,
