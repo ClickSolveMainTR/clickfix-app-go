@@ -133,6 +133,7 @@
   "bank.form_hint": "The IBAN checksum is verified before saving.",
   "bank.columns.bank": "Bank",
   "bank.columns.holder": "Account holder",
+  "bank.columns.iban": "IBAN",
   "bank.columns.status": "Status",
   "bank.active": "Shown to customers",
   "bank.inactive": "Hidden",

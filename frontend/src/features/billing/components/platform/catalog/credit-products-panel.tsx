@@ -10,16 +10,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 
 import { ErrorState } from "@/components/common/error-state";
+import { DataTable, createColumn } from "@/components/tables";
 import { ConfirmDialog } from "@/components/dialogs/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { permissions } from "@/config/permissions";
-import {
-  BillingTable,
-  type BillingColumn,
-} from "@/features/billing/components/billing-table";
 import {
   CREDIT_UNITS,
   formatUnitPrice,
@@ -83,130 +81,145 @@ export function CreditProductsPanel() {
     [query.data],
   );
 
-  const columns = (unit: CreditProductUnit): BillingColumn<CreditProduct>[] => [
-    {
-      key: "name",
-      header: t("credit_products.columns.product"),
-      cell: (row) => (
-        <span className="flex max-w-72 flex-col py-1.5">
-          <span className="font-medium">{row.name}</span>
-          <span className="text-muted-foreground truncate text-xs">
-            <code>{row.code}</code>
-            {row.description ? ` · ${row.description}` : null}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "quantity",
-      header: t("credit_products.columns.quantity"),
-      align: "end",
-      cell: (row) =>
-        t(`credit_products.quantity.${unit}`, {
-          count: formatCount(row.credits, locale),
+  const columnsByUnit = useMemo(() => {
+    const columns = (unit: CreditProductUnit) =>
+      [
+        createColumn<CreditProduct>({
+          id: "name",
+          labelKey: "credit_products.columns.product",
+          cell: ({ row: { original: row } }) => (
+            <span className="flex max-w-72 flex-col py-1.5">
+              <span className="font-medium">{row.name}</span>
+              <span className="text-muted-foreground truncate text-xs">
+                <code>{row.code}</code>
+                {row.description ? ` · ${row.description}` : null}
+              </span>
+            </span>
+          ),
         }),
-    },
-    {
-      key: "price",
-      header: t("credit_products.columns.price"),
-      align: "end",
-      cell: (row) => (
-        <span className="flex flex-col items-end">
-          <span className="font-medium">
-            {formatMinor(row.amount_minor, "TRY", locale)}
-          </span>
-          <span className="text-muted-foreground text-xs">
-            {t(`credit_products.unit_price.${unit}`, {
-              price: formatUnitPrice(row.amount_minor, row.credits, locale),
-            })}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "validity",
-      header: t("credit_products.columns.validity"),
-      cell: (row) =>
-        row.expires_days == null
-          ? t("credit_products.validity.none")
-          : t("credit_products.validity.days", {
-              days: formatCount(row.expires_days, locale),
+        createColumn<CreditProduct>({
+          id: "quantity",
+          labelKey: "credit_products.columns.quantity",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row: { original: row } }) =>
+            t(`credit_products.quantity.${unit}`, {
+              count: formatCount(row.credits, locale),
             }),
-    },
-    {
-      key: "plans",
-      header: t("credit_products.columns.visibility"),
-      cell: (row) =>
-        row.plan_uuids.length === 0 ? (
-          <span className="text-muted-foreground">
-            {t("credit_products.visibility.all")}
-          </span>
-        ) : (
-          <span className="flex max-w-56 flex-wrap gap-1">
-            {row.plan_uuids.map((uuid) => (
-              <Badge key={uuid} variant="secondary" className="font-normal">
-                {planNames.get(uuid) ?? t("credit_products.visibility.unknown")}
+        }),
+        createColumn<CreditProduct>({
+          id: "price",
+          labelKey: "credit_products.columns.price",
+          meta: {
+            headerClassName: "text-end",
+            cellClassName: "text-end tabular-nums",
+          },
+          cell: ({ row: { original: row } }) => (
+            <span className="flex flex-col items-end">
+              <span className="font-medium">
+                {formatMinor(row.amount_minor, "TRY", locale)}
+              </span>
+              <span className="text-muted-foreground text-xs">
+                {t(`credit_products.unit_price.${unit}`, {
+                  price: formatUnitPrice(row.amount_minor, row.credits, locale),
+                })}
+              </span>
+            </span>
+          ),
+        }),
+        createColumn<CreditProduct>({
+          id: "validity",
+          labelKey: "credit_products.columns.validity",
+          cell: ({ row: { original: row } }) =>
+            row.expires_days == null
+              ? t("credit_products.validity.none")
+              : t("credit_products.validity.days", {
+                  days: formatCount(row.expires_days, locale),
+                }),
+        }),
+        createColumn<CreditProduct>({
+          id: "plans",
+          labelKey: "credit_products.columns.visibility",
+          cell: ({ row: { original: row } }) =>
+            row.plan_uuids.length === 0 ? (
+              <span className="text-muted-foreground">
+                {t("credit_products.visibility.all")}
+              </span>
+            ) : (
+              <span className="flex max-w-56 flex-wrap gap-1">
+                {row.plan_uuids.map((uuid) => (
+                  <Badge key={uuid} variant="secondary" className="font-normal">
+                    {planNames.get(uuid) ??
+                      t("credit_products.visibility.unknown")}
+                  </Badge>
+                ))}
+              </span>
+            ),
+        }),
+        createColumn<CreditProduct>({
+          id: "status",
+          labelKey: "credit_products.columns.status",
+          cell: ({ row: { original: row } }) =>
+            row.active ? (
+              <Badge variant="success">
+                {t("credit_products.status.active")}
               </Badge>
-            ))}
-          </span>
-        ),
-    },
-    {
-      key: "status",
-      header: t("credit_products.columns.status"),
-      cell: (row) =>
-        row.active ? (
-          <Badge variant="success">{t("credit_products.status.active")}</Badge>
-        ) : (
-          <Badge variant="outline">
-            {t("credit_products.status.archived")}
-          </Badge>
-        ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">{t("billing.common.actions")}</span>,
-      align: "end",
-      cell: (row) =>
-        canWrite ? (
-          <span className="flex justify-end gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8"
-              onClick={() => setEditing({ product: row, unit })}
-            >
-              <Pencil className="size-3.5" />
-              {t("billing.common.edit")}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              aria-label={
-                row.active
-                  ? t("credit_products.archive")
-                  : t("credit_products.restore")
-              }
-              title={
-                row.active
-                  ? t("credit_products.archive")
-                  : t("credit_products.restore")
-              }
-              onClick={() => setToggling(row)}
-            >
-              {row.active ? (
-                <Archive className="size-3.5" />
-              ) : (
-                <ArchiveRestore className="size-3.5" />
-              )}
-            </Button>
-          </span>
-        ) : null,
-    },
-  ];
+            ) : (
+              <Badge variant="outline">
+                {t("credit_products.status.archived")}
+              </Badge>
+            ),
+        }),
+        createColumn<CreditProduct>({
+          id: "actions",
+          labelKey: "billing.common.actions",
+          enableHiding: false,
+          enableSorting: false,
+          meta: { headerClassName: "text-end", cellClassName: "text-end" },
+          cell: ({ row: { original: row } }) =>
+            canWrite ? (
+              <span className="flex justify-end gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => setEditing({ product: row, unit })}
+                >
+                  <Pencil className="size-3.5" />
+                  {t("billing.common.edit")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label={
+                    row.active
+                      ? t("credit_products.archive")
+                      : t("credit_products.restore")
+                  }
+                  title={
+                    row.active
+                      ? t("credit_products.archive")
+                      : t("credit_products.restore")
+                  }
+                  onClick={() => setToggling(row)}
+                >
+                  {row.active ? (
+                    <Archive className="size-3.5" />
+                  ) : (
+                    <ArchiveRestore className="size-3.5" />
+                  )}
+                </Button>
+              </span>
+            ) : null,
+        }),
+      ] as ColumnDef<CreditProduct, unknown>[];
+    return new Map(CREDIT_UNITS.map((unit) => [unit, columns(unit)]));
+  }, [canWrite, locale, planNames, t]);
 
   if (query.isError) {
     return (
@@ -282,14 +295,26 @@ export function CreditProductsPanel() {
                 </Button>
               ) : null}
             </div>
-            <BillingTable
-              caption={t(`credit_products.group.${unit}`)}
-              columns={columns(unit)}
-              rows={query.data ? rows : undefined}
+            <DataTable
+              columns={columnsByUnit.get(unit) ?? []}
+              data={rows}
               getRowId={(row) => row.uuid}
               isLoading={query.isLoading}
               emptyTitle={t(`credit_products.empty.${unit}`)}
               emptyDescription={t("credit_products.empty_hint")}
+              // Rows keep the catalog order; each group is short and unpaged.
+              manual={{ filtering: false, sorting: false, pagination: false }}
+              features={{
+                toolbar: false,
+                sorting: false,
+                globalFilter: false,
+                columnFilters: false,
+                rowSelection: false,
+                pagination: false,
+                viewMode: false,
+                density: false,
+                columnVisibility: false,
+              }}
             />
           </section>
         );

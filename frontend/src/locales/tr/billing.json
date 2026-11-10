@@ -133,6 +133,7 @@
   "bank.form_hint": "IBAN sağlama toplamı kaydetmeden önce doğrulanır.",
   "bank.columns.bank": "Banka",
   "bank.columns.holder": "Hesap sahibi",
+  "bank.columns.iban": "IBAN",
   "bank.columns.status": "Durum",
   "bank.active": "Müşterilere göster",
   "bank.inactive": "Gizli",
