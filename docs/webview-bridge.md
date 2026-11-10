@@ -2,6 +2,8 @@
 
 Mobil uygulamaların widget'ı **oturumu taşıyan güvenli bir webview** içinde göstermesi için uygulama ile widget arasındaki `postMessage` sözleşmesi. Müşteri ekibinin kararı (issue #114, 9 Kas): mobil yol tam SDK değil, bu webview'dir; böylece Flutter, React Native, iOS, Android ve diğer platformlar aynı yolla bağlanır. İleride çıkacak yerel paketler (CF-201 altyapı, CF-202 React Native, CF-203 Flutter) de bu sözleşmeyi kullanır.
 
+Uygulama tarafı paketler: Flutter `clickfix_webview` (`sdks/flutter/clickfix_webview`, CF-203) sözleşmeyi `ClickFixController` + `ClickFixWebView` olarak uygular ve `dart analyze` / `flutter test` ile doğrulanır.
+
 Uygulama: `frontend/widget-sdk/src/shared/bridge.ts` (saf, birim testli: `frontend/widget-sdk/tests/bridge.test.mjs`) ve `frontend/widget-sdk/src/widget.ts` (`attachBridge`). Barındırılan sayfa: `frontend/public/widget-embed.html`. Tipler: `frontend/public/widget.d.ts` (`ClickFixBridgeCommand`, `ClickFixBridgeMessage`, `ClickFixBridge`). Kullanıcı kılavuzu: `frontend/content/docs/tr/integration-guide.mdx` → "Mobil".
 
 ## Sürüm
@@ -29,7 +31,7 @@ Widget → uygulama yönünde widget, sayfada bulduğu **ilk** yerel nesneyi kul
 | React Native (`react-native-webview`) | `window.ReactNativeWebView` | `.postMessage(jsonString)` → `onMessage` |
 | iOS (WKWebView) | `window.webkit.messageHandlers.ClickFix` | `.postMessage(jsonString)` → `WKScriptMessageHandler` (ad: `ClickFix`) |
 | Android (WebView) | `window.ClickFixAndroid` | `.postMessage(jsonString)` → `@JavascriptInterface` (ad: `ClickFixAndroid`) |
-| Flutter (`webview_flutter`) | `window.ClickFixFlutter` | `.postMessage(jsonString)` → `JavaScriptChannel` (ad: `ClickFixFlutter`) |
+| Flutter (`webview_flutter`; hazır paket: `clickfix_webview`, `sdks/flutter/clickfix_webview`, CF-203) | `window.ClickFixFlutter` | `.postMessage(jsonString)` → `JavaScriptChannel` (ad: `ClickFixFlutter`) |
 | Üst çerçeve (iframe) | `window.parent` | `.postMessage(obj, origin)`; yalnız `bridge.origin` verilmişse, `"*"` asla |
 
 Yerel nesneler JSON **metin** alır; üst çerçeve yapılandırılmış nesne alır. Hiçbiri yoksa köprü yine kurulur (komutlar işler) ama dışarı mesaj gitmez ve `ClickFixBridge.transport` `null` olur.
