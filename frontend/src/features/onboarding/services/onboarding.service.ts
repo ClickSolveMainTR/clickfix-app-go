@@ -4,6 +4,8 @@ import { apiClient, unwrap } from "@/lib/api";
 export type OnboardingState = components["schemas"]["OnboardingState"];
 export type OnboardingStep = components["schemas"]["OnboardingStep"];
 export type OnboardingStepKey = OnboardingStep["key"];
+export type OnboardingCondition = components["schemas"]["OnboardingCondition"];
+export type OnboardingConditionKey = OnboardingCondition["key"];
 export type ChannelType = components["schemas"]["ChannelType"];
 export type Organization = components["schemas"]["Organization"];
 
@@ -29,9 +31,10 @@ export const onboardingService = {
     );
   },
 
-  async completeStep(slug: string, step: "widget" | "team") {
+  /** Skips a step; it stays as a warning until its conditions hold. */
+  async skipStep(slug: string, step: OnboardingStepKey) {
     return unwrap<OnboardingState>(
-      await apiClient.POST("/v1/tenant/onboarding/steps/{step}", {
+      await apiClient.POST("/v1/tenant/onboarding/steps/{step}/skip", {
         params: { ...org(slug), path: { step } },
       }),
     );

@@ -4,7 +4,6 @@ import { apiClient, unwrap } from "@/lib/api";
 
 export type Brand = components["schemas"]["Brand"];
 export type BrandInput = components["schemas"]["BrandInput"];
-export type BrandBusinessHours = components["schemas"]["WidgetBusinessHours"];
 
 /** Tenant routes are scoped by the active organization. */
 function orgHeader() {

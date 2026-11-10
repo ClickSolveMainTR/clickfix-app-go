@@ -9,21 +9,13 @@
   "team_member_uuids": [],
   "prechat": {
     "enabled": true,
-    "name": "optional",
-    "email": "optional",
-    "phone": "hidden",
-    "fields": [],
+    "form_uuid": "",
     "consent": {
       "enabled": false,
       "required": true,
       "text": {},
       "url": ""
     }
-  },
-  "business_hours": {
-    "enabled": false,
-    "timezone": "Europe/Istanbul",
-    "days": {}
   },
   "offline_message": "",
   "allowed_domains": [],

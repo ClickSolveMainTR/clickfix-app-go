@@ -8,6 +8,10 @@ import {
 } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
+import {
+  CardSubRow,
+  EXPAND_COLUMN_ID,
+} from "@/components/tables/expand-column";
 import type { DataTableColumnMeta } from "@/components/tables/types";
 import { ROW_FOCUS_CLASS, rowClickProps } from "@/components/tables/row-click";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,10 +25,11 @@ type GridViewProps<TData> = {
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
   rowHintId?: string;
+  renderSubRow?: (row: TData) => ReactNode;
 };
 
 function isUtilityColumn(id: string) {
-  return id === "__select" || id === "actions";
+  return id === "__select" || id === EXPAND_COLUMN_ID || id === "actions";
 }
 
 function CardShell({
@@ -77,12 +82,14 @@ function DefaultCard<TData>({
   mobile,
   onRowClick,
   rowHintId,
+  renderSubRow,
 }: {
   row: Row<TData>;
   table: Table<TData>;
   mobile?: boolean;
   onRowClick?: (row: TData) => void;
   rowHintId?: string;
+  renderSubRow?: (row: TData) => ReactNode;
 }) {
   const { t } = useLocale();
   const cells = row
@@ -178,6 +185,9 @@ function DefaultCard<TData>({
           </footer>
         ) : null}
       </div>
+      {renderSubRow ? (
+        <CardSubRow row={row} renderSubRow={renderSubRow} />
+      ) : null}
     </CardShell>
   );
 }
@@ -188,6 +198,7 @@ export function GridView<TData>({
   mobile,
   onRowClick,
   rowHintId,
+  renderSubRow,
 }: GridViewProps<TData>) {
   const rows = table.getRowModel().rows;
 
@@ -220,6 +231,9 @@ export function GridView<TData>({
               <div className={cn(table.options.enableRowSelection && "pe-8")}>
                 {renderGridItem(row.original, table)}
               </div>
+              {renderSubRow ? (
+                <CardSubRow row={row} renderSubRow={renderSubRow} />
+              ) : null}
             </CardShell>
           );
         }
@@ -232,6 +246,7 @@ export function GridView<TData>({
             mobile={mobile}
             onRowClick={onRowClick}
             rowHintId={rowHintId}
+            renderSubRow={renderSubRow}
           />
         );
       })}

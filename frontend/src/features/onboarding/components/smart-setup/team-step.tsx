@@ -88,8 +88,13 @@ export function TeamStep({
     "idle",
   );
 
+  // The checklist no longer has a channel step (CF-198); a widget exists
+  // once the customer step's identity-key condition can be evaluated, so
+  // the step asks the channel list instead.
   const channelDone = Boolean(
-    checklist?.steps.find((s) => s.key === "channel")?.done,
+    checklist?.steps
+      .find((s) => s.key === "customer")
+      ?.conditions.some((c) => c.key === "identity_key" && c.done),
   );
 
   const update = (id: number, patch: Partial<Row>) =>

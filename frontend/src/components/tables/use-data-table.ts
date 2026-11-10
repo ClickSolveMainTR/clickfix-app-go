@@ -13,6 +13,7 @@ import {
   type ColumnOrderState,
   type ColumnPinningState,
   type ColumnSizingState,
+  type ExpandedState,
   type PaginationState,
   type RowSelectionState,
   type SortingState,
@@ -108,6 +109,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     initialState,
     pageCount,
     rowCount,
+    getRowCanExpand,
   } = options;
 
   const features = { ...DEFAULT_FEATURES, ...featuresProp };
@@ -155,6 +157,8 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>(
     controlled?.rowSelection ?? initialState?.rowSelection ?? {},
   );
+  // Open detail rows; UI only, never persisted.
+  const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>(
     controlled?.pagination ??
       persisted?.pagination ??
@@ -254,6 +258,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       columnSizing: controlled?.columnSizing ?? columnSizing,
       rowSelection: controlled?.rowSelection ?? rowSelection,
       pagination: controlled?.pagination ?? pagination,
+      expanded,
     },
     onSortingChange: (updater) => {
       (controlled?.onSortingChange ?? setSorting)(updater);
@@ -275,6 +280,10 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onColumnSizingChange: controlled?.onColumnSizingChange ?? setColumnSizing,
     onRowSelectionChange,
     onPaginationChange: controlled?.onPaginationChange ?? setPagination,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: getRowCanExpand
+      ? (row) => getRowCanExpand(row.original)
+      : () => false,
 
     enableSorting: features.sorting,
     // Hiding a column needs a way to bring it back: the toolbar's column
@@ -334,6 +343,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     table.resetColumnPinning();
     table.resetColumnSizing();
     table.resetRowSelection();
+    table.resetExpanded();
     // Back to the first page only: `resetPagination()` would also drop the
     // page size to TanStack's default (10), whatever the screen started with.
     table.setPageIndex(0);

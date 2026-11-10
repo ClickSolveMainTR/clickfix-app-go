@@ -23,9 +23,11 @@ import {
   type Row,
   type Table,
 } from "@tanstack/react-table";
+import { Fragment, type ReactNode } from "react";
 
 import { ColumnFilter } from "@/components/tables/column-filter";
 import { ColumnHeader } from "@/components/tables/column-header";
+import { EXPAND_COLUMN_ID } from "@/components/tables/expand-column";
 import {
   EditableCell,
   type CellEditPayload,
@@ -69,6 +71,7 @@ type TableViewProps<TData> = {
   onCellEdit?: (payload: CellEditPayload<TData>) => void;
   onRowClick?: (row: TData) => void;
   rowHintId?: string;
+  renderSubRow?: (row: TData) => ReactNode;
 };
 
 export function TableView<TData>({
@@ -85,6 +88,7 @@ export function TableView<TData>({
   onCellEdit,
   onRowClick,
   rowHintId,
+  renderSubRow,
 }: TableViewProps<TData>) {
   const cellPad = densityCell[density];
   const leafColumns = table.getVisibleLeafColumns();
@@ -119,7 +123,9 @@ export function TableView<TData>({
             const hasCustomSize = column.id in sizing;
             const isActions = column.id === "actions";
             const fixed =
-              column.id === "__select" || column.id === "__reorder"
+              column.id === "__select" ||
+              column.id === "__reorder" ||
+              column.id === EXPAND_COLUMN_ID
                 ? 44
                 : undefined;
             return (
@@ -167,7 +173,9 @@ export function TableView<TData>({
                   }}
                 >
                   {header.isPlaceholder ? null : header.column.id ===
-                      "__select" || header.column.id === "__reorder" ? (
+                      "__select" ||
+                    header.column.id === "__reorder" ||
+                    header.column.id === EXPAND_COLUMN_ID ? (
                     flexRender(
                       header.column.columnDef.header,
                       header.getContext(),
@@ -260,18 +268,31 @@ export function TableView<TData>({
                   editingCell={null}
                 />
               ) : (
-                <StaticTableRow
-                  key={row.id}
-                  row={row}
-                  table={table}
-                  cellPad={cellPad}
-                  inlineEdit={inlineEdit}
-                  editingCell={editingCell}
-                  onEditingCellChange={onEditingCellChange}
-                  onCellEdit={onCellEdit}
-                  onRowClick={onRowClick}
-                  rowHintId={rowHintId}
-                />
+                <Fragment key={row.id}>
+                  <StaticTableRow
+                    row={row}
+                    table={table}
+                    cellPad={cellPad}
+                    inlineEdit={inlineEdit}
+                    editingCell={editingCell}
+                    onEditingCellChange={onEditingCellChange}
+                    onCellEdit={onCellEdit}
+                    onRowClick={
+                      onRowClick ??
+                      (renderSubRow && row.getCanExpand()
+                        ? () => row.toggleExpanded()
+                        : undefined)
+                    }
+                    rowHintId={onRowClick ? rowHintId : undefined}
+                  />
+                  {renderSubRow && row.getIsExpanded() ? (
+                    <tr className="border-border bg-muted/20 border-b last:border-0">
+                      <td colSpan={Math.max(colSpan, 1)} className={cellPad}>
+                        {renderSubRow(row.original)}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               ),
             )
           )}

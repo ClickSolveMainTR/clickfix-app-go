@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
@@ -195,49 +194,18 @@ func mapping(set widget.Settings, key string) (widget.AttributeMapEntry, bool) {
 	return widget.AttributeMapEntry{}, false
 }
 
-// checkPreChat validates the custom pre-chat answers and consent of a new
-// conversation and returns the answers to keep on the message.
-func checkPreChat(set widget.Settings, in SendInput) (map[string]any, error) {
+// checkPreChat enforces the consent box of a new conversation (CF-198: the
+// pre-chat questions themselves are the widget's request form, checked by
+// the forms module).
+func checkPreChat(set widget.Settings, in SendInput) error {
 	pc := set.PreChat
 	if !pc.Enabled {
-		return nil, nil
+		return nil
 	}
 	if pc.Consent.Enabled && pc.Consent.Required && (in.Consent == nil || !*in.Consent) {
-		return nil, ErrConsentRequired
+		return ErrConsentRequired
 	}
-	if pc.Phone == widget.FieldRequired && strings.TrimSpace(in.Profile.Phone) == "" {
-		return nil, fmt.Errorf("%w: phone is required", ErrInvalid)
-	}
-	out := map[string]any{}
-	for _, f := range pc.Fields {
-		raw := in.PreChat[f.Key]
-		var v any
-		switch x := raw.(type) {
-		case bool:
-			if x {
-				v = true
-			}
-		case string:
-			if t := clip(strings.TrimSpace(x), 500); t != "" {
-				v = t
-			}
-		case float64:
-			v = x
-		}
-		if f.Type == "select" && v != nil {
-			if s, _ := v.(string); !slices.Contains(f.Options, s) {
-				return nil, fmt.Errorf("%w: %s must be one of its options", ErrInvalid, f.Key)
-			}
-		}
-		if v == nil {
-			if f.Required {
-				return nil, fmt.Errorf("%w: %s is required", ErrInvalid, f.Key)
-			}
-			continue
-		}
-		out[f.Key] = v
-	}
-	return out, nil
+	return nil
 }
 
 func handoffKeyword(keywords []string, text string) bool {

@@ -3,7 +3,6 @@ package usecase
 import (
 	"net/netip"
 	"testing"
-	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
@@ -33,17 +32,16 @@ func TestToolSSRFAndSchemaBoundaries(t *testing.T) {
 func TestHoursAndChannelAllowlist(t *testing.T) {
 	cfg := model.DefaultConfig()
 	cfg.Channels = []string{"whatsapp"}
-	cfg.StartMinute = 9 * 60
-	cfg.EndMinute = 17 * 60
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	at := time.Date(2026, 10, 28, 7, 0, 0, 0, time.UTC)
-	if !cfg.Active(at, "whatsapp") || cfg.Active(at, "email") || cfg.Active(at.Add(10*time.Hour), "whatsapp") {
-		t.Fatal("hours/channel restriction bypassed")
+	// Around the clock by default; the organization's hours (CF-198) only
+	// restrict the agent when business_hours_only is on.
+	if !cfg.Active("whatsapp", false) || cfg.Active("email", true) {
+		t.Fatal("channel restriction bypassed")
 	}
-	cfg.Timezone = "invalid/zone"
-	if cfg.Validate() == nil {
-		t.Fatal("invalid zone accepted")
+	cfg.BusinessHoursOnly = true
+	if !cfg.Active("whatsapp", true) || cfg.Active("whatsapp", false) {
+		t.Fatal("hours restriction bypassed")
 	}
 }

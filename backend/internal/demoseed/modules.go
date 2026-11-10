@@ -21,7 +21,6 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/oncall"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/quality"
 	routingmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/routing/model"
-	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/safeconv"
 )
@@ -227,11 +226,6 @@ func (s *seeder) seedRequestForms(ctx context.Context) error {
 // Brands
 
 func (s *seeder) seedBrands(ctx context.Context) error {
-	days := map[string][]widget.Period{}
-	for _, d := range []string{"mon", "tue", "wed", "thu", "fri"} {
-		days[d] = []widget.Period{{Start: "09:00", End: "18:00"}}
-	}
-	hours := mustJSON(widget.BusinessHours{Enabled: true, Timezone: "Europe/Istanbul", Days: days})
 	brands := []struct {
 		name, primary, email, sender, path, signature, persona string
 		policy                                                 string
@@ -247,7 +241,7 @@ func (s *seeder) seedBrands(ctx context.Context) error {
 		if _, err := s.q.CreateBrand(ctx, db.CreateBrandParams{
 			OrganizationID: s.org.ID, Name: b.name, PrimaryColor: b.primary, SecondaryColor: "#ffffff",
 			SupportEmail: b.email, SenderName: b.sender, ReplyTo: b.email, HelpPath: b.path,
-			WidgetDefaults: []byte(`{}`), Signature: b.signature, BusinessHours: hours,
+			WidgetDefaults: []byte(`{}`), Signature: b.signature,
 			SlaPolicyID: pgtype.UUID{Bytes: s.policies[b.policy].Uuid, Valid: true}, AiPersona: b.persona,
 		}); err != nil {
 			return fmt.Errorf("%s: %w", b.name, err)

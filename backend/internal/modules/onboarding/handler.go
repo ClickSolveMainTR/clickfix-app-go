@@ -87,14 +87,14 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, st)
 }
 
-// CompleteStep ticks a manual step.
-func (h *Handler) CompleteStep(w http.ResponseWriter, r *http.Request) {
+// SkipStep marks a step as skipped; it stays as a warning.
+func (h *Handler) SkipStep(w http.ResponseWriter, r *http.Request) {
 	scope, ok := orgctx.From(r.Context())
 	if !ok {
 		response.InternalErr(w, r, errors.New("onboarding: missing organization scope"), "")
 		return
 	}
-	st, err := h.svc.CompleteStep(r.Context(), scope.ID, r.PathValue("step"))
+	st, err := h.svc.SkipStep(r.Context(), scope.ID, r.PathValue("step"))
 	if err != nil {
 		writeError(w, r, err)
 		return
