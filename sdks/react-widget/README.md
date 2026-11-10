@@ -1,7 +1,13 @@
-# @clickfix/react-widget (unpublished)
+# @clickfix/react-widget
 
 UI-free, typed, tree-shakable React 18+ hooks around the existing visitor API.
-No runtime dependency besides the React peer. Build from `sdks` with `pnpm build`.
+No runtime dependency besides the React peer.
+
+```sh
+npm install @clickfix/react-widget
+```
+
+Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes: [CHANGELOG.md](./CHANGELOG.md). Develop from `sdks` with `pnpm build`.
 
 ```tsx
 'use client';

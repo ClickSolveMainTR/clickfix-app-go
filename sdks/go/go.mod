@@ -1,4 +1,4 @@
-module github.com/furkanmeclis/clickfix-app-go/sdks/go
+module github.com/ClickSolveMainTR/clickfix-app-go/sdks/go
 
 go 1.26.10
 

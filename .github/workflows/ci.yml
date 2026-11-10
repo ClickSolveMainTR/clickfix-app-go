@@ -325,6 +325,21 @@ jobs:
       - name: Go SDK tests
         working-directory: sdks/go
         run: go test -p 2 ./...
+      # Integration guide samples (CF-199): the code embedded in the guide
+      # pages is this code, type-checked, compiled and run against the stub API.
+      - name: Guide examples are embedded and run
+        working-directory: sdks
+        run: |
+          pnpm examples:check
+          pnpm examples
+      # What `sdk-publish` would ship from main: pack + publish dry run, no token needed.
+      - name: npm pack and publish dry run
+        working-directory: sdks
+        run: |
+          for p in node react-widget; do
+            (cd "$p" && npm pack --dry-run && npm publish --dry-run --access public)
+          done
+          echo "sdks/go version $(cat go/VERSION) -> tag sdks/go/v$(cat go/VERSION)"
 
   # Lint, format, types, unit tests and the production build.
   frontend:
@@ -631,9 +646,73 @@ jobs:
             echo "pushed $image:main ($short)" >> "$GITHUB_STEP_SUMMARY"
           done
 
+  # SDK release (CF-199): a green main run publishes @clickfix/node and
+  # @clickfix/react-widget to npm when the version in package.json is not on
+  # the registry yet. Needs the NPM_TOKEN repository secret (an npm automation
+  # token of the account that owns the @clickfix scope); without it the job
+  # skips with a summary note and never fails main. Versions and changelogs
+  # live in sdks/<package>/CHANGELOG.md.
+  sdk-publish:
+    needs: [ci]
+    if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      # The token is exposed to the publish step only, never to pnpm install
+      # or the tests (dependency install scripts must not see it).
+      - name: Versions to publish
+        id: todo
+        env:
+          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "NPM_TOKEN secret is not set: npm publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          list=""
+          for p in node react-widget; do
+            name=$(jq -r .name "sdks/$p/package.json"); version=$(jq -r .version "sdks/$p/package.json")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY"
+            else
+              list="$list $p"
+            fi
+          done
+          echo "packages=${list# }" >> "$GITHUB_OUTPUT"
+          [ -n "$list" ] && echo "run=true" >> "$GITHUB_OUTPUT" || { echo "run=false" >> "$GITHUB_OUTPUT"; echo "no new SDK version" >> "$GITHUB_STEP_SUMMARY"; }
+      - uses: pnpm/action-setup@v6
+        if: steps.todo.outputs.run == 'true'
+        with:
+          version: 11.22.0
+          standalone: true
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: actions/setup-node@v7
+        if: steps.todo.outputs.run == 'true'
+        with:
+          node-version-file: frontend/.nvmrc
+          registry-url: https://registry.npmjs.org
+      - name: Build
+        if: steps.todo.outputs.run == 'true'
+        working-directory: sdks
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+      - name: Publish
+        if: steps.todo.outputs.run == 'true'
+        working-directory: sdks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for p in ${{ steps.todo.outputs.packages }}; do
+            (cd "$p" && npm publish --access public)
+            echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
+          done
+
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls
-  # the :main images, so the tag waits until they are pushed.
+  # the :main images, so the tag waits until they are pushed. The same job
+  # tags the Go SDK module (sdks/go/vX.Y.Z from sdks/go/VERSION) when that
+  # version has no tag yet; nobody tags by hand (CF-199).
   release-tag:
     needs: [ci, publish-images]
     if: ${{ !failure() && needs.ci.result == 'success' && needs.publish-images.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -657,3 +736,14 @@ jobs:
           git tag "$next" "$GITHUB_SHA"
           git push origin "$next"
           echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"
+      - name: Tag Go SDK module version
+        if: ${{ !failure() }}
+        run: |
+          git fetch --tags --force
+          v="sdks/go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
+          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
+            echo "$v already exists"; exit 0
+          fi
+          git tag "$v" "$GITHUB_SHA"
+          git push origin "$v"
+          echo "tagged $v (go get github.com/${GITHUB_REPOSITORY}/sdks/go@${v#sdks/go/})" >> "$GITHUB_STEP_SUMMARY"

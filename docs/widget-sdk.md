@@ -45,6 +45,7 @@ CF-55 (SDK 1.x) parçacıkları ve çağrıları değişmeden çalışır.
 | `attributes` | Kişi oluşunca yazılacak öznitelikler |
 | `consent` | Çerez yöneticiniz onayı zaten aldıysa `true` |
 | `debug` | Olayları konsola yazar |
+| `bridge` | Webview köprüsü: `true` ya da `{ origin }` (bkz. [webview-bridge.md](webview-bridge.md)) |
 
 ## Komutlar
 
@@ -191,6 +192,10 @@ başına bir kez veya her sayfa olabilir.
   mesajlar kuyrukta bekler ve bağlantı gelince sırayla gönderilir.
 - Markdown alt kümesi (kalın, italik, kod, liste, bağlantı); HTML asla yorumlanmaz.
 - Paket: `widget.js` ~120 KB (gzip ~38 KB); oturum kaydı modülü yalnız onaydan sonra ayrı yüklenir.
+
+## Mobil ve webview köprüsü (CF-199)
+
+Mobil uygulamalar widget'ı `https://<app>/widget-embed.html?widget=<id>` sayfasını bir webview'de açarak gösterir; sayfa `boot({ bridge: true, hideLauncher: true })` ile başlar, panel tam ekran açılır ve uygulamayla `postMessage` köprüsü üzerinden konuşur (oturum devri `clickfix:identify`, uygulama olayları `clickfix:track`, derin bağlantı `clickfix:open` / `?conversation=`, dış bağlantılar `clickfix:link`, her SDK olayı `clickfix:event`). Sözleşme ve güvenlik kuralları: [webview-bridge.md](webview-bridge.md). Kendi sayfanızda `data-bridge="true"` ya da `boot({ bridge: true | { origin } })` ile açılır; `origin` yalnız iframe içinde gerekir ve `"*"` kabul edilmez. Flutter, React Native, iOS ve Android örnekleri yardım merkezindeki entegrasyon kılavuzundadır.
 
 ## React
 

@@ -1,8 +1,9 @@
-# ClickFix SDKs (unpublished)
+# ClickFix SDKs
 
-- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification.
-- `node`: typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
-- `react-widget`: UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
+- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
+- `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
+- `react-widget`: `@clickfix/react-widget`, UI-free React 18+ visitor client and hooks; browser requests use the same-origin BFF.
+- `examples`: the integration guide's samples (widget JS, Node, Go, curl) and the runner that verifies them (`examples/README.md`).
 
 The source of truth is `backend/docs/openapi.yaml`. `make sdks` selects only
 `/v1/public-api/*` for server clients and `/v1/widget/*` for the visitor client,
@@ -18,15 +19,26 @@ Requires Go matching `backend/go.mod`, Node 22+ and pnpm 11.22.0.
 
 ```sh
 make sdks
-make sdks-check                 # compares files without git metadata or mutations
+make sdks-check                 # generated files current + guide pages current
 (cd sdks && pnpm test)
 (cd sdks/go && go test -p 2 ./...)
+make guide-examples             # run the guide samples (stub API, or CLICKFIX_BASE_URL)
 ```
 
 Generation is checked in a separate required CI job so generator installation does
 not slow the existing contracts job. Go SDK security and SDK dependency audits run
-in the required `security` job. No package is published; all package manifests
-remain private. Build output and dependencies are ignored.
+in the required `security` job.
+
+## Yayın (CF-199)
+
+Versions live in each package (`node/package.json`, `react-widget/package.json`,
+`go/VERSION`) next to its `CHANGELOG.md`. On every PR the `sdks` job runs
+`npm pack --dry-run` and `npm publish --dry-run`. On a green `main` the
+`sdk-publish` job publishes any npm version that is not on the registry yet
+(needs the `NPM_TOKEN` repository secret, an npm automation token for the
+`@clickfix` scope; without it the job skips with a note), and the `release-tag`
+job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
+tags by hand. Details: `docs/entegrasyon-kilavuzu.md`.
 
 References: existing ClickFix widget routes/types and Laravel
 `resources/js/widget/lib/widget-api.ts` for the headless transport approach;

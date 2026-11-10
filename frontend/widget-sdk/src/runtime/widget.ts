@@ -64,7 +64,7 @@ import type {
   Visitor,
 } from "./types";
 
-export const SDK_VERSION = "2.0.0";
+export const SDK_VERSION = "2.1.0";
 export const PROTOCOL_VERSION = 1;
 
 const EMOJIS =
@@ -153,6 +153,11 @@ export class Widget {
   private lastSignature = "";
   private pollPending = false;
   private host: HTMLElement | null = null;
+  /**
+   * Webview bridge (CF-199): when set, external links (help articles,
+   * links in messages) are handed to the host instead of window.open.
+   */
+  linkHandler: ((url: string) => void) | null = null;
   private shadow: ShadowRoot | null = null;
   private rootEl: HTMLDivElement | null = null;
   private panelEl: HTMLDivElement | null = null;
@@ -740,8 +745,10 @@ export class Widget {
   openArticle(url: string) {
     try {
       const u = new URL(String(url), location.href);
-      if (u.protocol === "https:" || u.hostname === "localhost")
-        window.open(u.toString(), "_blank", "noopener");
+      if (u.protocol === "https:" || u.hostname === "localhost") {
+        if (this.linkHandler) this.linkHandler(u.toString());
+        else window.open(u.toString(), "_blank", "noopener");
+      }
     } catch {
       /* ignore */
     }
@@ -1510,6 +1517,16 @@ export class Widget {
         e.stopPropagation();
         this.close();
       }
+    });
+    this.rootEl.addEventListener("click", (e) => {
+      // Webview bridge: the host decides how to open external links.
+      if (!this.linkHandler) return;
+      const a = (e.composedPath() as Element[]).find(
+        (n) => n instanceof HTMLAnchorElement,
+      ) as HTMLAnchorElement | undefined;
+      if (!a || !/^https?:$/.test(a.protocol) || a.target !== "_blank") return;
+      e.preventDefault();
+      this.linkHandler(a.href);
     });
     document.body.append(this.host);
     this.bindCustomLaunchers();

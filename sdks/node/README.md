@@ -1,6 +1,12 @@
-# @clickfix/node (unpublished)
+# @clickfix/node
 
-Node 22+, ESM, no runtime dependencies. Build with `cd sdks && pnpm build`.
+Node 22+, ESM, no runtime dependencies.
+
+```sh
+npm install @clickfix/node
+```
+
+Full walkthrough (identity, external ids, custom fields, events, API channel, webhooks): https://getclickfix.com/docs/integration-guide. Changes: [CHANGELOG.md](./CHANGELOG.md). Develop with `cd sdks && pnpm build`.
 
 ```ts
 import { createClient, paginate, verifyWebhook, identityHash } from '@clickfix/node';

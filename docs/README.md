@@ -11,6 +11,8 @@ Human and agent entry points for this boilerplate. Prefer these files over lefto
 | [odeme.md](./odeme.md) | Payments runbook: iyzico/PayTR env, webhook URLs, sandbox vs live (CF-154) |
 | [channels/mesaj-bicimi.md](./channels/mesaj-bicimi.md) | Message format per channel: source Markdown subset, what each channel receives, API channel note (CF-177) |
 | [bildirimler.md](./bildirimler.md) | Notification inventory: every event, channels, text, preferences and quiet hours (CF-157) |
+| [entegrasyon-kilavuzu.md](./entegrasyon-kilavuzu.md) | Where the customer-facing integration guide lives, how its samples are verified, how the SDKs are versioned and published (CF-199) |
+| [webview-bridge.md](./webview-bridge.md) | Mobile webview bridge contract between a native app and the widget (CF-199) |
 | [../AGENTS.md](../AGENTS.md) | Agent skill index |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Day-to-day contribution rules |
 | [../backend/README.md](../backend/README.md) | Go API |

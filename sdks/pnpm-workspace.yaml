@@ -1,3 +1,4 @@
 packages:
   - node
   - react-widget
+  - examples/node
