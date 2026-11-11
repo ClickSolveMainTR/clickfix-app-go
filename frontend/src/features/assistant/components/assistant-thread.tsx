@@ -15,10 +15,8 @@ import {
 } from "@assistant-ui/react";
 import {
   ArrowDown,
-  Bot,
   Check,
   Copy,
-  LifeBuoy,
   Loader2,
   Paperclip,
   Pencil,
@@ -56,24 +54,34 @@ import {
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { AppMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 import { errorKey, errorKeyForCode } from "../lib/errors";
 import { PROPOSE_TOOL, type AssistantCustom } from "../lib/messages";
 import { shouldSendQueued } from "../lib/queue";
+import { messageTimePattern, showCharCount } from "../lib/time";
 import { DOCUMENT_ACCEPT } from "../runtime/attachments";
 import { useAssistantSurface } from "../runtime/surface";
 
 import { ActionCard, RouteLink } from "./action-card";
+import { AssistantAvatar } from "./assistant-avatar";
 import { DocumentStrip } from "./document-strip";
+
+const COMPOSER_MAX = 4000;
+
+/** A quick question of the empty thread, with an optional glyph. */
+export type AssistantStarter = { prompt: string; icon?: ReactNode };
 
 export type AssistantThreadProps = {
   /** Shown above the starters while the thread is empty. */
   welcome?: ReactNode;
   /** Quick questions of an empty thread. */
-  starters?: readonly string[];
+  starters?: readonly (string | AssistantStarter)[];
   /** The assistant is off for the organization: composer locked. */
   disabled?: boolean;
 };
@@ -84,6 +92,10 @@ export type AssistantThreadProps = {
  * Attachment; Confirmation and Tool live in the card). The drawer and any
  * narrower surface render this same thread; `compact` in the surface
  * context tightens spacing.
+ *
+ * Look (CF-210): the user's words sit right in the brand colour, the
+ * assistant's answers sit left on a neutral card next to the ClickFix mark;
+ * every bubble carries its time under it in a fixed 28px action row.
  */
 export function AssistantThread({
   welcome,
@@ -106,24 +118,7 @@ export function AssistantThread({
         >
           <div className="space-y-3">
             {welcome}
-            {starters.length ? (
-              <div className="grid grid-cols-2 gap-2">
-                {starters.map((prompt) => (
-                  <ThreadPrimitive.Suggestion
-                    key={prompt}
-                    prompt={prompt}
-                    send
-                    asChild
-                  >
-                    <Suggestion
-                      suggestion={prompt}
-                      disabled={disabled}
-                      className="h-auto justify-start rounded-xl py-2 text-left whitespace-normal"
-                    />
-                  </ThreadPrimitive.Suggestion>
-                ))}
-              </div>
-            ) : null}
+            <Starters starters={starters} disabled={disabled} />
           </div>
         </AuiIf>
         <AuiIf
@@ -138,11 +133,7 @@ export function AssistantThread({
             components={{ UserMessage, AssistantMessage, EditComposer }}
           />
         </div>
-        <ThreadPrimitive.ViewportFooter
-          className={cn(
-            "bg-background sticky bottom-0 mt-auto flex flex-col gap-2 pb-3",
-          )}
-        >
+        <ThreadPrimitive.ViewportFooter className="bg-background sticky bottom-0 mt-auto flex flex-col gap-2 pb-3">
           <ScrollToBottom />
           <FollowupSuggestions />
           <DocumentStrip disabled={disabled} />
@@ -153,12 +144,110 @@ export function AssistantThread({
   );
 }
 
+/**
+ * The welcome card of an empty thread: the mark, a short introduction. The
+ * panel adds the page state card under it.
+ */
+export function AssistantWelcome({
+  title,
+  body,
+  eyebrow,
+}: {
+  title: string;
+  body: string;
+  eyebrow?: string;
+}) {
+  return (
+    <div
+      data-slot="assistant-welcome"
+      className="bg-card flex gap-3 rounded-2xl border p-4 text-sm shadow-xs"
+    >
+      <AssistantAvatar size="lg" />
+      <div className="min-w-0 space-y-1">
+        {eyebrow ? (
+          <p className="font-accent text-muted-foreground flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
+            <span aria-hidden className="signal-dot size-1.5!" />
+            <span className="truncate">{eyebrow}</span>
+          </p>
+        ) : null}
+        <p className="font-display font-semibold tracking-tight">{title}</p>
+        <p className="text-muted-foreground text-pretty">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function Starters({
+  starters,
+  disabled,
+}: {
+  starters: readonly (string | AssistantStarter)[];
+  disabled: boolean;
+}) {
+  const { t } = useLocale();
+  const { compact } = useAssistantSurface();
+  if (!starters.length) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground px-1 text-xs">
+        {t("assistant.welcome.starters")}
+      </p>
+      <div
+        className={cn("grid gap-2", compact ? "grid-cols-1" : "grid-cols-2")}
+      >
+        {starters.map((s) => {
+          const item = typeof s === "string" ? { prompt: s } : s;
+          return (
+            <ThreadPrimitive.Suggestion
+              key={item.prompt}
+              prompt={item.prompt}
+              send
+              asChild
+            >
+              <Suggestion
+                suggestion={item.prompt}
+                disabled={disabled}
+                className="bg-card hover:border-signal/50 hover:bg-card h-auto items-start justify-start gap-2 rounded-xl px-3 py-2.5 text-left font-normal whitespace-normal shadow-xs"
+              >
+                {item.icon ? (
+                  <span
+                    aria-hidden
+                    className="text-signal-text mt-0.5 shrink-0 [&_svg]:size-4"
+                  >
+                    {item.icon}
+                  </span>
+                ) : null}
+                <span className="min-w-0">{item.prompt}</span>
+              </Suggestion>
+            </ThreadPrimitive.Suggestion>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Two ghost bubbles while a past chat loads. */
 function ThreadLoading() {
   const { t } = useLocale();
   return (
-    <p role="status" className="text-muted-foreground py-4 text-sm">
-      {t("common.loading")}
-    </p>
+    <div
+      role="status"
+      aria-label={t("assistant.loading")}
+      className="space-y-4"
+    >
+      <div className="flex justify-end">
+        <Skeleton className="h-9 w-1/2 rounded-2xl rounded-br-md" />
+      </div>
+      <div className="flex gap-2.5">
+        <AssistantAvatar size="sm" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-16 w-4/5 rounded-2xl rounded-tl-md" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+      </div>
+      <span className="sr-only">{t("assistant.loading")}</span>
+    </div>
   );
 }
 
@@ -169,7 +258,7 @@ function ScrollToBottom() {
       <Button
         variant="secondary"
         size="sm"
-        className="absolute -top-10 self-center rounded-full shadow-sm disabled:invisible"
+        className="absolute -top-10 self-center rounded-full border shadow-sm disabled:invisible"
       >
         <ArrowDown className="size-4" />
         {t("assistant.latest")}
@@ -193,6 +282,7 @@ const selectSavedReplies = (s: AssistantState) => {
 };
 
 function FollowupSuggestions() {
+  const { t } = useLocale();
   const fromAdapter = useAuiState((s) => s.thread.suggestions);
   const saved = useAuiState(selectSavedReplies);
   const suggestions = useMemo<readonly ThreadSuggestion[]>(
@@ -205,7 +295,10 @@ function FollowupSuggestions() {
   if (!suggestions.length) return null;
   return (
     <AuiIf condition={(s) => !s.thread.isEmpty && !s.thread.isRunning}>
-      <Suggestions className="-mx-1 px-1 pb-0.5">
+      <Suggestions
+        aria-label={t("assistant.suggestions.title")}
+        className="-mx-1 px-1 pb-0.5"
+      >
         {suggestions.map((s, i) => (
           <ThreadPrimitive.Suggestion
             key={`${i}-${s.prompt}`}
@@ -213,7 +306,10 @@ function FollowupSuggestions() {
             send
             asChild
           >
-            <Suggestion suggestion={s.title ?? s.prompt} />
+            <Suggestion
+              suggestion={s.title ?? s.prompt}
+              className="bg-card hover:border-signal/50"
+            />
           </ThreadPrimitive.Suggestion>
         ))}
       </Suggestions>
@@ -242,6 +338,7 @@ function Composer({ disabled }: { disabled: boolean }) {
     () => 0,
   );
   const isRunning = useAuiState((s) => s.thread.isRunning);
+  const length = useAuiState((s) => s.composer.text.length);
   const wasRunning = useRef(isRunning);
   useEffect(() => {
     if (shouldSendQueued(wasRunning.current, isRunning, queue.size)) {
@@ -275,14 +372,18 @@ function Composer({ disabled }: { disabled: boolean }) {
     if (fileInput.current) fileInput.current.value = "";
   };
 
+  const placeholder = disabled
+    ? t("assistant.composer.locked")
+    : t("assistant.placeholder");
+
   return (
     <PromptInput>
-      <PromptInputBody>
+      <PromptInputBody className={cn(disabled && "bg-muted/40")}>
         <ComposerAttachments />
         <PromptInputTextarea
-          placeholder={t("assistant.placeholder")}
+          placeholder={placeholder}
           aria-label={t("assistant.placeholder")}
-          maxLength={4000}
+          maxLength={COMPOSER_MAX}
           disabled={disabled}
           onKeyDown={onKeyDown}
           autoFocus
@@ -303,37 +404,58 @@ function Composer({ disabled }: { disabled: boolean }) {
             <TooltipIconButton
               type="button"
               tooltip={t("assistant.documents.file")}
-              className="size-8 rounded-full"
+              className="text-muted-foreground hover:text-foreground size-8 rounded-full"
               disabled={disabled}
               onClick={() => fileInput.current?.click()}
             >
               <Paperclip className="size-4" />
             </TooltipIconButton>
           </PromptInputTools>
-          <PromptInputSubmit
-            sendLabel={t("assistant.send")}
-            stopLabel={t("assistant.stop")}
-          />
+          <div className="flex items-center gap-2">
+            {showCharCount(length, COMPOSER_MAX) ? (
+              <span
+                role="status"
+                className={cn(
+                  "text-[11px] tabular-nums",
+                  length >= COMPOSER_MAX
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {t("assistant.composer.count", {
+                  count: length,
+                  max: COMPOSER_MAX,
+                })}
+              </span>
+            ) : null}
+            <PromptInputSubmit
+              sendLabel={t("assistant.send")}
+              stopLabel={t("assistant.stop")}
+            />
+          </div>
         </PromptInputToolbar>
       </PromptInputBody>
-      {queued > 0 ? (
-        <div
-          role="status"
-          className="text-muted-foreground flex items-center justify-between gap-2 px-2 pt-1 text-[11px]"
-        >
-          <span className="truncate">
-            {t("assistant.queued", { count: queued })}
+      <div className="text-muted-foreground flex min-h-5 items-center justify-between gap-2 px-2 pt-1 text-[11px]">
+        {queued > 0 ? (
+          <>
+            <span role="status" className="truncate">
+              {t("assistant.queued", { count: queued })}
+            </span>
+            <button
+              type="button"
+              className="hover:text-foreground focus-visible:ring-ring/50 inline-flex shrink-0 items-center gap-1 rounded-sm outline-none focus-visible:ring-2"
+              onClick={() => queue.clear()}
+            >
+              <X className="size-3" />
+              {t("assistant.queued_drop")}
+            </button>
+          </>
+        ) : (
+          <span className="hidden truncate sm:inline">
+            {t("assistant.composer.hint")}
           </span>
-          <button
-            type="button"
-            className="hover:text-foreground inline-flex shrink-0 items-center gap-1"
-            onClick={() => queue.clear()}
-          >
-            <X className="size-3" />
-            {t("assistant.queued_drop")}
-          </button>
-        </div>
-      ) : null}
+        )}
+      </div>
     </PromptInput>
   );
 }
@@ -387,6 +509,37 @@ function AttachmentChip({
   );
 }
 
+/** When the message was sent, in the action row under the bubble. */
+function MessageTime() {
+  const { locale } = useLocale();
+  const createdAt = useAuiState((s) => s.message.createdAt);
+  if (!createdAt) return null;
+  return (
+    <time
+      dateTime={createdAt.toISOString()}
+      className="text-muted-foreground px-1 text-[11px] tabular-nums"
+    >
+      {datetime(createdAt, messageTimePattern(createdAt), locale)}
+    </time>
+  );
+}
+
+function CopyAction() {
+  const { t } = useLocale();
+  return (
+    <ActionBarPrimitive.Copy asChild>
+      <TooltipIconButton tooltip={t("assistant.copy")}>
+        <AuiIf condition={(s) => s.message.isCopied}>
+          <Check />
+        </AuiIf>
+        <AuiIf condition={(s) => !s.message.isCopied}>
+          <Copy />
+        </AuiIf>
+      </TooltipIconButton>
+    </ActionBarPrimitive.Copy>
+  );
+}
+
 function UserText({ text }: { text: string }) {
   return <p className="whitespace-pre-wrap">{text}</p>;
 }
@@ -398,6 +551,7 @@ function UserMessage() {
       data-role="user"
       className="flex flex-col items-end gap-1"
     >
+      <span className="sr-only">{t("assistant.you")}</span>
       <AuiIf condition={(s) => (s.message.attachments?.length ?? 0) > 0}>
         <AttachmentGroup className="justify-end">
           <MessagePrimitive.Attachments
@@ -405,20 +559,12 @@ function UserMessage() {
           />
         </AttachmentGroup>
       </AuiIf>
-      <div className="bg-primary text-primary-foreground max-w-[92%] min-w-0 rounded-2xl px-4 py-2.5 text-sm break-words">
+      <div className="bg-primary text-primary-foreground max-w-[85%] min-w-0 rounded-2xl rounded-br-md px-3.5 py-2.5 text-sm break-words shadow-xs">
         <MessagePrimitive.Parts components={{ Text: UserText }} />
       </div>
       <ActionBarPrimitive.Root className="text-muted-foreground flex h-7 items-center gap-1">
-        <ActionBarPrimitive.Copy asChild>
-          <TooltipIconButton tooltip={t("assistant.copy")}>
-            <AuiIf condition={(s) => s.message.isCopied}>
-              <Check />
-            </AuiIf>
-            <AuiIf condition={(s) => !s.message.isCopied}>
-              <Copy />
-            </AuiIf>
-          </TooltipIconButton>
-        </ActionBarPrimitive.Copy>
+        <MessageTime />
+        <CopyAction />
         <ActionBarPrimitive.Edit asChild>
           <TooltipIconButton tooltip={t("assistant.edit")}>
             <Pencil />
@@ -433,7 +579,7 @@ function EditComposer() {
   const { t } = useLocale();
   return (
     <MessagePrimitive.Root data-role="user" className="flex justify-end">
-      <ComposerPrimitive.Root className="bg-muted flex w-[92%] flex-col gap-2 rounded-2xl p-2">
+      <ComposerPrimitive.Root className="bg-card focus-within:border-ring focus-within:ring-ring/30 flex w-[85%] flex-col gap-2 rounded-2xl border p-2 shadow-xs focus-within:ring-[3px]">
         <ComposerPrimitive.Input
           className="min-h-9 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none"
           aria-label={t("assistant.edit")}
@@ -454,6 +600,18 @@ function EditComposer() {
   );
 }
 
+/** The assistant's words on a neutral card; cards of tool calls stand alone. */
+function AssistantText() {
+  return (
+    <div
+      data-slot="assistant-bubble"
+      className="bg-card text-card-foreground w-fit max-w-full min-w-0 rounded-2xl rounded-tl-md border px-3.5 py-2.5 text-sm break-words shadow-xs"
+    >
+      <MarkdownText />
+    </div>
+  );
+}
+
 function ToolFallback(props: ToolCallMessagePartProps) {
   return (
     <Marker variant="border">
@@ -466,9 +624,30 @@ const NoEmpty = () => null;
 
 const PART_COMPONENTS = {
   Empty: NoEmpty,
+  Text: AssistantText,
+  tools: { by_name: { [PROPOSE_TOOL]: ActionCard }, Fallback: ToolFallback },
+};
+
+const NOTE_PART_COMPONENTS = {
+  Empty: NoEmpty,
   Text: MarkdownText,
   tools: { by_name: { [PROPOSE_TOOL]: ActionCard }, Fallback: ToolFallback },
 };
+
+/** Three soft dots: the reply is on its way (still for reduced motion). */
+function TypingDots() {
+  return (
+    <span aria-hidden className="inline-flex items-center gap-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="bg-muted-foreground/70 size-1.5 animate-pulse rounded-full motion-reduce:animate-none"
+          style={{ animationDelay: `${i * 160}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
 
 function AssistantMessage() {
   const { t } = useLocale();
@@ -492,13 +671,13 @@ function AssistantMessage() {
 
   if (custom?.role === "tool") {
     return (
-      <MessagePrimitive.Root data-role="tool">
-        <Marker variant="border">
+      <MessagePrimitive.Root data-role="tool" className="pl-9">
+        <Marker variant="border" aria-label={t("assistant.tool_note")}>
           <MarkerIcon>
-            <LifeBuoy />
+            <AppMark glyph="cursor" title="" className="text-signal-text" />
           </MarkerIcon>
           <MarkerContent>
-            <MessagePrimitive.Parts components={PART_COMPONENTS} />
+            <MessagePrimitive.Parts components={NOTE_PART_COMPONENTS} />
             <ToolNoteLinks />
           </MarkerContent>
         </Marker>
@@ -508,68 +687,67 @@ function AssistantMessage() {
   return (
     <MessagePrimitive.Root
       data-role="assistant"
-      className="flex flex-col items-start gap-1"
+      className="flex items-start gap-2.5"
     >
-      <div className="flex w-full items-start gap-2">
-        <span className="bg-primary/10 text-primary mt-1 flex size-6 shrink-0 items-center justify-center rounded-md">
-          <Bot className="size-3.5" />
-        </span>
-        <div className="min-w-0 flex-1 text-sm">
+      <AssistantAvatar size="sm" className="mt-0.5" />
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+        <span className="sr-only">{t("assistant.assistant_name")}</span>
+        <div className="flex w-full min-w-0 flex-col gap-2 text-sm">
           {running && empty ? (
-            <Marker role="status" className="py-1.5">
+            <div
+              role="status"
+              className="bg-card text-muted-foreground flex w-fit items-center gap-2 rounded-2xl rounded-tl-md border px-3.5 py-2.5 text-xs shadow-xs"
+            >
+              <TypingDots />
+              {statusText || t("assistant.typing")}
+            </div>
+          ) : null}
+          <MessagePrimitive.Parts components={PART_COMPONENTS} />
+          {running && !empty ? (
+            <Marker role="status" className="px-1">
               <MarkerIcon>
-                <Loader2 className="animate-spin motion-reduce:animate-none" />
+                {statusText ? (
+                  <Loader2 className="animate-spin motion-reduce:animate-none" />
+                ) : null}
               </MarkerIcon>
               <MarkerContent>
-                {statusText || t("assistant.thinking")}
+                {statusText ? statusText : <TypingDots />}
               </MarkerContent>
             </Marker>
           ) : null}
-          <MessagePrimitive.Parts components={PART_COMPONENTS} />
-          {running && !empty && statusText ? (
-            <Marker role="status" className="py-1">
-              <MarkerIcon>
-                <Loader2 className="animate-spin motion-reduce:animate-none" />
-              </MarkerIcon>
-              <MarkerContent>{statusText}</MarkerContent>
-            </Marker>
-          ) : null}
           {failed ? (
-            <p role="alert" className="text-destructive mt-1 text-xs">
+            <p
+              role="alert"
+              className="bg-destructive/5 text-destructive border-destructive/20 rounded-lg border px-3 py-2 text-xs"
+            >
               {t(errorKey(status.error))}
             </p>
           ) : null}
           {/* History tells a failed turn (error code saved) from one the
               user stopped; a live failure already shows the alert above. */}
           {!failed && custom?.errorCode ? (
-            <p className="text-destructive mt-1 text-xs">
+            <p className="bg-destructive/5 text-destructive border-destructive/20 rounded-lg border px-3 py-2 text-xs">
               {t("assistant.failed_turn")}{" "}
               {t(errorKeyForCode(custom.errorCode))}
             </p>
           ) : cancelled || custom?.interrupted ? (
-            <p className="text-muted-foreground mt-1 text-xs">
-              {t("assistant.interrupted")}
-            </p>
+            <Marker variant="separator" className="px-1">
+              <MarkerContent className="flex-none">
+                {t("assistant.interrupted")}
+              </MarkerContent>
+            </Marker>
           ) : null}
         </div>
+        <ActionBarPrimitive.Root className="text-muted-foreground flex h-7 items-center gap-1">
+          <MessageTime />
+          <CopyAction />
+          <ActionBarPrimitive.Reload asChild>
+            <TooltipIconButton tooltip={t("assistant.regenerate")}>
+              <RefreshCw />
+            </TooltipIconButton>
+          </ActionBarPrimitive.Reload>
+        </ActionBarPrimitive.Root>
       </div>
-      <ActionBarPrimitive.Root className="text-muted-foreground ml-8 flex h-7 items-center gap-1">
-        <ActionBarPrimitive.Copy asChild>
-          <TooltipIconButton tooltip={t("assistant.copy")}>
-            <AuiIf condition={(s) => s.message.isCopied}>
-              <Check />
-            </AuiIf>
-            <AuiIf condition={(s) => !s.message.isCopied}>
-              <Copy />
-            </AuiIf>
-          </TooltipIconButton>
-        </ActionBarPrimitive.Copy>
-        <ActionBarPrimitive.Reload asChild>
-          <TooltipIconButton tooltip={t("assistant.regenerate")}>
-            <RefreshCw />
-          </TooltipIconButton>
-        </ActionBarPrimitive.Reload>
-      </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
   );
 }

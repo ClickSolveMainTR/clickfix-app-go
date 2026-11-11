@@ -1,13 +1,12 @@
 "use client";
 
-import { Bot } from "lucide-react";
-
+import { AppMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/providers/locale-provider";
 
 import { useOptionalAssistant } from "./assistant-provider";
 
-/** Header button that opens ClickFix Asistan (also Cmd/Ctrl + J). */
+/** Header button that opens ClickFix Asistan (also Cmd/Ctrl + J): the mark. */
 export function AssistantButton() {
   const { t } = useLocale();
   const assistant = useOptionalAssistant();
@@ -23,7 +22,7 @@ export function AssistantButton() {
       title={`${t("assistant.title")} (⌘J)`}
       data-guide="header-assistant"
     >
-      <Bot className="size-[1.1rem]" />
+      <AppMark className="size-5" title="" />
     </Button>
   );
 }

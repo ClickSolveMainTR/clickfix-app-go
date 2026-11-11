@@ -114,3 +114,41 @@ export function decisionProblem(
 export function isLongBody(body: string, maxChars = 320, maxLines = 8) {
   return body.length > maxChars || body.split('\n').length > maxLines;
 }
+
+export type PostKind = 'topic' | 'reply';
+export type VisibilityAction = 'unpublish' | 'republish';
+
+/**
+ * Taking a published post down and publishing it again (CF-182). Both ask
+ * first: a takedown hides the post from every visitor at once, and
+ * republishing shows it again. The wording names the kind of post.
+ */
+export function visibilityCopy(action: VisibilityAction, kind: PostKind) {
+  return {
+    title: `forum.${action}_${kind}_title`,
+    body: `forum.${action}_${kind}_body`,
+    action: `forum.${action}`,
+    destructive: action === 'unpublish',
+  };
+}
+
+/**
+ * Why a takedown or republish was refused, as a message key; null leaves it
+ * to the API's own text. 404: the post is gone. 409: it is no longer in the
+ * status the action needs (someone else acted, or a removed reply's topic
+ * is down).
+ */
+export function visibilityProblem(
+  status: number | null,
+  action: VisibilityAction,
+): 'forum.already_handled' | 'forum.unpublish_conflict' | 'forum.republish_conflict' | null {
+  if (status === 404) return 'forum.already_handled';
+  if (status === 409) return action === 'republish' ? 'forum.republish_conflict' : 'forum.unpublish_conflict';
+  return null;
+}
+
+/** The line under a removed post: who took it down, and why when a reason was given. */
+export function removedLine(t: T, item: { removed_by_name: string | null; removed_reason: string }, when: string) {
+  const by = item.removed_by_name ? t('forum.removed_by', { name: item.removed_by_name, when }) : when;
+  return item.removed_reason ? `${by} · ${t('forum.removed_reason', { reason: item.removed_reason })}` : by;
+}

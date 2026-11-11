@@ -169,5 +169,22 @@
   "fields_help.webhook_url": "HTTPS endpoint of your system where ClickFix posts agent replies",
   "fields_help.days": "Opening and closing hours per day; days left out are closed",
   "fields_help.timezone": "IANA time zone, default Europe/Istanbul",
-  "fields_help.holiday_country": "Country code of the public holidays (ISO 3166, default TR)"
+  "fields_help.holiday_country": "Country code of the public holidays (ISO 3166, default TR)",
+  "typing": "Typing…",
+  "you": "You",
+  "assistant_name": "ClickFix Assistant",
+  "composer.hint": "Enter sends, Shift+Enter adds a line",
+  "composer.count": "{{count}}/{{max}}",
+  "composer.locked": "Sending is off",
+  "welcome.eyebrow": "In-page helper",
+  "welcome.starters": "Start with one of these",
+  "history.active": "Open chat",
+  "history.running": "Reply in progress",
+  "history.empty_hint": "Ask your first question; your chats will be listed here.",
+  "history.title": "Chat history",
+  "loading": "Loading the chat…",
+  "suggestions.title": "Follow-ups",
+  "tool_note": "Assistant note",
+  "action.kind.proposed": "Waiting for your approval",
+  "action.kind.destructive": "Cannot be undone"
 }

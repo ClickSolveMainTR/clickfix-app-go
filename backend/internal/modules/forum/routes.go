@@ -62,6 +62,37 @@ func RegisterRoutes(rt supportops.Router, h *handler.Handler) {
 		}
 		return h.Service.Moderate(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r), in.Status)
 	})
+	rt.Tenant("GET "+tenant+"/removed", "tenant.feedback.manage", func(r *http.Request) (any, error) {
+		q, err := supportops.List(r)
+		if err != nil {
+			return nil, err
+		}
+		org := orgctx.Must(r.Context()).ID
+		rows, err := h.Service.Repo.Q.ForumRemoved(r.Context(), db.ForumRemovedParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset})
+		if err != nil {
+			return nil, err
+		}
+		n, err := h.Service.Repo.Q.ForumRemovedCount(r.Context(), org)
+		return supportops.Page(rows, n, q), err
+	})
+	rt.Tenant("POST "+tenant+"/posts/{uuid}/unpublish", "tenant.feedback.manage", func(r *http.Request) (any, error) {
+		// The reason is optional, and so is the body itself.
+		var in struct {
+			Reason string `json:"reason"`
+		}
+		if r.ContentLength != 0 {
+			var err error
+			if in, err = supportops.Read[struct {
+				Reason string `json:"reason"`
+			}](r); err != nil {
+				return nil, err
+			}
+		}
+		return h.Service.Unpublish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r), in.Reason)
+	})
+	rt.Tenant("POST "+tenant+"/posts/{uuid}/republish", "tenant.feedback.manage", func(r *http.Request) (any, error) {
+		return h.Service.Republish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r))
+	})
 	rt.Tenant("POST "+tenant+"/posts/{uuid}/assist", "tenant.feedback.manage", func(r *http.Request) (any, error) {
 		return h.Service.Assist(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r))
 	})
