@@ -2,6 +2,9 @@
 // in-memory doubles (tests/mocks) so nothing native is needed.
 module.exports = {
   preset: '@react-native/jest-preset',
+  // The first render of a suite pays the cold Babel transform of react-native
+  // (several seconds on a shared runner); 5 s would fail it before any assertion.
+  testTimeout: 30000,
   testMatch: ['<rootDir>/tests/**/*.test.ts?(x)'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
