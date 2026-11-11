@@ -416,7 +416,9 @@ jobs:
           composer update --prefer-dist --no-progress \
             --with="laravel/framework:${{ matrix.laravel }}" \
             --with="orchestra/testbench:${{ matrix.testbench }}"
-          composer show laravel/framework orchestra/testbench phpunit/phpunit | grep -E '^(name|versions)'
+          for p in laravel/framework orchestra/testbench phpunit/phpunit clickfix/sdk; do
+            composer show "$p" | grep -E '^(name|versions)'
+          done
       - name: Tests
         working-directory: sdks/laravel
         run: vendor/bin/phpunit --no-coverage
