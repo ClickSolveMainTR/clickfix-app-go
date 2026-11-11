@@ -64,3 +64,28 @@ Press `?` in the inbox to see every shortcut. Common ones: next/previous convers
 ## SLA [#sla]
 
 Define response and resolution targets, business hours and holidays under **Organization → SLA and business hours**. Conversations close to or past their target appear in the **SLA 1 hour** and **SLA breached** filters.
+
+## Customer identity and context [#identity-and-context]
+
+- **Verified badge:** a contact who proved their identity in the widget with `user_hash` carries the **Verified** badge; so does the company when its id is signed too. The contact card and the conversation panel distinguish three states: **verified**, **anonymous**, **self-named**. The conversation list can filter by them.
+- **External id:** the contact's and the company's id in your own system shows on the card and is searchable; the API and webhooks return it as `external_id` / `company_external_id`.
+- **Custom fields:** accepted values (plan, licence expiry…) show on the contact and company cards and in the conversation's right panel; an undefined field shows a warning with one-click definition.
+- **Screen context:** which screen the customer wrote from and their latest events in the conversation header; also usable in workflow conditions.
+- **Records read from your system:** with [Connect your system](/docs/integration-guide/system-binding?lang=en) set up, the customer's invoice, order and other concepts are read in the right panel and the defined actions run from there.
+
+## Instant reply [#instant-reply]
+
+Every new conversation written during working hours gets an automatic acknowledgement ("received, estimated time") within 10 seconds; outside working hours the single-source offline text. These show as system messages in the conversation and do not stop the SLA first-response timer. Setting: [Automation → Welcome](/docs/automation?lang=en#instant-reply).
+
+## FAQ [#faq]
+
+**What does "self-named" mean?** The contact or their channel provided a name, email or phone, but it was not proven with `user_hash`. To count them as verified add [identity verification](/docs/integration-guide/identity?lang=en) to your site.
+
+**How do I write to a customer before they visit the site?** Create the contact by external id through the API and open a conversation with `contact_external_id`; once the user signs in with `identify` they see it in the widget. From the panel: **New conversation** on the contact card.
+
+**Copilot versus Assistant?** Copilot works on text in the reply editor; [ClickFix Assistant](/docs/ai?lang=en#assistant) sets up and tests the panel.
+
+## Related API [#related-api]
+
+- [Conversations](/docs/api-reference/conversations/list-conversations?lang=en), [messages](/docs/api-reference/conversations/add-a-message-or-internal-note?lang=en), [contacts](/docs/api-reference/contacts/list-contacts?lang=en); responses carry `identity_state`, `external_id`, `custom_fields`.
+- Events: [Webhooks](/docs/webhooks?lang=en).

@@ -54,6 +54,23 @@ Every request carries two headers: `X-ClickFix-Timestamp` (Unix seconds) and `X-
 X-ClickFix-Signature = sha256=hex(HMAC-SHA256(secret, timestamp + "." + body))
 ```
 
-The message body schema is in the [API reference](/docs/api?lang=en).
+The message body schema is in the [API reference](/docs/api-reference/api-channel/send-a-customer-message?lang=en), with step-by-step setup and samples in five languages in the [guide](/docs/integration-guide/api-channel?lang=en).
 
 The `text` of an agent reply is in ClickFix's writing format: it may contain `**bold**`, `*italic*`, `` `code` ``, `[label](https://address)` and lists that start with `- `. On other channels this format is translated to the channel's own; on the API channel it is not, so you decide how to show it.
+
+## Identity warning [#identity-warning]
+
+On a web widget channel, when no identity verification secret has been generated or the latest `identify` attempts are rejected (`WIDGET_IDENTITY_INVALID`), channel health turns to **Warning** with the reason; the channel keeps receiving messages but users stay anonymous. Fix: [Identity verification](/docs/integration-guide/identity?lang=en).
+
+## FAQ [#faq]
+
+**The same customer wrote on two channels; are two contacts created?** No. When the external id, email or phone matches, they merge into one contact card; channel identities are listed on the card.
+
+**API channel or widget?** For a website the widget is enough. For your own chat app or another messaging service set up the API channel: [API channel step](/docs/integration-guide/api-channel?lang=en).
+
+**What happens when I pause a channel?** No new messages are received or sent; existing conversations and history are kept.
+
+## Related API [#related-api]
+
+- Sending a customer message: [`POST /v1/webhooks/channels/api/{instance}`](/docs/api-reference/api-channel/send-a-customer-message?lang=en); agent reply: [`apiChannelReply` webhook](/docs/api-reference/api-channel/agent-reply-api-channel?lang=en).
+- The channel id goes into [`POST /conversations`](/docs/api-reference/conversations/create-a-conversation?lang=en) as `inbox_uuid`.

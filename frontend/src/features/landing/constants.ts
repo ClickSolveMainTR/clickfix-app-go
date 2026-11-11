@@ -32,6 +32,8 @@ export const FAQ_KEYS = [
   "api",
   "sso",
   "languages",
+  "sdk",
+  "assistant",
 ] as const;
 
 /** Legal documents linked from the footer (`/legal/<slug>`). */

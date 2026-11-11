@@ -131,17 +131,19 @@ export function ProductTour() {
             }
           >
             <ol className="relative space-y-2.5">
-              {(["kb", "draft", "guard", "handoff"] as const).map((key, i) => (
-                <li
-                  key={key}
-                  className="flex items-start gap-3 rounded-xl bg-black/35 px-3 py-2.5 text-sm text-white/80 ring-1 ring-white/10 backdrop-blur"
-                >
-                  <span className="font-accent mt-0.5 text-xs text-[#7DFF86]">
-                    0{i + 1}
-                  </span>
-                  {t(`landing.tour.ai_${key}`)}
-                </li>
-              ))}
+              {(["kb", "draft", "guard", "handoff", "assistant"] as const).map(
+                (key, i) => (
+                  <li
+                    key={key}
+                    className="flex items-start gap-3 rounded-xl bg-black/35 px-3 py-2.5 text-sm text-white/80 ring-1 ring-white/10 backdrop-blur"
+                  >
+                    <span className="font-accent mt-0.5 text-xs text-[#7DFF86]">
+                      0{i + 1}
+                    </span>
+                    {t(`landing.tour.ai_${key}`)}
+                  </li>
+                ),
+              )}
             </ol>
           </TourCard>
 
@@ -223,15 +225,20 @@ export function ProductTour() {
                   className="px-2.5 py-1 text-xs"
                 />
               ))}
-              {(["api", "webhook", "openapi"] as const).map((key) => (
-                <span
-                  key={key}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/75"
-                >
-                  <BookOpenText className="size-3 text-white/45" aria-hidden />
-                  {t(`landing.tour.integrations_${key}`)}
-                </span>
-              ))}
+              {(["api", "webhook", "openapi", "sdk", "mcp"] as const).map(
+                (key) => (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/75"
+                  >
+                    <BookOpenText
+                      className="size-3 text-white/45"
+                      aria-hidden
+                    />
+                    {t(`landing.tour.integrations_${key}`)}
+                  </span>
+                ),
+              )}
             </div>
           </TourCard>
         </div>

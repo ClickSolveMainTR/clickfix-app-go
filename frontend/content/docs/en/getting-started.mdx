@@ -62,8 +62,37 @@ Send yourself a test message through the channel you connected. Set-up is comple
 
 With the ClickFix iOS and Android app you get push notifications, reply to conversations and manage your availability. Once you are signed in on the app, you can also sign in on the web without typing a password by choosing **Sign in with QR code** on the sign-in screen.
 
+## The right setup order [#setup-order]
+
+The setup wizard and ClickFix Assistant's "what did you leave undone" check follow the same five steps. The order matters: entering articles before introducing the customer makes the AI answer without knowing who it is talking to.
+
+| Step                      | What you do                                                                                            | "Done" condition                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| 1. Introduce the customer | Widget identity secret, `user_hash`, external ids (contact and company), custom fields, screen context | A verified `identify` arrived, custom fields were accepted |
+| 2. Connect your system    | Concepts, endpoints, actions, AI playbook (**Integrations → Connect your system**)                     | A concept returned a real answer with "Try"                |
+| 3. Teach the AI           | Agent mode, persona, procedures (**Organization → AI**)                                                | Agent on, at least one playbook or procedure published     |
+| 4. Knowledge base         | Articles, collections, help center                                                                     | A published article exists                                 |
+| 5. Automation and SLA     | Welcome (instant reply), routing, workflows, SLA and working hours                                     | Working hours set, an SLA policy exists                    |
+
+A skipped step stays as a warning in the wizard; the assistant points to the next step on every page. The developer side, step by step: [Integration guide](/docs/integration-guide?lang=en).
+
 ## Next steps [#next-steps]
 
 - [Set up the AI agent](/docs/ai?lang=en)
 - [Knowledge base and help center](/docs/knowledge-base?lang=en)
 - [Workflows and automation](/docs/automation?lang=en)
+
+## FAQ [#faq]
+
+**Can I enter articles before installing the widget?** You can, but the AI will answer without knowing the customer; finish steps 1 and 2 first.
+
+**Where do I define working hours?** In one place: **Organization → SLA and working hours**. The widget, the AI and the SLA use the same source.
+
+**Can I try it before inviting my team?** Yes; in an organization you own you can connect a channel and send a test message on your own.
+
+**How do I see which step I left undone?** The setup wizard is in the left menu; also open ClickFix Assistant with `⌘J`, it lists what is missing for the page you are on.
+
+## Related API [#related-api]
+
+- [API](/docs/api?lang=en): creating keys, scopes and the first request.
+- [Integration guide](/docs/integration-guide?lang=en): the code side of the setup order; [SDKs](/docs/integration-guide/sdks?lang=en).

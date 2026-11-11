@@ -1,6 +1,6 @@
 ---
-title: AI agent and Copilot
-description: Configure the AI agent's mode, triage, procedures and tools, and use Copilot to help agents reply faster.
+title: AI agent, Copilot and ClickFix Assistant
+description: "Set the AI agent's mode, classification, procedures and tools; Copilot for agents, the ClickFix Assistant that gets things done in the panel; one working-hours source, instant reply and AI with system binding."
 section: product
 order: 1
 ---
@@ -97,6 +97,47 @@ With a conversation open in the inbox, Copilot can:
 
 Open the Copilot menu from the reply editor or with keyboard shortcuts (`?` lists them all). Copilot suggestions never reach the customer unless you send them.
 
+## ClickFix Assistant [#assistant]
+
+ClickFix Assistant is the AI helper that opens on every panel page with `⌘J` (`Ctrl+J` on Windows) and **gets things done**; it is separate from the AI agent that answers customers. You write what you want, the assistant asks for what it needs, shows the action on an **approval card**, you approve, it applies the change and verifies the result.
+
+- **Capability cards:** every module registers its capabilities in one registry (reads, actions, tests, page guide). The assistant uses only the capabilities relevant to the page you are on and your permissions. Examples: listing channels and creating an API channel, channel health check, drafting, dry-running and saving a workflow, automation rules, SLA policies and working hours, inviting members and assigning teams, turning AI on, widget setup, webhook subscriptions and test deliveries, creating API keys (with step-up).
+- **Page state:** on the page where you open it, the assistant says what can be done there and what you left undone ("no identity secret", "AI is off on this channel"), following the same order as the setup wizard. It runs the test of a setting from inside the drawer (email channel test send, webhook test delivery, SLA rule dry run).
+- **Approval card:** an editable parameter form, the dry-run result and a verification step after applying. Destructive actions (revoking a key, deleting a rule) are always confirmed; secrets never reach the chat history or logs; the assistant cannot exceed your permissions, every action is re-checked on the server.
+- **Files and links:** share your own API documentation or a link; the assistant reads it and, for example, proposes concepts and endpoints for the [Connect your system](/docs/integration-guide/system-binding?lang=en) screen.
+- **Navigation:** when it says "go to this page" it goes there on approval and highlights the relevant field.
+- **Surfaces:** the panel drawer, the mobile app and (for verified members only) the support widget. In the widget only reads, navigation and a few safe actions are available.
+- **MCP tools:** the same capability registry is exposed to clients such as Claude and Cursor through the [MCP server](/docs/mcp-integrations?lang=en#mcp); there are no two catalogs. Capabilities that carry secrets or are destructive are not on MCP.
+- **Limits:** several tool calls in one turn are processed in order; when the turn limit is reached the assistant answers with the results so far; long answers are not cut off but continued automatically (at most two continuations, with a "shortened" note); after using a tool it always produces text. The daily assistant allowance depends on your plan and is shown in the drawer.
+
+The assistant cites its sources in every answer and connects you to our support team when needed. Every page also has a step-by-step **guided tour**.
+
+## One working-hours source and the instant reply [#working-hours-and-instant-reply]
+
+The AI agent's "we are out of office" text, the widget's online/offline state and the SLA timers feed from **one working-hours source**: **Organization → SLA and working hours**. The days and hours on this page's **Scope** tab narrow the range in which the agent replies; they do not change the source.
+
+In every mode (AI, agent, mixed) a new conversation written during working hours gets a "received, estimated time" acknowledgement within 10 seconds; when the AI hands over to a human it tells the customer. The texts live under **Automation → Welcome**. Details: [Automation](/docs/automation?lang=en#instant-reply).
+
+## AI and system binding [#ai-and-system-binding]
+
+The concepts (Invoice, Order, Licence…) and actions ("resend the invoice") you define under **Integrations → Connect your system** feed the AI playbooks: the agent reads the concept from your system with the customer's **external id**, follows the playbook step and performs the action (per its approval rule). No procedure or HTTP tool needs to be defined; a playbook written in plain sentences matches intents by AI classification, not keywords. The **Try as this customer** preview shows the context the agent sees for that customer. Setup: [Connect your system](/docs/integration-guide/system-binding?lang=en).
+
 ## AI during set-up [#ai-during-set-up]
 
 When you open a new organization, the set-up wizard can use your website and a few answers to suggest teams, SLAs, canned replies, starter articles and the agent's persona. See [Getting started](/docs/getting-started?lang=en).
+
+## FAQ [#faq]
+
+**What is the difference between the AI agent and ClickFix Assistant?** The agent talks to customers (widget, WhatsApp, email…); the Assistant talks to you, sets up the panel and tests it. They are separate settings and use separate credits / allowances.
+
+**How does the agent know the customer's plan or invoice?** [Custom fields](/docs/integration-guide/custom-fields?lang=en) (those marked visible to AI), [screen context](/docs/integration-guide/events?lang=en) and the concepts read from your system through [Connect your system](/docs/integration-guide/system-binding?lang=en) enter the agent's input. Fields marked sensitive never reach the AI.
+
+**What if the agent says something wrong?** Below the confidence threshold it waits as a draft; handover keywords pass the conversation to an agent at once; every run is logged and can be quality-reviewed.
+
+**What happens when credits run out?** The agent hands new conversations to agents, Copilot and the Assistant switch off; existing drafts are kept.
+
+## Related API [#related-api]
+
+- Conversation and message endpoints ([API reference](/docs/api-reference?lang=en)); the `identity_state` and `custom_fields` fields are the same context the agent sees.
+- Screen context and product events: [`POST /company-events`](/docs/api-reference/companies/send-an-event-to-the-company-timeline?lang=en), widget `track`.
+- MCP server and tool catalog: [Zapier, Make, n8n and MCP](/docs/mcp-integrations?lang=en#mcp).

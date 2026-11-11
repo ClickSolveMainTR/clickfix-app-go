@@ -34,12 +34,12 @@ export function DocsToolbar({ locale }: { locale: AppLocale }) {
   );
   const dark = mounted && resolvedTheme === "dark";
   const path = pathname.replace(/^\/en(?=\/|$)/, "") || "/";
-  const t = (tr: string, en: string) => (locale === "tr" ? tr : en);
+  const label = (tr: string, en: string) => (locale === "tr" ? tr : en);
 
   return (
     <div className="border-fd-border flex items-center justify-between gap-2 border-b pb-3">
       <nav
-        aria-label={t("Dil", "Language")}
+        aria-label={label("Dil", "Language")}
         className="bg-fd-muted flex items-center gap-1 rounded-full p-0.5"
       >
         {LOCALES.map((option) => (
@@ -73,11 +73,11 @@ export function DocsToolbar({ locale }: { locale: AppLocale }) {
       <button
         type="button"
         onClick={() => setTheme(dark ? "light" : "dark")}
-        aria-label={t(
+        aria-label={label(
           dark ? "Açık temaya geç" : "Koyu temaya geç",
           dark ? "Switch to light mode" : "Switch to dark mode",
         )}
-        title={t("Tema", "Theme")}
+        title={label("Tema", "Theme")}
         className="text-fd-muted-foreground hover:bg-fd-accent hover:text-fd-accent-foreground inline-flex size-8 items-center justify-center rounded-full transition-colors"
       >
         {dark ? (

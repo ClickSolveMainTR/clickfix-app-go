@@ -83,3 +83,13 @@ Ekibinizle **Üyeler için giriş bağlantısı**'nı paylaşın; bu bağlantı 
 **IP kısıtlaması** bölümünde organizasyona yalnızca belirli IP adreslerinden veya CIDR bloklarından (ör. `203.0.113.0/24`) erişilmesini sağlarsınız. Liste boşken kısıtlama yoktur; en fazla 100 kural eklenebilir.
 
 Kısıtlama panel, API ve mobil uygulama dahil tüm istekler için geçerlidir. Mevcut IP'niz listede yoksa ClickFix kaydetmenize izin vermez; **IP'mi ekle** ile kendi adresinizi ekleyin.
+
+## Sık sorulanlar [#faq]
+
+**SSO zorunluyken API anahtarları çalışır mı?** Evet; API anahtarı üyenin güncel yetkileriyle çalışır, SSO yalnız panele girişi kapsar. SCIM ile pasifleşen üyenin anahtarları da durur.
+
+**MCP ve Asistan SSO ile nasıl yetkilenir?** MCP istemcisi OAuth ile üye olarak yetkilenir; SSO zorunluysa yetkilendirme SSO sağlayıcınızdan geçer.
+
+## İlgili API [#related-api]
+
+- Anahtarın üyeye bağlı yetkisi: [API → Anahtar hangi verilere erişir](/docs/api#key-access).

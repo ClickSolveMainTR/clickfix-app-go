@@ -67,3 +67,16 @@ Posts with suspicious instructions or many links are flagged in moderation. **Re
 ### Forum question from a conversation [#forum-question-from-a-conversation]
 
 You can create a public forum question from a customer conversation. The conversation text isn't copied; only the text you write goes to the moderation queue. Remove personal details (name, email, order number and so on) from it.
+
+## FAQ [#faq]
+
+**Which articles does the AI agent use?** Only **public** and **published** ones. Drafts and internal articles never reach the agent; records read from your system through [Connect your system](/docs/integration-guide/system-binding?lang=en) are added per customer.
+
+**Can I show an article to specific customers only?** Yes; article targeting uses list-type [custom field](/docs/integration-guide/custom-fields?lang=en) options (e.g. plan = Pro).
+
+**How does search work in the widget?** It searches published articles; results follow the visitor's language.
+
+## Related API [#related-api]
+
+- Help center search from the widget with `helpSearch` ([`@getclickfix/visitor-core`](/docs/integration-guide/sdks?lang=en#visitor-core)).
+- How the AI agent uses article content: [AI](/docs/ai?lang=en#knowledge-source).

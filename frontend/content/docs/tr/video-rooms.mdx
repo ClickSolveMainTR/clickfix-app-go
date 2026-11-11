@@ -79,3 +79,13 @@ Görüntülü görüşme **katılımcı-dakika** üzerinden ücretlendirilir: he
 - Ek dakikaları **Dakikalar** sekmesinden paket olarak satın alırsınız; fatura ödendikten sonra dakikalar hesabınıza yüklenir.
 - Bakiye sıfırsa yeni oda açılamaz ve yeni katılımcı giremez. Bakiye görüşme sırasında biterse oda kapatılır.
 - Bakiye belirlenen eşiğin altına düştüğünde sahip ve yöneticilere günde en fazla bir kez bildirim gider.
+
+## Sık sorulanlar [#faq]
+
+**Misafirin uygulama kurması gerekir mi?** Hayır; oda tarayıcıda açılır. Mobil uygulamadan gelen müşteri için bağlantı widget webview'inde `clickfix:link` olarak gelir ve sistem tarayıcısında açılır.
+
+**Kayıt ve transkript nerede durur?** Organizasyonun saklama süresine göre depolanır; transkript ve özet konuşmanın zaman çizelgesine eklenir, kayıt silinince metni de silinir ([KVKK araçları](/docs/data-protection#retention)).
+
+## İlgili API [#related-api]
+
+- Odanın bağlı olduğu konuşma ve mesajları: [`GET /conversations/{uuid}/messages`](/docs/api-reference/conversations/list-messages).

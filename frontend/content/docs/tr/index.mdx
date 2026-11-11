@@ -1,21 +1,34 @@
 ---
 title: ClickFix dokümantasyonu
-description: Kurulumdan entegrasyonlara, ClickFix kullanım kılavuzları.
+description: Kurulumdan entegrasyonlara ClickFix kullanım kılavuzları; ürün sayfaları, entegrasyon kılavuzu, API başvurusu ve SDK'lar.
 ---
 
-ClickFix ile tüm müşteri iletişiminizi tek yerde yönetin.
+ClickFix, tüm müşteri iletişiminizi tek gelen kutusunda toplayan B2B destek platformudur. Bu dokümantasyon dört bölümdür; sol menüden ya da `Ctrl K` aramasından ulaşırsınız. Her sayfanın üstündeki düğmelerle sayfayı Markdown olarak kopyalayabilir ya da ChatGPT / Claude'da açabilirsiniz; tüm dokümanlar [`/llms.txt`](/llms.txt) ve [`/llms-full.txt`](/llms-full.txt) adreslerinde de yayımlanır.
 
-## Başlayın [#get-started]
+## Başlangıç [#get-started]
 
-- [İlk organizasyonunuzu kurun](/docs/getting-started)
-- [Kanallarınızı bağlayın](/docs/channels)
-- [Gelen kutusunu kullanın](/docs/inbox)
-- [Yapay zekâyı yapılandırın](/docs/ai)
+- [ClickFix'e başlarken](/docs/getting-started): hesap, organizasyon, ekip, ilk kanal ve **doğru kurulum sırası** (müşteriyi tanıt → sistemini bağla → AI'a öğret → bilgi bankası → otomasyon).
+- [Gelen kutusunun temelleri](/docs/inbox): görünümler, durumlar, atama, doğrulanmış müşteri rozeti, özel alanlar ve ekran bağlamı.
+- [Kanallara genel bakış](/docs/channels): desteklenen kanallar, sağlık, kimlik uyarısı, API kanalı.
+
+## Ürün [#product]
+
+- Kanallar: [WhatsApp, Instagram ve Messenger](/docs/meta), [E-posta](/docs/email), [Web widget](/docs/web-widget) (temel/gelişmiş kurulum, `user_hash` ve firma imzası, mobil uygulama anahtarı), [Telegram](/docs/telegram), [Google Chat](/docs/google-chat), [Slack ve Teams](/docs/slack-teams), [SMS ve telefon](/docs/sms-voice).
+- [AI ajanı, Copilot ve ClickFix Asistan](/docs/ai): çalışma modu, prosedürler, araçlar, panelde iş yapan asistan, tek çalışma saati ve anında yanıt.
+- [Bilgi bankası, yardım merkezi ve topluluk forumu](/docs/knowledge-base), [Otomasyon ve iş akışları](/docs/automation), [Randevular](/docs/appointments), [Görüntülü görüşme odaları](/docs/video-rooms).
 
 ## Geliştiriciler [#developers]
 
-- [Entegrasyon kılavuzu: baştan sona, her adımda kod](/docs/integration-guide)
-- [API anahtarları ve API başvurusu](/docs/api)
-- [Webhook’lar](/docs/webhooks)
-- [Kendi uygulamanızı yapın](/docs/apps)
-- [Uygulama galerisi](/docs/apps-gallery)
+- [Entegrasyon kılavuzu](/docs/integration-guide): kurulum sırasıyla dokuz adım; her adımda widget, Node.js, Go, PHP ve curl örneği. [Kimlik doğrulama](/docs/integration-guide/identity) · [Kişiler, firmalar ve dış kimlik](/docs/integration-guide/contacts-companies) · [Özel alanlar](/docs/integration-guide/custom-fields) · [Olaylar](/docs/integration-guide/events) · [Sistemini bağla](/docs/integration-guide/system-binding) · [API kanalı](/docs/integration-guide/api-channel) · [Webhook'lar](/docs/integration-guide/webhooks) · [Mobil](/docs/integration-guide/mobile) · [SDK'lar](/docs/integration-guide/sdks).
+- [API](/docs/api): anahtarlar, kapsamlar, zarf, hata kodları, sayfalama, idempotency, hız sınırları; [API başvurusu](/docs/api-reference): her uç için şema, örnek ve curl/Node.js/Go/PHP istekleri, playground.
+- [Webhook'lar](/docs/webhooks), [Zapier, Make, n8n ve MCP](/docs/mcp-integrations), [n8n düğümü](/docs/n8n-node), [Kendi uygulamanızı yapın](/docs/apps), [Sipariş sorgulama örneği](/docs/order-lookup-sample), [Uygulama galerisi](/docs/apps-gallery).
+- Paketler: [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node), [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core), [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget), [Go](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/go), [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk), [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel), [`clickfix_webview`](https://pub.dev/packages/clickfix_webview). Çalışan örnek uygulamalar: [clickfix-examples](https://github.com/ClickSolveMainTR/clickfix-examples). Tüm kaynak: [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR).
+
+## Yönetim [#administration]
+
+- [SSO ve SCIM](/docs/sso-scim): SAML/OIDC ile giriş, SCIM ile kullanıcı sağlama, IP kısıtlaması.
+- [KVKK araçları](/docs/data-protection): ilgili kişi başvuruları, saklama süreleri, açık rıza, VERBİS.
+
+## Yardım [#help]
+
+Panelde `⌘J` ile ClickFix Asistan'ı açın: bulunduğunuz sayfayı anlatır, eksik adımları söyler ve kurulumu sizin onayınızla yapar. Bulamadığınız bir şey için destek@getclickfix.com.

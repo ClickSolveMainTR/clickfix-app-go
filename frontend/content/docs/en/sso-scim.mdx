@@ -83,3 +83,13 @@ With **Require SSO** on, only SSO sessions can access the organization; members 
 Under **IP restrictions** you can limit access to the organization to specific IP addresses or CIDR blocks (e.g. `203.0.113.0/24`). An empty list means no restriction; up to 100 rules are allowed.
 
 The restriction applies to every request, including the API and the mobile app. ClickFix won't let you save a list that doesn't contain your current IP; add it with **Add my IP**.
+
+## FAQ [#faq]
+
+**Do API keys work while SSO is enforced?** Yes; an API key works with the member's current permissions, SSO only covers panel sign-in. Keys of a member deactivated through SCIM stop too.
+
+**How are MCP and the Assistant authorized under SSO?** The MCP client is authorized as a member with OAuth; with SSO enforced the authorization goes through your identity provider.
+
+## Related API [#related-api]
+
+- A key's member-bound permissions: [API → What a key can reach](/docs/api?lang=en#key-access).
