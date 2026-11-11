@@ -50,7 +50,9 @@ const help = await client.helpSearch('billing', 'en');
 ```
 
 `user_hash` is hex HMAC-SHA256(identity secret, user_id), produced on your server
-(e.g. `@clickfix/node.identityHash`). Never ship the secret to the browser.
+(e.g. `@clickfix/node.identityHash`); with `company: { id }` it is
+hex HMAC-SHA256(identity secret, user_id + "\n" + company_id) (CF-206). Never ship the
+secret to the browser.
 Session tokens are renewed by bootstrap/identify. Calls accept AbortSignals.
 `useConversations`, `useMessages` and `useHelpSearch` return `{data,error,loading,reload}`;
 mount conversation/message hooks after a visitor is ready. They abort stale requests

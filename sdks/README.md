@@ -47,9 +47,9 @@ dependency of react-widget on visitor-core is rewritten to a version). On a
 green `main` the `sdk-publish` job publishes any npm version that is not on the
 registry yet, visitor-core before react-widget
 (needs the `NPM_TOKEN` repository secret, an npm automation token for the
-`@clickfix` scope; without it the job skips with a note), and the `release-tag`
-job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
-tags by hand. The PHP package (`sdks/php`, version = newest `CHANGELOG.md` entry and
+`@clickfix` scope; without it the job skips with a note), and the `sdks-mirror`
+job pushes the tree and the `go/vX.Y.Z` tag to the public mirror when they do not exist.
+Nobody publishes or tags by hand. The PHP package (`sdks/php`, version = newest `CHANGELOG.md` entry and
 `Client::USER_AGENT`) is pushed by the same `sdks-mirror` job to the public repository
 `ClickSolveMainTR/clickfix-php` and tagged `vX.Y.Z` there; Packagist (`clickfix/sdk`) watches that
 repository. Details: `docs/entegrasyon-kilavuzu.md`.

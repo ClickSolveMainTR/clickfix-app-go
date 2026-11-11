@@ -23,6 +23,7 @@ export type BridgeIdentity = {
   name?: string;
   email?: string;
   phone?: string;
+  /** `id` binds the company only when `user_hash` signs it with `user_id` (CF-206). */
   company?: { id?: string; name?: string; domain?: string };
   attributes?: Record<string, string | number | boolean>;
 };

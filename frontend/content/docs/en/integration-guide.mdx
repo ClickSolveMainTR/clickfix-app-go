@@ -9,12 +9,12 @@ This is the single integration guide: in the order the **Setup** wizard in the p
 
 ## Before you start [#before-you-start]
 
-| You need                                    | Where                                         | Used for                                              |
-| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
-| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`) |
-| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash`, server side only               |
-| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                |
-| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel  |
+| You need                                    | Where                                         | Used for                                                    |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`)       |
+| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash` (user + company id), server side only |
+| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                      |
+| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel        |
 
 The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require `Idempotency-Key`. Keys never reach the browser or the mobile app. Envelope, error codes and rate limits: [API](/docs/api?lang=en).
 
@@ -26,7 +26,7 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 | [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                        |
 | [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)             |
 | [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                               | `npm install @clickfix/react-widget` (React 18+)                                               |
-| Go module                                                                              | `sdks/go/v0.1.0`                                                                    | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                            |
+| Go module                                                                              | `sdks/go/v0.1.0`                                                                    | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
 | [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)                |
 | [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)                  | 0.1.0                                                                               | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); see [Laravel package](#laravel) |
 
@@ -51,10 +51,16 @@ The [API channel](#api-channel) and the [mobile webview](#mobile) are channel se
 `user_hash` is the only way to introduce a signed-in user to the widget with proof:
 
 ```text
+# user that belongs to a company (identify sends company.id): both ids are signed together
+user_hash = hex(HMAC-SHA256(widget_identity_secret, user_id + "\n" + company_id))
+
+# no company: the user id alone
 user_hash = hex(HMAC-SHA256(widget_identity_secret, user_id))
 ```
 
-`user_id` is the user's id in **your** system and is the external id of the next section. The value is computed **on your server only**; your site and your mobile app receive the finished `user_hash`, never the secret. A contact verified with a valid `user_hash` gets the **Verified** badge in the panel and their anonymous history moves to the same contact. When `identify` is rejected the widget keeps working but the user stays anonymous, and the `error` event carries `WIDGET_IDENTITY_DISABLED` (no secret generated yet) or `WIDGET_IDENTITY_INVALID` (mismatch).
+`user_id` is the user's id in **your** system and is the external id of the next section; `company_id` is the company's id in your system and goes to `identify` as `company: { id }`. The value is computed **on your server only**; your site and your mobile app receive the finished `user_hash`, never the secret. A contact verified with a valid `user_hash` gets the **Verified** badge in the panel and their anonymous history moves to the same contact. When the company id is signed, the contact is bound to that company by the signed value, the company gets the **Verified** badge in the panel too, and a verified user cannot claim another company; the `identify` event reports `company_verified: true`. When `identify` is rejected the widget keeps working but the user stays anonymous, and the `error` event carries `WIDGET_IDENTITY_DISABLED` (no secret generated yet) or `WIDGET_IDENTITY_INVALID` (mismatch, including a hash that signs another company id). Neither id may contain a line break (`\n`).
+
+**Migration.** The original `user_hash` over `user_id` alone keeps working (backward compatible). When such a call also carries `company.id`, the user is still verified but the company id is **not linked and not stored**: `company.name` and `company.domain` are used only as matching hints, the widget prints a fixed console warning and the `identify` event reports `company_verified: false`. To bind the company by its id, add `company_id` to the signature on your server: Node `identityHash(secret, userId, companyId)`, Go `IdentityCompanyHash(secret, userID, companyID)`; the PHP and Laravel helpers get the same formula in their own releases.
 
 {/* example: widget/01-identify.js */}
 
@@ -63,14 +69,17 @@ user_hash = hex(HMAC-SHA256(widget_identity_secret, user_id))
 // @ts-check
 ClickFix("boot", { widgetId: "WIDGET_ID", locale: "tr" });
 
-fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash } döner
+fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash, company_id } döner
   .then((r) => r.json())
   .then((session) =>
     ClickFix("identify", {
       user_id: session.user_id, // kişinin dış kimliği
-      user_hash: session.user_hash, // hex(HMAC-SHA256(anahtar, user_id)), sunucuda
+      // Firma ile: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)), sunucuda.
+      // Firmasız: hex(HMAC-SHA256(anahtar, user_id)).
+      user_hash: session.user_hash,
       name: "Ayşe Yılmaz",
       email: "ayse@example.com",
+      company: { id: session.company_id }, // imzadaki firma kimliği
     }),
   );
 
@@ -89,14 +98,21 @@ import { identityHash } from "@clickfix/node";
 // Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
 const secret = process.env.CLICKFIX_IDENTITY_SECRET!;
 
-// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik)
-export function userHashFor(userId: string): string {
-  return identityHash(secret, userId);
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik) ve
+// firmasının kimliği (identify'daki company.id). Firma verilirse imza ikisini
+// birden kapsar: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)).
+export function userHashFor(userId: string, companyId?: string): string {
+  return identityHash(secret, userId, companyId);
 }
 
 // Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
 console.log(
-  JSON.stringify({ user_id: "1001", user_hash: userHashFor("1001") }),
+  JSON.stringify({
+    user_id: "1001",
+    user_hash: userHashFor("1001"), // firmasız: eski formül
+    company_id: "F-77",
+    company_user_hash: userHashFor("1001", "F-77"), // company: { id: "F-77" } ile gönderilir
+  }),
 );
 ```
 
@@ -117,8 +133,14 @@ import (
 func userHash(ctx context.Context) error {
 	secret := os.Getenv("CLICKFIX_IDENTITY_SECRET") // Panel > Web widget > Güvenlik
 	userID := "1001"                                // kullanıcının sizin sisteminizdeki kimliği
-	hash := clickfix.IdentityHash(secret, userID)
-	return json.NewEncoder(os.Stdout).Encode(map[string]string{"user_id": userID, "user_hash": hash})
+	companyID := "F-77"                             // firmasının kimliği (identify: company.id)
+	return json.NewEncoder(os.Stdout).Encode(map[string]string{
+		"user_id":   userID,
+		"user_hash": clickfix.IdentityHash(secret, userID), // firmasız: eski formül
+		// Firma ile: imza user_id + "\n" + company_id üzerinden; company: { id } ile gönderilir.
+		"company_id":        companyID,
+		"company_user_hash": clickfix.IdentityCompanyHash(secret, userID, companyID),
+	})
 }
 ```
 
@@ -150,6 +172,9 @@ echo json_encode(['user_id' => '1001', 'user_hash' => userHashFor($secret, '1001
 # Adım 1: user_hash = hex(HMAC-SHA256(kimlik_anahtari, user_id)); yalnız sunucuda.
 USER_ID="1001"
 printf '%s' "$USER_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
+# Firma ile (company: { id }): imza user_id + "\n" + company_id üzerinden hesaplanır.
+COMPANY_ID="F-77"
+printf '%s\n%s' "$USER_ID" "$COMPANY_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
 ```
 
 If you **Rotate** the secret, values made with the old one stop working; update the secret on your server at the same time. On sites that need cookie consent pass it with `boot({ consent })` or `ClickFix("consent", true)`; nothing is written to the browser before consent.
@@ -172,11 +197,11 @@ The ids of your own system live in ClickFix as the **external id** (`external_id
 // @ts-check
 ClickFix("identify", {
   user_id: "1001", // API: contacts.external_id
-  user_hash: "SUNUCUDA_HESAPLANAN",
+  user_hash: "SUNUCUDA_HESAPLANAN", // user_id + "\n" + company.id üzerinden imzalı
   company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" }, // API: companies.external_id
 });
-ClickFix("on", "identify", ({ verified }) =>
-  console.log("doğrulandı:", verified),
+ClickFix("on", "identify", ({ verified, company_verified }) =>
+  console.log("doğrulandı:", verified, "firma:", company_verified),
 );
 ```
 
@@ -413,18 +438,19 @@ curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/contacts/by-e
 
 ## 4. Company [#company]
 
-A company is created or matched through `company` in the widget's `identify` call: the first key is `company.id` (the company's external id), the second is `domain`. Through the API a company is found with `GET /v1/public-api/companies?external_id=`; three customer-health signals are sent against it: usage (`PUT /company-usage`, 0–100), revenue (`PUT /company-revenue`) and product events (`POST /company-events`, next section). In all three the company is selected by `company_uuid`, `external_id` or `domain`.
+A company is created or matched through `company` in the widget's `identify` call: the first key is `company.id` (the company's external id; used only when `user_hash` signs it too, see [identity verification](#identity)), the second is `domain`. A company bound through a signed id carries the **Verified** badge in the panel. Through the API a company is found with `GET /v1/public-api/companies?external_id=`; three customer-health signals are sent against it: usage (`PUT /company-usage`, 0–100), revenue (`PUT /company-revenue`) and product events (`POST /company-events`, next section). In all three the company is selected by `company_uuid`, `external_id` or `domain`.
 
 {/* example: widget/04-company.js */}
 
 ```js tab="Widget"
 // Adım 4: şirket identify ile oluşur ya da dış kimliğiyle eşleşir (ikinci anahtar: domain).
+// company.id yalnız user_hash onu da imzalıyorsa bağlanır (user_id + "\n" + company.id).
 // @ts-check
 ClickFix("boot", {
   widgetId: "WIDGET_ID",
   user: {
     user_id: "1001",
-    user_hash: "SUNUCUDA_HESAPLANAN",
+    user_hash: "SUNUCUDA_HESAPLANAN", // user_id + "\n" + "F-77" üzerinden
     company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com.tr" },
   },
 });
@@ -1186,9 +1212,9 @@ The path for mobile apps is not a separate native SDK but a **secure webview tha
 
 ### Session handoff [#mobile-session]
 
-1. The app fetches `{ user_id, user_hash }` from your own server ([identity verification](#identity)); the secret never reaches the app.
+1. The app fetches `{ user_id, user_hash, company_id }` from your own server ([identity verification](#identity)); `user_hash` signs the user id and the company id together, and the secret never reaches the app.
 2. The webview loads `widget-embed.html?widget=WIDGET_ID&locale=en&theme=auto`. When the widget is ready, `{"type":"clickfix:ready", ...}` arrives over the bridge.
-3. The app sends `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}`; the answer is `{"type":"clickfix:result","id":"1","ok":true}`. When rejected, `ok:false` and `error.code` (such as `WIDGET_IDENTITY_INVALID`) come back and the user stays anonymous.
+3. The app sends `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}`; `company.id` is the company id in the signature (bridge contract 1.2, `bridge_version` 1). The answer is `{"type":"clickfix:result","id":"1","ok":true}`. When rejected, `ok:false` and `error.code` (such as `WIDGET_IDENTITY_INVALID`) come back and the user stays anonymous.
 4. On logout send `{"type":"clickfix:reset"}`; the visitor is forgotten and the next launch is a new visitor.
 
 The webview's cookies and storage carry the session across reloads; never switch accounts without sending `reset`.

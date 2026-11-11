@@ -35,6 +35,8 @@ export type Visitor = {
   token: string;
   expires_at: string;
   verified: boolean;
+  /** The contact's company was proved by a company-signed user_hash (CF-206). */
+  company_verified: boolean;
   contact: VisitorContact | null;
 };
 export type Conversation = {
@@ -128,10 +130,15 @@ export type Envelope<T> = {
 
 export type IdentifyInput = {
   user_id: string;
+  /**
+   * Server-computed: hex(HMAC-SHA256(secret, user_id)), or with a company
+   * hex(HMAC-SHA256(secret, user_id + "\n" + company.id)) (CF-206).
+   */
   user_hash: string;
   name?: string;
   email?: string;
   phone?: string;
+  /** `id` binds the company only when user_hash signs it as well. */
   company?: { id?: string; name?: string; domain?: string };
   attributes?: Record<string, string | number | boolean>;
 };

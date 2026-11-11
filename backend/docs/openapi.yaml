@@ -43623,12 +43623,13 @@ components:
         avatar_url: { type: [string, "null"] }
     WidgetVisitor:
       type: object
-      required: [id, token, expires_at, verified, contact]
+      required: [id, token, expires_at, verified, company_verified, contact]
       properties:
         id: { type: string, description: Anonymous visitor id }
         token: { type: string, description: "Visitor token, sent as a bearer Authorization header" }
         expires_at: { type: string, format: date-time }
         verified: { type: boolean }
+        company_verified: { type: boolean, description: "The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint" }
         contact:
           oneOf:
             - type: "null"
@@ -43704,15 +43705,23 @@ components:
       type: object
       required: [user_id, user_hash]
       properties:
-        user_id: { type: string, maxLength: 200 }
-        user_hash: { type: string, description: "hex(HMAC-SHA256(identity_secret, user_id))" }
+        user_id: { type: string, maxLength: 200, description: "The user's id in your system (the contact's external id); no line breaks" }
+        user_hash:
+          type: string
+          description: >-
+            Computed on your server with the widget's identity secret. Without a company id:
+            hex(HMAC-SHA256(identity_secret, user_id)). With company.id (CF-206):
+            hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id)), so the user cannot claim
+            another company. A user-only hash sent together with company.id still verifies the user,
+            but the company id is then a claim: it binds no company and is not stored (name and domain
+            stay hints).
         name: { type: string }
         email: { type: string }
         phone: { type: string }
         company:
           type: object
           properties:
-            id: { type: string }
+            id: { type: string, maxLength: 200, description: "The company's id in your system (companies.external_id); binds the contact to the company only when user_hash covers it" }
             name: { type: string }
             domain: { type: string }
     WidgetProfileInput:
@@ -56288,12 +56297,13 @@ components:
 
     Company:
       type: object
-      required: [uuid, name, domain, external_id, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
+      required: [uuid, name, domain, external_id, verified_at, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         domain: { type: [string, "null"] }
         external_id: { type: [string, "null"] }
+        verified_at: { type: [string, "null"], format: date-time, description: "Last time a signed-in user proved external_id with a company-signed user_hash (CF-206); null when the company was never proved" }
         tier: { type: string }
         account_owner: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         notes: { type: string }
@@ -60333,6 +60343,9 @@ components:
         interrupted:
           type: boolean
           description: Generation stopped or connection lost; content is a saved partial reply.
+        error_code:
+          type: string
+          description: Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped.
         uuid: *id004
         role:
           type: string
@@ -60365,7 +60378,7 @@ components:
     AssistantStreamDelta: {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}
     AssistantStreamUsage: {"type": "object", "required": ["input_tokens", "output_tokens", "provider", "model"], "properties": {"input_tokens": {"type": "integer"}, "output_tokens": {"type": "integer"}, "provider": {"type": "string"}, "model": {"type": "string"}}}
     AssistantStreamDone: {"type": "object", "required": ["reply", "usage"], "properties": {"reply": {"$ref": "#/components/schemas/AssistantMessage"}, "usage": {"$ref": "#/components/schemas/AssistantStreamUsage"}}}
-    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}}}
+    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}, "request_id": {"type": "string", "description": "Correlation id of the request (the client's X-Request-ID when it sent one)."}}}
     AssistantSendInput:
       type: object
       additionalProperties: false

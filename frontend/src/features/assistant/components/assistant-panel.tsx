@@ -6,7 +6,7 @@ import {
   useAui,
   useAuiState,
 } from "@assistant-ui/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
   History,
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,6 +33,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 import { errorKey } from "../lib/errors";
 import { openSupportChat } from "../lib/support-widget";
+import { bumpUsage, runSettled } from "../lib/usage";
 import { useAssistantSurface } from "../runtime/surface";
 import { assistantService } from "../services/assistant.service";
 
@@ -76,11 +77,22 @@ export function AssistantPanel({
   const isEmpty = useAuiState((s) => s.thread.messages.length === 0);
   const isRunning = useAuiState((s) => s.thread.isRunning);
 
+  const qc = useQueryClient();
   const status = useQuery({
     queryKey: keys.status(slug),
     queryFn: () => assistantService.status(slug),
     enabled: Boolean(slug),
   });
+  // "Today N/limit" moves with every reply (CF-207, #150): bump the cached
+  // count as soon as a run settles, then fetch the exact figure.
+  const wasRunning = useRef(isRunning);
+  useEffect(() => {
+    if (runSettled(wasRunning.current, isRunning)) {
+      qc.setQueryData(keys.status(slug), bumpUsage);
+      void qc.invalidateQueries({ queryKey: keys.status(slug) });
+    }
+    wasRunning.current = isRunning;
+  }, [isRunning, qc, slug]);
   const pageGuides = useQuery({
     queryKey: ["guides", slug, "route", pathname, locale],
     queryFn: () => guidesService.forRoute(slug, pathname, locale),

@@ -121,10 +121,34 @@ func VerifyWebhook(secret, timestamp, signature string, body []byte, now time.Ti
 	return nil
 }
 
-// IdentityHash is calculated on your server. Never expose the identity secret to a browser.
+// IdentityHash is the widget user_hash of a user id alone:
+// hex(HMAC-SHA256(secret, userID)). It is calculated on your server; never
+// expose the identity secret to a browser or an app. For a user that
+// belongs to a company use IdentityCompanyHash.
 func IdentityHash(secret, userID string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(userID))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// IdentityCompanyHash is the widget user_hash of a user id together with
+// the company's id in your system (sent to identify as company.id):
+// hex(HMAC-SHA256(secret, userID + "\n" + companyID)), so a signed-in user
+// cannot claim another company (CF-206). With an empty companyID it equals
+// IdentityHash. The ids are separated by a newline inside the signed bytes,
+// so an id that contains a line break cannot be signed: the result is then
+// "" (which the widget API never accepts), as the Node helper throws.
+func IdentityCompanyHash(secret, userID, companyID string) string {
+	if companyID == "" {
+		return IdentityHash(secret, userID)
+	}
+	if strings.ContainsAny(userID+companyID, "\n\r") {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(userID))
+	_, _ = mac.Write([]byte("\n"))
+	_, _ = mac.Write([]byte(companyID))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 

@@ -18055,6 +18055,8 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             verified: boolean;
+            /** @description The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint */
+            company_verified: boolean;
             contact: null | {
                 name: string;
                 email: string | null;
@@ -18208,13 +18210,15 @@ export interface components {
             request_form?: components["schemas"]["PublicRequestForm"] | null;
         };
         WidgetIdentifyInput: {
+            /** @description The user's id in your system (the contact's external id); no line breaks */
             user_id: string;
-            /** @description hex(HMAC-SHA256(identity_secret, user_id)) */
+            /** @description Computed on your server with the widget's identity secret. Without a company id: hex(HMAC-SHA256(identity_secret, user_id)). With company.id (CF-206): hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id)), so the user cannot claim another company. A user-only hash sent together with company.id still verifies the user, but the company id is then a claim: it binds no company and is not stored (name and domain stay hints). */
             user_hash: string;
             name?: string;
             email?: string;
             phone?: string;
             company?: {
+                /** @description The company's id in your system (companies.external_id); binds the contact to the company only when user_hash covers it */
                 id?: string;
                 name?: string;
                 domain?: string;
@@ -25056,6 +25060,11 @@ export interface components {
             name: string;
             domain: string | null;
             external_id: string | null;
+            /**
+             * Format: date-time
+             * @description Last time a signed-in user proved external_id with a company-signed user_hash (CF-206); null when the company was never proved
+             */
+            verified_at: string | null;
             tier: string;
             account_owner: components["schemas"]["InboxRef"] | null;
             notes: string;
@@ -28004,6 +28013,8 @@ export interface components {
         AssistantMessage: {
             /** @description Generation stopped or connection lost; content is a saved partial reply. */
             interrupted?: boolean;
+            /** @description Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped. */
+            error_code?: string;
             /** Format: uuid */
             uuid: string;
             /** @enum {string} */
@@ -28036,10 +28047,12 @@ export interface components {
             reply: components["schemas"]["AssistantMessage"];
             usage: components["schemas"]["AssistantStreamUsage"];
         };
-        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
+        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
         AssistantStreamError: {
             /** @enum {string} */
             code: "VALIDATION_ERROR" | "ASSISTANT_NOT_FOUND" | "ASSISTANT_DISABLED" | "ASSISTANT_DAILY_LIMIT" | "ASSISTANT_MESSAGE_REJECTED" | "ASSISTANT_AI_UNAVAILABLE" | "ASSISTANT_ACTION_FAILED" | "ASSISTANT_INTERNAL";
+            /** @description Correlation id of the request (the client's X-Request-ID when it sent one). */
+            request_id?: string;
         };
         AssistantSendInput: {
             content: string;

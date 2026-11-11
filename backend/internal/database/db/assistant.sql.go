@@ -234,7 +234,7 @@ func (q *Queries) AssistantEscalatedConversation(ctx context.Context, arg Assist
 const assistantMessageCreate = `-- name: AssistantMessageCreate :one
 INSERT INTO assistant_messages (organization_id, thread_id, role, content, suggestions, actions)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted
+RETURNING id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted, error_code
 `
 
 type AssistantMessageCreateParams struct {
@@ -267,21 +267,24 @@ func (q *Queries) AssistantMessageCreate(ctx context.Context, arg AssistantMessa
 		&i.Actions,
 		&i.CreatedAt,
 		&i.Interrupted,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
 const assistantMessageInterrupted = `-- name: AssistantMessageInterrupted :exec
-UPDATE assistant_messages SET interrupted = TRUE WHERE organization_id = $1 AND uuid = $2
+UPDATE assistant_messages SET interrupted = TRUE, error_code = $1
+WHERE organization_id = $2 AND uuid = $3
 `
 
 type AssistantMessageInterruptedParams struct {
+	ErrorCode      string    `json:"error_code"`
 	OrganizationID int64     `json:"organization_id"`
 	Uuid           uuid.UUID `json:"uuid"`
 }
 
 func (q *Queries) AssistantMessageInterrupted(ctx context.Context, arg AssistantMessageInterruptedParams) error {
-	_, err := q.db.Exec(ctx, assistantMessageInterrupted, arg.OrganizationID, arg.Uuid)
+	_, err := q.db.Exec(ctx, assistantMessageInterrupted, arg.ErrorCode, arg.OrganizationID, arg.Uuid)
 	return err
 }
 
@@ -302,7 +305,7 @@ func (q *Queries) AssistantMessageSetActions(ctx context.Context, arg AssistantM
 }
 
 const assistantMessageWithAction = `-- name: AssistantMessageWithAction :one
-SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted FROM assistant_messages
+SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted, error_code FROM assistant_messages
 WHERE organization_id = $1 AND thread_id = $2 AND role = 'assistant'
   AND actions @> jsonb_build_array(jsonb_build_object('id', $3::text))
 FOR UPDATE
@@ -328,12 +331,13 @@ func (q *Queries) AssistantMessageWithAction(ctx context.Context, arg AssistantM
 		&i.Actions,
 		&i.CreatedAt,
 		&i.Interrupted,
+		&i.ErrorCode,
 	)
 	return i, err
 }
 
 const assistantMessagesList = `-- name: AssistantMessagesList :many
-SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted FROM assistant_messages
+SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted, error_code FROM assistant_messages
 WHERE organization_id = $1 AND thread_id = $2 ORDER BY id
 `
 
@@ -362,6 +366,7 @@ func (q *Queries) AssistantMessagesList(ctx context.Context, arg AssistantMessag
 			&i.Actions,
 			&i.CreatedAt,
 			&i.Interrupted,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
@@ -374,8 +379,8 @@ func (q *Queries) AssistantMessagesList(ctx context.Context, arg AssistantMessag
 }
 
 const assistantMessagesRecent = `-- name: AssistantMessagesRecent :many
-SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted FROM (
-    SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted FROM assistant_messages
+SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted, error_code FROM (
+    SELECT id, uuid, organization_id, thread_id, role, content, suggestions, actions, created_at, interrupted, error_code FROM assistant_messages
     WHERE organization_id = $1 AND thread_id = $2
     ORDER BY id DESC LIMIT $3
 ) recent ORDER BY id
@@ -407,6 +412,7 @@ func (q *Queries) AssistantMessagesRecent(ctx context.Context, arg AssistantMess
 			&i.Actions,
 			&i.CreatedAt,
 			&i.Interrupted,
+			&i.ErrorCode,
 		); err != nil {
 			return nil, err
 		}
