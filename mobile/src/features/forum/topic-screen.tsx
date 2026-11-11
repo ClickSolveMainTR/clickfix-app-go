@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { RefreshControl, View } from 'react-native';
 
@@ -15,20 +15,21 @@ import { Text } from '@/ui/text';
 import { useManualRefresh } from '@/ui/use-manual-refresh';
 
 import { type ForumReply, type ForumTopic, useForumActions, useForumScope, useForumTopic } from './api';
-import { acceptedReply } from './core';
+import { acceptedReply, type PostKind, visibilityCopy } from './core';
 import { confirmAction, ForumNotice, useForumT, useSingleFlight } from './parts';
 
 /**
  * One published topic (CF-171) as visitors see it, with the moderator's
- * action from the panel's topic dialog: marking the accepted answer. Text
- * written by visitors is shown as plain text.
+ * actions from the panel's topic dialog: marking the accepted answer and
+ * taking the topic or a reply down (CF-182). Text written by visitors is
+ * shown as plain text.
  */
 export function ForumTopicScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const t = useForumT();
   const { org, canManage } = useForumScope();
   const topic = useForumTopic(slug);
-  const { accept } = useForumActions();
+  const { accept, visibility } = useForumActions();
   const refresh = useManualRefresh(topic);
   const flight = useSingleFlight();
   const title = topic.data?.title ?? t('forum.topic');
@@ -64,6 +65,31 @@ export function ForumTopicScreen() {
     });
   };
 
+  // Taking a post down asks first. A topic taken down is gone from the
+  // public read this screen shows, so the screen closes after it.
+  const takeDown = (kind: PostKind, uuid: string) => {
+    const copy = visibilityCopy('unpublish', kind);
+    confirmAction(t, {
+      title: t(copy.title),
+      body: t(copy.body),
+      action: t(copy.action),
+      destructive: true,
+      run: () => {
+        if (!flight.start()) return;
+        visibility.mutate(
+          { uuid, action: 'unpublish' },
+          {
+            onSettled: flight.end,
+            onSuccess: () => {
+              if (kind === 'topic' && router.canGoBack()) router.back();
+            },
+          },
+        );
+      },
+    });
+  };
+  const busy = accept.isPending || visibility.isPending;
+
   return (
     <>
       <Stack.Screen options={{ title }} />
@@ -87,16 +113,28 @@ export function ForumTopicScreen() {
                     </Text>
                   </View>
                 </List>
-                <Button
-                  title={t('forum.view_public')}
-                  icon="externalLink"
-                  variant="outline"
-                  onPress={() =>
-                    void WebBrowser.openBrowserAsync(
-                      `${WEB_URL}/help/${encodeURIComponent(org)}/community/topic/${encodeURIComponent(data.slug)}`,
-                    )
-                  }
-                />
+                <View className="flex-row flex-wrap gap-2">
+                  <Button
+                    title={t('forum.view_public')}
+                    icon="externalLink"
+                    variant="outline"
+                    onPress={() =>
+                      void WebBrowser.openBrowserAsync(
+                        `${WEB_URL}/help/${encodeURIComponent(org)}/community/topic/${encodeURIComponent(data.slug)}`,
+                      )
+                    }
+                    className="flex-1"
+                  />
+                  <Button
+                    title={t('forum.unpublish')}
+                    icon="hide"
+                    variant="destructive"
+                    disabled={busy}
+                    loading={visibility.isPending && visibility.variables?.uuid === data.uuid}
+                    onPress={() => takeDown('topic', data.uuid)}
+                    className="flex-1"
+                  />
+                </View>
                 <View>
                   <SectionHeader title={t('forum.replies', { count: data.replies.total })} />
                   {replies.length ? (
@@ -118,17 +156,26 @@ export function ForumTopicScreen() {
                               </Text>
                               {isAccepted ? <StatusPill label={t('forum.accepted')} tone="done" /> : null}
                             </View>
-                            {isAccepted ? null : (
+                            <View className="flex-row flex-wrap gap-2">
+                              {isAccepted ? null : (
+                                <Button
+                                  title={t('forum.accept')}
+                                  icon="accept"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  loading={accept.isPending && accept.variables?.reply.uuid === r.uuid}
+                                  onPress={() => markAccepted(data, r, !!accepted)}
+                                />
+                              )}
                               <Button
-                                title={t('forum.accept')}
-                                icon="accept"
+                                title={t('forum.unpublish')}
+                                icon="hide"
                                 variant="ghost"
-                                disabled={accept.isPending}
-                                loading={accept.isPending && accept.variables?.reply.uuid === r.uuid}
-                                onPress={() => markAccepted(data, r, !!accepted)}
-                                className="self-start"
+                                disabled={busy}
+                                loading={visibility.isPending && visibility.variables?.uuid === r.uuid}
+                                onPress={() => takeDown('reply', r.uuid)}
                               />
-                            )}
+                            </View>
                           </View>
                         );
                       })}

@@ -1,10 +1,45 @@
+/*
+ * A second Tailwind bundle, scoped to fumadocs' own class list. It loads
+ * after the app bundle, so a plain utility it also emits (`.hidden`, ...)
+ * outranks a responsive variant from the app bundle on the same element:
+ * the landing shell around the docs therefore uses `max-lg:hidden` style
+ * classes instead of `hidden lg:flex`.
+ */
 @import "tailwindcss" source(none);
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 @import "fumadocs-openapi/css/preset.css";
 
-.clickfix-docs,
-body:has(.clickfix-docs) {
+/*
+ * Docs colours in both modes (CF-208). The landing shell around the docs is
+ * always ink; the docs body follows the theme class next-themes sets on
+ * <html> (`.dark`). Light values are the ClickFix paper look, dark values the
+ * ink look; code blocks use Shiki's dual theme (`--shiki-light` /
+ * `--shiki-dark`), which fumadocs switches on the same `.dark` class.
+ */
+.clickfix-docs {
+  --color-fd-background: #f6f8f6;
+  --color-fd-foreground: #0f1410;
+  --color-fd-primary: #0a7a16;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-muted: #e9eeea;
+  --color-fd-muted-foreground: #4b5a4e;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #0f1410;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #0f1410;
+  --color-fd-secondary: #e3e9e4;
+  --color-fd-secondary-foreground: #0f1410;
+  --color-fd-border: #d2dbd4;
+  --color-fd-accent: #dcefdf;
+  --color-fd-accent-foreground: #0f1410;
+  --color-fd-ring: #0a7a16;
+  --fd-banner-height: 4rem;
+  background: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  color-scheme: light;
+}
+.dark .clickfix-docs {
   --color-fd-background: #0a0d0b;
   --color-fd-foreground: #f2f5f2;
   --color-fd-primary: #03ff13;
@@ -15,11 +50,38 @@ body:has(.clickfix-docs) {
   --color-fd-card-foreground: #f2f5f2;
   --color-fd-popover: #101611;
   --color-fd-popover-foreground: #f2f5f2;
+  --color-fd-secondary: #171c18;
+  --color-fd-secondary-foreground: #f2f5f2;
   --color-fd-border: #29392c;
   --color-fd-accent: #19351e;
   --color-fd-accent-foreground: #f2f5f2;
-  --fd-banner-height: 4rem;
+  --color-fd-ring: #03ff13;
   color-scheme: dark;
+}
+/* The search dialog and popovers render in a portal outside .clickfix-docs. */
+body:has(.clickfix-docs) {
+  --color-fd-background: #f6f8f6;
+  --color-fd-foreground: #0f1410;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #0f1410;
+  --color-fd-border: #d2dbd4;
+  --color-fd-muted: #e9eeea;
+  --color-fd-muted-foreground: #4b5a4e;
+  --color-fd-accent: #dcefdf;
+  --color-fd-accent-foreground: #0f1410;
+  --color-fd-primary: #0a7a16;
+}
+.dark body:has(.clickfix-docs) {
+  --color-fd-background: #0a0d0b;
+  --color-fd-foreground: #f2f5f2;
+  --color-fd-popover: #101611;
+  --color-fd-popover-foreground: #f2f5f2;
+  --color-fd-border: #29392c;
+  --color-fd-muted: #171c18;
+  --color-fd-muted-foreground: #a5b3a7;
+  --color-fd-accent: #19351e;
+  --color-fd-accent-foreground: #f2f5f2;
+  --color-fd-primary: #03ff13;
 }
 .clickfix-docs #nd-sidebar {
   top: 4rem;
@@ -28,4 +90,12 @@ body:has(.clickfix-docs) {
 .clickfix-docs h2,
 .clickfix-docs h3 {
   font-family: var(--font-space-grotesk), sans-serif;
+}
+/* Links in prose keep the signal green readable on both backgrounds. */
+.clickfix-docs .prose a:not(.not-prose a) {
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--color-fd-primary) 50%,
+    transparent
+  );
 }

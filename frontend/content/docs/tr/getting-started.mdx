@@ -62,8 +62,37 @@ Bağladığınız kanaldan kendinize bir test mesajı gönderin. Mesaj **Gelen k
 
 ClickFix'in iOS ve Android uygulamasıyla anlık bildirim alır, konuşmaları yanıtlar ve çevrimiçi durumunuzu yönetirsiniz. Mobil uygulamada giriş yaptıktan sonra, web'deki giriş ekranında **QR kod ile giriş** seçeneğiyle bilgisayarınızda şifre yazmadan da giriş yapabilirsiniz.
 
+## Doğru kurulum sırası [#setup-order]
+
+Kurulum sihirbazı ve ClickFix Asistan'ın "neyi eksik bıraktın" kontrolü aynı beş adımı izler. Sıra önemlidir: önce müşteriyi tanıtmadan makale girmek, AI'ın müşteriyi tanımadan yanıt vermesine yol açar.
+
+| Adım                | Ne yaparsınız                                                                                | "Bitti" koşulu                                              |
+| ------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1. Müşteriyi tanıt  | Widget kimlik anahtarı, `user_hash`, dış kimlik (kişi ve firma), özel alanlar, ekran bağlamı | Doğrulanmış bir `identify` geldi, özel alanlar kabul edildi |
+| 2. Sistemini bağla  | Kavramlar, uçlar, yapılabilecek işler, AI tarifi (**Entegrasyonlar → Sistemini bağla**)      | Bir kavram "Dene" ile gerçek cevap döndü                    |
+| 3. AI'a öğret       | Ajan modu, kişilik, prosedürler (**Organizasyon → Yapay zekâ**)                              | Ajan açık, en az bir tarif ya da prosedür yayında           |
+| 4. Bilgi bankası    | Makaleler, koleksiyonlar, yardım merkezi                                                     | Yayında makale var                                          |
+| 5. Otomasyon ve SLA | Karşılama (anında yanıt), yönlendirme, iş akışları, SLA ve çalışma saatleri                  | Çalışma saati tanımlı, SLA politikası var                   |
+
+Atlanan adım sihirbazda uyarı olarak kalır; asistan her sayfada bir sonraki adıma yönlendirir. Geliştirici tarafı adım adım: [Entegrasyon kılavuzu](/docs/integration-guide).
+
 ## Sonraki adımlar [#next-steps]
 
 - [AI ajanını ayarlayın](/docs/ai)
 - [Bilgi bankası ve yardım merkezi](/docs/knowledge-base)
 - [İş akışları ve otomasyon](/docs/automation)
+
+## Sık sorulanlar [#faq]
+
+**Widget'ı kurmadan önce makale girebilir miyim?** Girebilirsiniz ama AI müşteriyi tanımadan yanıt verir; önce 1. ve 2. adımı tamamlayın.
+
+**Çalışma saatlerini nerede tanımlarım?** Tek yerde: **Organizasyon → SLA ve çalışma saatleri**. Widget, AI ve SLA aynı kaynağı kullanır.
+
+**Ekibimi davet etmeden deneyebilir miyim?** Evet; sahibi olduğunuz organizasyonda tek başınıza kanal bağlayıp test mesajı gönderebilirsiniz.
+
+**Hangi adımı eksik bıraktığımı nasıl görürüm?** Kurulum sihirbazı sol menüdedir; ayrıca `⌘J` ile ClickFix Asistan'ı açın, bulunduğunuz sayfa için eksikleri söyler.
+
+## İlgili API [#related-api]
+
+- [API](/docs/api): anahtar oluşturma, kapsamlar ve ilk istek.
+- [Entegrasyon kılavuzu](/docs/integration-guide): kurulum sırasının kod tarafı; [SDK'lar](/docs/integration-guide/sdks).

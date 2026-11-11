@@ -1,0 +1,134 @@
+---
+title: Events and screen context
+description: "The widget's screen context (track) and the API's product events (company-events): which screen the customer wrote from, the company timeline, idempotency."
+---
+
+There are two separate event channels:
+
+- **Screen context** (widget): the last 20 events you record with `ClickFix("track", name, properties)` and the page URL travel with the visitor's next message. In the panel they appear in the conversation header as **which screen they wrote from**, and they feed the AI agent's input and workflow conditions. Query strings and `#` fragments are dropped on the server; still, keep personal data out of `track` properties.
+- **Product events** (API, `events:write`): `POST /v1/public-api/company-events` writes to the company timeline; `contact_email` links the event to a known contact and `idempotency_key` stops the same event from being written twice (`duplicate: true`).
+
+{/* example: widget/05-events.js */}
+
+```js tab="Widget"
+// Adım 5: ekran bağlamı. Son 20 olay ve sayfa adresi ziyaretçinin mesajıyla
+// gider; panelde "hangi ekrandan yazdı" ve AI'ın girdisi olur.
+// @ts-check
+ClickFix("track", "order_viewed", { order_id: "SP-1042", total: 1250.5 });
+ClickFix("track", "payment_failed", { reason: "insufficient_funds" });
+// Kullanıcı destek isterse konuşmayı hazır metinle açın:
+ClickFix(
+  "startConversation",
+  "SP-1042 numaralı siparişimde ödeme hatası alıyorum",
+);
+```
+
+{/* example: node/05-events.ts */}
+
+```ts tab="Node.js"
+// Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
+// şirket zaman çizelgesine API ile yazılır (events:write).
+import { createClient } from "@getclickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+const eventId = `seat-limit-F-77-${Date.now()}`;
+
+const event = await client.request(
+  "/v1/public-api/company-events",
+  "post",
+  {
+    external_id: "F-77", // şirketin dış kimliği (ya da company_uuid / domain)
+    contact_email: "ayse@example.com", // olayı bilinen kişiye bağlar
+    name: "seat_limit_reached",
+    properties: { seats: 12, limit: 12 },
+    idempotency_key: eventId,
+  },
+  { idempotencyKey: eventId },
+);
+
+console.log(JSON.stringify(event.data));
+```
+
+{/* example: go/events.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+)
+
+// Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
+func events(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+	ext, email, idem := "F-77", "ayse@example.com", fmt.Sprintf("seat-limit-F-77-%d", time.Now().UnixNano())
+	props := map[string]any{"seats": 12, "limit": 12}
+	res, err := client.PostV1PublicApiCompanyEventWithResponse(ctx,
+		&clickfix.PostV1PublicApiCompanyEventParams{IdempotencyKey: idem},
+		clickfix.PostV1PublicApiCompanyEventJSONRequestBody{
+			ExternalId: &ext, ContactEmail: &email, Name: "seat_limit_reached", Properties: &props, IdempotencyKey: &idem,
+		})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 200 && res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
+}
+```
+
+{/* example: php/05-events.php */}
+
+```php tab="PHP"
+<?php
+// Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
+// şirket zaman çizelgesine API ile yazılır (events:write).
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+
+$client = new Client(getenv('CLICKFIX_BASE_URL'), getenv('CLICKFIX_API_KEY'));
+
+// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+$eventId = 'seat-limit-F-77-'.(int) (microtime(true) * 1000);
+
+// idempotency_key aynı zamanda Idempotency-Key başlığı olur.
+$event = $client->events()->track([
+    'external_id' => 'F-77', // şirketin dış kimliği (ya da company_uuid / domain)
+    'contact_email' => 'ayse@example.com', // olayı bilinen kişiye bağlar
+    'name' => 'seat_limit_reached',
+    'properties' => ['seats' => 12, 'limit' => 12],
+    'idempotency_key' => $eventId,
+]);
+
+echo json_encode($event), PHP_EOL;
+```
+
+{/* example: curl/05-events.sh */}
+
+```bash tab="curl"
+# Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
+# Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+EVENT_ID="seat-limit-F-77-$(date +%s%N)"
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/public-api/company-events" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $EVENT_ID" \
+  -d '{ "external_id": "F-77", "contact_email": "ayse@example.com", "name": "seat_limit_reached", "properties": { "seats": 12, "limit": 12 }, "idempotency_key": "'$EVENT_ID'" }'
+```

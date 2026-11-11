@@ -1,12 +1,39 @@
 ---
 title: Uygulama galerisi
-description: ClickFix paneline hazır uygulamaları ekleyin.
+description: Hazır galeri uygulamalarını (sipariş sorgulama, Calendly, Uptime Kuma, Google Dokümanlar, Metabase, OpenStreetMap) tek tıkla panele ekleyin; sınırları ve kendi uygulamanızla farkı.
 section: developers
 order: 5
 ---
 
-**Organizasyon → Uygulama yönetimi → Galeri** bölümünden hazır uygulamaları seçebilirsiniz.
+Galeri, kod yazmadan panele eklenebilen hazır **kenar çubuğu uygulamalarıdır**. **Organizasyon → Uygulama yönetimi → Galeri** bölümünden bir kartı seçer, kendi HTTPS adresinizi girer ve uygulamanın nerede görüneceğini (konuşma kenar çubuğu, kişi kartı, tam sayfa) belirlersiniz. Galeri uygulamaları yalnızca girdiğiniz adresi bir iframe içinde gösterir; ClickFix onlara konuşma verisi, kişi bilgisi ya da imzalı bağlam belirteci göndermez.
 
-Sipariş sorgulama, Calendly, Uptime Kuma, Google Dokümanlar, Metabase ve OpenStreetMap için hazır kartlar bulunur. Galeri kartını seçin, kendi HTTPS adresinizi girin ve uygulamanın nerede görüneceğini belirleyin.
+## Ne yapar [#what-it-does]
 
-Galeri uygulamaları yalnızca girilen adresi gösterir; konuşma verisi almaz. Konuşma bağlamı ve panel eylemleri için [kendi uygulamanızı geliştirin](/docs/apps).
+| Kart              | Ne gösterir                                                                                   | Girdi                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Sipariş sorgulama | Kendi sipariş sayfanızı konuşmanın yanında; müşteri e-postasını sorgu parametresiyle alabilir | Sipariş sayfanızın adresi; bkz. [Sipariş sorgulama örneği](/docs/order-lookup-sample) |
+| Calendly          | Randevu takvimi                                                                               | Calendly etkinlik bağlantınız                                                         |
+| Uptime Kuma       | Durum sayfası                                                                                 | Durum sayfanızın herkese açık adresi                                                  |
+| Google Dokümanlar | Paylaşılan bir doküman (iç prosedür, sık sorulanlar)                                          | "Bağlantıya sahip herkes görüntüleyebilir" bağlantısı                                 |
+| Metabase          | Gömülü bir pano                                                                               | Metabase herkese açık/gömme bağlantısı                                                |
+| OpenStreetMap     | Adres haritası                                                                                | Harita gömme bağlantısı                                                               |
+
+## Nasıl kurulur [#how-to-set-up]
+
+1. **Galeri**'den kartı seçin ve **Ekle**'ye basın.
+2. Adresi girin. Yalnız `https://` kabul edilir; adres iframe'de açılabilmelidir (sitenizin `X-Frame-Options` / `frame-ancestors` kuralı `getclickfix.com`'a izin vermelidir).
+3. **Yerleşim** seçin: konuşma kenar çubuğu, kişi kartı ya da sol menüde tam sayfa. Kimlerin göreceğini rolle sınırlayabilirsiniz.
+4. **Kaydet**. Uygulama hemen görünür; **Devre dışı bırak** ile gizlenir, **Kaldır** ile silinir.
+
+## Sık sorulanlar [#faq]
+
+**Uygulama konuşmadaki müşteriyi nasıl bilir?** Galeri uygulamaları bilmez; yalnız sabit adresi gösterir. Müşteriye göre içerik için [kendi uygulamanızı yapın](/docs/apps): imzalı bağlam belirteci ile kim, hangi konuşma, hangi organizasyon bilgisi gelir.
+
+**Adres iframe'de açılmıyor.** Sitenizin `Content-Security-Policy: frame-ancestors` ya da `X-Frame-Options` başlığı `https://getclickfix.com` kaynağına izin vermelidir.
+
+**Giriş gerektiren bir sayfayı gömebilir miyim?** Evet; iframe kendi çerezleriyle açılır, kullanıcı o sayfada oturum açar. Üçüncü taraf çerez kısıtları için sayfanın kendi alan adında olması gerekir.
+
+## İlgili API [#related-api]
+
+- Kendi uygulamanız için bağlam belirteci doğrulama anahtarları: [`GET /v1/app-context/jwks`](/docs/api-reference/apps/read-the-app-context-verification-keys).
+- Uygulama mesajlaşma ve olayları: [Kendi uygulamanızı yapın](/docs/apps#messages-and-events).

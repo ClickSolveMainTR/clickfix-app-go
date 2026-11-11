@@ -82,3 +82,22 @@ The **Runs** tab shows each run's step log. **Show on canvas** highlights the pa
 ## Automating with external tools [#automating-with-external-tools]
 
 To connect tools like Zapier, Make and n8n, see [Integrations](/docs/mcp-integrations?lang=en). To send events to your own system, see [Webhooks](/docs/webhooks?lang=en).
+
+## Welcome and instant reply [#instant-reply]
+
+Under **Automation → Welcome** you define, per mode (AI, agent, mixed), the "received, estimated time" text and estimate that reaches every new conversation written during working hours within 10 seconds, and the text the AI tells the customer when handing over to a human. The out-of-hours text has **one source**, the organization's working hours (**Organization → SLA and working hours**); the widget's online state and the AI use the same source. The welcome message does not stop the SLA first-response timer.
+
+## Custom fields and screen context in conditions [#custom-fields-in-conditions]
+
+Workflow and SLA conditions can read [custom fields](/docs/integration-guide/custom-fields?lang=en) (list fields by option id, so renaming an option keeps the link) and the customer's [screen context](/docs/integration-guide/events?lang=en) (latest event name, page path). Actions defined through [Connect your system](/docs/integration-guide/system-binding?lang=en) can be picked as workflow actions too (for example "resend the invoice").
+
+## FAQ [#faq]
+
+**Can I try a workflow without saving it?** Yes; **Dry run** simulates it on the latest conversation without changing data. ClickFix Assistant drafts a workflow from a sentence and shows the same dry run on its approval card.
+
+**Webhook or workflow action?** Webhooks to send data out; workflows for status, tags, assignment and messages inside ClickFix. A webhook delivery can also be picked as a workflow action.
+
+## Related API [#related-api]
+
+- Outbound events: [Webhooks](/docs/webhooks?lang=en), [REST hooks and trigger polling](/docs/api-reference/triggers/poll-trigger-events?lang=en).
+- Updating a conversation: [`PATCH /conversations/{uuid}`](/docs/api-reference/conversations/update-a-conversation?lang=en).

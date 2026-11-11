@@ -10,6 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import {
   CheckCircle2,
   ExternalLink,
+  EyeOff,
   MessageSquare,
   MessagesSquare,
   ThumbsUp,
@@ -39,16 +40,22 @@ import { datetime } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
+import { useVisibility } from "../hooks/use-visibility";
 import { forumKeys } from "../lib/keys";
 import {
   forumService,
   type ForumTopicSummary,
 } from "../services/forum.service";
+import { RemovedPosts } from "./removed-posts";
+import { VisibilityDialog } from "./visibility-dialog";
 const ALL = "__all__";
+type View = "published" | "removed";
 
 /**
  * Published topics (CF-78) as visitors see them, with agent actions: mark
- * an accepted answer and turn a topic into an inbox conversation.
+ * an accepted answer, take a topic or reply down (CF-182) and turn a topic
+ * into an inbox conversation. The "removed" view lists what was taken down
+ * and publishes it again.
  */
 export function TopicsTab({
   org,
@@ -59,6 +66,7 @@ export function TopicsTab({
 }) {
   const { t, locale } = useLocale();
   const [category, setCategory] = useState<string>(ALL);
+  const [view, setView] = useState<View>("published");
   const [open, setOpen] = useState<ForumTopicSummary | null>(null);
   const listState = useServerListState({ initialPageSize: 20 });
   const { limit, offset, q } = listState.params;
@@ -151,6 +159,37 @@ export function TopicsTab({
     [catName, locale, t],
   );
 
+  const viewSelect = (
+    <Select value={view} onValueChange={(v) => setView(v as View)}>
+      <SelectTrigger
+        className="h-8 w-full sm:w-56"
+        aria-label={t("forum.visibility.view")}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="published">
+          {t("forum.visibility.view_published")}
+        </SelectItem>
+        <SelectItem value="removed">
+          {t("forum.visibility.view_removed")}
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+  if (view === "removed") {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-xs">
+            {t("forum.removed.hint")}
+          </p>
+          {viewSelect}
+        </div>
+        <RemovedPosts org={org} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-xs">{t("forum.topics.hint")}</p>
@@ -177,30 +216,33 @@ export function TopicsTab({
           viewMode: false,
         }}
         toolbarExtra={
-          <Select
-            value={category}
-            onValueChange={(v) => {
-              setCategory(v);
-              listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
-            }}
-          >
-            <SelectTrigger
-              className="h-8 w-full sm:w-56"
-              aria-label={t("forum.topics.category")}
+          <>
+            {viewSelect}
+            <Select
+              value={category}
+              onValueChange={(v) => {
+                setCategory(v);
+                listState.setPagination((p) => ({ ...p, pageIndex: 0 }));
+              }}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>
-                {t("forum.topics.all_categories")}
-              </SelectItem>
-              {(categories.data ?? []).map((c) => (
-                <SelectItem key={c.uuid} value={c.slug}>
-                  {c.name}
+              <SelectTrigger
+                className="h-8 w-full sm:w-56"
+                aria-label={t("forum.topics.category")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>
+                  {t("forum.topics.all_categories")}
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {(categories.data ?? []).map((c) => (
+                  <SelectItem key={c.uuid} value={c.slug}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
         }
       />
       {open && (
@@ -229,6 +271,10 @@ function TopicDialog({
   const { t, locale } = useLocale();
   const qc = useQueryClient();
   const [converting, setConverting] = useState(false);
+  // A topic taken down is gone from the public read this dialog shows.
+  const visibility = useVisibility(org, (r) => {
+    if (r.kind === "topic" && r.action === "unpublish") onClose();
+  });
   const topic = useQuery({
     queryKey: forumKeys.topic(org, summary.slug),
     queryFn: () => forumService.topic(summary.slug),
@@ -278,6 +324,22 @@ function TopicDialog({
               {t("forum.topics.to_conversation")}
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive"
+            disabled={visibility.isPending}
+            onClick={() =>
+              visibility.ask({
+                action: "unpublish",
+                kind: "topic",
+                uuid: summary.uuid,
+              })
+            }
+          >
+            <EyeOff className="size-4" />
+            {t("forum.visibility.unpublish")}
+          </Button>
         </div>
         {topic.isLoading && <Skeleton className="h-32 w-full" />}
         {topic.isError && (
@@ -336,6 +398,26 @@ function TopicDialog({
                           {t("forum.topics.accept")}
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={
+                          accepted
+                            ? "text-destructive ml-auto h-7"
+                            : "text-destructive h-7"
+                        }
+                        disabled={visibility.isPending}
+                        onClick={() =>
+                          visibility.ask({
+                            action: "unpublish",
+                            kind: "reply",
+                            uuid: r.uuid,
+                          })
+                        }
+                      >
+                        <EyeOff className="size-3.5" />
+                        {t("forum.visibility.unpublish")}
+                      </Button>
                     </div>
                   </li>
                 );
@@ -355,6 +437,12 @@ function TopicDialog({
           onClose={() => setConverting(false)}
         />
       )}
+      <VisibilityDialog
+        request={visibility.pending}
+        isPending={visibility.isPending}
+        onConfirm={visibility.confirmPending}
+        onCancel={visibility.cancel}
+      />
     </AppDialog>
   );
 }

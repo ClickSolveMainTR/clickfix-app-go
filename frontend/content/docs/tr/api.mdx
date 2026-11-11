@@ -1,182 +1,193 @@
 ---
-title: API ve SDK hızlı başlangıç
-description: API anahtarı oluşturun, ClickFix REST API'sine ilk isteğinizi gönderin; yanıt yapısı, sayfalama, idempotency ve hız sınırları.
+title: API
 section: developers
 order: 1
+description: "ClickFix REST API'si: API anahtarı ve kapsamlar, ilk istek, yanıt zarfı, hata kodları, sayfalama, Idempotency-Key, hız sınırları ve sürümleme; SDK'lara ve uç nokta başvurusuna bağlantılar."
 ---
 
-ClickFix REST API'si, kendi sistemlerinizden konuşma oluşturmanızı, not eklemenizi, kişileri güncellemenizi ve olaylara abone olmanızı sağlar. Tam uç nokta listesi, şemalar ve her dil için hazır istek örnekleri [API başvurusunda](/docs/api) yer alır; başvuru yalnızca herkese açık ve kararlı uç noktaları içerir. API uç noktaları aşağıdaki başvuru sayfalarında belgelenir.
+ClickFix REST API'si; konuşma açmanızı, mesaj ve iç not eklemenizi, kişi ve şirket verinizi senkron tutmanızı, müşteri sağlığı sinyali göndermenizi ve olaylara webhook ile abone olmanızı sağlar. Bu sayfa API'nin ortak kurallarını anlatır. Uç noktalar, şemalar ve her dil için hazır istekler [API başvurusunda](/docs/api-reference); baştan sona kurulum sırası [Entegrasyon kılavuzunda](/docs/integration-guide); paketler [SDK'lar](/docs/integration-guide/sdks) sayfasındadır. Başvuruda yalnızca herkese açık ve kararlı uç noktalar yer alır; panelin kendi kullandığı iç uç noktalar API anahtarıyla çağrılamaz.
+
+**Temel adres:** `https://api.getclickfix.com/v1/public-api`
 
 ## 1. API anahtarı oluşturun [#create-api-key]
 
-1. **Organizasyon → API ve otomasyonlar** sayfasını açın.
-2. **API anahtarları** sekmesinde **Yeni API anahtarı**'na basın.
-3. Bir ad girin, yalnızca entegrasyonun ihtiyaç duyduğu **Kapsamları** seçin, isterseniz **Dakikalık istek limiti** ve **Son geçerlilik** tarihi belirleyin.
+1. **Organizasyon → API ve otomasyonlar** sayfasını açın. Sayfayı görmek için organizasyonda API anahtarlarını yönetme yetkiniz olmalıdır.
+2. **API anahtarları** sekmesinde **Yeni API anahtarı**'na basın ve anahtara entegrasyonu tanıtan bir ad verin (ör. "ERP senkronizasyonu").
+3. Yalnızca entegrasyonun ihtiyaç duyduğu **kapsamları** seçin; isterseniz **dakikalık istek limiti** (1–6000, varsayılan 120) ve **son geçerlilik** tarihi belirleyin.
 4. **Anahtar oluştur**'a basın ve anahtarı hemen kopyalayın. Anahtar `cf_sk_` ile başlar ve **yalnızca bir kez** gösterilir; ClickFix yalnızca özetini saklar.
 
-Anahtar, onu oluşturan üyenin **güncel** yetkileriyle sınırlıdır. Üyenin yetkisi düşerse veya organizasyondan çıkarılırsa anahtar da aynı oranda kısıtlanır. **İptal et** ile bir anahtarı hemen geçersiz kılabilirsiniz.
+Bir anahtarı aynı sayfadaki **İptal et** ile hemen geçersiz kılabilirsiniz. Anahtar sızdıysa önce iptal edin, sonra yenisini oluşturun.
 
-> API anahtarlarını yalnızca sunucunuzda kullanın. Tarayıcı veya mobil uygulama koduna asla koymayın.
+> API anahtarları yalnızca sunucuda kullanılır. Tarayıcı, mobil uygulama veya herkese açık bir depodaki koda koymayın. Mobil uygulamalar için [uygulama anahtarı](/docs/integration-guide/mobile#mobile-session), siteler için [`user_hash`](/docs/integration-guide/identity) vardır.
+
+### Anahtar hangi verilere erişir? [#key-access]
+
+- Anahtar oluşturulduğu **organizasyona** bağlıdır; `X-Organization` gibi bir başlık göndermeniz gerekmez.
+- Anahtar, onu oluşturan üyenin **güncel** yetkileriyle sınırlıdır. Üyenin yetkisi düşerse, üye pasifleşirse veya organizasyondan çıkarılırsa anahtar da aynı oranda kısıtlanır ya da çalışmaz.
+- Bir isteğin geçmesi için hem anahtarın ilgili **kapsamı** hem de üyenin ilgili **yetkisi** gerekir.
 
 ### Kapsamlar [#scopes]
 
-| Kapsam                | İzin verdiği                                       |
-| --------------------- | -------------------------------------------------- |
-| `conversations:read`  | Konuşmaları ve mesajları okuma                     |
-| `conversations:write` | Konuşma oluşturma, güncelleme, mesaj ve not ekleme |
-| `contacts:read`       | Kişileri okuma                                     |
-| `contacts:write`      | Kişileri güncelleme                                |
-| `companies:read`      | Şirketleri okuma                                   |
-| `triggers:read`       | Tetikleyici olaylarını yoklama                     |
-| `webhooks:read`       | Webhook aboneliklerini okuma                       |
-| `webhooks:write`      | Webhook aboneliği oluşturma, güncelleme ve silme   |
-| `revenue:write`       | Şirket gelir verisi gönderme                       |
-| `health:write`        | Müşteri sağlığı (kullanım) sinyali gönderme        |
-| `events:write`        | Şirket zaman çizelgesine ürün olayı gönderme       |
+| Kapsam                | İzin verdiği                                                    |
+| --------------------- | --------------------------------------------------------------- |
+| `conversations:read`  | Konuşmaları ve mesajları okuma                                  |
+| `conversations:write` | Konuşma oluşturma ve güncelleme, mesaj ve iç not ekleme         |
+| `contacts:read`       | Kişileri okuma                                                  |
+| `contacts:write`      | Kişi oluşturma, dış kimlikle oluşturma/güncelleme ve güncelleme |
+| `companies:read`      | Şirketleri okuma                                                |
+| `triggers:read`       | Tetikleyici olaylarını yoklama                                  |
+| `webhooks:read`       | Webhook aboneliklerini okuma                                    |
+| `webhooks:write`      | Webhook ve REST hook aboneliği oluşturma, güncelleme ve silme   |
+| `revenue:write`       | Şirket gelir verisi gönderme                                    |
+| `health:write`        | Müşteri sağlığı (kullanım, 0–100) sinyali gönderme              |
+| `events:write`        | Şirket zaman çizelgesine ürün olayı gönderme                    |
+
+Her uç noktanın gerektirdiği kapsam başvurudaki açıklamasında yazar. Kapsam eksikse `403 FORBIDDEN` döner ve mesajda eksik kapsam belirtilir.
 
 ## 2. İlk isteğiniz [#first-request]
 
-Temel adres:
-
-```text
-https://api.getclickfix.com/v1/public-api
-```
-
-Her istekte anahtarı `Authorization` başlığıyla gönderin:
+Her istekte anahtarı `Authorization` başlığıyla `Bearer` olarak gönderin. Beş dakikada ilk istek: anahtarı sunucunuzda bir ortam değişkenine koyun ve kişileri listeleyin.
 
 ```bash
-curl https://api.getclickfix.com/v1/public-api/contacts?limit=20 \
-  -H "Authorization: Bearer cf_sk_..."
+export CLICKFIX_API_KEY="cf_sk_..."
+
+curl "https://api.getclickfix.com/v1/public-api/contacts?limit=5" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY"
 ```
 
-## Yanıt yapısı [#response-format]
-
-Tüm yanıtlar aynı zarfı kullanır:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "meta": { "request_id": "..." }
-}
-```
-
-Hata durumunda:
-
-```json
-{
-  "success": false,
-  "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [] },
-  "meta": { "request_id": "..." }
-}
-```
-
-Hata yönetimini `error.code` değerine göre yapın; mesaj metni değişebilir. Destek talebinde `meta.request_id` değerini paylaşın.
-
-## Sayfalama [#pagination]
-
-Liste uç noktaları `limit` (varsayılan 20, en fazla 100) ve `offset` parametrelerini kabul eder. Kişi listesi ayrıca `q` ile arama destekler.
-
-```json
-{
-  "success": true,
-  "data": { "items": [], "total": 0, "limit": 20, "offset": 0 }
-}
-```
-
-Değişiklikleri sürekli izlemek için sayfalama yerine [tetikleyici yoklama](/docs/mcp-integrations) veya [webhook'lar](/docs/webhooks) kullanın.
-
-## Yazma istekleri ve Idempotency-Key [#idempotency]
-
-`GET` dışındaki tüm isteklerde `Idempotency-Key` başlığı **zorunludur**. Her mantıksal işlem için benzersiz bir değer üretin ve tekrar denemede aynı değeri aynı gövdeyle gönderin. ClickFix tamamlanan yanıtı saklar ve aynı anahtarla gelen tekrar isteğe aynı yanıtı döner. Aynı anahtar farklı bir gövdeyle kullanılırsa `409 IDEMPOTENCY_CONFLICT` döner.
-
-### Örnek: konuşma oluşturma [#create-conversation]
+Sonra bir kişi ve bir kanal (`inbox_uuid`) seçip konuşma açın. Kişiyi `contact_uuid` ya da kendi sisteminizdeki numarasıyla `contact_external_id` olarak verebilirsiniz. Yazma isteklerinde `Idempotency-Key` zorunludur:
 
 ```bash
-curl -X POST https://api.getclickfix.com/v1/public-api/conversations \
-  -H "Authorization: Bearer cf_sk_..." \
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: order-42-support" \
+  -H "Idempotency-Key: siparis-1042-destek" \
   -d '{
-    "contact_uuid": "KISI_UUID",
+    "contact_external_id": "1001",
     "inbox_uuid": "KANAL_UUID",
     "subject": "Teslimat sorusu"
   }'
 ```
 
-`inbox_uuid` etkin bir kanalınızın kimliğidir. Kişi ve kanal anahtarın organizasyonuna ait olmalıdır. Konuşma, anahtarı oluşturan üyeye atanır.
+Yanıt `201` ve `data.uuid` alanında konuşmanın kimliğini döner. Aynı isteği aynı `Idempotency-Key` ile tekrar gönderirseniz yeni konuşma açılmaz, ilk yanıt aynen döner. `inbox_uuid` etkin bir kanalınızın kimliğidir; kişi ve kanal anahtarın organizasyonuna ait olmalıdır. Konuşma, anahtarı oluşturan üyeye atanır; kanal web widget'ıysa kullanıcı sitenize girip `identify` ile oturum açtığında konuşmayı widget'ta görür.
 
-### Örnek: iç not ekleme [#add-note]
+İç not eklemek için `private: true` gönderin (müşteriye gitmez):
 
 ```bash
-curl -X POST https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages \
-  -H "Authorization: Bearer cf_sk_..." \
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 6f1c0e3a-note-1" \
   -d '{ "content": "Sipariş kargoya verildi.", "private": true, "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90" }'
 ```
 
-## Uç noktalar [#endpoints]
+## Yanıt zarfı [#response-format]
 
-| İşlem                                   | Uç nokta                                                    | Kapsam                                       |
-| --------------------------------------- | ----------------------------------------------------------- | -------------------------------------------- |
-| Konuşmaları listele                     | `GET /conversations`                                        | `conversations:read`                         |
-| Konuşma getir / güncelle                | `GET` / `PATCH /conversations/{uuid}`                       | `conversations:read` / `conversations:write` |
-| Konuşma oluştur                         | `POST /conversations`                                       | `conversations:write`                        |
-| Mesajları listele / mesaj veya not ekle | `GET` / `POST /conversations/{uuid}/messages`               | `conversations:read` / `conversations:write` |
-| Kişileri listele                        | `GET /contacts`                                             | `contacts:read`                              |
-| Kişiyi güncelle                         | `PATCH /contacts/{uuid}`                                    | `contacts:write`                             |
-| Şirketleri listele                      | `GET /companies`                                            | `companies:read`                             |
-| Tetikleyicileri yokla                   | `GET /triggers`                                             | `triggers:read`                              |
-| Webhook abonelikleri                    | `GET` / `POST /webhooks`, `PUT` / `DELETE /webhooks/{uuid}` | `webhooks:read` / `webhooks:write`           |
-| REST hook abone ol / ayrıl              | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`       | `webhooks:write`                             |
-| Şirket geliri                           | `PUT /company-revenue`                                      | `revenue:write`                              |
-| Şirket kullanım sinyali (0-100)         | `PUT /company-usage`                                        | `health:write`                               |
-| Şirket olayı                            | `POST /company-events`                                      | `events:write`                               |
+Tüm yanıtlar aynı zarfı kullanır. Başarılı yanıt:
 
-Gövde alanları ve yanıt şemaları [API başvurusunda](/docs/api) yer alır.
+```json
+{
+  "success": true,
+  "data": { "uuid": "8f0e…", "status": "open" },
+  "meta": { "request_id": "01JB…" }
+}
+```
+
+Hatalı yanıt:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input; writes require Idempotency-Key",
+    "details": [{ "field": "subject", "message": "too long", "code": "max" }]
+  },
+  "meta": { "request_id": "01JB…" }
+}
+```
+
+Hata yönetimini `error.code` değerine göre yapın; `message` metni bilgilendirme amaçlıdır ve değişebilir. Destek talebinde `meta.request_id` değerini paylaşın; isteği bu değerle buluruz.
+
+## Hata kodları [#errors]
+
+| HTTP | `error.code`                                                            | Ne zaman                                                                            | Ne yapmalı                                                                                                |
+| ---- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 400  | `VALIDATION_ERROR`                                                      | Gövde geçersiz, alan kuralı ihlal edildi veya yazma isteğinde `Idempotency-Key` yok | `details` alanına bakıp isteği düzeltin; aynı isteği tekrar denemeyin                                     |
+| 401  | `UNAUTHENTICATED`                                                       | Anahtar yok, hatalı, iptal edilmiş veya süresi dolmuş                               | Anahtarı kontrol edin, gerekirse yenisini oluşturun                                                       |
+| 403  | `FORBIDDEN`                                                             | Anahtarın kapsamı veya anahtarı oluşturan üyenin yetkisi yetmiyor                   | Anahtara kapsamı ekleyin (yeni anahtar) veya üyenin rolünü güncelleyin                                    |
+| 403  | `ENTITLEMENT_REQUIRED`, `PLAN_LIMIT_EXCEEDED`, `SUBSCRIPTION_READ_ONLY` | Organizasyonun planı bu özelliği içermiyor, kota doldu veya abonelik salt okunur    | Organizasyon yöneticinizle planı gözden geçirin                                                           |
+| 404  | `NOT_FOUND`                                                             | Kayıt yok, başka organizasyona ait veya uç nokta herkese açık API'de yok            | Kimliği ve yolu kontrol edin                                                                              |
+| 409  | `IDEMPOTENCY_CONFLICT`                                                  | Aynı `Idempotency-Key` farklı bir istekle kullanıldı veya ilk istek hâlâ işleniyor  | Yeni işlem için yeni anahtar üretin; işlenen istek için kısa bir süre sonra aynı anahtarla tekrar deneyin |
+| 409  | `EXTERNAL_ID_EXISTS`                                                    | Dış kimlik başka bir kişide                                                         | [Dış kimlik](/docs/integration-guide/contacts-companies) kurallarına bakın                                |
+| 410  | `CURSOR_EXPIRED`                                                        | Tetikleyici imleci artık geçerli değil                                              | Kaynakları yeniden okuyup `cursor=0` ile baştan başlayın                                                  |
+| 429  | `RATE_LIMITED`                                                          | Anahtarın dakikalık limiti aşıldı                                                   | `Retry-After` saniye kadar bekleyip tekrar deneyin                                                        |
+| 502  | `RESULT_TOO_LARGE`                                                      | Yanıt çok büyük                                                                     | `limit` değerini düşürün veya filtre ekleyin                                                              |
+| 500  | `INTERNAL_ERROR`                                                        | Beklenmeyen sunucu hatası                                                           | Üstel bekleme ile tekrar deneyin; sürerse `request_id` ile bize yazın                                     |
+
+## Sayfalama [#pagination]
+
+Liste uç noktaları `limit` (varsayılan 20, en fazla 100) ve `offset` parametrelerini kabul eder ve sonucu tek bir yapıda döner:
+
+```json
+{
+  "success": true,
+  "data": { "items": [], "total": 134, "limit": 20, "offset": 40 }
+}
+```
+
+Sonraki sayfa için `offset` değerini `limit` kadar artırın; `items` boş geldiğinde veya `offset + limit >= total` olduğunda durun. Kişi listesi ayrıca `q` ile arama ve `external_id` ile tam eşleşme destekler. Sayfalama anlık görüntü almak içindir; çok sayıda kaydı sürekli senkron tutmak için sayfa sayfa yoklamak yerine [webhook](/docs/webhooks) veya [tetikleyici yoklama](/docs/mcp-integrations) (`GET /triggers`, imleç tabanlı) kullanın.
+
+## Yazma istekleri ve Idempotency-Key [#idempotency]
+
+`GET` dışındaki her istekte `Idempotency-Key` başlığı **zorunludur** (en fazla 200 bayt).
+
+- Her mantıksal işlem için benzersiz bir değer üretin, ör. `siparis-1042-iade` veya bir UUID.
+- Ağ hatası veya zaman aşımında aynı isteği **aynı anahtar ve aynı gövdeyle** tekrar gönderin. ClickFix ilk tamamlanan yanıtı saklar ve aynen döner; işlem iki kez yapılmaz.
+- Anahtar 24 saat saklanır. Aynı anahtarı farklı bir gövde, yöntem veya yolla kullanırsanız `409 IDEMPOTENCY_CONFLICT` döner.
+- Saklanan yanıt bir hata ise (ör. `400`), aynı anahtarla tekrar denemek yine aynı hatayı döner. Girdiyi düzelttiyseniz yeni bir anahtar kullanın.
+- Mesaj gönderirken `client_id` alanı ek bir tekrar koruması sağlar.
 
 ## Hız sınırları ve boyutlar [#rate-limits]
 
-- Her anahtarın dakikalık bir istek limiti vardır (varsayılan 120, 1-6000 arası ayarlanabilir).
-- Limit aşılırsa `429 RATE_LIMITED` ve `Retry-After` başlığı döner; belirtilen süre kadar bekleyip tekrar deneyin.
-- İstek gövdesi en fazla 128 KB olabilir.
-- Doğrulama ve yetki hatalarında (`400`, `401`, `403`) isteği tekrar denemeyin; önce düzeltin.
+- Her API anahtarının dakikalık bir istek limiti vardır: varsayılan **120**, anahtar oluştururken 1–6000 arasında ayarlanabilir.
+- Limit aşıldığında `429 RATE_LIMITED` ve `Retry-After` başlığı (saniye) döner. Bu süre kadar bekleyin, ardından üstel bekleme ve rastgele sapma (jitter) ile tekrar deneyin.
+- Birden çok entegrasyon için ayrı anahtar kullanın; limit anahtar başına uygulanır.
+- İstek gövdesi en fazla **128 KB** olabilir.
+- `400`, `401`, `403` ve `404` yanıtlarını tekrar denemeyin; önce isteği düzeltin.
 
-## SDK'lar [#sdks]
+## Sürümleme [#versioning]
 
-ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için başlıksız bir widget istemcisi vardır: `@getclickfix/node` 0.1.0, `@getclickfix/react-widget` 0.1.0 (npm) ve `github.com/ClickSolveMainTR/clickfix-sdks/go` v0.1.0. Her dil için kullanım örnekleri ve aynı çağrıların SDK'sız hâli [SDK'lar ve örnek kod](/docs/sdks) sayfasında, baştan sona kurulum [Entegrasyon kılavuzu](/docs/integration-guide) sayfasındadır. Yapılandırmada temel adres olarak `https://api.getclickfix.com` kullanın (sonuna `/v1` eklemeyin).
+- API'nin sürümü yoldadır: `/v1/...`. `v1` içinde yalnızca **geriye uyumlu** değişiklikler yapılır: yeni uç nokta, yeni isteğe bağlı alan, yeni olay türü, yeni hata kodu.
+- İstemciniz tanımadığı yanıt alanlarını ve olay türlerini yok saymalıdır.
+- Bir alanı kaldırmak, anlamını değiştirmek veya zorunlu alan eklemek gibi kırıcı değişiklikler yalnızca yeni bir ana sürümle (`/v2`) gelir ve önceden duyurulur; eski sürüm geçiş süresi boyunca çalışmaya devam eder.
+- Başvuruda yer almayan uç noktalar herkese açık API'nin parçası değildir ve haber verilmeden değişebilir.
 
-SDK'lar kimlik doğrulama, sınırlı tekrar deneme, sayfalama ve webhook imza doğrulaması sağlar. Örneğin Node.js:
+## Uç noktalar [#endpoints]
 
-```ts
-import { createClient } from "@getclickfix/node";
+| İşlem                                     | Uç nokta                                                         | Kapsam                                            |
+| ----------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------- |
+| Konuşmaları listele                       | `GET /conversations`                                             | `conversations:read`                              |
+| Konuşma oluştur                           | `POST /conversations`                                            | `conversations:write`                             |
+| Konuşma getir / güncelle                  | `GET` / `PATCH /conversations/{uuid}`                            | `conversations:read` / `conversations:write`      |
+| Mesajları listele / mesaj veya not ekle   | `GET` / `POST /conversations/{uuid}/messages`                    | `conversations:read` / `conversations:write`      |
+| Kişileri listele                          | `GET /contacts`                                                  | `contacts:read`                                   |
+| Kişi oluştur                              | `POST /contacts`                                                 | `contacts:write`                                  |
+| Kişiyi dış kimlikle oluştur veya güncelle | `PUT /contacts/by-external-id`                                   | `contacts:write`                                  |
+| Kişiyi güncelle                           | `PATCH /contacts/{uuid}`                                         | `contacts:write`                                  |
+| Şirketleri listele                        | `GET /companies`                                                 | `companies:read`                                  |
+| Şirket geliri                             | `PUT /company-revenue`                                           | `revenue:write`                                   |
+| Şirket kullanım sinyali (0-100)           | `PUT /company-usage`                                             | `health:write`                                    |
+| Şirket olayı                              | `POST /company-events`                                           | `events:write`                                    |
+| Webhook abonelikleri                      | `GET` / `POST /webhooks`, `PUT` / `DELETE /webhooks/{uuid}`      | `webhooks:read` / `webhooks:write`                |
+| Tetikleyicileri yokla                     | `GET /triggers`                                                  | `triggers:read`                                   |
+| REST hook abone ol / ayrıl                | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`            | `webhooks:write`                                  |
+| API kanalına müşteri mesajı               | `POST /v1/webhooks/channels/api/{instance}` (imzalı, anahtarsız) | [API kanalı](/docs/integration-guide/api-channel) |
 
-const client = createClient({
-  baseURL: "https://api.getclickfix.com",
-  apiKey: process.env.CLICKFIX_API_KEY!,
-});
-
-await client.request(
-  "/v1/public-api/conversations",
-  "post",
-  {
-    contact_uuid: contactUUID,
-    inbox_uuid: inboxUUID,
-    subject: "Teslimat sorusu",
-  },
-  { idempotencyKey: "order-42-support" },
-);
-```
+Gövde alanları, yanıt şemaları ve her uç nokta için curl, Node.js, Go ve PHP örnekleri [API başvurusunda](/docs/api-reference) yer alır.
 
 ## Sonraki adımlar [#next-steps]
 
-- [Webhook'lar ve imza doğrulama](/docs/webhooks)
-- [Zapier, Make ve n8n](/docs/mcp-integrations)
-- [Kendi uygulamanızı yapın](/docs/apps)
-
-## Uç nokta başvurusu [#endpoint-reference]
-
-API uç noktaları ve şemaları sol menüdeki **API başvurusu** bölümünde listelenir. Bu sayfalar yayınlanan API sözleşmesinden derleme sırasında üretilir.
-
-[API başvurusunu açın](/docs/api-reference/conversations).
+- [Entegrasyon kılavuzu](/docs/integration-guide): kimlik doğrulama, dış kimlik, özel alanlar, sistem bağlama, webhook'lar, mobil.
+- [SDK'lar](/docs/integration-guide/sdks): Node.js, Go, PHP, Laravel, React, Flutter.
+- [Webhook'lar ve imza doğrulama](/docs/webhooks), [Zapier, Make ve n8n](/docs/mcp-integrations), [Kendi uygulamanızı yapın](/docs/apps).

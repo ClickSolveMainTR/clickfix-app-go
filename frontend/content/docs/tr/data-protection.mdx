@@ -71,3 +71,15 @@ Ticari SMS gönderimlerinde İYS izin kontrolü için bkz. [SMS ve telefon](/doc
 - **Organizasyon → Destek erişimi**: ClickFix destek ekibinin organizasyonunuza sınırlı süre erişmesine izin verirsiniz; destek ekibinin her işlemi denetim kaydına yazılır.
 - **Organizasyon → Güvenlik**: SSO, SCIM ve IP kısıtlaması. Bkz. [SSO ve SCIM](/docs/sso-scim).
 - Yapay zekâ çalışma kayıtlarında kişisel veriler maskelenir. Bkz. [Yapay zekâ](/docs/ai).
+
+## Sık sorulanlar [#faq]
+
+**Hassas özel alanlar AI'a gider mi?** Hayır; **Hassas** işaretli alanlar maskelenir, AI bağlamına ve dışa aktarıma girmez ([Özel alanlar](/docs/integration-guide/custom-fields)).
+
+**İlgili kişi başvurusu API ile açılan kişileri de kapsar mı?** Evet; kişi dış kimliğiyle de aranır, dışa aktarma ve silme aynı kayıt üzerinden yapılır.
+
+**Asistan ve MCP ne kaydeder?** Her eylem denetim kaydına yazılır; gizli değerler sohbet geçmişine ve loga girmez.
+
+## İlgili API [#related-api]
+
+- Kişi okuma ve güncelleme: [`GET /contacts`](/docs/api-reference/contacts/list-contacts), [`PATCH /contacts/{uuid}`](/docs/api-reference/contacts/update-a-contact).

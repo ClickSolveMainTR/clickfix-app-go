@@ -1,176 +1,193 @@
 ---
-title: API and SDK quickstart
-description: Create an API key and send your first request to the ClickFix REST API; response envelope, pagination, idempotency and rate limits.
+title: API
 section: developers
 order: 1
+description: "The ClickFix REST API: API keys and scopes, your first request, the response envelope, error codes, pagination, Idempotency-Key, rate limits and versioning; links to the SDKs and the endpoint reference."
 ---
 
-The ClickFix REST API lets your systems create conversations, add notes, update contacts and subscribe to events. The [API reference](/docs/api?lang=en) lists every endpoint and schema with ready-made request samples per language; it only contains public, stable endpoints. The reference below documents the public API endpoints.
+The ClickFix REST API lets you open conversations, add messages and internal notes, keep contact and company data in sync, send customer-health signals and subscribe to events with webhooks. This page explains the rules shared by every endpoint. Endpoints, schemas and ready-made requests for every language are in the [API reference](/docs/api-reference?lang=en); the end-to-end setup order is the [Integration guide](/docs/integration-guide?lang=en); the packages are on [SDKs](/docs/integration-guide/sdks?lang=en). The reference contains only public, stable endpoints; the panel's own internal endpoints cannot be called with an API key.
 
-## 1. Create an API key
+**Base URL:** `https://api.getclickfix.com/v1/public-api`
 
-1. Open **Organization → API & automations**.
-2. On the **API keys** tab, click **New API key**.
-3. Enter a name, select only the **Scopes** your integration needs and optionally set **Requests per minute** and an **Expires** date.
-4. Click **Create key** and copy the key right away. It starts with `cf_sk_` and is shown **only once**; ClickFix stores only a hash.
+## 1. Create an API key [#create-api-key]
 
-A key is limited to the **current** permissions of the member who created it. If that member loses a permission or leaves the organization, the key is restricted accordingly. **Revoke** invalidates a key immediately.
+1. Open **Organization → API and automations**. You need permission to manage API keys in the organization to see the page.
+2. On the **API keys** tab press **New API key** and give the key a name that identifies the integration (e.g. "ERP sync").
+3. Pick only the **scopes** the integration needs; optionally set a **requests per minute** limit (1–6000, default 120) and an **expiry** date.
+4. Press **Create key** and copy the key right away. It starts with `cf_sk_` and is shown **only once**; ClickFix keeps only a digest.
 
-> Use API keys on your server only. Never put them in browser or mobile app code.
+**Revoke** on the same page invalidates a key immediately. If a key leaked, revoke it first, then create a new one.
 
-### Scopes
+> API keys are used on the server only. Never put them in browser code, a mobile app or a public repository. Mobile apps use an [app key](/docs/integration-guide/mobile?lang=en#mobile-session); websites use [`user_hash`](/docs/integration-guide/identity?lang=en).
 
-| Scope                 | Allows                                                         |
-| --------------------- | -------------------------------------------------------------- |
-| `conversations:read`  | Reading conversations and messages                             |
-| `conversations:write` | Creating and updating conversations, adding messages and notes |
-| `contacts:read`       | Reading contacts                                               |
-| `contacts:write`      | Updating contacts                                              |
-| `companies:read`      | Reading companies                                              |
-| `triggers:read`       | Polling trigger events                                         |
-| `webhooks:read`       | Reading webhook subscriptions                                  |
-| `webhooks:write`      | Creating, updating and deleting webhook subscriptions          |
-| `revenue:write`       | Sending company revenue data                                   |
-| `health:write`        | Sending customer health (usage) signals                        |
-| `events:write`        | Sending product events to the company timeline                 |
+### What a key can reach [#key-access]
 
-## 2. Your first request
+- A key is bound to the **organization** it was created in; no `X-Organization` style header is needed.
+- A key is limited to the **current** permissions of the member who created it. If that member loses permissions, is deactivated or leaves the organization, the key is restricted or stops working accordingly.
+- A request passes only when the key has the relevant **scope** and the member has the relevant **permission**.
 
-Base URL:
+### Scopes [#scopes]
 
-```text
-https://api.getclickfix.com/v1/public-api
-```
+| Scope                 | Allows                                                              |
+| --------------------- | ------------------------------------------------------------------- |
+| `conversations:read`  | Reading conversations and messages                                  |
+| `conversations:write` | Creating and updating conversations, adding messages and notes      |
+| `contacts:read`       | Reading contacts                                                    |
+| `contacts:write`      | Creating contacts, upserting by external id and updating contacts   |
+| `companies:read`      | Reading companies                                                   |
+| `triggers:read`       | Polling trigger events                                              |
+| `webhooks:read`       | Reading webhook subscriptions                                       |
+| `webhooks:write`      | Creating, updating and deleting webhook and REST hook subscriptions |
+| `revenue:write`       | Sending company revenue                                             |
+| `health:write`        | Sending the customer-health usage signal (0–100)                    |
+| `events:write`        | Sending product events to the company timeline                      |
 
-Send the key in the `Authorization` header of every request:
+The scope each endpoint needs is stated in its reference description. A missing scope returns `403 FORBIDDEN` and names the scope in the message.
 
-```bash
-curl https://api.getclickfix.com/v1/public-api/contacts?limit=20 \
-  -H "Authorization: Bearer cf_sk_..."
-```
+## 2. Your first request [#first-request]
 
-## Response envelope
-
-Every response uses the same envelope:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "meta": { "request_id": "..." }
-}
-```
-
-On error:
-
-```json
-{
-  "success": false,
-  "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [] },
-  "meta": { "request_id": "..." }
-}
-```
-
-Branch on `error.code`; message text can change. Include `meta.request_id` when you contact support.
-
-## Pagination
-
-List endpoints accept `limit` (default 20, max 100) and `offset`. The contact list also supports `q` for search.
-
-```json
-{
-  "success": true,
-  "data": { "items": [], "total": 0, "limit": 20, "offset": 0 }
-}
-```
-
-To follow changes continuously, use [trigger polling](/docs/mcp-integrations?lang=en) or [webhooks](/docs/webhooks?lang=en) instead of paging.
-
-## Writes and Idempotency-Key
-
-Every request other than `GET` **must** carry an `Idempotency-Key` header. Generate a unique value per logical action and send the same value with the same body when you retry. ClickFix stores the completed response and returns it again for a repeated request with the same key. Reusing a key with a different body returns `409 IDEMPOTENCY_CONFLICT`.
-
-### Example: create a conversation
+Send the key as a `Bearer` token in the `Authorization` header on every request. Your first request in five minutes: put the key in an environment variable on your server and list contacts.
 
 ```bash
-curl -X POST https://api.getclickfix.com/v1/public-api/conversations \
-  -H "Authorization: Bearer cf_sk_..." \
+export CLICKFIX_API_KEY="cf_sk_..."
+
+curl "https://api.getclickfix.com/v1/public-api/contacts?limit=5" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY"
+```
+
+Then pick a contact and a channel (`inbox_uuid`) and open a conversation. The contact is given as `contact_uuid` or, with the id from your own system, as `contact_external_id`. Writes require `Idempotency-Key`:
+
+```bash
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: order-42-support" \
+  -H "Idempotency-Key: order-1042-support" \
   -d '{
-    "contact_uuid": "CONTACT_UUID",
+    "contact_external_id": "1001",
     "inbox_uuid": "CHANNEL_UUID",
     "subject": "Delivery question"
   }'
 ```
 
-`inbox_uuid` is the ID of one of your active channels. The contact and the channel must belong to the key's organization. The conversation is assigned to the member who created the key.
+The response is `201` with the conversation id in `data.uuid`. Sending the same request with the same `Idempotency-Key` again does not open a second conversation; the first response is returned as is. `inbox_uuid` is the id of one of your active channels; contact and channel must belong to the key's organization. The conversation is assigned to the member who created the key; on a web widget channel the user sees it in the widget once they sign in on your site with `identify`.
 
-### Example: add an internal note
+Send `private: true` to add an internal note (never delivered to the customer):
 
 ```bash
-curl -X POST https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID/messages \
-  -H "Authorization: Bearer cf_sk_..." \
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID/messages" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 6f1c0e3a-note-1" \
-  -d '{ "content": "Order shipped.", "private": true, "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90" }'
+  -d '{ "content": "The order has shipped.", "private": true, "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90" }'
 ```
 
-## Endpoints
+## Response envelope [#response-format]
 
-| Operation                             | Endpoint                                                    | Scope                                        |
-| ------------------------------------- | ----------------------------------------------------------- | -------------------------------------------- |
-| List conversations                    | `GET /conversations`                                        | `conversations:read`                         |
-| Get / update a conversation           | `GET` / `PATCH /conversations/{uuid}`                       | `conversations:read` / `conversations:write` |
-| Create a conversation                 | `POST /conversations`                                       | `conversations:write`                        |
-| List messages / add a message or note | `GET` / `POST /conversations/{uuid}/messages`               | `conversations:read` / `conversations:write` |
-| List contacts                         | `GET /contacts`                                             | `contacts:read`                              |
-| Update a contact                      | `PATCH /contacts/{uuid}`                                    | `contacts:write`                             |
-| List companies                        | `GET /companies`                                            | `companies:read`                             |
-| Poll triggers                         | `GET /triggers`                                             | `triggers:read`                              |
-| Webhook subscriptions                 | `GET` / `POST /webhooks`, `PUT` / `DELETE /webhooks/{uuid}` | `webhooks:read` / `webhooks:write`           |
-| REST hook subscribe / unsubscribe     | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`       | `webhooks:write`                             |
-| Company revenue                       | `PUT /company-revenue`                                      | `revenue:write`                              |
-| Company usage signal (0-100)          | `PUT /company-usage`                                        | `health:write`                               |
-| Company event                         | `POST /company-events`                                      | `events:write`                               |
+Every response uses the same envelope. A successful response:
 
-Body fields and response schemas are in the [API reference](/docs/api?lang=en).
+```json
+{
+  "success": true,
+  "data": { "uuid": "8f0e…", "status": "open" },
+  "meta": { "request_id": "01JB…" }
+}
+```
 
-## Rate limits and sizes
+An error response:
 
-- Each key has a per-minute request limit (default 120, configurable from 1 to 6000).
-- Over the limit you get `429 RATE_LIMITED` with a `Retry-After` header; wait that long before retrying.
-- Request bodies can be up to 128 KB.
-- Don't retry validation and auth errors (`400`, `401`, `403`); fix the request first.
-
-## SDKs
-
-ClickFix has server SDKs for Go and Node.js and a UI-free widget client for React: `@getclickfix/node` 0.1.0 and `@getclickfix/react-widget` 0.1.0 on npm, and `github.com/ClickSolveMainTR/clickfix-sdks/go` v0.1.0. Usage examples for every language and the same calls without an SDK are on [SDKs and sample code](/docs/sdks?lang=en); the end-to-end setup is the [Integration guide](/docs/integration-guide?lang=en).
-
-The SDKs handle authentication, bounded retries, pagination and webhook signature verification. For example, in Node.js:
-
-```ts
-import { createClient } from "@getclickfix/node";
-
-const client = createClient({
-  baseURL: "https://api.getclickfix.com",
-  apiKey: process.env.CLICKFIX_API_KEY!,
-});
-
-await client.request(
-  "/v1/public-api/conversations",
-  "post",
-  {
-    contact_uuid: contactUUID,
-    inbox_uuid: inboxUUID,
-    subject: "Delivery question",
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input; writes require Idempotency-Key",
+    "details": [{ "field": "subject", "message": "too long", "code": "max" }]
   },
-  { idempotencyKey: "order-42-support" },
-);
+  "meta": { "request_id": "01JB…" }
+}
 ```
 
-## Next steps
+Handle errors by `error.code`; the `message` text is informational and may change. Share `meta.request_id` when contacting support; we find the request by it.
 
-- [Webhooks and signature verification](/docs/webhooks?lang=en)
-- [Zapier, Make and n8n](/docs/mcp-integrations?lang=en)
-- [Build your own app](/docs/apps?lang=en)
+## Error codes [#errors]
+
+| HTTP | `error.code`                                                            | When                                                                                            | What to do                                                                           |
+| ---- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 400  | `VALIDATION_ERROR`                                                      | The body is invalid, a field rule is violated or a write lacks `Idempotency-Key`                | Read `details`, fix the request; do not retry the same request                       |
+| 401  | `UNAUTHENTICATED`                                                       | The key is missing, wrong, revoked or expired                                                   | Check the key, create a new one if needed                                            |
+| 403  | `FORBIDDEN`                                                             | The key's scope or the creating member's permission is not enough                               | Add the scope (new key) or update the member's role                                  |
+| 403  | `ENTITLEMENT_REQUIRED`, `PLAN_LIMIT_EXCEEDED`, `SUBSCRIPTION_READ_ONLY` | The organization's plan lacks the feature, a quota is full or the subscription is read-only     | Review the plan with your organization admin                                         |
+| 404  | `NOT_FOUND`                                                             | The record does not exist, belongs to another organization or the endpoint is not public        | Check the id and the path                                                            |
+| 409  | `IDEMPOTENCY_CONFLICT`                                                  | The same `Idempotency-Key` was used with a different request, or the first one is still running | Generate a new key for a new action; retry the running one with the same key shortly |
+| 409  | `EXTERNAL_ID_EXISTS`                                                    | The external id belongs to another contact                                                      | See the [external id](/docs/integration-guide/contacts-companies?lang=en) rules      |
+| 410  | `CURSOR_EXPIRED`                                                        | The trigger cursor is no longer valid                                                           | Re-read the resources and start again with `cursor=0`                                |
+| 429  | `RATE_LIMITED`                                                          | The key's per-minute limit was exceeded                                                         | Wait `Retry-After` seconds and retry                                                 |
+| 502  | `RESULT_TOO_LARGE`                                                      | The response is too large                                                                       | Lower `limit` or add a filter                                                        |
+| 500  | `INTERNAL_ERROR`                                                        | Unexpected server error                                                                         | Retry with exponential backoff; if it persists, contact us with the `request_id`     |
+
+## Pagination [#pagination]
+
+List endpoints accept `limit` (default 20, at most 100) and `offset` and return one structure:
+
+```json
+{
+  "success": true,
+  "data": { "items": [], "total": 134, "limit": 20, "offset": 40 }
+}
+```
+
+For the next page increase `offset` by `limit`; stop when `items` is empty or `offset + limit >= total`. The contact list also supports `q` for search and `external_id` for an exact match. Pagination is for snapshots; to keep many records in sync use [webhooks](/docs/webhooks?lang=en) or [trigger polling](/docs/mcp-integrations?lang=en) (`GET /triggers`, cursor based) instead of polling page by page.
+
+## Writes and Idempotency-Key [#idempotency]
+
+Every request other than `GET` **requires** the `Idempotency-Key` header (at most 200 bytes).
+
+- Generate a unique value per logical action, e.g. `order-1042-refund` or a UUID.
+- On a network error or timeout send the same request again **with the same key and the same body**. ClickFix stores the first completed response and returns it as is; the action is not performed twice.
+- Keys are kept for 24 hours. Using the same key with a different body, method or path returns `409 IDEMPOTENCY_CONFLICT`.
+- If the stored response is an error (e.g. `400`), retrying with the same key returns the same error. Use a new key once you fixed the input.
+- When sending messages, `client_id` adds another layer of duplicate protection.
+
+## Rate limits and sizes [#rate-limits]
+
+- Every API key has a per-minute request limit: **120** by default, 1–6000 when creating the key.
+- Over the limit the API returns `429 RATE_LIMITED` with a `Retry-After` header (seconds). Wait that long, then retry with exponential backoff and jitter.
+- Use a separate key per integration; the limit applies per key.
+- Request bodies are at most **128 KB**.
+- Do not retry `400`, `401`, `403` and `404`; fix the request first.
+
+## Versioning [#versioning]
+
+- The API version is in the path: `/v1/...`. Within `v1` only **backwards-compatible** changes are made: new endpoints, new optional fields, new event types, new error codes.
+- Your client must ignore response fields and event types it does not know.
+- Breaking changes such as removing a field, changing its meaning or adding a required field come only with a new major version (`/v2`) and are announced ahead; the old version keeps working during the transition.
+- Endpoints not in the reference are not part of the public API and may change without notice.
+
+## Endpoints [#endpoints]
+
+| Action                                    | Endpoint                                                     | Scope                                                      |
+| ----------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| List conversations                        | `GET /conversations`                                         | `conversations:read`                                       |
+| Create a conversation                     | `POST /conversations`                                        | `conversations:write`                                      |
+| Get / update a conversation               | `GET` / `PATCH /conversations/{uuid}`                        | `conversations:read` / `conversations:write`               |
+| List messages / add a message or note     | `GET` / `POST /conversations/{uuid}/messages`                | `conversations:read` / `conversations:write`               |
+| List contacts                             | `GET /contacts`                                              | `contacts:read`                                            |
+| Create a contact                          | `POST /contacts`                                             | `contacts:write`                                           |
+| Create or update a contact by external id | `PUT /contacts/by-external-id`                               | `contacts:write`                                           |
+| Update a contact                          | `PATCH /contacts/{uuid}`                                     | `contacts:write`                                           |
+| List companies                            | `GET /companies`                                             | `companies:read`                                           |
+| Company revenue                           | `PUT /company-revenue`                                       | `revenue:write`                                            |
+| Company usage signal (0-100)              | `PUT /company-usage`                                         | `health:write`                                             |
+| Company event                             | `POST /company-events`                                       | `events:write`                                             |
+| Webhook subscriptions                     | `GET` / `POST /webhooks`, `PUT` / `DELETE /webhooks/{uuid}`  | `webhooks:read` / `webhooks:write`                         |
+| Poll triggers                             | `GET /triggers`                                              | `triggers:read`                                            |
+| REST hook subscribe / unsubscribe         | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`        | `webhooks:write`                                           |
+| Customer message to the API channel       | `POST /v1/webhooks/channels/api/{instance}` (signed, no key) | [API channel](/docs/integration-guide/api-channel?lang=en) |
+
+Body fields, response schemas and curl, Node.js, Go and PHP samples for every endpoint are in the [API reference](/docs/api-reference?lang=en).
+
+## Next steps [#next-steps]
+
+- [Integration guide](/docs/integration-guide?lang=en): identity verification, external ids, custom fields, system binding, webhooks, mobile.
+- [SDKs](/docs/integration-guide/sdks?lang=en): Node.js, Go, PHP, Laravel, React, Flutter.
+- [Webhooks and signature verification](/docs/webhooks?lang=en), [Zapier, Make and n8n](/docs/mcp-integrations?lang=en), [Build your own app](/docs/apps?lang=en).

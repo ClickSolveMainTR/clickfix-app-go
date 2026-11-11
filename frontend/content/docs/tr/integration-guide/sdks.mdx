@@ -1,0 +1,409 @@
+---
+title: SDK'lar
+description: "Node.js, visitor-core, React, Go, PHP, Laravel ve Flutter paketleri: kurulum, en küçük örnek, örnek uygulama; istemci oluşturma, sayfalama, webhook imzası ve SDK'sız istekler."
+---
+
+ClickFix'in Node.js, Go ve PHP için sunucu SDK'ları; React Native, Node ve tarayıcı için DOM'suz bir ziyaretçi istemcisi (`@getclickfix/visitor-core`); React için arayüzsüz widget hook'ları; Laravel için tam paket ve Flutter için webview paketi vardır. Sunucu SDK'ları kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama, `user_hash` ve webhook imza doğrulaması sağlar. Hepsi MIT lisanslıdır; kaynak herkese açık [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) ve [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) depolarındadır; her paketin çalışan bir örnek uygulaması [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposundadır. Tüm paketler [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR) altında yayımlanır.
+
+<include>../../../generated/packages.tr.mdx</include>
+
+Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). API anahtarları yalnızca sunucuda kalır; tarayıcı ve mobil uygulama koduna koymayın. Anahtar oluşturma, kapsamlar, yanıt zarfı ve hata kodları: [API](/docs/api). Her uç noktanın [API başvurusundaki](/docs/api-reference) sayfasında curl, Node.js, Go ve PHP için hazır istek örnekleri de bulunur.
+
+## Node.js: `@getclickfix/node` [#node]
+
+Tipli, Node 22+ `fetch` istemcisi; `paths` tiplerini API sözleşmesinden alır. Örnek uygulama: [`clickfix-examples/node-express`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/node-express).
+
+```sh
+npm install @getclickfix/node
+```
+
+```ts
+import { createClient } from "@getclickfix/node";
+
+const client = createClient({
+  baseURL: "https://api.getclickfix.com",
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+const created = await client.request(
+  "/v1/public-api/conversations",
+  "post",
+  {
+    contact_external_id: "1001",
+    inbox_uuid: inboxUUID,
+    subject: "Teslimat sorusu",
+  },
+  {
+    idempotencyKey: "siparis-1042-destek",
+    signal: AbortSignal.timeout(30_000),
+  },
+);
+```
+
+| Dışa aktarılan                                      | Ne yapar                                                                                                                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createClient({ baseURL, apiKey, attempts? })`      | `request(path, method, body?, { path?, query?, idempotencyKey?, signal? })`; hata yanıtlarında durum, kod, istek kimliği ve ayrıntı taşıyan `APIError` fırlatır |
+| `paginate(fetchPage)`                               | `{ items, total, limit, offset }` sayfalarını tek tek öğeye açan `AsyncGenerator`                                                                               |
+| `verifyWebhook(secret, timestamp, signature, body)` | Ham gövde üzerinde `v1=` imzası ve 5 dakika tolerans; [webhook'lar](/docs/integration-guide/webhooks)                                                           |
+| `identityHash(secret, userId, companyId?)`          | Widget `user_hash` değeri; `companyId` verilirse firma da imzalanır ([kimlik doğrulama](/docs/integration-guide/identity))                                      |
+
+GET istekleri ve `idempotencyKey` verilen yazmalar en fazla üç kez denenir (üstel bekleme, sınırlı `Retry-After`; `429`, `502`, `503`, `504` ve ağ hatalarında); anahtarsız yazmalar tekrar denenmez. API tamamlanmış yazma yanıtlarını (hatalar dahil) saklar: aynı anahtarla tekrar denemek kayıtlı bir hatayı başarıya çeviremez; düzeltilmiş girdi için yeni anahtar kullanın.
+
+## Ziyaretçi istemcisi: `@getclickfix/visitor-core` [#visitor-core]
+
+Widget uçlarını (`/v1/widget/{public_id}/*`) DOM olmadan çağıran istemci: tarayıcıda aynı kökenli vekil üzerinden (`mode: "browser"`), mobil uygulamada [uygulama anahtarıyla](/docs/integration-guide/mobile#mobile-session) (`mode: "app"`). Tekrar deneme, oturum yenileme, gerçek zamanlı soyutlama ve [webview köprüsü](/docs/integration-guide/mobile#bridge-contract) tiplerini (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`) içerir. Örnek uygulama: [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
+
+```sh
+npm install @getclickfix/visitor-core
+```
+
+```ts
+import { createVisitorClient, commandScript } from "@getclickfix/visitor-core";
+
+const client = createVisitorClient({
+  mode: "app",
+  baseURL: "https://getclickfix.com/api",
+  publicId: "WIDGET_ID",
+  app: { key: APP_KEY, packageName: "com.example.app" },
+});
+await client.init();
+await client.identify({ user_id: user.id, user_hash: userHashFromServer });
+
+// Webview açılıp clickfix:ready gelince oturumu devret:
+webview.injectJavaScript(
+  commandScript({
+    type: "clickfix:session",
+    id: "s1",
+    token: client.getToken(),
+  }),
+);
+```
+
+Uygulama anahtarı yalnız yerel çekirdeğin HTTP başlığındadır; webview'e ya da sayfaya verilmez.
+
+## React: `@getclickfix/react-widget` [#react-widget]
+
+Hazır mesajlaşma arayüzünü (balon, ana sayfa, yardım merkezi) kendi düğmenizle yönetmek için tipli hook'lar; kendi arayüzünüzü çizmek için `visitor-core` üzerinde `createWidgetClient` + `useWidget`. Örnek uygulama: [`clickfix-examples/nextjs-widget`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/nextjs-widget).
+
+```sh
+npm install @getclickfix/react-widget
+```
+
+```tsx tab="Hazır widget"
+"use client";
+import { useMemo } from "react";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
+
+export function Support({ consent }: { consent: boolean }) {
+  const options = useMemo(
+    () =>
+      consent
+        ? {
+            appOrigin: "https://getclickfix.com",
+            widgetId: "WIDGET_ID",
+            hideLauncher: true,
+          }
+        : null, // null, onay verilene kadar yüklemeyi erteler
+    [consent],
+  );
+  const { ready, unread, open, sdk } = useClickFix(options);
+  useClickFixEvent("conversation:ended", (e) => console.log(e.status));
+
+  return (
+    <button aria-expanded={open} disabled={!ready} onClick={() => sdk.toggle()}>
+      Destek {unread || ""}
+    </button>
+  );
+}
+```
+
+```tsx tab="Kendi arayüzünüz"
+"use client";
+import { useEffect, useState } from "react";
+import { createWidgetClient, useWidget } from "@getclickfix/react-widget";
+
+export function Support() {
+  const [client] = useState(() =>
+    createWidgetClient({
+      publicId: "WIDGET_ID",
+      baseURL: "/api", // kendi sitenizdeki aynı kökenli vekil
+      onToken: (token) => sessionStorage.setItem("support-token", token),
+    }),
+  );
+  const { visitor } = useWidget(client);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void client.init(abort.signal).catch(console.error);
+    return () => abort.abort();
+  }, [client]);
+
+  return <span>{visitor ? "Hazır" : "Bağlanıyor"}</span>;
+}
+```
+
+Arayüzsüz istemcide konuşmaları ve mesajları kendiniz çizersiniz:
+
+```ts
+await client.identify({ user_id: user.id, user_hash: serverProvidedHmac });
+const { items } = await client.conversations();
+await client.createConversation({
+  text: "Merhaba",
+  client_id: crypto.randomUUID(),
+});
+await client.sendMessage(
+  conversationUUID,
+  { text: "Fotoğraf", client_id: stableMessageUUID },
+  file,
+);
+await client.markRead(conversationUUID);
+```
+
+`user_hash` sunucunuzda üretilir; kimlik anahtarını tarayıcıya göndermeyin. Widget komutları ve olayları: [Web widget](/docs/web-widget#javascript-api).
+
+## Go: `github.com/ClickSolveMainTR/clickfix-sdks/go` [#go]
+
+API sözleşmesinden üretilmiş istemci (`oapi-codegen`) artı kimlik doğrulama, 30 saniyelik HTTP zaman aşımı, sınırlı tekrar deneme, sayfalama ve webhook doğrulaması. Sürümler `go/vX.Y.Z` etiketleriyle yayımlanır. Örnek uygulama: [`clickfix-examples/go-server`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/go-server).
+
+```sh
+go get github.com/ClickSolveMainTR/clickfix-sdks/go@latest
+```
+
+```go
+import clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+
+client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+if err != nil {
+	log.Fatal(err)
+}
+res, err := client.GetV1PublicApiContactsWithResponse(ctx, &clickfix.GetV1PublicApiContactsParams{})
+```
+
+| Fonksiyon                                                                         | Ne yapar                                                                                      |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `New(baseURL, key)`                                                               | Üretilmiş `ClientWithResponses` + tekrar deneyen taşıma; her işlem `<Ad>WithResponse(ctx, …)` |
+| `Iterate(ctx, fetch, yield)` / `ListPage[T](ctx, c, resource, limit, offset)`     | `{items, total, limit, offset}` sayfalarını tek tek öğeye açar                                |
+| `VerifyWebhook(secret, timestamp, signature, body, now, tolerance)`               | Ham gövde üzerinde `v1=` imzası                                                               |
+| `IdentityHash(secret, userID)` / `IdentityCompanyHash(secret, userID, companyID)` | Widget `user_hash`; ikincisi firma kimliğini de imzalar                                       |
+
+## PHP: `clickfix/sdk` [#php]
+
+PHP 8.1+ için PSR-18 taşımalı istemci (Guzzle önerilir; `php-http/discovery` ile PSR-17 fabrikaları), tipli hatalar, sınırlı tekrar deneme, ofset sayfalama, webhook doğrulama ve `user_hash`. Kaynak: [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php). Örnek uygulama: [`clickfix-examples/php-plain`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/php-plain).
+
+```sh
+composer require clickfix/sdk guzzlehttp/guzzle
+```
+
+```php
+use ClickFix\Client;
+use ClickFix\UserHash;
+use ClickFix\Webhooks;
+
+$client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+$contact = $client->contacts()->upsertByExternalId('1001', [
+    'name' => 'Ayşe Yılmaz',
+    'email' => 'ayse@example.com',
+], idempotencyKey: 'kullanici-1001-v3');
+
+foreach ($client->contacts()->all(['q' => 'acme']) as $item) {
+    // eşleşen her kişi, sayfa sayfa
+}
+
+$userHash = UserHash::make($identitySecret, $authenticatedUserId); // yalnız bu değer widget'a gider
+$ok = Webhooks::verify($secret, $headers['ClickFix-Webhook-Timestamp'], $headers['ClickFix-Webhook-Signature'], $rawBody);
+```
+
+Kaynak sınıfları `contacts()`, `companies()`, `customFields()`, `conversations()`, `events()`, `webhooks()`, `triggers()` ve `apiChannel($instance, $secret)`; her uç nokta için `list`/`all`/`get`/`create`/`update`/`delete` biçiminde yöntemler. Hata yanıtları `ClickFix\Exception\ApiException` alt sınıflarıdır (`AuthenticationException` 401, `ForbiddenException` 403, `NotFoundException` 404, `ConflictException` 409, `ValidationException` 400/422, `RateLimitException` 429 `retryAfter` ile, `ServerException` 5xx); ağ hataları `TransportException`.
+
+## Laravel paketi [#laravel]
+
+Laravel 10, 11, 12 ve 13 (PHP 8.1+) için [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) kılavuzdaki adımları tek pakette toplar: servis sağlayıcı ve `ClickFix` facade'ı, `config/clickfix.php`, artisan komutları, imzayı doğrulayan `POST /clickfix/webhook` rotası ve her olay için bir Laravel event'i, `@clickfixWidget` Blade direktifi. Paket keşfi sağlayıcıyı kendisi kaydeder. Kaynak ve değişiklik günlüğü: [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel). Örnek uygulama: [`clickfix-examples/laravel-app`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/laravel-app).
+
+### Kurulum [#laravel-install]
+
+```sh
+composer require clickfix/laravel
+php artisan clickfix:install
+php artisan clickfix:check
+```
+
+`clickfix:install` `config/clickfix.php` dosyasını yayımlar, `.env` dosyasına eksik `CLICKFIX_*` anahtarlarını ekler (webhook sırrını üretir), abone olunacak webhook adresini ve sonraki adımları yazar. Anahtarları doldurduktan sonra `clickfix:check` API anahtarını API'ye karşı dener, widget kimliğini, kimlik anahtarını, webhook sırrını ve rotanın `https` olduğunu doğrular; bir şey eksikse çıkış kodu 1'dir.
+
+| `.env` anahtarı            | Nereden                                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `CLICKFIX_API_KEY`         | [Başlamadan önce](/docs/integration-guide#before-you-start) tablosundaki API anahtarı        |
+| `CLICKFIX_WIDGET_ID`       | Web widget → Kurulum                                                                         |
+| `CLICKFIX_IDENTITY_SECRET` | Web widget → Güvenlik → Kimlik doğrulama; yalnız sunucuda kalır                              |
+| `CLICKFIX_WEBHOOK_SECRET`  | Aboneliğin `data.secret` değeri ya da `clickfix:install`'ın ürettiği değer (aboneliğe girin) |
+| `CLICKFIX_WEBHOOK_QUEUE`   | Boş: olaylar istek içinde; `true` veya kuyruk adı: kuyruğa alınan işten                      |
+
+### Artisan komutları [#laravel-artisan]
+
+| Komut                                                               | Ne yapar                                                                                                                                      |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clickfix:install [--force] [--no-env]`                             | Config yayımlar, `.env` anahtarlarını ekler, webhook sırrı üretir, webhook adresini yazar                                                     |
+| `clickfix:check`                                                    | API anahtarı, widget kimliği, kimlik anahtarı, webhook sırrı ve rotası; hata varsa çıkış kodu 1                                               |
+| `clickfix:user-hash {user} [--raw] [--json]`                        | Bir kullanıcı (model anahtarı) için `user_hash`; `WIDGET_IDENTITY_INVALID` ayıklamak için                                                     |
+| `clickfix:webhook:secret [--write]`                                 | 64 karakter hex sır; `--write` `.env`'e yazar                                                                                                 |
+| `clickfix:sync:contacts [--id=*] [--since=] [--chunk=] [--dry-run]` | `config('clickfix.contacts')` içindeki modeli dış kimlikle kişi olarak oluşturur/günceller (`PUT /contacts/by-external-id`, `contacts:write`) |
+
+`clickfix:sync:contacts` için model (`App\Models\User`), alan eşlemesi (`name`, `email`, `phone`, `job_title`, `locale`, `timezone` → model özniteliği veya noktalı yol) ve özel alan eşlemesi config'dedir. Dış kimlik her zaman modelin birincil anahtarıdır; `identify`'daki `user_id` ile aynı değer olduğu için eşitlenen kişi ile widget oturumu tek kişidir ([dış kimlik](/docs/integration-guide/contacts-companies#external-id)).
+
+### Widget ve kimlik doğrulama [#laravel-widget]
+
+```blade
+    @clickfixWidget
+</body>
+```
+
+Direktif kuyruk parçacığını, `ClickFix("boot", {...})` çağrısını ve `widget.js` etiketini basar. Argümansız kullanımda oturum açmış kullanıcı doğrulanır (`user_id` model anahtarı, `user_hash` kimlik anahtarıyla sunucuda hesaplanır, `name` ve `email` modelden); kimse oturum açmamışsa widget anonim açılır. `@clickfixWidget($musteri)` belirli bir modeli, `@clickfixWidget(null)` her zaman anonim widget'ı, `@clickfixWidget(auth()->user(), ['locale' => 'tr'])` ek başlatma seçeneklerini verir. Kimliğe giren alanlar `clickfix.widget.user` ile ya da modelde `ProvidesClickFixIdentity` arayüzüyle (`company`, `attributes` dahil) belirlenir.
+
+Inertia, Livewire veya widget'ı kendisi başlatan bir SPA için kimlik yükünü sunucuda üretip sayfaya paylaşın:
+
+```php
+use ClickFix\Laravel\Facades\ClickFix;
+
+ClickFix::userHash($user);  // hex HMAC-SHA256(kimlik anahtarı, model anahtarı)
+ClickFix::identity($user);  // ['user_id' => '42', 'user_hash' => '…', 'name' => …, 'email' => …]
+```
+
+Tarayıcıda `ClickFix("identify", identity)` çağırın; kimlik anahtarı sunucudan çıkmaz ([kimlik doğrulama](/docs/integration-guide/identity)).
+
+### Webhook [#laravel-webhook]
+
+Paket `POST /clickfix/webhook` rotasını `web` grubunun dışında (oturum ve CSRF yok) ve `clickfix.webhook` middleware'i arkasında kaydeder. Middleware `ClickFix-Webhook-Timestamp` ve `ClickFix-Webhook-Signature` başlıklarını ham gövde üzerinde doğrular ([Webhook'lar](/docs/integration-guide/webhooks) bölümündeki kuralla; 5 dakika tolerans, sabit zamanlı karşılaştırma); bozuk veya bayat imza `401`, sır tanımsızsa `503` döner. Aynı `ClickFix-Webhook-Id` ile gelen tekrar teslimat önbellekten tanınır ve olaylar ikinci kez tetiklenmeden `200` ile yanıtlanır.
+
+Doğrulanan her teslimat `ClickFix\Laravel\Events\WebhookReceived` olayını, tanınan olay adları ayrıca kendi sınıfını tetikler: `ConversationCreated`, `ConversationResolved`, `MessageReceived`, `MessageSent`, `ContactCreated`, `ContactUpdated`, `CompanyUpdated`, `SlaBreached`, `CsatSubmitted` … (olay başına bir sınıf; tanınmayan ad yalnız `WebhookReceived`).
+
+```php
+use ClickFix\Laravel\Events\MessageReceived;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(MessageReceived::class, function (MessageReceived $event) {
+    $event->get('conversation_uuid');
+    $event->get('contact_external_id'); // sizin kullanıcı numaranız
+    $event->payload->occurredAt();      // Carbon
+});
+```
+
+`CLICKFIX_WEBHOOK_QUEUE=true` (veya bir kuyruk adı) ile olaylar istek yerine `ProcessWebhook` işinden tetiklenir ve rota `202` döner. Rotayı kendiniz tanımlamak için `CLICKFIX_WEBHOOK_ROUTE=false` yapıp kendi rotanıza `clickfix.webhook` middleware'ini ekleyin. Abonelik açma örneği için [Webhook'lar](/docs/integration-guide/webhooks).
+
+## Flutter: `clickfix_webview` [#flutter]
+
+Mobil uygulamalar widget'ı oturumu taşıyan güvenli bir webview'de gösterir; Flutter için hazır paket [`clickfix_webview`](https://pub.dev/packages/clickfix_webview) köprü sözleşmesini `ClickFixController` + `ClickFixWebView` olarak uygular. Kurulum, yöntem tablosu ve örnekler: [Mobil: webview ve Flutter](/docs/integration-guide/mobile#flutter). Örnek uygulama: [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
+
+## Ortak davranış [#common]
+
+### Sayfalama [#pagination]
+
+```ts tab="Node.js"
+import { paginate } from "@getclickfix/node";
+
+for await (const contact of paginate(async (limit, offset) => {
+  const envelope = await client.request(
+    "/v1/public-api/contacts",
+    "get",
+    undefined,
+    { query: { limit, offset } },
+  );
+  // envelope.data'yı kendi şemanızla doğrulayıp {items, total, limit, offset} döndürün.
+  return validateContactPage(envelope.data);
+})) {
+  await consume(contact);
+}
+```
+
+```go tab="Go"
+type Contact struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+err = clickfix.Iterate(ctx,
+	func(ctx context.Context, limit, offset int) (clickfix.Page[Contact], error) {
+		return clickfix.ListPage[Contact](ctx, client, "contacts", limit, offset)
+	},
+	func(contact Contact) bool { /* işle */ return true },
+)
+```
+
+```php tab="PHP"
+foreach ($client->contacts()->all(['q' => 'acme']) as $contact) {
+    // sayfa sayfa, tek tek
+}
+```
+
+Ofset sayfalama anlık görüntüler içindir; eşzamanlı eklemeler sayfaları kaydırabilir. Eşitleme yaparken UUID'leri tekilleştirin; artımlı eşitleme için [tetikleyici imlecini](/docs/mcp-integrations) ya da [webhook'ları](/docs/integration-guide/webhooks) kullanın.
+
+### Webhook imzası ve kimlik özeti [#webhook-signature]
+
+```ts tab="Node.js"
+import { identityHash, verifyWebhook } from "@getclickfix/node";
+
+const valid = verifyWebhook(
+  secret,
+  headers.timestamp,
+  headers.signature,
+  rawBody,
+);
+
+// Web widget'ında oturum açmış kullanıcı ve firması için user_hash
+const userHash = identityHash(identitySecret, authenticatedUser.id, company.id);
+```
+
+```go tab="Go"
+err = clickfix.VerifyWebhook(secret,
+	r.Header.Get("ClickFix-Webhook-Timestamp"),
+	r.Header.Get("ClickFix-Webhook-Signature"), rawBody, time.Now(), 5*time.Minute)
+
+userHash := clickfix.IdentityCompanyHash(identitySecret, userID, companyID)
+```
+
+```php tab="PHP"
+$ok = Webhooks::verify($secret, $timestamp, $signature, $rawBody);
+$userHash = UserHash::make($identitySecret, $userId);
+```
+
+İmzayı JSON'u ayrıştırmadan önce, ham gövde üzerinde doğrulayın ve yan etkilerden önce `ClickFix-Webhook-Id` değerini kaydedip tekilleştirin. SDK'sız doğrulama örnekleri (Node.js, Python, Go): [Webhook'lar](/docs/webhooks#verifying-the-signature).
+
+## SDK'sız istekler [#without-an-sdk]
+
+Örnek betikler: [`clickfix-examples/curl`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/curl).
+
+```bash tab="curl"
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: siparis-1042-not" \
+  -d '{ "content": "Sipariş kargoya verildi.", "private": true }'
+```
+
+```ts tab="fetch"
+const res = await fetch(
+  "https://api.getclickfix.com/v1/public-api/contacts?limit=20",
+  {
+    headers: { Authorization: `Bearer ${process.env.CLICKFIX_API_KEY}` },
+  },
+);
+const body = await res.json();
+if (!body.success) throw new Error(`${body.error.code}: ${body.error.message}`);
+```
+
+```python tab="Python"
+import os, requests
+
+API = "https://api.getclickfix.com/v1/public-api"
+headers = {"Authorization": f"Bearer {os.environ['CLICKFIX_API_KEY']}"}
+
+contacts = requests.get(f"{API}/contacts", params={"limit": 20}, headers=headers, timeout=30).json()
+
+created = requests.post(
+    f"{API}/conversations",
+    json={"contact_uuid": contact_uuid, "inbox_uuid": inbox_uuid, "subject": "Teslimat sorusu"},
+    headers={**headers, "Idempotency-Key": "siparis-1042-destek"},
+    timeout=30,
+).json()
+```
+
+`429 RATE_LIMITED` yanıtında `Retry-After` süresi kadar bekleyip aynı `Idempotency-Key` ile tekrar deneyin; `400`, `401` ve `403` hatalarını tekrar denemeyin.

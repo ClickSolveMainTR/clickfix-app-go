@@ -339,6 +339,8 @@ jobs:
       - name: Generated SDKs and backend/docs/public-api.yaml are current
         working-directory: sdks
         run: pnpm check
+      # pnpm test: build, type tests, Node test runner, then the React Native
+      # and Expo hooks/screens under jest (react-native preset, fake widget API; CF-202).
       - name: TypeScript and widget SDK tests
         working-directory: sdks
         run: pnpm test
@@ -347,6 +349,7 @@ jobs:
         run: go test -p 2 ./...
       # Integration guide samples (CF-199): the code embedded in the guide
       # pages is this code, type-checked, compiled and run against the stub API.
+      # The Expo example (CF-202) is type-checked and passes expo-doctor (offline, against the installed SDK).
       - name: Guide examples are embedded and run
         working-directory: sdks
         run: |
@@ -354,11 +357,12 @@ jobs:
           pnpm examples
       # What `sdk-publish` would ship from main: publish dry run, no token
       # needed. pnpm (not npm) so `workspace:` dependencies are rewritten to
-      # real versions (react-widget depends on visitor-core, CF-201).
+      # real versions (react-widget and react-native depend on visitor-core,
+      # expo on react-native; CF-201, CF-202).
       - name: npm publish dry run
         working-directory: sdks
         run: |
-          for p in node visitor-core react-widget; do
+          for p in node visitor-core react-widget react-native expo; do
             (cd "$p" && pnpm publish --dry-run --no-git-checks --access public)
           done
           echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
@@ -604,6 +608,9 @@ jobs:
         run: pnpm typecheck
       - name: Unit tests
         run: pnpm run --if-present test
+      # The docs copy of the public API spec must match backend/docs (CF-208).
+      - name: Docs spec copy is current
+        run: pnpm docs:check
       - uses: actions/cache@v6
         with:
           path: frontend/.next/cache
@@ -678,12 +685,13 @@ jobs:
           node-version-file: frontend/.nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      # After setup-node: the self-hosted machine has no preinstalled Node.
-      - name: Check frontend public API docs copy
-        run: node frontend/scripts/sync-docs-spec.mjs --check
       - name: Install
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      # After Install: the sync script parses YAML with the frontend's `yaml` package (CF-208).
+      - name: Check frontend public API docs copies (EN + derived TR)
+        working-directory: frontend
+        run: pnpm docs:check
       - name: api-generate is up to date
         working-directory: frontend
         run: |
@@ -855,6 +863,15 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: the docs "last updated" dates come from git.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      # The frontend build context has no .git; snapshot the dates first (CF-208).
+      - name: Docs last-updated dates
+        run: node frontend/scripts/docs-last-modified.mjs
       - uses: docker/setup-buildx-action@v4
       - uses: crazy-max/ghaction-github-runtime@v4
       - uses: docker/login-action@v3
@@ -879,7 +896,8 @@ jobs:
           done
 
   # SDK release (CF-199): a green main run publishes @getclickfix/node,
-  # @getclickfix/visitor-core (CF-201) and @getclickfix/react-widget to npm when
+  # @getclickfix/visitor-core (CF-201), @getclickfix/react-widget,
+  # @getclickfix/react-native and @getclickfix/expo (CF-202) to npm when
   # the version in package.json is not on the registry yet. Needs the
   # NPM_TOKEN repository secret (an npm automation token of the account that
   # owns the scopes); without it the job skips with a summary note and never
@@ -910,7 +928,8 @@ jobs:
             echo "NPM_TOKEN secret is not set: npm publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           list=""
-          for p in node visitor-core react-widget; do
+          # Dependency order: a package is published after the ones it depends on.
+          for p in node visitor-core react-widget react-native expo; do
             name=$(jq -r .name "sdks/$p/package.json"); version=$(jq -r .version "sdks/$p/package.json")
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY"
@@ -1022,7 +1041,7 @@ jobs:
   # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
-  # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
+  # visitor-core/vX.Y.Z, react-native/vX.Y.Z, expo/vX.Y.Z, go/vX.Y.Z (Go module path
   # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Packagist
   # needs composer.json at the repository root, so sdks/php and sdks/laravel are
   # also pushed to their own mirrors (clickfix-php, clickfix-laravel) and tagged
@@ -1072,7 +1091,7 @@ jobs:
             git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
           }
           mirror sdks clickfix-sdks
-          for p in node react-widget visitor-core; do
+          for p in node react-widget visitor-core react-native expo; do
             [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
           done
           [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"

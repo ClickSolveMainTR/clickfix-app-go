@@ -1,0 +1,60 @@
+---
+title: Integration guide
+description: Connect ClickFix to your own product end to end; identity verification, external ids, custom fields, events, system binding, the API channel, webhooks, the mobile webview and the SDKs. Widget, Node.js, Go, PHP and curl samples on every step.
+---
+
+This guide covers, in the order the **Setup** wizard in the panel follows, everything you write to connect your own product to ClickFix. Each step has its own page, and each step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) and **curl**. The samples come from the `examples` folder of the public [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/examples) repository and are executed on every release; the code you see here is the code that passed. For complete, runnable applications (Express, Next.js, React Native, Flutter, Go, PHP, Laravel, curl) see the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository.
+
+## Steps [#steps]
+
+1. [Identity verification: `user_hash` and the company signature](/docs/integration-guide/identity?lang=en)
+2. [Contacts, companies and external ids](/docs/integration-guide/contacts-companies?lang=en)
+3. [Custom fields](/docs/integration-guide/custom-fields?lang=en)
+4. [Events and screen context](/docs/integration-guide/events?lang=en)
+5. [Connect your system](/docs/integration-guide/system-binding?lang=en)
+6. [API channel](/docs/integration-guide/api-channel?lang=en)
+7. [Webhooks](/docs/integration-guide/webhooks?lang=en)
+8. [Mobile: webview and Flutter](/docs/integration-guide/mobile?lang=en)
+9. [SDKs](/docs/integration-guide/sdks?lang=en)
+
+## Before you start [#before-you-start]
+
+| You need                                    | Where                                         | Used for                                                                             |
+| ------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`)                                |
+| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash` (user + company id), server side only                          |
+| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                                               |
+| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel                                 |
+| **App key** (mobile)                        | Web widget → Advanced → Mobile apps           | Only for apps calling the widget API without a webview (`@getclickfix/visitor-core`) |
+
+The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require `Idempotency-Key`. Keys never reach the browser or the mobile app. Envelope, error codes and rate limits: [API](/docs/api?lang=en).
+
+### Packages [#packages]
+
+<include>../../../generated/packages.en.mdx</include>
+
+To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`. Installation, the smallest example and the example app of every package: [SDKs](/docs/integration-guide/sdks?lang=en).
+
+## The right setup order [#setup-order]
+
+The **Setup** wizard in the panel has five steps; the pages of this guide follow the same order. Open each step in the panel first, then write its code.
+
+| Wizard step               | In this guide                                                                                                                                                                                                                                                       | In the panel                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1. Introduce the customer | [Identity verification](/docs/integration-guide/identity?lang=en), [external ids and company](/docs/integration-guide/contacts-companies?lang=en), [custom fields](/docs/integration-guide/custom-fields?lang=en), [events](/docs/integration-guide/events?lang=en) | Web widget → Security; Settings → Custom fields |
+| 2. Connect your system    | [Connect your system](/docs/integration-guide/system-binding?lang=en)                                                                                                                                                                                               | Integrations → Connect your system              |
+| 3. Teach the AI           | [Next steps](#next-steps)                                                                                                                                                                                                                                           | AI → Procedures                                 |
+| 4. Knowledge base         | [Next steps](#next-steps)                                                                                                                                                                                                                                           | Knowledge base                                  |
+| 5. Automation and SLA     | [Webhooks](/docs/integration-guide/webhooks?lang=en), [next steps](#next-steps)                                                                                                                                                                                     | Automation, SLA                                 |
+
+The [API channel](/docs/integration-guide/api-channel?lang=en) and the [mobile webview](/docs/integration-guide/mobile?lang=en) are channel setup; do them after introducing the customer, before or after system binding.
+
+## Next steps [#next-steps]
+
+The remaining steps of the setup wizard are panel work, not code:
+
+- **Teach the AI:** [AI](/docs/ai?lang=en). The concepts and actions of system binding feed the AI playbooks.
+- **Knowledge base:** [Knowledge base](/docs/knowledge-base?lang=en). The widget's help tab and the AI read from it.
+- **Automation and SLA:** [Automation](/docs/automation?lang=en). Workflow conditions can read custom fields and screen context; for outbound actions use [webhooks](/docs/integration-guide/webhooks?lang=en).
+
+Other references: [API](/docs/api?lang=en), [Web widget](/docs/web-widget?lang=en), [Webhooks](/docs/webhooks?lang=en), [API reference](/docs/api-reference?lang=en).

@@ -149,6 +149,54 @@ export function compareGroups(locale: AppLocale): {
           clickfix: "yes",
           others: ["yes", "yes", "yes"],
         },
+        {
+          label: {
+            tr: "Resmi SDK'lar: Node.js, Go, PHP, Laravel, React, Flutter (MIT)",
+            en: "Official SDKs: Node.js, Go, PHP, Laravel, React, Flutter (MIT)",
+          },
+          clickfix: "yes",
+          others: ["yes", "yes", "yes"],
+        },
+        {
+          label: {
+            tr: "Müşteri uygulamasında destek: webview köprüsü ve Flutter paketi",
+            en: "Support inside the customer app: webview bridge and Flutter package",
+          },
+          clickfix: "yes",
+          others: ["yes", "yes", "yes"],
+        },
+        {
+          label: {
+            tr: "İmzalı müşteri kimliği (user_hash) ve firma imzası, dış kimlik",
+            en: "Signed customer identity (user_hash) with company signature, external ids",
+          },
+          clickfix: "yes",
+          others: ["yes", "yes", "yes"],
+        },
+        {
+          label: {
+            tr: "Sistemini bağla: kendi API'nizden kayıt okuyan AI ve temsilci",
+            en: "Connect your system: AI and agents reading records from your own API",
+          },
+          clickfix: "yes",
+          others: ["none", "addon", "none"],
+        },
+        {
+          label: {
+            tr: "Panelde iş yapan AI asistan (kurulum, test, onay kartı)",
+            en: "AI assistant that does the setup in the panel (setup, tests, approval card)",
+          },
+          clickfix: "yes",
+          others: ["none", "none", "none"],
+        },
+        {
+          label: {
+            tr: "MCP sunucusu (Claude, Cursor) ve llms.txt dokümantasyon",
+            en: "MCP server (Claude, Cursor) and llms.txt documentation",
+          },
+          clickfix: "yes",
+          others: ["none", "none", "none"],
+        },
       ],
     },
   ];

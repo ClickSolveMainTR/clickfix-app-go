@@ -1,9 +1,11 @@
 "use client";
 
 import {
+  Ban,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
+  Clock,
   Loader2,
   XCircle,
 } from "lucide-react";
@@ -38,33 +40,49 @@ export function Tool({
   return (
     <Collapsible
       data-slot="tool"
-      className={cn("bg-card w-full rounded-xl border text-sm", className)}
+      className={cn(
+        "bg-card text-card-foreground w-full rounded-xl border text-sm shadow-xs",
+        className,
+      )}
       {...props}
     />
   );
 }
 
+/**
+ * One colour per outcome, shared by every card of the conversation
+ * (CF-210): waiting is amber, done is green, an error is red, a denied call
+ * and a streaming input stay neutral.
+ */
 export function getStatusBadge(state: ToolState, label: string) {
   const icon =
     state === "input-streaming" ? (
       <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
     ) : state === "output-available" ? (
       <CheckCircle2 className="size-3" />
-    ) : state === "output-error" || state === "output-denied" ? (
+    ) : state === "output-error" ? (
       <XCircle className="size-3" />
+    ) : state === "output-denied" ? (
+      <Ban className="size-3" />
+    ) : state === "approval-requested" ? (
+      <Clock className="size-3" />
     ) : (
       <CircleDashed className="size-3" />
     );
   return (
     <Badge
+      data-slot="tool-status"
+      data-state={state}
       variant={
         state === "output-error"
           ? "danger"
           : state === "output-available"
-            ? "default"
-            : "secondary"
+            ? "success"
+            : state === "approval-requested"
+              ? "warning"
+              : "secondary"
       }
-      className="gap-1 rounded-full"
+      className="shrink-0 gap-1 rounded-full whitespace-nowrap"
     >
       {icon}
       {label}
@@ -76,22 +94,34 @@ export function ToolHeader({
   title,
   state,
   statusLabel,
+  icon,
   className,
   ...props
 }: ComponentProps<typeof CollapsibleTrigger> & {
   title: ReactNode;
   state: ToolState;
   statusLabel: string;
+  /** Leading glyph of the card (the kind of call). */
+  icon?: ReactNode;
 }) {
   return (
     <CollapsibleTrigger
       data-slot="tool-header"
       className={cn(
-        "group flex w-full items-center gap-2 px-3 py-2 text-left",
+        "group focus-visible:ring-ring/50 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left outline-none focus-visible:ring-[3px]",
         className,
       )}
       {...props}
     >
+      {icon ? (
+        <span
+          aria-hidden
+          data-slot="tool-icon"
+          className="bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5"
+        >
+          {icon}
+        </span>
+      ) : null}
       <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
       {getStatusBadge(state, statusLabel)}
       <ChevronDown className="text-muted-foreground size-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />

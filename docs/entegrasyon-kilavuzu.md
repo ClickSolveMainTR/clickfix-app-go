@@ -4,8 +4,8 @@ Müşteri ekibine verilen tek entegrasyon kılavuzunun geliştirici tarafı: ner
 
 ## Kılavuz
 
-- Yardım merkezi sayfası: `frontend/content/docs/tr/integration-guide.mdx` ve `en/integration-guide.mdx` (`/docs/integration-guide`). Bölüm sırası CF-198'deki kurulum sihirbazıyla aynıdır: müşteriyi tanıt (kimlik doğrulama, dış kimlik, özel alanlar, şirket, olaylar) → sistemini bağla → kanallar (API kanalı, webhook'lar) → mobil webview → AI / bilgi bankası / otomasyon (panel işi, bağlantı).
-- Kaynak gerçekler: `backend/docs/public-api.yaml` (ve `backend/docs/public-api/*.md` giriş bölümleri), CF-195 kişi API'si ve dış kimlik, CF-196 özel alan kataloğu (`widget/usecase/attributes.go`), CF-197 sistem bağlama (`modules/integrations/systems`). Bu kodlar değişince kılavuz da değişir.
+- Yardım merkezi sayfası: `frontend/content/docs/tr/integration-guide/` ve `en/integration-guide/` (`/docs/integration-guide`, adım başına sayfa; paket tablosu `frontend/content/generated/packages.*.mdx` dosyasından `make sdks` ile üretilir). Bölüm sırası CF-198'deki kurulum sihirbazıyla aynıdır: müşteriyi tanıt (kimlik doğrulama, dış kimlik, özel alanlar, şirket, olaylar) → sistemini bağla → kanallar (API kanalı, webhook'lar) → mobil webview → AI / bilgi bankası / otomasyon (panel işi, bağlantı).
+- Kaynak gerçekler: `backend/docs/public-api.yaml` (İngilizce; TR çevirisi ve örnekler `backend/docs/public-api/config.yaml` içinde, ortak kurallar `frontend/content/docs/*/api.mdx`), CF-195 kişi API'si ve dış kimlik, CF-196 özel alan kataloğu (`widget/usecase/attributes.go`), CF-197 sistem bağlama (`modules/integrations/systems`). Bu kodlar değişince kılavuz da değişir.
 - Her adımın beş örneği (`widget` JS, Node, Go, PHP, curl) `sdks/examples/` altındadır ve sayfaya `sdks/examples/sync-docs.mjs` ile gömülür. Sayfadaki kod bloklarını elle düzenlemeyin; örneği değiştirip `cd sdks && pnpm examples:sync` çalıştırın. CI (`sdks` işi) `pnpm examples:check` ile sayfaların güncel olduğunu, `pnpm examples` ile örneklerin çalıştığını denetler.
 
 ## Örnekleri doğrulama

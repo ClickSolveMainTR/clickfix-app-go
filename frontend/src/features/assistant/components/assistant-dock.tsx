@@ -16,7 +16,7 @@ export function AssistantDock() {
   return (
     <aside
       aria-label="ClickFix Asistan"
-      className="bg-background sticky top-0 hidden h-svh w-[26rem] shrink-0 flex-col border-l lg:flex xl:w-[30rem]"
+      className="bg-background relative sticky top-0 hidden h-svh w-[26rem] shrink-0 flex-col border-l lg:flex xl:w-[30rem]"
       data-guide="assistant-dock"
     >
       <AssistantPanel

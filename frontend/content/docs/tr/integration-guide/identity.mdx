@@ -1,0 +1,135 @@
+---
+title: "Kimlik doğrulama: user_hash ve firma imzası"
+description: "Giriş yapmış kullanıcıyı ve firmasını widget'a kanıtlı biçimde tanıtın: user_hash sunucuda hesaplanır, firma kimliği imzaya girer; widget, Node.js, Go, PHP ve curl örnekleri."
+---
+
+Giriş yapmış kullanıcıyı widget'a kanıtlı biçimde tanıtmanın tek yolu `user_hash` değeridir:
+
+```text
+# kullanıcı bir firmaya bağlıysa (identify'da company.id gönderilir): iki kimlik birlikte imzalanır
+user_hash = hex(HMAC-SHA256(widget_kimlik_anahtari, user_id + "\n" + company_id))
+
+# firma yoksa: yalnız kullanıcı kimliği
+user_hash = hex(HMAC-SHA256(widget_kimlik_anahtari, user_id))
+```
+
+`user_id` kullanıcının **sizin** sisteminizdeki kimliğidir ve bir sonraki bölümdeki dış kimliğin kendisidir; `company_id` firmasının sizin sisteminizdeki kimliğidir ve `identify` çağrısına `company: { id }` olarak gider. Değer **yalnız sunucunuzda** hesaplanır; sitenize ve mobil uygulamanıza anahtar değil, hazır `user_hash` gider. Geçerli `user_hash` ile doğrulanan kişi panelde **Doğrulanmış** rozeti alır; anonim geçmişi aynı kişiye taşınır. Firma kimliği imzalıysa kişi o firmaya imzalı değerle bağlanır, firma da panelde **Doğrulanmış** rozeti alır ve doğrulanmış bir kullanıcı başka bir firmayı iddia edemez; `identify` olayı `company_verified: true` döner. Reddedilen `identify` çağrısında widget çalışmaya devam eder ama kullanıcı anonim kalır ve `error` olayı `WIDGET_IDENTITY_DISABLED` (anahtar üretilmemiş) ya da `WIDGET_IDENTITY_INVALID` (eşleşmiyor; başka bir firma kimliğini imzalayan değer de buna girer) kodunu verir. İki kimlik satır sonu (`\n`) içeremez.
+
+**Geçiş.** Yalnız `user_id` ile hesaplanan eski `user_hash` çalışmaya devam eder (geriye uyumlu). Böyle bir çağrı `company.id` de taşıyorsa kullanıcı yine doğrulanır ama firma kimliği **bağlanmaz ve saklanmaz**: `company.name` ve `company.domain` yalnız eşleştirme ipucu olarak kullanılır, widget konsola sabit bir uyarı yazar ve `identify` olayı `company_verified: false` döner. Firmayı kimliğiyle bağlamak için sunucunuzda imzaya `company_id`'yi ekleyin: Node `identityHash(secret, userId, companyId)`, Go `IdentityCompanyHash(secret, userID, companyID)`; PHP ve Laravel yardımcıları aynı formülü kendi sürümlerinde alır.
+
+{/* example: widget/01-identify.js */}
+
+```js tab="Widget"
+// Adım 1: sunucunuzdan aldığınız user_hash ile giriş yapmış kullanıcıyı tanıtın.
+// @ts-check
+ClickFix("boot", { widgetId: "WIDGET_ID", locale: "tr" });
+
+fetch("/api/support-session") // sizin ucunuz: { user_id, user_hash, company_id } döner
+  .then((r) => r.json())
+  .then((session) =>
+    ClickFix("identify", {
+      user_id: session.user_id, // kişinin dış kimliği
+      // Firma ile: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)), sunucuda.
+      // Firmasız: hex(HMAC-SHA256(anahtar, user_id)).
+      user_hash: session.user_hash,
+      name: "Ayşe Yılmaz",
+      email: "ayse@example.com",
+      company: { id: session.company_id }, // imzadaki firma kimliği
+    }),
+  );
+
+ClickFix("on", "error", (e) => {
+  if (e.code === "WIDGET_IDENTITY_INVALID")
+    console.warn("user_hash eşleşmedi:", e.message);
+});
+```
+
+{/* example: node/01-user-hash.ts */}
+
+```ts tab="Node.js"
+// Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
+import { identityHash } from "@getclickfix/node";
+
+// Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
+const secret = process.env.CLICKFIX_IDENTITY_SECRET!;
+
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik) ve
+// firmasının kimliği (identify'daki company.id). Firma verilirse imza ikisini
+// birden kapsar: hex(HMAC-SHA256(anahtar, user_id + "\n" + company_id)).
+export function userHashFor(userId: string, companyId?: string): string {
+  return identityHash(secret, userId, companyId);
+}
+
+// Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
+console.log(
+  JSON.stringify({
+    user_id: "1001",
+    user_hash: userHashFor("1001"), // firmasız: eski formül
+    company_id: "F-77",
+    company_user_hash: userHashFor("1001", "F-77"), // company: { id: "F-77" } ile gönderilir
+  }),
+);
+```
+
+{/* example: go/user_hash.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+)
+
+// Adım 1: user_hash sunucuda hesaplanır; anahtar tarayıcıya ve uygulamaya gitmez.
+func userHash(ctx context.Context) error {
+	secret := os.Getenv("CLICKFIX_IDENTITY_SECRET") // Panel > Web widget > Güvenlik
+	userID := "1001"                                // kullanıcının sizin sisteminizdeki kimliği
+	companyID := "F-77"                             // firmasının kimliği (identify: company.id)
+	return json.NewEncoder(os.Stdout).Encode(map[string]string{
+		"user_id":   userID,
+		"user_hash": clickfix.IdentityHash(secret, userID), // firmasız: eski formül
+		// Firma ile: imza user_id + "\n" + company_id üzerinden; company: { id } ile gönderilir.
+		"company_id":        companyID,
+		"company_user_hash": clickfix.IdentityCompanyHash(secret, userID, companyID),
+	})
+}
+```
+
+{/* example: php/01-user-hash.php */}
+
+```php tab="PHP"
+<?php
+// Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
+require __DIR__.'/vendor/autoload.php'; // composer require clickfix/sdk
+
+use ClickFix\UserHash;
+
+// Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
+$secret = getenv('CLICKFIX_IDENTITY_SECRET');
+
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik)
+function userHashFor(string $secret, string $userId): string
+{
+    return UserHash::make($secret, $userId);
+}
+
+// Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
+echo json_encode(['user_id' => '1001', 'user_hash' => userHashFor($secret, '1001')]), PHP_EOL;
+```
+
+{/* example: curl/01-user-hash.sh */}
+
+```bash tab="curl"
+# Adım 1: user_hash = hex(HMAC-SHA256(kimlik_anahtari, user_id)); yalnız sunucuda.
+USER_ID="1001"
+printf '%s' "$USER_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
+# Firma ile (company: { id }): imza user_id + "\n" + company_id üzerinden hesaplanır.
+COMPANY_ID="F-77"
+printf '%s\n%s' "$USER_ID" "$COMPANY_ID" | openssl dgst -sha256 -hmac "$CLICKFIX_IDENTITY_SECRET" | sed 's/^.* //'
+```
+
+Anahtarı **Anahtarı yenile** ile değiştirirseniz eski anahtarla üretilen değerler geçersiz olur; sunucunuzdaki anahtarı aynı anda güncelleyin. Çerez onayı gerektiren sitelerde `boot({ consent })` ya da `ClickFix("consent", true)` ile onayı iletin; onay gelene kadar tarayıcıya hiçbir şey yazılmaz.

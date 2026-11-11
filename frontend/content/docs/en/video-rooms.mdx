@@ -79,3 +79,13 @@ Video is billed per **participant-minute**: each participant's connection is rou
 - Buy extra minutes as packages on the **Minutes** tab; they are added once the invoice is paid.
 - With a zero balance no new room can be opened and nobody new can join. If the balance runs out during a call, the room is closed.
 - When the balance drops below the threshold, owners and admins are notified at most once a day.
+
+## FAQ [#faq]
+
+**Does the guest need to install an app?** No; the room opens in the browser. For a customer coming from a mobile app the link arrives in the widget webview as `clickfix:link` and opens in the system browser.
+
+**Where are recordings and transcripts kept?** Stored per the organization's retention period; the transcript and summary are added to the conversation timeline and deleted with the recording ([KVKK tools](/docs/data-protection?lang=en#retention)).
+
+## Related API [#related-api]
+
+- The conversation and messages a room belongs to: [`GET /conversations/{uuid}/messages`](/docs/api-reference/conversations/list-messages?lang=en).

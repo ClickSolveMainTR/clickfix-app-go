@@ -1,0 +1,60 @@
+---
+title: Entegrasyon kılavuzu
+description: ClickFix'i kendi ürününüze baştan sona bağlayın; kimlik doğrulama, dış kimlik, özel alanlar, olaylar, sistem bağlama, API kanalı, webhook'lar, mobil webview ve SDK'lar. Her adımda widget, Node.js, Go, PHP ve curl örneği.
+---
+
+Bu kılavuz, panelde **Kurulum** sihirbazının izlediği sırayla, kendi ürününüzü ClickFix'e bağlamak için yazmanız gereken her şeyi adım adım anlatır. Her adım kendi sayfasındadır ve her adımda beş örnek vardır: tarayıcıdaki **widget** (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) ve **curl**. Örnekler herkese açık [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/examples) deposundaki `examples` klasöründen gelir ve her sürümde çalıştırılarak doğrulanır; burada gördüğünüz kod, testten geçen koddur. Çalışan tam uygulamalar (Express, Next.js, React Native, Flutter, Go, PHP, Laravel, curl) için [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposuna bakın.
+
+## Adımlar [#steps]
+
+1. [Kimlik doğrulama: `user_hash` ve firma imzası](/docs/integration-guide/identity)
+2. [Kişiler, firmalar ve dış kimlik](/docs/integration-guide/contacts-companies)
+3. [Özel alanlar](/docs/integration-guide/custom-fields)
+4. [Olaylar ve ekran bağlamı](/docs/integration-guide/events)
+5. [Sistemini bağla](/docs/integration-guide/system-binding)
+6. [API kanalı](/docs/integration-guide/api-channel)
+7. [Webhook'lar](/docs/integration-guide/webhooks)
+8. [Mobil: webview ve Flutter](/docs/integration-guide/mobile)
+9. [SDK'lar](/docs/integration-guide/sdks)
+
+## Başlamadan önce [#before-you-start]
+
+| Gereken                                 | Nereden                                              | Nerede kullanılır                                                                         |
+| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **API anahtarı** (`cf_sk_…`)            | Organizasyon → API ve otomasyonlar → API anahtarları | Sunucunuzdan yapılan tüm çağrılar (`Authorization: Bearer`)                               |
+| **Widget kimlik anahtarı**              | Web widget → Güvenlik → Kimlik doğrulama             | `user_hash` hesaplamak için (kullanıcı + firma kimliği), yalnız sunucuda                  |
+| **Widget kimliği** (`WIDGET_ID`)        | Web widget → Kurulum                                 | `widget.js` ve mobil webview adresi                                                       |
+| **API kanalı kimliği ve imza anahtarı** | Kanallar → Kanal ekle → API                          | Yalnız kendi sohbet uygulamanızı kanal olarak bağlıyorsanız                               |
+| **Uygulama anahtarı** (mobil)           | Web widget → Gelişmiş → Mobil uygulamalar            | Yalnız yerel çekirdekle (`@getclickfix/visitor-core`) webview'siz çağrı yapan uygulamalar |
+
+Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma isteklerinde `Idempotency-Key` zorunludur. Anahtarlar tarayıcıya ve mobil uygulamaya girmez. Yanıt zarfı, hata kodları ve hız sınırları: [API](/docs/api).
+
+### Paketler [#packages]
+
+<include>../../../generated/packages.tr.mdx</include>
+
+Örnekleri kendi ortamınızda çalıştırmak için ortam değişkenleri: `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE`, `CLICKFIX_CHANNEL_SECRET`. Her paketin kurulumu, en küçük örneği ve örnek uygulaması: [SDK'lar](/docs/integration-guide/sdks).
+
+## Doğru kurulum sırası [#setup-order]
+
+Paneldeki **Kurulum** sihirbazı beş adımdır; bu kılavuzun sayfaları aynı sırayı izler. Her adımı önce panelde açın, sonra kodunu yazın.
+
+| Sihirbaz adımı      | Bu kılavuzda                                                                                                                                                                                                              | Panelde                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 1. Müşteriyi tanıt  | [Kimlik doğrulama](/docs/integration-guide/identity), [dış kimlik ve firma](/docs/integration-guide/contacts-companies), [özel alanlar](/docs/integration-guide/custom-fields), [olaylar](/docs/integration-guide/events) | Web widget → Güvenlik; Ayarlar → Özel alanlar |
+| 2. Sistemini bağla  | [Sistemini bağla](/docs/integration-guide/system-binding)                                                                                                                                                                 | Entegrasyonlar → Sistemini bağla              |
+| 3. AI'a öğret       | [Sonraki adımlar](#next-steps)                                                                                                                                                                                            | AI → Prosedürler                              |
+| 4. Bilgi bankası    | [Sonraki adımlar](#next-steps)                                                                                                                                                                                            | Bilgi bankası                                 |
+| 5. Otomasyon ve SLA | [Webhook'lar](/docs/integration-guide/webhooks), [sonraki adımlar](#next-steps)                                                                                                                                           | Otomasyon, SLA                                |
+
+[API kanalı](/docs/integration-guide/api-channel) ve [mobil webview](/docs/integration-guide/mobile) kanal kurulumudur; müşteriyi tanıttıktan sonra, sistem bağlamadan önce ya da sonra yapılabilir.
+
+## Sonraki adımlar [#next-steps]
+
+Kurulum sihirbazının kalan adımları kod değil panel işidir:
+
+- **AI'a öğret:** [Yapay zekâ](/docs/ai). Sistem bağlamadaki kavramlar ve işler AI tariflerine girer.
+- **Bilgi bankası:** [Bilgi bankası](/docs/knowledge-base). Widget'ın yardım sekmesi ve AI buradan beslenir.
+- **Otomasyon ve SLA:** [Otomasyon](/docs/automation). İş akışı koşulları özel alanları ve ekran bağlamını okuyabilir; dışarı aksiyon için [webhook'lar](/docs/integration-guide/webhooks).
+
+Diğer başvurular: [API](/docs/api), [Web widget](/docs/web-widget), [Webhook'lar](/docs/webhooks), [API başvurusu](/docs/api-reference).

@@ -9,19 +9,26 @@ The web widget is a live chat bubble on your site. Visitors message you, search 
 
 ## Create a widget [#create-a-widget]
 
-1. Open **Web widget** in the left menu.
-2. Type a name and click **Create widget**.
-3. Configure the tabs and click **Save**.
+1. Open the **Web widget** page in the left menu.
+2. Type a name and press **Create widget**.
+3. Walk through the setup and press **Save**.
 
-| Tab            | Settings                                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| Appearance     | Accent color, position (bottom right / bottom left), language, show the team                                   |
-| Chat           | Greeting title and text, pre-chat form (name and email), file upload (up to 10 MB), satisfaction rating (CSAT) |
-| Business hours | Days and hours, time zone, offline message                                                                     |
-| Security       | Allowed domains, identity verification secret, identified users only                                           |
-| Install        | Install code and an identify example                                                                           |
+The widget page has two tabs:
 
-Outside business hours the widget shows as offline and requires an email address.
+- **Basic setup**: a three-step wizard. **Appearance** (colour, theme, launcher), **Identity** (language, welcome texts, logo, team) and **Channel** (AI assistant, pre-chat form, allowed domains, install code). These three steps are enough to put the first widget live.
+- **Advanced settings**: all sixty-plus settings in sections. Every field you change in the basic setup updates the same field here.
+
+| Advanced section | Settings                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Appearance       | Primary colour, theme, position (bottom right / bottom left), language, show the team                                                            |
+| Chat             | Welcome title and text, pre-chat form, file uploads (up to 10 MB), satisfaction rating (CSAT)                                                    |
+| Working hours    | The widget's online/offline state comes from the **organization's working hours** (SLA → Working hours); here you only choose whether they apply |
+| Security         | Allowed domains, identity verification secret, verified users only                                                                               |
+| Mobile apps      | App keys for native iOS and Android apps (below)                                                                                                 |
+| Install          | Install code and the identify sample                                                                                                             |
+| Session replay   | Co-browsing and session recording (with consent)                                                                                                 |
+
+Outside working hours the widget shows as offline, displays the offline message and requires an email address. The AI agent ("we are out of office" text) and the SLA timers use the same working-hours source; changing the hours in one place changes all three.
 
 ## Install [#install]
 
@@ -62,6 +69,8 @@ Once loaded, the widget is controlled through `window.ClickFix`. Calls made befo
 | `ClickFix("open")` / `"close"` / `"toggle"`  | Opens, closes or toggles the chat window                                                                                          |
 | `ClickFix("identify", {...})`                | Identifies a signed-in user (below)                                                                                               |
 | `ClickFix("update", { name, email, phone })` | Updates the visitor's details                                                                                                     |
+| `ClickFix("setAttributes", {...})`           | Sends custom field values (the key is the one under Settings → Custom fields)                                                     |
+| `ClickFix("consent", true)`                  | Passes cookie consent; nothing is written to the browser until it arrives                                                         |
 | `ClickFix("track", "event_name", {...})`     | Records a page event; the last 20 are attached to the visitor's next message                                                      |
 | `ClickFix("on", "message", fn)`              | Listens to an event: `ready`, `open`, `close`, `message`, `message:sent`, `conversation`, `unread`, `identify`, `rating`, `track` |
 | `ClickFix("reset")`                          | Forgets the visitor (call it on logout)                                                                                           |
@@ -79,8 +88,14 @@ You can securely tell the widget who your signed-in users are, so their conversa
 2. On your server, compute a `user_hash` for each user:
 
    ```text
+   # with a company (identify sends company.id)
+   user_hash = hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))
+
+   # without a company
    user_hash = hex(HMAC-SHA256(identity_secret, user_id))
    ```
+
+   `user_id` and `company.id` are the ids in your own system and become the contact's and the company's **external id** in ClickFix (`external_id` in the API). Signing the company id too means a verified user cannot claim another company and the company gets the **Verified** badge; the older value computed from `user_id` alone keeps working, in which case `company.id` is not linked and `company.name` / `domain` are only matching hints.
 
 3. Call `identify` on the page:
 
@@ -91,21 +106,25 @@ You can securely tell the widget who your signed-in users are, so their conversa
        user_hash: "USER_HASH",
        name: "Ada Yılmaz",
        email: "ada@example.com",
-       company: { id: "acme", name: "Acme Inc.", domain: "acme.com" },
+       company: { id: "F-77", name: "Acme Inc.", domain: "acme.com" },
+       attributes: { plan: "pro" },
      });
    </script>
    ```
 
-Never send the secret to the browser. For example, in Node.js:
+A verified contact gets the **Verified** badge in the panel and their anonymous history moves to the same contact. When `identify` is rejected the widget keeps working but the user stays anonymous and the `error` event carries `WIDGET_IDENTITY_DISABLED` (no secret generated) or `WIDGET_IDENTITY_INVALID` (mismatch); channel health turns to **Warning** with the reason. Never send the secret to the browser. For example in Node.js with the SDK:
 
 ```js
-import crypto from "node:crypto";
+import { identityHash } from "@getclickfix/node";
 
-const userHash = crypto
-  .createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
-  .update(String(user.id))
-  .digest("hex");
+const userHash = identityHash(
+  process.env.CLICKFIX_IDENTITY_SECRET,
+  String(user.id),
+  user.companyId, // optional
+);
 ```
+
+Step by step, with Go, PHP, curl and Laravel samples: [Integration guide → Identity verification](/docs/integration-guide/identity?lang=en).
 
 Turn on **Identified users only** to stop anonymous visitors from sending messages; this suits sites that require sign-in, like a customer portal. Use **Rotate secret** to replace the secret, and update it on your server too.
 
@@ -165,45 +184,91 @@ ClickFix("track", "checkout_started", { total: 349.9 });
 
 ### Computing `user_hash` on the server [#user-hash-on-the-server]
 
-Compute the `user_hash` of a signed-in user on your server and give the page only the result:
+Compute `user_hash` for the signed-in user on your server and hand the page only the result. With a company id the signed message is `user_id + "\n" + company_id`:
 
 ```js tab="Node.js"
 import { createHmac } from "node:crypto";
 
-export function userHash(userId) {
+export function userHash(userId, companyId) {
+  const message = companyId ? `${userId}\n${companyId}` : String(userId);
   return createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
-    .update(String(userId))
+    .update(message)
     .digest("hex");
 }
 ```
 
 ```php tab="PHP"
 <?php
-function clickfix_user_hash(string $userId): string {
-    return hash_hmac('sha256', $userId, getenv('CLICKFIX_IDENTITY_SECRET'));
+function clickfix_user_hash(string $userId, ?string $companyId = null): string {
+    $message = $companyId === null ? $userId : $userId . "\n" . $companyId;
+    return hash_hmac('sha256', $message, getenv('CLICKFIX_IDENTITY_SECRET'));
 }
 ```
 
 ```python tab="Python"
 import hashlib, hmac, os
 
-def user_hash(user_id: str) -> str:
+def user_hash(user_id: str, company_id: str | None = None) -> str:
     secret = os.environ["CLICKFIX_IDENTITY_SECRET"].encode()
-    return hmac.new(secret, str(user_id).encode(), hashlib.sha256).hexdigest()
+    message = f"{user_id}\n{company_id}" if company_id else str(user_id)
+    return hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
 ```
 
 ```go tab="Go"
-func UserHash(userID string) string {
+func UserHash(userID, companyID string) string {
+	message := userID
+	if companyID != "" {
+		message = userID + "\n" + companyID
+	}
 	mac := hmac.New(sha256.New, []byte(os.Getenv("CLICKFIX_IDENTITY_SECRET")))
-	mac.Write([]byte(userID))
+	mac.Write([]byte(message))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 ```
 
+Ready-made helpers: Node `identityHash`, Go `IdentityCompanyHash`, PHP `UserHash::make`, Laravel `ClickFix::userHash($user)` ([SDKs](/docs/integration-guide/sdks?lang=en)).
+
 ### React [#react]
 
-To drive the widget with typed hooks in a React app, see [SDKs and sample code → React widget client](/docs/sdks?lang=en#react-widget).
+To drive the widget with typed hooks in a React app, see [SDKs → React](/docs/integration-guide/sdks?lang=en#react-widget).
+
+## Custom fields and screen context [#custom-fields-and-screen-context]
+
+- **Custom fields:** define a field once under **Settings → Custom fields** and send its key with `identify({ attributes })` or `ClickFix("setAttributes", { plan: "pro" })`; the value is validated against the field type, list fields accept an option id or label. An undefined key is not dropped silently: it shows as an **undefined field received** warning in the channel setup check and on the contact card, with one-click definition. The field's **widget access** decides whether an anonymous visitor may write it. Accepted values show on the contact card, in the conversation panel and (if allowed) in the AI context.
+- **Screen context:** the last 20 events recorded with `ClickFix("track", "checkout_started", { total: 349.9 })` and the page URL travel with the visitor's next message; the panel shows **which screen they wrote from** in the conversation header, and the events feed the AI agent's input and workflow conditions. The query string and `#` fragment of the URL are dropped on the server; keep personal data out of event properties.
+
+Details: [Custom fields](/docs/integration-guide/custom-fields?lang=en), [Events and screen context](/docs/integration-guide/events?lang=en).
+
+## Pre-chat form [#pre-chat-form]
+
+The pre-chat form and the panel's request forms share one **Forms** infrastructure: define a form under **Settings → Forms** and pick, in the widget's **Channel** step (or Advanced → Chat), which form is asked. Form fields can map to custom fields; a verified user is not asked for name and email again. Outside working hours the email field becomes required.
+
+## Instant reply and offline message [#instant-reply]
+
+The customer is never left waiting: every new conversation written during working hours gets an automatic "received, estimated time" acknowledgement within 10 seconds (text and estimate under **Automation → Welcome**, per mode: AI, agent, mixed). When the AI agent hands over to a human it tells the customer. The out-of-hours message has one source, the organization's working hours. Details: [Automation](/docs/automation?lang=en#instant-reply).
+
+## Mobile apps: app key [#mobile-apps]
+
+The recommended path for mobile apps is a secure **webview** that carries the session (`widget-embed.html`); Flutter has a ready-made package. An app can also call the widget endpoints without a webview, with the native core (`@getclickfix/visitor-core`); for that create an **app key** under **Advanced → Mobile apps** with the platform (iOS/Android) and package name. The key is shown only when created, stored hashed and can be revoked; a widget can have at most 20 active keys. The app adds `X-ClickFix-App-Key` and `X-ClickFix-App-Package` to every widget request; `user_hash` verification and rate limits are the same as in the browser. The key never enters the webview or a page. Details: [Mobile: webview and Flutter](/docs/integration-guide/mobile?lang=en).
 
 ## Help center and booking [#help-center-and-booking]
 
 If your knowledge base has published public articles, visitors can search them from the widget. With the appointments module on, the widget links to your public booking page. Details: [Knowledge base](/docs/knowledge-base?lang=en), [Appointments](/docs/appointments?lang=en).
+
+## FAQ [#faq]
+
+**The widget says "online" but the AI says "we are out of office".** Not any more: the widget state, the AI text and the SLA use the same working-hours source (SLA → Working hours). If **Apply working hours** is off in the widget, the widget always shows as online.
+
+**I called `identify` but the contact shows as anonymous.** Check the code of the `error` event: `WIDGET_IDENTITY_DISABLED` means no secret was generated on the Security tab; `WIDGET_IDENTITY_INVALID` means `user_hash` was computed with the wrong secret or the wrong message (with a company id it is `user_id + "\n" + company_id`). Channel health shows the same reason.
+
+**A custom field I send does not show in the panel.** If the field is not defined, the contact card shows an "undefined field received" warning; define it from there. If it is defined, its widget access may be closed to anonymous visitors; verify the user with `identify`.
+
+**Can I use one widget on several sites?** Yes; add all of them to the allowed domains. For a different language, colour or team create another widget; every widget is its own inbox.
+
+**What happens on sites that need cookie consent?** Nothing is written to the browser until `ClickFix("consent", true)` (or `boot({ consent })`) is called; the visitor session starts once consent arrives.
+
+## Related API [#related-api]
+
+- The widget endpoints are called from the browser and the mobile app; server side, [`PUT /contacts/by-external-id`](/docs/api-reference/contacts/create-or-update-a-contact-by-external-id?lang=en) creates the contact by external id and [`POST /conversations`](/docs/api-reference/conversations/create-a-conversation?lang=en) with `contact_external_id` opens a conversation before the customer visits your site.
+- SDKs: [`@getclickfix/react-widget`](/docs/integration-guide/sdks?lang=en#react-widget), [`@getclickfix/visitor-core`](/docs/integration-guide/sdks?lang=en#visitor-core), [`clickfix_webview`](/docs/integration-guide/mobile?lang=en#flutter).
+- Events: [Webhooks](/docs/webhooks?lang=en) (`conversation.created`, `message.received`, `contact.updated`).

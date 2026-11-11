@@ -30,6 +30,7 @@ import {
   type TrackingConfig,
 } from "@/features/landing/lib/tracking";
 import { translate } from "@/lib/i18n/messages";
+import { cn } from "@/lib/utils";
 
 /**
  * Cookie consent and marketing tags of the public marketing pages (CF-144).
@@ -72,6 +73,8 @@ export function MarketingTracking({
   const firstPath = useRef(true);
   const titleId = useId();
   const open = reopened || consent === null;
+  // Docs readers get a one-line bar at the bottom instead of the card (CF-208).
+  const compact = /^\/(?:en\/)?docs(?:\/|$)/.test(pathname) && !customize;
 
   // Capture this visit's campaign parameters; reopen from the footer link.
   useEffect(() => {
@@ -121,12 +124,25 @@ export function MarketingTracking({
       aria-modal="false"
       aria-labelledby={titleId}
       lang={locale}
-      className="fixed inset-x-3 bottom-3 z-[80] mx-auto max-w-xl rounded-2xl border border-white/15 bg-[#0F1310] p-5 text-white shadow-[0_20px_60px_-20px_rgb(0_0_0/0.8)] sm:inset-x-auto sm:right-5 sm:bottom-5"
+      className={
+        compact
+          ? "fixed inset-x-0 bottom-0 z-[80] flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/15 bg-[#0F1310] px-4 py-2.5 text-white sm:px-6"
+          : "fixed inset-x-3 bottom-3 z-[80] mx-auto max-w-xl rounded-2xl border border-white/15 bg-[#0F1310] p-5 text-white shadow-[0_20px_60px_-20px_rgb(0_0_0/0.8)] sm:inset-x-auto sm:right-5 sm:bottom-5"
+      }
     >
-      <h2 id={titleId} className="font-display text-base font-semibold">
+      <h2
+        id={titleId}
+        className={compact ? "sr-only" : "font-display text-base font-semibold"}
+      >
         {t("title")}
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-white/70">
+      <p
+        className={
+          compact
+            ? "min-w-0 flex-1 text-xs leading-relaxed text-white/70"
+            : "mt-2 text-sm leading-relaxed text-white/70"
+        }
+      >
         {t("body")}{" "}
         <a
           href={localizedHref("/legal/cookies", locale)}
@@ -171,7 +187,11 @@ export function MarketingTracking({
         </fieldset>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div
+        className={
+          compact ? "flex flex-wrap gap-2" : "mt-4 flex flex-wrap gap-2"
+        }
+      >
         {customize ? (
           <button
             type="button"
@@ -184,7 +204,10 @@ export function MarketingTracking({
           <button
             type="button"
             onClick={() => setCustomize(true)}
-            className="h-10 rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40"
+            className={cn(
+              "rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40",
+              compact ? "h-8 text-xs" : "h-10",
+            )}
           >
             {t("customize")}
           </button>
@@ -192,18 +215,22 @@ export function MarketingTracking({
         <button
           type="button"
           onClick={() => decide({ analytics: false, marketing: false })}
-          className="h-10 rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40"
+          className={cn(
+            "rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40",
+            compact ? "h-8 text-xs" : "h-10",
+          )}
         >
           {t("reject")}
         </button>
         <button
           type="button"
           onClick={() => decide({ analytics: true, marketing: true })}
-          className={
+          className={cn(
             customize
-              ? "h-10 rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40"
-              : "h-10 rounded-full bg-[#03FF13] px-4 text-sm font-semibold text-black hover:bg-[#3DFF4B]"
-          }
+              ? "rounded-full border border-white/20 px-4 text-sm font-medium hover:border-white/40"
+              : "rounded-full bg-[#03FF13] px-4 text-sm font-semibold text-black hover:bg-[#3DFF4B]",
+            compact ? "h-8 text-xs" : "h-10",
+          )}
         >
           {t("accept_all")}
         </button>

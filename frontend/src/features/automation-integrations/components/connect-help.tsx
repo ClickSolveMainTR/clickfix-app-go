@@ -20,7 +20,7 @@ import { ENDPOINTS, TRIGGER_EVENTS } from "../lib/constants";
 const DOCS = {
   integrations: "/docs/mcp-integrations",
   n8n: "/docs/n8n-node",
-  sdks: "/docs/sdks",
+  sdks: "/docs/integration-guide/sdks",
 };
 
 const TOOLS: { slug: BrandSlug; name: string }[] = [

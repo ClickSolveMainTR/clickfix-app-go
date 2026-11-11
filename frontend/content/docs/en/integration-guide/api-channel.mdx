@@ -1,0 +1,151 @@
+---
+title: API channel
+description: "Connect your own chat app as a channel: send the customer message with a signed request, receive the agent reply by webhook."
+---
+
+Use the API channel to connect your own chat app or system as a **channel**; a website does not need it, the widget already is a channel. The channel is created under **Channels → Add channel → API**; you get an inbound address (`/v1/webhooks/channels/api/{instance}`), a **signing secret** and a field for the address agent replies are delivered to.
+
+- **Customer message → ClickFix:** `POST /v1/webhooks/channels/api/{instance}` with `{ id, sender_id, sender_name?, text, thread_id?, reply_to?, at? }`. The request is verified with the channel's signing secret, not the API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body)). `sender_id` is the customer's id in your system; the same `id` is stored once.
+- **Agent reply → you:** ClickFix `POST`s the `apiChannelReply` body to the address configured on the channel, with the same signature headers and an `Idempotency-Key` carrying the message UUID. Return `2xx` after storing the message; `4xx` other than `408` and `429` counts as permanent. Verification is the same as for [webhooks](/docs/integration-guide/webhooks?lang=en) (`sha256=` instead of `v1=`).
+
+{/* example: widget/06-api-channel.js */}
+
+```js tab="Widget"
+// Adım 6: web'de API kanalı gerekmez; widget zaten kanaldır. Kendi arayüzünüz
+// varsa @getclickfix/react-widget'ın arayüzsüz istemcisini kullanın.
+// @ts-check
+ClickFix("on", "message", (m) => {
+  // Temsilci veya AI yanıtı: kendi bildirim sisteminize aktarabilirsiniz
+  console.log(m.conversation_uuid, m.sender_type, m.text);
+});
+```
+
+{/* example: node/06-api-channel.ts */}
+
+```ts tab="Node.js"
+// Adım 6: API kanalı. Kendi uygulamanızdaki müşteri mesajını ClickFix'e
+// gönderin; imza API anahtarıyla değil kanalın imza anahtarıyla atılır.
+import { createHmac } from "node:crypto";
+
+const base = process.env.CLICKFIX_BASE_URL!;
+const instance = process.env.CLICKFIX_CHANNEL_INSTANCE!; // Kanallar > API kanalı
+const secret = process.env.CLICKFIX_CHANNEL_SECRET!;
+
+const body = JSON.stringify({
+  id: `msg-${Date.now()}`, // kanal içinde tekil; aynı id bir kez kaydedilir
+  sender_id: "1001", // müşterinin sizin sisteminizdeki kimliği
+  sender_name: "Ayşe Yılmaz",
+  text: "Siparişim ne zaman gelir?",
+});
+const timestamp = String(Math.floor(Date.now() / 1000));
+const signature =
+  "sha256=" +
+  createHmac("sha256", secret)
+    .update(`${timestamp}.`)
+    .update(body)
+    .digest("hex");
+
+const res = await fetch(`${base}/v1/webhooks/channels/api/${instance}`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-ClickFix-Timestamp": timestamp,
+    "X-ClickFix-Signature": signature,
+  },
+  body,
+});
+if (!res.ok) throw new Error(`ClickFix ${res.status}`);
+console.log(JSON.stringify(await res.json()));
+```
+
+{/* example: go/api_channel.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+)
+
+// Adım 6: API kanalına müşteri mesajı gönder; imza kanalın imza anahtarıyla.
+func apiChannel(ctx context.Context) error {
+	base, instance, secret := os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_CHANNEL_INSTANCE"), os.Getenv("CLICKFIX_CHANNEL_SECRET")
+	body, _ := json.Marshal(map[string]string{
+		"id":          fmt.Sprintf("msg-%d", time.Now().UnixNano()), // kanal içinde tekil
+		"sender_id":   "1001",                                       // müşterinin sizin sisteminizdeki kimliği
+		"sender_name": "Ayşe Yılmaz",
+		"text":        "Siparişim ne zaman gelir?",
+	})
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp + "."))
+	mac.Write(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/webhooks/channels/api/"+instance, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ClickFix-Timestamp", timestamp)
+	req.Header.Set("X-ClickFix-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode)
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode})
+}
+```
+
+{/* example: php/06-api-channel.php */}
+
+```php tab="PHP"
+<?php
+// Adım 6: API kanalı. Kendi uygulamanızdaki müşteri mesajını ClickFix'e
+// gönderin; imza API anahtarıyla değil kanalın imza anahtarıyla atılır.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\ApiChannel;
+
+$channel = new ApiChannel(
+    getenv('CLICKFIX_BASE_URL'),
+    getenv('CLICKFIX_CHANNEL_INSTANCE'), // Kanallar > API kanalı
+    getenv('CLICKFIX_CHANNEL_SECRET'),
+);
+
+// X-ClickFix-Timestamp ve X-ClickFix-Signature başlıklarını SDK ekler.
+$received = $channel->send([
+    'id' => 'msg-'.(int) (microtime(true) * 1000), // kanal içinde tekil; aynı id bir kez kaydedilir
+    'sender_id' => '1001', // müşterinin sizin sisteminizdeki kimliği
+    'sender_name' => 'Ayşe Yılmaz',
+    'text' => 'Siparişim ne zaman gelir?',
+]);
+
+echo json_encode($received), PHP_EOL;
+```
+
+{/* example: curl/06-api-channel.sh */}
+
+```bash tab="curl"
+# Adım 6: API kanalına müşteri mesajı; imza kanalın imza anahtarıyla (API anahtarı değil).
+BODY='{"id":"msg-'$(date +%s)'","sender_id":"1001","sender_name":"Ayşe Yılmaz","text":"Siparişim ne zaman gelir?"}'
+TS=$(date +%s)
+SIG=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$CLICKFIX_CHANNEL_SECRET" | sed 's/^.* //')
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/webhooks/channels/api/$CLICKFIX_CHANNEL_INSTANCE" \
+  -H "Content-Type: application/json" \
+  -H "X-ClickFix-Timestamp: $TS" \
+  -H "X-ClickFix-Signature: sha256=$SIG" \
+  -d "$BODY"
+```

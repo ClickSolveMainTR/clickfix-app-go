@@ -54,6 +54,23 @@ Her istekte iki başlık bulunur: `X-ClickFix-Timestamp` (Unix saniye) ve `X-Cli
 X-ClickFix-Signature = sha256=hex(HMAC-SHA256(anahtar, timestamp + "." + gövde))
 ```
 
-Mesaj gövdesinin şeması [API başvurusunda](/docs/api) yer alır.
+Mesaj gövdesinin şeması [API başvurusunda](/docs/api-reference/api-channel/send-a-customer-message), adım adım kurulum ve beş dildeki örnekler [kılavuzda](/docs/integration-guide/api-channel) yer alır.
 
 Temsilci yanıtının `text` alanı ClickFix'in yazım biçimindedir: `**kalın**`, `*italik*`, `` `kod` ``, `[ad](https://adres)` ve `- ` ile başlayan listeler içerebilir. Diğer kanallarda bu biçim kanalın kendi biçimine çevrilir; API kanalında çevrilmez, metni nasıl göstereceğinize siz karar verirsiniz.
+
+## Kimlik uyarısı [#identity-warning]
+
+Web widget kanalında kimlik doğrulama anahtarı üretilmemişse ya da son `identify` denemeleri reddediliyorsa (`WIDGET_IDENTITY_INVALID`) kanal sağlığı **Uyarı** olur ve nedeni yazılır; kanal mesaj almaya devam eder ama kullanıcılar anonim kalır. Çözüm: [Kimlik doğrulama](/docs/integration-guide/identity).
+
+## Sık sorulanlar [#faq]
+
+**Aynı müşteri iki kanaldan yazdı; iki kişi mi oluşur?** Hayır. Dış kimlik, e-posta ya da telefon eşleşiyorsa aynı kişi kartında birleşir; kanal kimlikleri kişi kartında listelenir.
+
+**API kanalı mı, widget mı?** Web sitesi için widget yeter. Kendi sohbet uygulamanız ya da başka bir mesajlaşma servisi için API kanalı kurun: [API kanalı adımı](/docs/integration-guide/api-channel).
+
+**Kanalı duraklatınca ne olur?** Yeni mesaj alınmaz ve gönderilmez; mevcut konuşmalar ve geçmiş silinmez.
+
+## İlgili API [#related-api]
+
+- Müşteri mesajı gönderme: [`POST /v1/webhooks/channels/api/{instance}`](/docs/api-reference/api-channel/send-a-customer-message); temsilci yanıtı: [`apiChannelReply` webhook'u](/docs/api-reference/api-channel/agent-reply-api-channel).
+- Kanal kimliği `inbox_uuid` olarak [`POST /conversations`](/docs/api-reference/conversations/create-a-conversation) isteğine girer.

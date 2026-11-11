@@ -33,6 +33,7 @@ export function Confirmation({
         data-state={state}
         className={cn(
           "bg-card text-card-foreground flex w-full flex-col gap-3 rounded-xl border p-3 text-sm shadow-xs",
+          state === "requested" && "border-warning/40",
           destructive && state === "requested" && "border-destructive/40",
           className,
         )}

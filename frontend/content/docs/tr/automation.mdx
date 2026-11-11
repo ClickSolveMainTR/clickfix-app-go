@@ -82,3 +82,22 @@ Yayınlanan her sürüm değişmez; çalışmalar başladıkları sürüme bağl
 ## Dış araçlarla otomasyon [#automating-with-external-tools]
 
 Zapier, Make ve n8n gibi araçları ClickFix'e bağlamak için [Entegrasyonlar](/docs/mcp-integrations) sayfasına, kendi sisteminize olay göndermek için [Webhook'lar](/docs/webhooks) sayfasına bakın.
+
+## Karşılama ve anında yanıt [#instant-reply]
+
+**Otomasyon → Karşılama** altında her mod için (AI, temsilci, karma) mesai içindeki yeni konuşmaya 10 saniye içinde gidecek "aldık, tahmini süre şu" metni ve tahmini süre tanımlanır; AI'ın insana devrederken müşteriye söyleyeceği metin de buradadır. Mesai dışı metin **tek kaynaktan**, organizasyonun çalışma saatlerinden gelir (**Organizasyon → SLA ve çalışma saatleri**); widget'ın çevrimiçi durumu ve AI aynı kaynağı kullanır. Karşılama mesajı SLA'nın ilk yanıt sayacını durdurmaz.
+
+## Özel alanlar ve ekran bağlamı koşullarda [#custom-fields-in-conditions]
+
+İş akışı ve SLA koşulları [özel alanları](/docs/integration-guide/custom-fields) (liste alanlarında seçenek kimliğiyle; seçenek yeniden adlandırılınca bağ kopmaz) ve müşterinin [ekran bağlamını](/docs/integration-guide/events) (son olay adı, sayfa yolu) okuyabilir. [Sistemini bağla](/docs/integration-guide/system-binding) ile tanımlanan işler iş akışı eylemi olarak da seçilebilir (örneğin "faturayı tekrar gönder").
+
+## Sık sorulanlar [#faq]
+
+**İş akışını kaydetmeden deneyebilir miyim?** Evet; **Kuru çalıştır** son konuşma üzerinde simüle eder, veri değişmez. ClickFix Asistan iş akışını cümleden taslak olarak kurup aynı kuru çalıştırmayı onay kartında gösterir.
+
+**Webhook mu, iş akışı eylemi mi?** Dışarıya veri göndermek için webhook; ClickFix içinde durum, etiket, atama ve mesaj için iş akışı. İş akışı eylemi olarak webhook teslimatı da seçilebilir.
+
+## İlgili API [#related-api]
+
+- Dışa olaylar: [Webhook'lar](/docs/webhooks), [REST hook ve tetikleyici yoklama](/docs/api-reference/triggers/poll-trigger-events).
+- Konuşmayı güncelleme: [`PATCH /conversations/{uuid}`](/docs/api-reference/conversations/update-a-conversation).
