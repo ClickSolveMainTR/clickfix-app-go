@@ -86,6 +86,13 @@ export function ClickFixProvider(props: ClickFixProviderProps) {
   useEffect(() => client.subscribe(() => setSession(client.getSnapshot())), [client]);
 
   const restored = useRef<Promise<void> | null>(null);
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
   const init = useCallback(async () => {
     setStatus('loading');
     setError(null);
@@ -99,10 +106,12 @@ export function ClickFixProvider(props: ClickFixProviderProps) {
         .catch(() => undefined);
       await restored.current;
       await client.init();
-      setStatus('ready');
+      if (mounted.current) setStatus('ready');
     } catch (err) {
-      setStatus('error');
-      setError(err);
+      if (mounted.current) {
+        setStatus('error');
+        setError(err);
+      }
       errorRef.current?.(err);
       throw err;
     }

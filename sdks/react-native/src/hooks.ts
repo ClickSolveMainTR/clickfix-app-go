@@ -98,12 +98,22 @@ export function useConversations() {
   const ready = status === 'ready';
   const visitorId = session.visitor?.id ?? null;
   const generation = useRef(0);
+  const abort = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      generation.current++;
+      abort.current?.abort();
+    },
+    [],
+  );
 
   const reload = useCallback(async () => {
     const current = ++generation.current;
+    abort.current?.abort();
+    const controller = (abort.current = new AbortController());
     setLoading(true);
     try {
-      const out = await client.conversations();
+      const out = await client.conversations(controller.signal);
       if (current === generation.current) {
         setItems(out.items);
         setError(null);
@@ -169,9 +179,12 @@ export function useConversation(initial: string | null, options: ConversationOpt
   latest.current = messages;
   const ready = status === 'ready';
   const generation = useRef(0);
+  const abort = useRef<AbortController>(new AbortController());
 
   useEffect(() => {
     generation.current++;
+    abort.current.abort();
+    abort.current = new AbortController();
     setUuid(initial);
     setConversation(null);
     setMessages([]);
@@ -205,7 +218,7 @@ export function useConversation(initial: string | null, options: ConversationOpt
       const current = generation.current;
       const last = latest.current.at(-1);
       try {
-        const page = await client.messages(uuid, full || !last ? {} : { after: last.uuid });
+        const page = await client.messages(uuid, full || !last ? {} : { after: last.uuid }, abort.current.signal);
         if (current !== generation.current) return;
         apply(page, full || !last ? 'replace' : 'append');
         setError(null);
@@ -242,6 +255,8 @@ export function useConversation(initial: string | null, options: ConversationOpt
   }, [uuid, ready, interval, refresh]);
   useEffect(
     () => () => {
+      generation.current++;
+      abort.current.abort();
       if (typingTimer.current) clearTimeout(typingTimer.current);
     },
     [],
@@ -251,7 +266,7 @@ export function useConversation(initial: string | null, options: ConversationOpt
     const oldest = latest.current[0];
     if (!uuid || !oldest || !hasMore) return;
     const current = generation.current;
-    const page = await client.messages(uuid, { before: oldest.uuid });
+    const page = await client.messages(uuid, { before: oldest.uuid }, abort.current.signal);
     if (current === generation.current) apply(page, 'prepend');
   }, [client, uuid, hasMore, apply]);
 
@@ -305,9 +320,10 @@ export function useHelpSearch(query: string, locale: 'tr' | 'en' = 'tr', options
       return;
     }
     let live = true;
+    const controller = new AbortController();
     setLoading(true);
     const id = setTimeout(() => {
-      client.helpSearch(q, locale).then(
+      client.helpSearch(q, locale, controller.signal).then(
         (out) => {
           if (!live) return;
           setResult(out);
@@ -324,6 +340,7 @@ export function useHelpSearch(query: string, locale: 'tr' | 'en' = 'tr', options
     return () => {
       live = false;
       clearTimeout(id);
+      controller.abort();
     };
   }, [client, q, locale, ready, options.debounceMs]);
   return { result, loading, error };
