@@ -1,0 +1,16 @@
+{
+  "title": "Entegrasyon kılavuzu",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "identity",
+    "contacts-companies",
+    "custom-fields",
+    "events",
+    "system-binding",
+    "api-channel",
+    "webhooks",
+    "mobile",
+    "sdks"
+  ]
+}

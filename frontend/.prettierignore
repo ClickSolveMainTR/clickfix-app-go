@@ -10,3 +10,5 @@ public/widget-recorder.js
 .source
 content/api
 content/docs/tr/api-reference
+content/generated
+content/docs/en/api-reference

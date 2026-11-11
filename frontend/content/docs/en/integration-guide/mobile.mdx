@@ -1,0 +1,254 @@
+---
+title: "Mobile: webview and Flutter"
+description: "The secure webview that carries the session in a mobile app: bridge contract, session handover, native core and app key, deep links, security rules, the clickfix_webview Flutter package."
+---
+
+The path for mobile apps is not a separate native SDK but a **secure webview that carries the session**: the app opens `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` in a webview; the widget opens full screen and talks to the app over a **bridge**. Flutter, React Native, iOS, Android and every other platform connect the same way, with the same contract. The bridge contract (`bridge_version` 1: commands, messages, error codes, security rules) is in the [Bridge contract](#bridge-contract) section of this page; Flutter has the ready-made [`clickfix_webview`](#flutter) package, and complete apps for the other platforms live in the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository (`react-native-webview`, `flutter-webview`).
+
+### Session handoff [#mobile-session]
+
+1. The app fetches `{ user_id, user_hash, company_id }` from your own server ([identity verification](/docs/integration-guide/identity?lang=en)); `user_hash` signs the user id and the company id together, and the secret never reaches the app.
+2. The webview loads `widget-embed.html?widget=WIDGET_ID&locale=en&theme=auto`. When the widget is ready, `{"type":"clickfix:ready", ...}` arrives over the bridge.
+3. The app sends `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}`; `company.id` is the company id in the signature (bridge contract 1.2, `bridge_version` 1). The answer is `{"type":"clickfix:result","id":"1","ok":true}`. When rejected, `ok:false` and `error.code` (such as `WIDGET_IDENTITY_INVALID`) come back and the user stays anonymous.
+4. On logout send `{"type":"clickfix:reset"}`; the visitor is forgotten and the next launch is a new visitor.
+
+The webview's cookies and storage carry the session across reloads; never switch accounts without sending `reset`.
+
+**Session handover with the native core (CF-201).** An app can also call the widget endpoints without a webview: create an **app key** with the platform and package name under Web widget → Advanced → **Mobile apps**; `@getclickfix/visitor-core` with `mode: "app"` sends it in the `X-ClickFix-App-Key` and `X-ClickFix-App-Package` headers, so no page origin is needed. Hand the native session to the webview with `{"type":"clickfix:session","token":client.getToken()}`; the widget answers with its own token in a `clickfix:session` message after `ready`, `identify` and `reset` (`client.adoptToken`). The key is shown only when created and can be revoked in the panel; `user_hash` verification is the same as in the browser.
+
+### The bridge: app to widget and widget to app [#mobile-bridge]
+
+App → widget (commands): `clickfix:identify`, `clickfix:track` (adds an app event to the screen context), `clickfix:open` (`view` or `conversation`), `clickfix:close`, `clickfix:update` (language, theme, profile, attributes), `clickfix:consent`, `clickfix:reset`, `clickfix:get-state`. Every command may carry an `id`; when it does, the widget answers with `clickfix:result`. A command arrives through `window.ClickFixBridge.receive(json)` or a `postMessage` to the page.
+
+Widget → app: `clickfix:ready`, `clickfix:event` (every SDK event: `message`, `unread`, `close`, `conversation:ended`…), `clickfix:link` (a link to open outside; use the system browser) and `clickfix:result`. The widget picks the transport by platform: `ReactNativeWebView.postMessage`, iOS `webkit.messageHandlers.ClickFix`, the Android `ClickFixAndroid` interface, the Flutter `ClickFixFlutter` channel.
+
+The host-side samples below set up the bridge, hand over the session when the widget is ready, send an app event and close the support screen on the widget's `close` event. They are not part of the guide's automated test; build and verify them in your own project.
+
+```dart tab="Flutter"
+// Package: clickfix_webview (sdks/flutter/clickfix_webview; a git dependency until the first release). The package sets up
+// the bridge, the origin lock and the ClickFixFlutter channel; you hand over the session.
+import 'package:clickfix_webview/clickfix_webview.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+final controller = ClickFixController(
+  widgetId: 'WIDGET_ID',
+  locale: 'en',
+  conversation: conversationUuid, // optional deep link
+);
+
+ClickFixWebView(
+  controller: controller,
+  onReady: (_) async {
+    final s = await api.supportSession(); // { user_id, user_hash } from your server
+    try {
+      await controller.identify(ClickFixIdentity(
+        userId: s.userId, userHash: s.userHash, company: ClickFixCompany(id: s.companyId)));
+      await controller.track('app_screen', properties: {'screen': 'orders'});
+    } on ClickFixBridgeError catch (e) {
+      debugPrint('identity rejected: ${e.code}'); // e.g. WIDGET_IDENTITY_INVALID; the visitor stays anonymous
+    }
+  },
+  onUnread: (count) => badge.value = count,
+  onLink: (link) => launchUrl(link.url, mode: LaunchMode.externalApplication), // https only
+  onClose: () => Navigator.of(context).pop(),
+);
+// On logout: controller.reset(); when the screen closes: controller.dispose().
+```
+
+```tsx tab="React Native"
+// react-native-webview: onMessage from the widget, injectJavaScript to it.
+import { useRef } from "react";
+import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
+
+export function Support({ onClose }: { onClose: () => void }) {
+  const ref = useRef<WebView>(null);
+  const send = (m: object) =>
+    ref.current?.injectJavaScript(
+      `window.ClickFixBridge && window.ClickFixBridge.receive(${JSON.stringify(JSON.stringify(m))}); true;`,
+    );
+  return (
+    <WebView
+      ref={ref}
+      source={{
+        uri: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en",
+      }}
+      originWhitelist={["https://getclickfix.com"]}
+      onShouldStartLoadWithRequest={(r) =>
+        r.url.startsWith("https://getclickfix.com/")
+      }
+      sharedCookiesEnabled={false}
+      onMessage={async (e) => {
+        const data = JSON.parse(e.nativeEvent.data);
+        if (data.type === "clickfix:ready") {
+          const s = await api.supportSession(); // { user_id, user_hash } from your server
+          send({
+            type: "clickfix:identify",
+            id: "login",
+            user: { user_id: s.user_id, user_hash: s.user_hash },
+          });
+          send({
+            type: "clickfix:track",
+            name: "app_screen",
+            properties: { screen: "orders" },
+          });
+        } else if (data.type === "clickfix:link") Linking.openURL(data.url);
+        else if (data.type === "clickfix:event" && data.event === "close")
+          onClose();
+      }}
+    />
+  );
+}
+```
+
+```swift tab="iOS"
+// WKWebView: the script message handler is named "ClickFix"; commands go through evaluateJavaScript.
+final class SupportViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+    private lazy var webView: WKWebView = {
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(self, name: "ClickFix")
+        config.websiteDataStore = .default() // the session survives relaunches; send clickfix:reset on logout
+        let w = WKWebView(frame: .zero, configuration: config)
+        w.navigationDelegate = self
+        return w
+    }()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view = webView
+        webView.load(URLRequest(url: URL(string: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en")!))
+    }
+
+    func send(_ message: [String: Any]) {
+        let json = try! JSONSerialization.data(withJSONObject: message)
+        let literal = String(data: try! JSONSerialization.data(withJSONObject: [String(decoding: json, as: UTF8.self)]), encoding: .utf8)!
+        webView.evaluateJavaScript("window.ClickFixBridge && window.ClickFixBridge.receive(\(literal)[0])")
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let text = m.body as? String, let data = text.data(using: .utf8),
+              let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        switch msg["type"] as? String {
+        case "clickfix:ready":
+            api.supportSession { s in // { user_id, user_hash } from your server
+                self.send(["type": "clickfix:identify", "id": "login", "user": ["user_id": s.userId, "user_hash": s.userHash]])
+            }
+        case "clickfix:link":
+            if let url = URL(string: msg["url"] as? String ?? "") { UIApplication.shared.open(url) }
+        case "clickfix:event" where msg["event"] as? String == "close":
+            dismiss(animated: true)
+        default: break
+        }
+    }
+
+    func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        decisionHandler(a.request.url?.host == "getclickfix.com" ? .allow : .cancel) // other hosts never load inside the webview
+    }
+}
+```
+
+```kotlin tab="Android"
+// WebView: the JavascriptInterface is named "ClickFixAndroid"; commands go through evaluateJavascript.
+class SupportActivity : AppCompatActivity() {
+    private lateinit var web: WebView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        web = WebView(this).also { setContentView(it) }
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true      // the session survives relaunches; send clickfix:reset on logout
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) =
+                r.url.host != "getclickfix.com" // other hosts never load inside the webview
+        }
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun postMessage(text: String) = runOnUiThread { onBridge(JSONObject(text)) }
+        }, "ClickFixAndroid")
+        web.loadUrl("https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en")
+    }
+
+    private fun send(m: JSONObject) =
+        web.evaluateJavascript("window.ClickFixBridge && window.ClickFixBridge.receive(${JSONObject.quote(m.toString())})", null)
+
+    private fun onBridge(m: JSONObject) = when (m.optString("type")) {
+        "clickfix:ready" -> lifecycleScope.launch {
+            val s = api.supportSession() // { user_id, user_hash } from your server
+            send(JSONObject().put("type", "clickfix:identify").put("id", "login")
+                .put("user", JSONObject().put("user_id", s.userId).put("user_hash", s.userHash)))
+        }
+        "clickfix:link" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(m.getString("url"))))
+        "clickfix:event" -> if (m.optString("event") == "close") finish() else Unit
+        else -> Unit
+    }
+}
+```
+
+### Deep links [#mobile-deep-link]
+
+- **Open a specific conversation:** load `…/widget-embed.html?widget=WIDGET_ID&conversation=CONVERSATION_UUID`, or send `{"type":"clickfix:open","conversation":"CONVERSATION_UUID"}` to an open webview. `view` picks the tab (`home`, `messages`, `help`, `new`).
+- **From a notification to the conversation:** subscribe to the `message.sent` webhook event for your app's own push notification; the event carries `conversation_uuid` and `contact_external_id`. When the notification's deep link (`myapp://support?conversation=…`) opens, load the webview with the URL above. The widget's `unread` event (`clickfix:event`) is enough for the badge.
+- **Out of the widget:** help articles and links in messages arrive as `clickfix:link`; open them in the system browser. Do not allow navigation away from `getclickfix.com` inside the webview.
+
+### Security notes [#mobile-security]
+
+- **The identity secret never enters the app.** `user_hash` comes from an authenticated endpoint on your server; it is neither computed nor hard-coded in the app.
+- **Origin restriction:** the webview loads `https://getclickfix.com` only (or the app URL given to you); navigation elsewhere is blocked, and a `clickfix:link` URL is re-validated in the app (`https:` only) before it opens in the system browser; never hand it to an intent or deep-link handler. Disable third-party and shared cookie stores; disable file and content access (`allowFileAccess`, `allowContentAccess`).
+- **JS bridge:** `window.ClickFixBridge.receive` exists on this page only, and the page belongs to ClickFix. Messages arriving by `postMessage` are accepted from the configured parent origin only when framed (`boot({ bridge: { origin } })`) and from the page itself only when not framed; `"*"` is refused. Rejected commands never write the message content (for example `user_hash`) to the console or the result.
+- **Cookies and storage:** the session lives in the webview's storage; send `clickfix:reset` on account switch and logout. On shared devices clear the webview storage too.
+- **Consent:** if your app collects consent, add `consent=1` to the URL or send `clickfix:consent`; nothing is stored without it.
+
+### Bridge contract [#bridge-contract]
+
+Every command is a JSON object; `type` is required, `id` optional (≤128 characters). When `id` is given the widget answers with `clickfix:result`. A message cannot exceed 64 KB. The contract only changes in backwards-compatible ways; the app must ignore fields and events it does not know.
+
+**App → widget (commands)**
+
+| `type`               | Fields                                                                                                | What the widget does                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `clickfix:identify`  | `user: { user_id, user_hash, name?, email?, phone?, company?: { id?, name?, domain? }, attributes? }` | `identify`; `user_hash` is computed on your server, a signed `company.id` links the verified company |
+| `clickfix:track`     | `name` (≤100), `properties?`                                                                          | Adds the app event to the screen context                                                             |
+| `clickfix:open`      | `view?` (`home`/`messages`/`help`/`new`), `conversation?` (UUID)                                      | Opens the conversation or the tab                                                                    |
+| `clickfix:close`     | –                                                                                                     | Closes the panel                                                                                     |
+| `clickfix:update`    | `update` (`locale`, `theme`, `name`, `email`, `phone`, attributes)                                    | Updates profile and appearance                                                                       |
+| `clickfix:consent`   | `granted` (boolean)                                                                                   | Passes consent; `false` deletes everything stored                                                    |
+| `clickfix:reset`     | –                                                                                                     | Forgets the visitor (logout, account switch)                                                         |
+| `clickfix:get-state` | –                                                                                                     | Returns `ClickFixState` in `result.data` (`open`, `view`, `unread`, `verified`, `visitor_id`…)       |
+| `clickfix:session`   | `token` (≤2048)                                                                                       | Adopts the native core's session                                                                     |
+
+**Widget → app (messages)**
+
+| `type`             | Fields                                                                            | When                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `clickfix:ready`   | `bridge_version: 1`, `protocol_version`, `sdk_version`, `widget_id`, `visitor_id` | When the widget is rendered; send `identify` after it (earlier commands are queued)              |
+| `clickfix:event`   | `event`, `payload`                                                                | On every SDK event (`ready`, `open`, `close`, `message`, `unread`, `identify`, `csat`, `error`…) |
+| `clickfix:link`    | `url`                                                                             | An external link; the app checks it is `https:` and opens the system browser                     |
+| `clickfix:result`  | `id`, `ok`, `data?`, `error?: { code, message }`                                  | After every command that carries an `id`                                                         |
+| `clickfix:session` | `token`, `visitor_id`                                                             | After `ready`, `identify` and `reset`; hand it to the native core with `adoptToken`              |
+
+Error codes (`result.error.code`): `INVALID_JSON`, `INVALID_MESSAGE`, `UNKNOWN_COMMAND`, `TOO_LARGE`, SDK errors raised while the command runs (`WIDGET_IDENTITY_DISABLED`, `WIDGET_IDENTITY_INVALID`, `RATE_LIMITED`, `NETWORK_ERROR`…) and `COMMAND_FAILED` for unknown errors. `error.message` only repeats the code; message content is never written to the result, the console or the `error` event.
+
+The transport is picked by the widget per platform: React Native `window.ReactNativeWebView.postMessage`, iOS `window.webkit.messageHandlers.ClickFix`, Android `window.ClickFixAndroid` (`@JavascriptInterface`), Flutter `window.ClickFixFlutter` (`JavaScriptChannel`), inside an iframe `window.parent.postMessage` (only to the configured `origin`). App → widget commands go through `window.ClickFixBridge.receive(json)` (preferred) or `postMessage` to the page.
+
+### Flutter package: `clickfix_webview` [#flutter]
+
+[`clickfix_webview`](https://pub.dev/packages/clickfix_webview) (Flutter 3.38+, Dart 3.10+; on top of `webview_flutter`, Android `minSdk` 24, iOS 12+) implements the bridge contract as `ClickFixController` + `ClickFixWebView`: origin lock, a command queue before `ready`, deep links, `clickfix:link` validation. The Flutter tab above uses this package; the runnable app is in [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
+
+```sh
+flutter pub add clickfix_webview
+```
+
+| Method                       | Bridge command                         |
+| ---------------------------- | -------------------------------------- |
+| `identify(ClickFixIdentity)` | `clickfix:identify`                    |
+| `track(name, properties:)`   | `clickfix:track`                       |
+| `open(view:, conversation:)` | `clickfix:open`                        |
+| `close()`                    | `clickfix:close`                       |
+| `update({...})`              | `clickfix:update`                      |
+| `setConsent(bool)`           | `clickfix:consent`                     |
+| `reset()`                    | `clickfix:reset`                       |
+| `getState()`                 | `clickfix:get-state` → `ClickFixState` |
+| `send(ClickFixCommand)`      | any command, raw                       |
+
+Widget → app messages arrive as callbacks such as `onUnread`, `onLink`, `onClose` and as the `controller.messages`, `events`, `links`, `results` streams; errors are thrown as `ClickFixBridgeError` (`ClickFixErrorCode`). The native Dart client and the other native SDKs are separate projects; when they ship they will use this same bridge contract.

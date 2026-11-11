@@ -25,6 +25,14 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (publicPage) {
     if (pathname === "/docs/search" || pathname.startsWith("/docs/og/"))
       return NextResponse.next();
+    // Raw Markdown of a docs page for LLMs: /docs/<slug>.md (CF-208).
+    const markdown = /^\/docs\/(.+)\.md$/.exec(pathname);
+    if (markdown) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/llms.mdx/${searchParams.get("lang") === "en" ? "en" : "tr"}/${markdown[1] === "index" ? "_index" : markdown[1]}`;
+      url.search = "";
+      return NextResponse.rewrite(url);
+    }
     if (searchParams.get("lang") === "en") {
       const url = request.nextUrl.clone();
       url.pathname = `/en${pathname === "/" ? "" : pathname}`;

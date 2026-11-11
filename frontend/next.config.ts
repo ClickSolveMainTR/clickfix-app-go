@@ -45,6 +45,16 @@ const settingsRedirects = [
 ].map((rule) => ({ ...rule, permanent: true }));
 
 /**
+ * Docs pages that moved when the guide was split into step pages and the
+ * SDK page joined it (CF-208); npm / Packagist READMEs link the old URLs.
+ * The query (`?lang=en`) is carried over.
+ */
+const docsRedirects = [
+  { source: "/docs/sdks", destination: "/docs/integration-guide/sdks" },
+  { source: "/en/docs/sdks", destination: "/en/docs/integration-guide/sdks" },
+].map((rule) => ({ ...rule, permanent: true }));
+
+/**
  * Common spellings of the legal document slugs (`LEGAL_DOCS`) people type or
  * link to (CF-135); the query (`?lang=en`) is carried over.
  */
@@ -81,6 +91,25 @@ const nextConfig: NextConfig = {
       "./content/api/public-api.yaml",
     ],
     "/sitemap.xml": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/llms.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/llms-full.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/en/llms.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/en/llms-full.txt": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+    ],
+    "/llms.mdx/[locale]/[[...slug]]": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+    ],
+  },
+  async rewrites() {
+    // Raw Markdown of an English docs page without the query form (CF-208);
+    // the proxy handles `/docs/<slug>.md` and `?lang=en`.
+    return [
+      { source: "/en/docs/index.md", destination: "/llms.mdx/en/_index" },
+      { source: "/en/docs/:path*.md", destination: "/llms.mdx/en/:path*" },
+    ];
   },
   async headers() {
     return headerRules(process.env.NODE_ENV === "production");
@@ -88,6 +117,7 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       ...settingsRedirects,
+      ...docsRedirects,
       ...legacyRedirects.map((rule) => ({ ...rule, permanent: true })),
     ];
   },

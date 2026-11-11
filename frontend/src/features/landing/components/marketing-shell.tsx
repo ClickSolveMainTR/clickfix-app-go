@@ -21,11 +21,14 @@ export function MarketingShell({
   locale,
   signupOpen,
   breadcrumb,
+  navSolid,
   children,
 }: {
   locale: AppLocale;
   signupOpen: boolean;
   breadcrumb?: { name: string; path: string }[];
+  /** Always draw the top bar on ink (docs: the page below may be light). */
+  navSolid?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -50,11 +53,11 @@ export function MarketingShell({
         ) : null}
         <a
           href="#content"
-          className="sr-only z-[70] rounded-full bg-white px-4 py-2 text-sm text-black focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+          className="z-[70] rounded-full bg-white px-4 py-2 text-sm text-black not-focus:sr-only focus:fixed focus:top-3 focus:left-3"
         >
           {translate(locale, "landing.nav.skip")}
         </a>
-        <LandingNav />
+        <LandingNav solid={navSolid} />
         <main id="content" tabIndex={-1} className="outline-none">
           {children}
         </main>

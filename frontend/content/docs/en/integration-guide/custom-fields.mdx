@@ -1,0 +1,116 @@
+---
+title: Custom fields
+description: Define a custom field once and send the same key through custom_fields in the API and setAttributes in the widget; type validation, list fields and widget access.
+---
+
+Define a custom field once under **Settings → Custom fields**; defining it is the only step. Whatever the field's **key** is, send that key both in `custom_fields` through the API and in `setAttributes` / `identify({ attributes })` in the widget. Values are validated by the field's type; **list** fields accept the option id or its label and store the id. The field's **widget access** decides whether anonymous visitors may write it (default: verified users only). An undefined key is not dropped silently: it is listed in the panel as an **undefined field** warning and applied to the contact once you define the field. When the visitor has no contact yet the widget result is `pending: true` and the values travel with the first message.
+
+{/* example: widget/03-custom-fields.js */}
+
+```js tab="Widget"
+// Adım 3: özel alanlar. Anahtar panelde tanımlı alanın anahtarıdır; tanımsız
+// anahtar "tanımsız alan" uyarısı olarak kalır ve alanı tanımlayınca işlenir.
+// @ts-check
+ClickFix("setAttributes", {
+  plan: "pro",
+  seats: 12,
+  renewal_date: "2027-01-31",
+});
+ClickFix("on", "attributes", ({ applied, ignored, pending }) => {
+  console.log({ applied, ignored, pending }); // pending: ilk mesajla gönderilecek
+});
+```
+
+{/* example: node/03-custom-fields.ts */}
+
+```ts tab="Node.js"
+// Adım 3: özel alanlar. Alanı panelde tanımlayın (Ayarlar > Özel alanlar);
+// anahtarı neyse custom_fields içinde o anahtarla gönderin.
+import { createClient } from "@getclickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+const contact = await client.request(
+  "/v1/public-api/contacts/by-external-id",
+  "put",
+  {
+    external_id: "1001",
+    // Liste alanlarında seçeneğin kimliği ya da etiketi kabul edilir.
+    custom_fields: { plan: "pro", seats: 12, renewal_date: "2027-01-31" },
+  },
+  { idempotencyKey: `user-1001-fields-${Date.now()}` },
+);
+
+console.log(JSON.stringify(contact.data));
+```
+
+{/* example: go/custom_fields.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+)
+
+// Adım 3: özel alanlar; anahtar panelde tanımladığınız alanın anahtarıdır.
+func customFields(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	fields := map[string]any{"plan": "pro", "seats": 12, "renewal_date": "2027-01-31"}
+	res, err := client.PutV1PublicApiContactByExternalIdWithResponse(ctx,
+		&clickfix.PutV1PublicApiContactByExternalIdParams{IdempotencyKey: fmt.Sprintf("user-1001-fields-%d", time.Now().UnixNano())},
+		clickfix.PutV1PublicApiContactByExternalIdJSONRequestBody{ExternalId: "1001", CustomFields: &fields})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 200 && res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
+}
+```
+
+{/* example: php/03-custom-fields.php */}
+
+```php tab="PHP"
+<?php
+// Adım 3: özel alanlar. Alanı panelde tanımlayın (Ayarlar > Özel alanlar);
+// anahtarı neyse custom_fields içinde o anahtarla gönderin.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+
+$client = new Client(getenv('CLICKFIX_BASE_URL'), getenv('CLICKFIX_API_KEY'));
+
+// Liste alanlarında seçeneğin kimliği ya da etiketi kabul edilir.
+$contact = $client->customFields()->setForContact(
+    '1001',
+    ['plan' => 'pro', 'seats' => 12, 'renewal_date' => '2027-01-31'],
+    idempotencyKey: 'user-1001-fields-'.(int) (microtime(true) * 1000),
+);
+
+echo json_encode($contact), PHP_EOL;
+```
+
+{/* example: curl/03-custom-fields.sh */}
+
+```bash tab="curl"
+# Adım 3: özel alanlar; anahtar panelde tanımlı alanın anahtarıdır.
+curl -sS --fail-with-body -X PUT "$CLICKFIX_BASE_URL/v1/public-api/contacts/by-external-id" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: user-1001-fields-$(date +%s)" \
+  -d '{ "external_id": "1001", "custom_fields": { "plan": "pro", "seats": 12, "renewal_date": "2027-01-31" } }'
+```

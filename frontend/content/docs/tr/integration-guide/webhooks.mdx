@@ -1,0 +1,212 @@
+---
+title: Webhook'lar
+description: "Olaylara imzalı POST ile abone olun: abonelik açma, imza doğrulama, tekilleştirme ve tekrar denemeler; widget, Node.js, Go, PHP ve curl örnekleri."
+---
+
+Webhook'lar olayları (yeni konuşma, gelen mesaj, kişi güncellemesi, SLA ihlali, memnuniyet…) imzalı `POST` ile size iletir; yoklama gerekmez. Abonelik `webhooks:write` kapsamıyla `POST /v1/public-api/webhooks` ile açılır; yanıttaki `data.secret` yalnız o yanıtta döner. Adres herkese açık `https` olmalıdır. Her teslimat `ClickFix-Webhook-Id`, `ClickFix-Webhook-Event`, `ClickFix-Webhook-Timestamp` ve `ClickFix-Webhook-Signature: v1=…` başlıklarını taşır. Doğrulama: ham gövde üzerinde `hex(HMAC-SHA256(secret, timestamp + "." + ham_gövde))`, sabit zamanlı karşılaştırma, 5 dakika tolerans, `ClickFix-Webhook-Id` ile tekilleştirme; sonra `2xx`. Başarısız teslimatlar artan aralıklarla 24 saate kadar tekrarlanır. Olay listesi ve gövde biçimi: [Webhook'lar](/docs/webhooks).
+
+{/* example: widget/07-webhooks.js */}
+
+```js tab="Widget"
+// Adım 7: tarayıcı tarafında webhook yoktur; konuşma olaylarını SDK verir.
+// @ts-check
+ClickFix("on", "conversation:started", ({ conversation_uuid }) =>
+  console.log("yeni", conversation_uuid),
+);
+ClickFix("on", "conversation:ended", ({ conversation_uuid, status }) =>
+  console.log(conversation_uuid, status),
+);
+ClickFix("on", "csat", ({ score }) => console.log("memnuniyet", score));
+```
+
+{/* example: node/07-webhooks.ts */}
+
+```ts tab="Node.js"
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+import { createServer } from "node:http";
+import { createClient, verifyWebhook } from "@getclickfix/node";
+
+const client = createClient({
+  baseURL: process.env.CLICKFIX_BASE_URL!,
+  apiKey: process.env.CLICKFIX_API_KEY!, // webhooks:write
+});
+
+const created = await client.request(
+  "/v1/public-api/webhooks",
+  "post",
+  {
+    name: "CRM senkronizasyonu",
+    url: "https://example.com/clickfix/webhook",
+    events: ["conversation.created", "message.received", "contact.updated"],
+    enabled: true,
+  },
+  { idempotencyKey: `webhook-crm-${Date.now()}` },
+);
+// data.secret yalnız bu yanıtta döner: güvenli saklayın (ör. gizli değer deposu),
+// loglamayın. Doğrulama sunucunuz onu oradan okur.
+const { secret: issued, ...subscription } = created.data as {
+  secret: string;
+  uuid: string;
+};
+const secret = process.env.CLICKFIX_WEBHOOK_SECRET ?? issued;
+console.log(JSON.stringify({ subscription }));
+
+createServer(async (req, res) => {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  const raw = Buffer.concat(chunks);
+  const ok = verifyWebhook(
+    secret,
+    String(req.headers["clickfix-webhook-timestamp"] ?? ""),
+    String(req.headers["clickfix-webhook-signature"] ?? ""),
+    raw,
+  );
+  if (!ok) {
+    res.writeHead(401).end();
+    return;
+  }
+  // ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+  const event = JSON.parse(raw.toString()) as { event: string; data: unknown };
+  console.log(JSON.stringify({ received: event.event }));
+  res.writeHead(200).end();
+}).listen(Number(process.env.PORT ?? 3000), () => console.log("listening"));
+```
+
+{/* example: go/webhooks.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+)
+
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+func webhooks(ctx context.Context) error {
+	client, err := clickfix.New(os.Getenv("CLICKFIX_BASE_URL"), os.Getenv("CLICKFIX_API_KEY"))
+	if err != nil {
+		return err
+	}
+	res, err := client.PostV1PublicApiWebhooksWithResponse(ctx,
+		&clickfix.PostV1PublicApiWebhooksParams{IdempotencyKey: fmt.Sprintf("webhook-crm-%d", time.Now().UnixNano())},
+		clickfix.PostV1PublicApiWebhooksJSONRequestBody{
+			Name: "CRM senkronizasyonu", Url: "https://example.com/clickfix/webhook",
+			Events: []string{"conversation.created", "message.received", "contact.updated"}, Enabled: true,
+		})
+	if err != nil {
+		return err
+	}
+	if res.StatusCode() != 201 {
+		return fmt.Errorf("clickfix: HTTP %d", res.StatusCode())
+	}
+	var created struct {
+		Data struct {
+			Secret string `json:"secret"` // yalnız bu yanıtta döner
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(res.Body, &created); err != nil {
+		return err
+	}
+	// Yalnız bu yanıtta döner: güvenli saklayın, loglamayın; sunucu onu oradan okur.
+	secret := os.Getenv("CLICKFIX_WEBHOOK_SECRET")
+	if secret == "" {
+		secret = created.Data.Secret
+	}
+	fmt.Println(`{"subscription":"created"}`)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := clickfix.VerifyWebhook(secret, r.Header.Get("ClickFix-Webhook-Timestamp"),
+			r.Header.Get("ClickFix-Webhook-Signature"), raw, time.Now(), 5*time.Minute); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+		var event struct {
+			Event string `json:"event"`
+		}
+		_ = json.Unmarshal(raw, &event)
+		fmt.Printf(`{"received":%q}`+"\n", event.Event)
+		w.WriteHeader(http.StatusOK)
+	})
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	fmt.Println("listening")
+	return http.ListenAndServe("127.0.0.1:"+port, nil)
+}
+```
+
+{/* example: php/07-webhooks.php */}
+
+```php tab="PHP"
+<?php
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+// Komut satırından çalışınca aboneliği açar; web sunucusu altında
+// (php -S 127.0.0.1:3000 07-webhooks.php ya da framework rotanız) teslimatları doğrular.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+use ClickFix\Webhooks;
+
+if (PHP_SAPI === 'cli') {
+    $client = new Client(
+        getenv('CLICKFIX_BASE_URL'),
+        getenv('CLICKFIX_API_KEY'), // webhooks:write
+    );
+    $created = $client->webhooks()->create([
+        'name' => 'CRM senkronizasyonu',
+        'url' => 'https://example.com/clickfix/webhook',
+        'events' => ['conversation.created', 'message.received', 'contact.updated'],
+        'enabled' => true,
+    ], idempotencyKey: 'webhook-crm-'.(int) (microtime(true) * 1000));
+    // secret yalnız bu yanıtta döner: güvenli saklayın (ör. gizli değer deposu),
+    // loglamayın. Doğrulama sunucunuz onu oradan okur (örnekte CLICKFIX_WEBHOOK_SECRET).
+    unset($created['secret']);
+    echo json_encode(['subscription' => $created]), PHP_EOL;
+    exit;
+}
+
+$secret = getenv('CLICKFIX_WEBHOOK_SECRET');
+$raw = file_get_contents('php://input'); // ham gövde; JSON'a çevirmeden doğrulayın
+$ok = Webhooks::verify(
+    $secret,
+    $_SERVER['HTTP_CLICKFIX_WEBHOOK_TIMESTAMP'] ?? '',
+    $_SERVER['HTTP_CLICKFIX_WEBHOOK_SIGNATURE'] ?? '',
+    $raw,
+);
+if (!$ok) {
+    http_response_code(401);
+    exit;
+}
+// ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+$event = json_decode($raw, true);
+error_log(json_encode(['received' => $event['event'] ?? null]));
+http_response_code(200);
+```
+
+{/* example: curl/07-webhooks.sh */}
+
+```bash tab="curl"
+# Adım 7: webhook aboneliği (webhooks:write). data.secret yalnız bu yanıtta döner.
+curl -sS --fail-with-body -X POST "$CLICKFIX_BASE_URL/v1/public-api/webhooks" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: webhook-crm-$(date +%s)" \
+  -d '{ "name": "CRM senkronizasyonu", "url": "https://example.com/clickfix/webhook", "events": ["conversation.created", "message.received", "contact.updated"], "enabled": true }'
+```
+
+Zapier, Make ve n8n için `POST /v1/public-api/subscriptions` (REST hook) ve `GET /v1/public-api/triggers` (imleçli yoklama) aynı altyapıyı kullanır: [Zapier, Make ve n8n](/docs/mcp-integrations).

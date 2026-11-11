@@ -1,10 +1,12 @@
 {
   "title": "Dokümantasyon",
   "pages": [
+    "---Başlangıç---",
     "index",
     "getting-started",
     "inbox",
     "channels",
+    "---Ürün---",
     "meta",
     "email",
     "web-widget",
@@ -17,9 +19,9 @@
     "automation",
     "appointments",
     "video-rooms",
+    "---Geliştiriciler---",
     "integration-guide",
     "api",
-    "sdks",
     "api-reference",
     "webhooks",
     "mcp-integrations",
@@ -27,6 +29,7 @@
     "apps",
     "order-lookup-sample",
     "apps-gallery",
+    "---Yönetim---",
     "sso-scim",
     "data-protection"
   ]
