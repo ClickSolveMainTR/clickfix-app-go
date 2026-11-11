@@ -48,7 +48,7 @@ paths:
       parameters: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -155,7 +155,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -269,7 +269,7 @@ paths:
       description: "Kapsam: `conversations:write`. Kişiyi `contact_uuid` ya da kendi kullanıcı numaranızla `contact_external_id` olarak verin. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Web widget kanalında kişi siteye girip `identify` ile oturum açtığında konuşmayı görür. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
       responses:
         "201":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -410,7 +410,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -507,7 +507,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -641,7 +641,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -734,7 +734,7 @@ paths:
         - integrationKey: []
       responses:
         "201":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -867,7 +867,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -929,12 +929,12 @@ paths:
             default: 0
         - name: q
           in: query
-          description: Case-insensitive match on the contact name or e-mail.
+          description: Kişi adında veya e-postasında büyük/küçük harf duyarsız arama.
           schema:
             type: string
         - name: external_id
           in: query
-          description: "CF-195: the customer's own user id, exact match."
+          description: Kendi sisteminizdeki kullanıcı numarası, tam eşleşme.
           schema:
             type: string
             maxLength: 200
@@ -1020,7 +1020,7 @@ paths:
                 plan: pro
       responses:
         "201":
-          description: Created
+          description: Oluşturuldu
           content:
             application/json:
               schema:
@@ -1183,7 +1183,7 @@ paths:
                 seats: 12
       responses:
         "200":
-          description: Updated
+          description: Güncellendi
           content:
             application/json:
               schema:
@@ -1220,7 +1220,7 @@ paths:
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
         "201":
-          description: Created
+          description: Oluşturuldu
           content:
             application/json:
               schema:
@@ -1354,7 +1354,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -1407,7 +1407,7 @@ paths:
             default: 0
         - name: external_id
           in: query
-          description: "CF-195: the company's id in your system, exact match."
+          description: Firmanın sizin sisteminizdeki numarası, tam eşleşme.
           schema:
             type: string
             maxLength: 200
@@ -1489,7 +1489,7 @@ paths:
               score: 90
       responses:
         "200":
-          description: OK
+          description: Tamam
           content:
             application/json:
               schema:
@@ -1610,7 +1610,7 @@ paths:
               occurred_at: 2026-11-11T09:31:00Z
       responses:
         "200":
-          description: OK
+          description: Tamam
           content:
             application/json:
               schema:
@@ -1630,7 +1630,7 @@ paths:
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
         "201":
-          description: Created
+          description: Oluşturuldu
           content:
             application/json:
               schema:
@@ -1789,7 +1789,7 @@ paths:
               external_ref: sub_9f3k2
       responses:
         "200":
-          description: OK
+          description: Tamam
           content:
             application/json:
               schema:
@@ -1922,7 +1922,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2026,7 +2026,7 @@ paths:
         - integrationKey: []
       responses:
         "201":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2166,7 +2166,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2310,7 +2310,7 @@ paths:
         - integrationKey: []
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2399,7 +2399,7 @@ paths:
       description: "Kapsam: `triggers:read`. Seçilen olay türü için `cursor` değerinden sonraki olayları döner; ilk çağrıda `cursor=0` gönderin ve yanıttaki imleci saklayın. Yanıtlar konuşma metnini değil, kayıt kimliklerini içerir. İmleç süresi dolarsa `410 CURSOR_EXPIRED` döner."
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2439,7 +2439,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "410":
-          description: "CURSOR_EXPIRED: resynchronize resources and restart with cursor=0"
+          description: "CURSOR_EXPIRED: kaynakları yeniden okuyup cursor=0 ile baştan başlayın"
           content:
             application/json:
               schema:
@@ -2520,7 +2520,7 @@ paths:
       description: "Kapsam: `webhooks:write`. Zapier, Make ve n8n gibi araçların kullandığı REST hook aboneliği; webhook'larla aynı imzalı teslimat altyapısını kullanır. İmza anahtarı yalnızca bu yanıtta döner. `Idempotency-Key` zorunludur."
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2666,7 +2666,7 @@ paths:
       description: "Kapsam: `webhooks:write`. `Idempotency-Key` zorunludur; tekrar denemelerde aynı değeri kullanın."
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2776,7 +2776,7 @@ paths:
       description: "Kapsam: `contacts:write`. Paneldeki kişi doğrulama kuralları aynen uygulanır. `Idempotency-Key` zorunludur."
       responses:
         "200":
-          description: Success
+          description: Başarılı
           content:
             application/json:
               schema:
@@ -2938,13 +2938,13 @@ paths:
         - name: instance
           in: path
           required: true
-          description: The channel instance id given during setup.
+          description: Kanal kurulumunda verilen kanal kimliği.
           schema:
             type: string
         - name: X-ClickFix-Timestamp
           in: header
           required: true
-          description: Signing time (Unix seconds).
+          description: İmzalama anı (Unix saniye).
           schema:
             type: string
           example: "1761732900"
@@ -2961,7 +2961,7 @@ paths:
               text: When will my order arrive?
       responses:
         "200":
-          description: Message received.
+          description: Mesaj alındı.
           content:
             application/json:
               schema:
@@ -3086,13 +3086,13 @@ webhooks:
           required: true
           schema:
             type: string
-            description: Unix seconds
+            description: Unix saniye
         - name: X-ClickFix-Signature
           in: header
           required: true
           schema:
             type: string
-            description: sha256= followed by hex HMAC-SHA256
+            description: "`sha256=` ve onaltılık HMAC-SHA256"
         - name: Idempotency-Key
           in: header
           required: true
@@ -3114,17 +3114,17 @@ webhooks:
               reply_to: msg-1001
       responses:
         "200":
-          description: Durably accepted, including duplicate id
+          description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "204":
-          description: Durably accepted, including duplicate id
+          description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "400":
-          description: Permanent content rejection
+          description: Kalıcı içerik reddi
         "401":
-          description: Permanent authentication rejection
+          description: Kalıcı kimlik doğrulama reddi
         "429":
-          description: Rate limit, retried with backoff
+          description: Hız sınırı; artan aralıklarla tekrar denenir
         "500":
-          description: Temporary receiver failure, retried with backoff
+          description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
 components:
   schemas:
     APIChannelMessage:
@@ -3138,7 +3138,7 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          description: Stable unique message ID within this instance
+          description: Kanal içinde tekil ve sabit mesaj kimliği
         sender_id:
           type: string
           minLength: 1
@@ -3159,7 +3159,7 @@ components:
           format: date-time
     APIChannelReply:
       type: object
-      description: JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key.
+      description: Organizasyonun herkese açık webhook adresine zaman damgalı HMAC ve Idempotency-Key ile gönderilen JSON.
       required:
         - id
         - conversation_id
@@ -3246,7 +3246,7 @@ components:
           format: date-time
     CompanyRevenue:
       type: object
-      description: What the customer pays the organization. Amounts are minor units of `currency`.
+      description: Müşterinin organizasyona ödediği tutar. Tutarlar `currency` biriminin kuruş cinsindendir.
       required:
         - mrr_minor
         - currency
@@ -3334,7 +3334,7 @@ components:
           type:
             - string
             - "null"
-          description: RFC 3339 time or YYYY-MM-DD date; null clears it.
+          description: RFC 3339 zaman ya da YYYY-MM-DD tarih; null değeri siler.
         lifetime_value_minor:
           type: integer
           format: int64
@@ -3399,7 +3399,7 @@ components:
           type:
             - string
             - "null"
-          description: the customer's own user id, unique in the organization.
+          description: Kendi sisteminizdeki kullanıcı numarası; organizasyon içinde tekil.
         identity_state:
           $ref: "#/components/schemas/ContactIdentityState"
         verified_at:
@@ -3407,7 +3407,7 @@ components:
             - string
             - "null"
           format: date-time
-          description: Last widget identify that proved the id with user_hash.
+          description: Kimliği user_hash ile kanıtlayan son widget identify zamanı.
         job_title:
           type: string
         company:
@@ -3493,11 +3493,7 @@ components:
         - verified
         - anonymous
         - self_named
-      description: |
-        . verified: the contact proved the customer's user id with
-        user_hash (widget identify). anonymous: no name, e-mail or phone.
-        self_named: a name, e-mail or phone the contact or its channel gave,
-        not proved.
+      description: "verified: kişi, kullanıcı numarasını user_hash ile (widget identify) kanıtladı. anonymous: ad, e-posta ya da telefon yok. self_named: kişinin ya da kanalının verdiği, kanıtlanmamış ad, e-posta ya da telefon."
     ContactInput:
       type: object
       additionalProperties: false
@@ -3531,7 +3527,7 @@ components:
         external_id:
           type: string
           maxLength: 200
-          description: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          description: Kendi sisteminizdeki kullanıcı numarası; boş değer siler. Başka kişideyse 409 EXTERNAL_ID_EXISTS.
     ConversationPriority:
       type: string
       enum:
@@ -3568,7 +3564,7 @@ components:
             - string
             - "null"
           format: uuid
-          description: Team uuid; null removes the team (tenant.conversations.assign)
+          description: Ekip uuid'si; null ekibi kaldırır (tenant.conversations.assign)
         snoozed_until:
           type: string
           format: date-time
@@ -3695,7 +3691,7 @@ components:
       properties:
         code:
           type: string
-          description: Machine-readable error code
+          description: Makinece okunur hata kodu
           examples:
             - VALIDATION_ERROR
             - INVALID_RESET_CODE
@@ -3764,7 +3760,7 @@ components:
       additionalProperties: false
     IntegrationCreateConversation:
       type: object
-      description: Name the contact by contact_uuid or contact_external_id (, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
+      description: Kişiyi contact_uuid ya da contact_external_id (kendi sisteminizdeki kullanıcı numarası) ile verin, ikisini birden değil. Widget kanalında dış kimlikli kişi widget kimliğini alır; temsilci önce yazabilir, siteye giriş yapan kullanıcı konuşmayı sitede bulur.
       properties:
         contact_uuid:
           type: string
@@ -3881,7 +3877,7 @@ components:
         url:
           type: string
           format: uri
-          description: Public HTTPS URL. Private addresses, redirects and DNS rebinding are blocked.
+          description: Herkese açık HTTPS adresi. Özel adresler, yönlendirmeler ve DNS rebinding engellenir.
         events:
           type: array
           minItems: 1
@@ -3903,37 +3899,37 @@ components:
           type: string
   responses:
     BadRequest:
-      description: Validation or malformed request
+      description: Doğrulama hatası ya da bozuk istek
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Conflict:
-      description: Conflict (duplicate / constraint)
+      description: Çakışma (tekrar / kısıt)
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Forbidden:
-      description: Authenticated but not allowed
+      description: Kimlik doğrulandı ama izin yok
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     NotFound:
-      description: Resource not found
+      description: Kayıt bulunamadı
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     Unauthenticated:
-      description: Missing or invalid credentials / access token
+      description: Eksik ya da geçersiz kimlik bilgisi / erişim belirteci
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     ValidationError:
-      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
+      description: "`VALIDATION_ERROR`: `details[].field` her geçersiz alanı adlandırır (noktalı yol, ör. `company.tax_number`)"
       content:
         application/json:
           schema:

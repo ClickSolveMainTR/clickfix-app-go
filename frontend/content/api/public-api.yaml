@@ -934,7 +934,7 @@ paths:
             type: string
         - name: external_id
           in: query
-          description: "CF-195: the customer's own user id, exact match."
+          description: The customer's own user id, exact match.
           schema:
             type: string
             maxLength: 200
@@ -1407,7 +1407,7 @@ paths:
             default: 0
         - name: external_id
           in: query
-          description: "CF-195: the company's id in your system, exact match."
+          description: The company's id in your system, exact match.
           schema:
             type: string
             maxLength: 200
@@ -3399,7 +3399,7 @@ components:
           type:
             - string
             - "null"
-          description: the customer's own user id, unique in the organization.
+          description: The customer's own user id, unique in the organization.
         identity_state:
           $ref: "#/components/schemas/ContactIdentityState"
         verified_at:
@@ -3494,7 +3494,7 @@ components:
         - anonymous
         - self_named
       description: |
-        . verified: the contact proved the customer's user id with
+        Verified: the contact proved the customer's user id with
         user_hash (widget identify). anonymous: no name, e-mail or phone.
         self_named: a name, e-mail or phone the contact or its channel gave,
         not proved.
@@ -3531,7 +3531,7 @@ components:
         external_id:
           type: string
           maxLength: 200
-          description: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          description: The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
     ConversationPriority:
       type: string
       enum:
@@ -3764,7 +3764,7 @@ components:
       additionalProperties: false
     IntegrationCreateConversation:
       type: object
-      description: Name the contact by contact_uuid or contact_external_id (, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
+      description: Name the contact by contact_uuid or contact_external_id (the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
       properties:
         contact_uuid:
           type: string

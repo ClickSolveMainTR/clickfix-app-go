@@ -453,3 +453,46 @@ webhooks:
         Bir temsilci API kanalındaki konuşmayı yanıtladığında ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (mesaj UUID'si) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. Mesajı kalıcı olarak kaydettikten sonra `2xx` dönün. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
     examples:
       request: { id: "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f", conversation_id: "8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f", recipient_id: "customer-42", text: "Your order ships today.", thread_id: "msg-1001", reply_to: "msg-1001" }
+
+# Turkish for texts that come straight from backend/docs/openapi.yaml (parameter
+# and response descriptions, shared components); exact match on the English
+# text after scrubbing, applied as `x-i18n`. The generator fails on an entry
+# that matches nothing, so stale lines are caught by `make sdks-check`.
+translations:
+  tr:
+    "Success": "Başarılı"
+    "Created": "Oluşturuldu"
+    "Updated": "Güncellendi"
+    "OK": "Tamam"
+    "Case-insensitive match on the contact name or e-mail.": "Kişi adında veya e-postasında büyük/küçük harf duyarsız arama."
+    "The customer's own user id, exact match.": "Kendi sisteminizdeki kullanıcı numarası, tam eşleşme."
+    "The company's id in your system, exact match.": "Firmanın sizin sisteminizdeki numarası, tam eşleşme."
+    "CURSOR_EXPIRED: resynchronize resources and restart with cursor=0": "CURSOR_EXPIRED: kaynakları yeniden okuyup cursor=0 ile baştan başlayın"
+    "The channel instance id given during setup.": "Kanal kurulumunda verilen kanal kimliği."
+    "Signing time (Unix seconds).": "İmzalama anı (Unix saniye)."
+    "Message received.": "Mesaj alındı."
+    "Unix seconds": "Unix saniye"
+    "sha256= followed by hex HMAC-SHA256": "`sha256=` ve onaltılık HMAC-SHA256"
+    "Durably accepted, including duplicate id": "Kalıcı olarak kabul edildi (tekrarlanan id dahil)"
+    "Permanent content rejection": "Kalıcı içerik reddi"
+    "Permanent authentication rejection": "Kalıcı kimlik doğrulama reddi"
+    "Rate limit, retried with backoff": "Hız sınırı; artan aralıklarla tekrar denenir"
+    "Temporary receiver failure, retried with backoff": "Alıcıda geçici hata; artan aralıklarla tekrar denenir"
+    "Stable unique message ID within this instance": "Kanal içinde tekil ve sabit mesaj kimliği"
+    "JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key.": "Organizasyonun herkese açık webhook adresine zaman damgalı HMAC ve Idempotency-Key ile gönderilen JSON."
+    "What the customer pays the organization. Amounts are minor units of `currency`.": "Müşterinin organizasyona ödediği tutar. Tutarlar `currency` biriminin kuruş cinsindendir."
+    "RFC 3339 time or YYYY-MM-DD date; null clears it.": "RFC 3339 zaman ya da YYYY-MM-DD tarih; null değeri siler."
+    "The customer's own user id, unique in the organization.": "Kendi sisteminizdeki kullanıcı numarası; organizasyon içinde tekil."
+    "Last widget identify that proved the id with user_hash.": "Kimliği user_hash ile kanıtlayan son widget identify zamanı."
+    "The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.": "Kendi sisteminizdeki kullanıcı numarası; boş değer siler. Başka kişideyse 409 EXTERNAL_ID_EXISTS."
+    "Team uuid; null removes the team (tenant.conversations.assign)": "Ekip uuid'si; null ekibi kaldırır (tenant.conversations.assign)"
+    "Machine-readable error code": "Makinece okunur hata kodu"
+    "Public HTTPS URL. Private addresses, redirects and DNS rebinding are blocked.": "Herkese açık HTTPS adresi. Özel adresler, yönlendirmeler ve DNS rebinding engellenir."
+    "Validation or malformed request": "Doğrulama hatası ya da bozuk istek"
+    "Conflict (duplicate / constraint)": "Çakışma (tekrar / kısıt)"
+    "Authenticated but not allowed": "Kimlik doğrulandı ama izin yok"
+    "Resource not found": "Kayıt bulunamadı"
+    "Missing or invalid credentials / access token": "Eksik ya da geçersiz kimlik bilgisi / erişim belirteci"
+    "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)": "`VALIDATION_ERROR`: `details[].field` her geçersiz alanı adlandırır (noktalı yol, ör. `company.tax_number`)"
+    "Verified: the contact proved the customer's user id with user_hash (widget identify). anonymous: no name, e-mail or phone. self_named: a name, e-mail or phone the contact or its channel gave, not proved.": "verified: kişi, kullanıcı numarasını user_hash ile (widget identify) kanıtladı. anonymous: ad, e-posta ya da telefon yok. self_named: kişinin ya da kanalının verdiği, kanıtlanmamış ad, e-posta ya da telefon."
+    "Name the contact by contact_uuid or contact_external_id (the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.": "Kişiyi contact_uuid ya da contact_external_id (kendi sisteminizdeki kullanıcı numarası) ile verin, ikisini birden değil. Widget kanalında dış kimlikli kişi widget kimliğini alır; temsilci önce yazabilir, siteye giriş yapan kullanıcı konuşmayı sitede bulur."

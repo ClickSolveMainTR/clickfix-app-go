@@ -133,6 +133,9 @@ paths:
                       alg: EdDSA
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -228,6 +231,9 @@ paths:
                   offset: 0
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -353,6 +359,9 @@ paths:
                   status: open
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -487,6 +496,9 @@ paths:
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -588,6 +600,9 @@ paths:
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -722,6 +737,9 @@ paths:
                   offset: 0
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -815,6 +833,9 @@ paths:
                   created_at: 2026-11-11T09:20:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -972,6 +993,9 @@ paths:
                   offset: 0
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -997,12 +1021,18 @@ paths:
           description: Case-insensitive match on the contact name or e-mail.
           schema:
             type: string
+          x-i18n:
+            tr:
+              description: Kişi adında veya e-postasında büyük/küçük harf duyarsız arama.
         - name: external_id
           in: query
-          description: "CF-195: the customer's own user id, exact match."
+          description: The customer's own user id, exact match.
           schema:
             type: string
             maxLength: 200
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası, tam eşleşme.
       x-i18n:
         tr:
           summary: Kişileri listele
@@ -1123,6 +1153,9 @@ paths:
                   updated_at: 2026-11-11T09:14:50Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1292,6 +1325,9 @@ paths:
                   updated_at: 2026-11-11T09:14:50Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Güncellendi
         "201":
           description: Created
           content:
@@ -1327,6 +1363,9 @@ paths:
                   updated_at: 2026-11-11T09:14:50Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1462,6 +1501,9 @@ paths:
                   offset: 0
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1484,10 +1526,13 @@ paths:
             default: 0
         - name: external_id
           in: query
-          description: "CF-195: the company's id in your system, exact match."
+          description: The company's id in your system, exact match.
           schema:
             type: string
             maxLength: 200
+          x-i18n:
+            tr:
+              description: Firmanın sizin sisteminizdeki numarası, tam eşleşme.
       x-i18n:
         tr:
           summary: Şirketleri listele
@@ -1583,6 +1628,9 @@ paths:
                   expires_at: 2026-12-11T09:30:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1714,6 +1762,9 @@ paths:
                   duplicate: true
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "201":
           description: Created
           content:
@@ -1734,6 +1785,9 @@ paths:
                   duplicate: false
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1899,6 +1953,9 @@ paths:
                     updated_at: 2026-11-11T09:30:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2038,6 +2095,9 @@ paths:
                   offset: 0
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2143,6 +2203,9 @@ paths:
                   secret: whsec_3f9c1a7e5b2d4c8f0a6e9b1d3c5f7a2e4b6d8c0f1a3e5b7d9c2f4a6e8b0d1c3f
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2286,6 +2349,9 @@ paths:
                   created_at: 2026-11-01T10:00:00Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2426,6 +2492,9 @@ paths:
                   deleted: true
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2539,6 +2608,9 @@ paths:
                   retention_days: 7
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2553,6 +2625,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+          x-i18n:
+            tr:
+              description: "CURSOR_EXPIRED: kaynakları yeniden okuyup cursor=0 ile baştan başlayın"
       parameters:
         - name: event
           in: query
@@ -2664,6 +2739,9 @@ paths:
                   secret: whsec_a4f0…
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2813,6 +2891,9 @@ paths:
                   deleted: true
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2947,6 +3028,9 @@ paths:
                   updated_at: 2026-11-11T09:14:50Z
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3066,6 +3150,9 @@ paths:
           description: The channel instance id given during setup.
           schema:
             type: string
+          x-i18n:
+            tr:
+              description: Kanal kurulumunda verilen kanal kimliği.
         - name: X-ClickFix-Timestamp
           in: header
           required: true
@@ -3073,6 +3160,9 @@ paths:
           schema:
             type: string
           example: "1761732900"
+          x-i18n:
+            tr:
+              description: İmzalama anı (Unix saniye).
       requestBody:
         required: true
         content:
@@ -3098,6 +3188,9 @@ paths:
                   conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Mesaj alındı.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -3219,12 +3312,18 @@ webhooks:
           schema:
             type: string
             description: Unix seconds
+            x-i18n:
+              tr:
+                description: Unix saniye
         - name: X-ClickFix-Signature
           in: header
           required: true
           schema:
             type: string
             description: sha256= followed by hex HMAC-SHA256
+            x-i18n:
+              tr:
+                description: "`sha256=` ve onaltılık HMAC-SHA256"
         - name: Idempotency-Key
           in: header
           required: true
@@ -3247,16 +3346,34 @@ webhooks:
       responses:
         "200":
           description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "204":
           description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "400":
           description: Permanent content rejection
+          x-i18n:
+            tr:
+              description: Kalıcı içerik reddi
         "401":
           description: Permanent authentication rejection
+          x-i18n:
+            tr:
+              description: Kalıcı kimlik doğrulama reddi
         "429":
           description: Rate limit, retried with backoff
+          x-i18n:
+            tr:
+              description: Hız sınırı; artan aralıklarla tekrar denenir
         "500":
           description: Temporary receiver failure, retried with backoff
+          x-i18n:
+            tr:
+              description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
       x-i18n:
         tr:
           summary: Temsilci yanıtı (API kanalı)
@@ -3276,6 +3393,9 @@ components:
           minLength: 1
           maxLength: 255
           description: Stable unique message ID within this instance
+          x-i18n:
+            tr:
+              description: Kanal içinde tekil ve sabit mesaj kimliği
         sender_id:
           type: string
           minLength: 1
@@ -3319,6 +3439,9 @@ components:
           type: string
         reply_to:
           type: string
+      x-i18n:
+        tr:
+          description: Organizasyonun herkese açık webhook adresine zaman damgalı HMAC ve Idempotency-Key ile gönderilen JSON.
     CompanyEvent:
       type: object
       required:
@@ -3432,6 +3555,9 @@ components:
         updated_at:
           type: string
           format: date-time
+      x-i18n:
+        tr:
+          description: Müşterinin organizasyona ödediği tutar. Tutarlar `currency` biriminin kuruş cinsindendir.
     CompanyRevenueUpsertInput:
       type: object
       additionalProperties: false
@@ -3472,6 +3598,9 @@ components:
             - string
             - "null"
           description: RFC 3339 time or YYYY-MM-DD date; null clears it.
+          x-i18n:
+            tr:
+              description: RFC 3339 zaman ya da YYYY-MM-DD tarih; null değeri siler.
         lifetime_value_minor:
           type: integer
           format: int64
@@ -3536,7 +3665,10 @@ components:
           type:
             - string
             - "null"
-          description: the customer's own user id, unique in the organization.
+          description: The customer's own user id, unique in the organization.
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası; organizasyon içinde tekil.
         identity_state:
           $ref: "#/components/schemas/ContactIdentityState"
         verified_at:
@@ -3545,6 +3677,9 @@ components:
             - "null"
           format: date-time
           description: Last widget identify that proved the id with user_hash.
+          x-i18n:
+            tr:
+              description: Kimliği user_hash ile kanıtlayan son widget identify zamanı.
         job_title:
           type: string
         company:
@@ -3631,10 +3766,13 @@ components:
         - anonymous
         - self_named
       description: |
-        . verified: the contact proved the customer's user id with
+        Verified: the contact proved the customer's user id with
         user_hash (widget identify). anonymous: no name, e-mail or phone.
         self_named: a name, e-mail or phone the contact or its channel gave,
         not proved.
+      x-i18n:
+        tr:
+          description: "verified: kişi, kullanıcı numarasını user_hash ile (widget identify) kanıtladı. anonymous: ad, e-posta ya da telefon yok. self_named: kişinin ya da kanalının verdiği, kanıtlanmamış ad, e-posta ya da telefon."
     ContactInput:
       type: object
       additionalProperties: false
@@ -3668,7 +3806,10 @@ components:
         external_id:
           type: string
           maxLength: 200
-          description: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          description: The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası; boş değer siler. Başka kişideyse 409 EXTERNAL_ID_EXISTS.
     ConversationPriority:
       type: string
       enum:
@@ -3706,6 +3847,9 @@ components:
             - "null"
           format: uuid
           description: Team uuid; null removes the team (tenant.conversations.assign)
+          x-i18n:
+            tr:
+              description: Ekip uuid'si; null ekibi kaldırır (tenant.conversations.assign)
         snoozed_until:
           type: string
           format: date-time
@@ -3859,6 +4003,9 @@ components:
             - NO_TENANT_MEMBERSHIP
             - ORGANIZATION_SUSPENDED
             - ORGANIZATION_ACCESS_EXPIRED
+          x-i18n:
+            tr:
+              description: Makinece okunur hata kodu
         message:
           type: string
         details:
@@ -3901,7 +4048,7 @@ components:
       additionalProperties: false
     IntegrationCreateConversation:
       type: object
-      description: Name the contact by contact_uuid or contact_external_id (, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
+      description: Name the contact by contact_uuid or contact_external_id (the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
       properties:
         contact_uuid:
           type: string
@@ -3920,6 +4067,9 @@ components:
         - inbox_uuid
         - subject
       additionalProperties: false
+      x-i18n:
+        tr:
+          description: Kişiyi contact_uuid ya da contact_external_id (kendi sisteminizdeki kullanıcı numarası) ile verin, ikisini birden değil. Widget kanalında dış kimlikli kişi widget kimliğini alır; temsilci önce yazabilir, siteye giriş yapan kullanıcı konuşmayı sitede bulur.
     IntegrationEnvelope:
       type: object
       properties:
@@ -4019,6 +4169,9 @@ components:
           type: string
           format: uri
           description: Public HTTPS URL. Private addresses, redirects and DNS rebinding are blocked.
+          x-i18n:
+            tr:
+              description: Herkese açık HTTPS adresi. Özel adresler, yönlendirmeler ve DNS rebinding engellenir.
         events:
           type: array
           minItems: 1
@@ -4045,36 +4198,54 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Doğrulama hatası ya da bozuk istek
     Conflict:
       description: Conflict (duplicate / constraint)
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Çakışma (tekrar / kısıt)
     Forbidden:
       description: Authenticated but not allowed
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Kimlik doğrulandı ama izin yok
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Kayıt bulunamadı
     Unauthenticated:
       description: Missing or invalid credentials / access token
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Eksik ya da geçersiz kimlik bilgisi / erişim belirteci
     ValidationError:
       description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: "`VALIDATION_ERROR`: `details[].field` her geçersiz alanı adlandırır (noktalı yol, ör. `company.tax_number`)"
   securitySchemes:
     apiChannelSignature:
       type: apiKey
