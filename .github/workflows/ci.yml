@@ -357,7 +357,7 @@ jobs:
           for p in node visitor-core react-widget; do
             (cd "$p" && pnpm publish --dry-run --no-git-checks --access public)
           done
-          echo "sdks/go version $(cat go/VERSION) -> tag sdks/go/v$(cat go/VERSION)"
+          echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
 
   # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
   # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
@@ -919,7 +919,7 @@ jobs:
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls
   # the :main images, so the tag waits until they are pushed. The same job
-  # tags the Go SDK module (sdks/go/vX.Y.Z from sdks/go/VERSION) when that
+  # tags the Go SDK module (go/vX.Y.Z from sdks/go/VERSION) when that
   # version has no tag yet; nobody tags by hand (CF-199).
   release-tag:
     needs: [ci, publish-images]
@@ -944,14 +944,68 @@ jobs:
           git tag "$next" "$GITHUB_SHA"
           git push origin "$next"
           echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"
-      - name: Tag Go SDK module version
-        if: ${{ !failure() }}
+
+  # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
+  # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
+  # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
+  # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Packagist
+  # needs composer.json at the repository root, so sdks/php and sdks/laravel are
+  # also pushed to their own mirrors (clickfix-php, clickfix-laravel) and tagged
+  # vX.Y.Z there (version = newest "## X.Y.Z" heading of the package CHANGELOG).
+  # Needs the SDKS_MIRROR_TOKEN repository secret: a fine-grained token with
+  # Contents read/write on the three mirror repositories only. Without it the
+  # job skips with a note and never fails main. One mirror commit per release;
+  # history is not rewritten and tags are never moved.
+  sdks-mirror:
+    needs: [release-tag]
+    if: ${{ !failure() && needs.release-tag.result == 'success' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Mirror sdks/ to the public SDK repositories
+        env:
+          SDKS_MIRROR_TOKEN: ${{ secrets.SDKS_MIRROR_TOKEN }}
         run: |
-          git fetch --tags --force
-          v="sdks/go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
-          if git rev-parse -q --verify "refs/tags/$v" >/dev/null; then
-            echo "$v already exists"; exit 0
+          if [ -z "$SDKS_MIRROR_TOKEN" ]; then
+            echo "SDKS_MIRROR_TOKEN secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
-          git tag "$v" "$GITHUB_SHA"
-          git push origin "$v"
-          echo "tagged $v (go get github.com/${GITHUB_REPOSITORY}/sdks/go@${v#sdks/go/})" >> "$GITHUB_STEP_SUMMARY"
+          work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+          printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"
+          export GIT_CONFIG_GLOBAL="$work/gitconfig"   # job-private: the runner's own git config stays untouched
+          git config --global credential.helper "store --file=$work/cred"
+          release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
+          changelog_version() { sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' "$1/CHANGELOG.md" | head -1; }
+          # mirror <source dir> <repository> : one commit per release, then tags via tag()
+          mirror() {
+            src=$1; repo=$2; dir="$work/$repo"
+            git clone --quiet --branch main "https://github.com/ClickSolveMainTR/$repo.git" "$dir" 2>/dev/null \
+              || { git init --quiet -b main "$dir"; git -C "$dir" remote add origin "https://github.com/ClickSolveMainTR/$repo.git"; }
+            rsync -a --delete --exclude .git "$src/" "$dir/"
+            [ -f "$dir/LICENSE" ] || cp sdks/LICENSE "$dir/LICENSE"
+            git -C "$dir" config user.name "clickfix-ci"; git -C "$dir" config user.email "ci@getclickfix.com"
+            git -C "$dir" add -A
+            if git -C "$dir" diff --cached --quiet; then echo "$repo unchanged"; else
+              git -C "$dir" commit --quiet -m "clickfix-app-go ${release:-$GITHUB_SHA}"
+              git -C "$dir" push --quiet origin HEAD:main
+              echo "mirrored $src to $repo at ${release:-$GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          tag() { # tag <repository> <tag>
+            dir="$work/$1"
+            if git -C "$dir" ls-remote --tags origin "refs/tags/$2" | grep -q .; then echo "$1 $2 exists"; return; fi
+            git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
+          }
+          mirror sdks clickfix-sdks
+          for p in node react-widget visitor-core; do
+            [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
+          done
+          [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
+          [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          for p in php laravel; do
+            if [ -f "sdks/$p/composer.json" ]; then
+              mirror "sdks/$p" "clickfix-$p"
+              v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+            fi
+          done
+          true

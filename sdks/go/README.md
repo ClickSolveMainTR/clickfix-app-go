@@ -1,16 +1,16 @@
 # ClickFix Go server SDK
 
 ```sh
-go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@latest
+go get github.com/ClickSolveMainTR/clickfix-sdks/go@latest
 ```
 
-Releases are tagged `sdks/go/vX.Y.Z` (see [CHANGELOG.md](./CHANGELOG.md)). While the repository is private, set `GOPRIVATE=github.com/ClickSolveMainTR/*` and give `git` credentials for GitHub. Full walkthrough: https://getclickfix.com/docs/integration-guide.
+Releases are tagged `go/vX.Y.Z` in the public mirror repository [ClickSolveMainTR/clickfix-sdks](https://github.com/ClickSolveMainTR/clickfix-sdks) (see [CHANGELOG.md](./CHANGELOG.md)); the source of truth is `sdks/go` in the main codebase. Full walkthrough: https://getclickfix.com/docs/integration-guide.
 
 ```go
 import (
     "context"
     "os"
-    clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+    clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 client, err := clickfix.New("https://support.example.com", os.Getenv("CLICKFIX_API_KEY"))

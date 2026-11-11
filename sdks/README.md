@@ -1,6 +1,6 @@
 # ClickFix SDKs
 
-- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go`, tags `sdks/go/vX.Y.Z` (version in `go/VERSION`).
+- `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-sdks/go`, tags `go/vX.Y.Z` (version in `go/VERSION`).
 - `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
 - `visitor-core`: `@getclickfix/visitor-core`, the DOM-free visitor (widget) API client for React Native, Node and browsers: browser mode (same-origin BFF) or app mode (mobile app key headers), retries, session renewal, realtime abstraction and the webview bridge types (CF-201).
 - `react-widget`: `@clickfix/react-widget`, UI-free React 18+ hooks over `visitor-core` in browser mode.
@@ -41,9 +41,9 @@ dependency of react-widget on visitor-core is rewritten to a version). On a
 green `main` the `sdk-publish` job publishes any npm version that is not on the
 registry yet, visitor-core before react-widget
 (needs the `NPM_TOKEN` repository secret, an npm automation token for the
-`@clickfix` scope; without it the job skips with a note), and the `release-tag`
-job pushes the `sdks/go/vX.Y.Z` tag when it does not exist. Nobody publishes or
-tags by hand. The PHP package (`sdks/php`, version = newest `CHANGELOG.md` entry and
+`@clickfix` scope; without it the job skips with a note), and the `sdks-mirror`
+job pushes the tree and the `go/vX.Y.Z` tag to the public mirror when they do not exist.
+Nobody publishes or tags by hand. The PHP package (`sdks/php`, version = newest `CHANGELOG.md` entry and
 `Client::USER_AGENT`) is pushed by the same `sdks-mirror` job to the public repository
 `ClickSolveMainTR/clickfix-php` and tagged `vX.Y.Z` there; Packagist (`clickfix/sdk`) watches that
 repository. Details: `docs/entegrasyon-kilavuzu.md`.

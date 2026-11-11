@@ -26,7 +26,7 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 | [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                   |
 | [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)        |
 | [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                               | `npm install @clickfix/react-widget` (React 18+)                                          |
-| Go module                                                                              | `sdks/go/v0.1.0`                                                                    | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                       |
+| Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
 | [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)           |
 
 Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
@@ -109,7 +109,7 @@ import (
 	"encoding/json"
 	"os"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 1: user_hash sunucuda hesaplanır; anahtar tarayıcıya ve uygulamaya gitmez.
@@ -223,7 +223,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
@@ -354,7 +354,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 3: özel alanlar; anahtar panelde tanımladığınız alanın anahtarıdır.
@@ -474,7 +474,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 4: şirketi bul ve kullanım sinyali gönder (health:write).
@@ -605,7 +605,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 5: ürün olayını şirket zaman çizelgesine yaz (events:write).
@@ -1054,7 +1054,7 @@ import (
 	"os"
 	"time"
 
-	clickfix "github.com/ClickSolveMainTR/clickfix-app-go/sdks/go"
+	clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
 )
 
 // Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.

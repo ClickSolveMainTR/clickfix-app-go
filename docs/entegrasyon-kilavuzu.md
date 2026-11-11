@@ -25,7 +25,7 @@ make guide-examples-check    # yalnız derleme, tip kontrolü ve sayfa eşitliğ
 | `@getclickfix/visitor-core` | `sdks/visitor-core/package.json`, `CHANGELOG.md` | aynı iş (CF-201; react-widget'tan önce yayımlanır) |
 | `@clickfix/react-widget` | `sdks/react-widget/package.json`, `CHANGELOG.md` | aynı iş |
 | `clickfix_webview` (pub.dev, CF-203) | `sdks/flutter/clickfix_webview/pubspec.yaml`, `CHANGELOG.md` | `sdk-publish` işi: pub.dev'de olmayan sürümü `dart pub publish --force` ile yayımlar; `PUB_CREDENTIALS` secret'ı yoksa atlar |
-| `github.com/ClickSolveMainTR/clickfix-app-go/sdks/go` | `sdks/go/VERSION`, `CHANGELOG.md` | `release-tag` işi `sdks/go/vX.Y.Z` etiketini basar (yoksa); elle etiket basılmaz |
+| `github.com/ClickSolveMainTR/clickfix-sdks/go` | `sdks/go/VERSION`, `CHANGELOG.md` | `sdks-mirror` işi ayna repoda `go/vX.Y.Z` etiketini basar (yoksa); elle etiket basılmaz |
 | `clickfix/sdk` (PHP, CF-204) | `sdks/php/CHANGELOG.md` en üst girdi (ve `Client::USER_AGENT`; `composer.json`'a `version` yazılmaz, `composer validate --strict` buna uyarı verir) | `sdks-mirror` işi (#144) `sdks/php`'yi herkese açık `ClickSolveMainTR/clickfix-php` reposuna iter ve orada `vX.Y.Z` etiketini basar; Packagist (`clickfix/sdk`) o repoyu izler |
 
 - PR'da `sdks` işi `pnpm publish --dry-run` koşar; token gerekmez. `npm publish` değil `pnpm publish` kullanılır: react-widget'ın `workspace:^` bağımlılığı (`@getclickfix/visitor-core`) ancak böyle gerçek sürüme çevrilir.
