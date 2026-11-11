@@ -5,7 +5,7 @@ order: 1
 description: "The ClickFix REST API: API keys and scopes, your first request, the response envelope, error codes, pagination, Idempotency-Key, rate limits and versioning; links to the SDKs and the endpoint reference."
 ---
 
-The ClickFix REST API lets you open conversations, add messages and internal notes, keep contact and company data in sync, send customer-health signals and subscribe to events with webhooks. This page explains the rules shared by every endpoint. Endpoints, schemas and ready-made requests for every language are in the [API reference](/docs/api-reference/conversations?lang=en); the end-to-end setup order is the [Integration guide](/docs/integration-guide?lang=en); the packages are on [SDKs](/docs/integration-guide/sdks?lang=en). The reference contains only public, stable endpoints; the panel's own internal endpoints cannot be called with an API key.
+The ClickFix REST API lets you open conversations, add messages and internal notes, keep contact and company data in sync, send customer-health signals and subscribe to events with webhooks. This page explains the rules shared by every endpoint. Endpoints, schemas and ready-made requests for every language are in the [API reference](/docs/api-reference?lang=en); the end-to-end setup order is the [Integration guide](/docs/integration-guide?lang=en); the packages are on [SDKs](/docs/integration-guide/sdks?lang=en). The reference contains only public, stable endpoints; the panel's own internal endpoints cannot be called with an API key.
 
 **Base URL:** `https://api.getclickfix.com/v1/public-api`
 
@@ -184,7 +184,7 @@ Every request other than `GET` **requires** the `Idempotency-Key` header (at mos
 | REST hook subscribe / unsubscribe         | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`        | `webhooks:write`                                           |
 | Customer message to the API channel       | `POST /v1/webhooks/channels/api/{instance}` (signed, no key) | [API channel](/docs/integration-guide/api-channel?lang=en) |
 
-Body fields, response schemas and curl, Node.js, Go and PHP samples for every endpoint are in the [API reference](/docs/api-reference/conversations?lang=en).
+Body fields, response schemas and curl, Node.js, Go and PHP samples for every endpoint are in the [API reference](/docs/api-reference?lang=en).
 
 ## Next steps [#next-steps]
 

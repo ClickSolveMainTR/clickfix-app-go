@@ -23,7 +23,11 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
       pathname,
     );
   if (publicPage) {
-    if (pathname === "/docs/search" || pathname.startsWith("/docs/og/"))
+    if (
+      pathname === "/docs/search" ||
+      pathname === "/docs/api-proxy" ||
+      pathname.startsWith("/docs/og/")
+    )
       return NextResponse.next();
     // Raw Markdown of a docs page for LLMs: /docs/<slug>.md (CF-208).
     const markdown = /^\/docs\/(.+)\.md$/.exec(pathname);

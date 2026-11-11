@@ -5,7 +5,7 @@ order: 1
 description: "ClickFix REST API'si: API anahtarı ve kapsamlar, ilk istek, yanıt zarfı, hata kodları, sayfalama, Idempotency-Key, hız sınırları ve sürümleme; SDK'lara ve uç nokta başvurusuna bağlantılar."
 ---
 
-ClickFix REST API'si; konuşma açmanızı, mesaj ve iç not eklemenizi, kişi ve şirket verinizi senkron tutmanızı, müşteri sağlığı sinyali göndermenizi ve olaylara webhook ile abone olmanızı sağlar. Bu sayfa API'nin ortak kurallarını anlatır. Uç noktalar, şemalar ve her dil için hazır istekler [API başvurusunda](/docs/api-reference/conversations); baştan sona kurulum sırası [Entegrasyon kılavuzunda](/docs/integration-guide); paketler [SDK'lar](/docs/integration-guide/sdks) sayfasındadır. Başvuruda yalnızca herkese açık ve kararlı uç noktalar yer alır; panelin kendi kullandığı iç uç noktalar API anahtarıyla çağrılamaz.
+ClickFix REST API'si; konuşma açmanızı, mesaj ve iç not eklemenizi, kişi ve şirket verinizi senkron tutmanızı, müşteri sağlığı sinyali göndermenizi ve olaylara webhook ile abone olmanızı sağlar. Bu sayfa API'nin ortak kurallarını anlatır. Uç noktalar, şemalar ve her dil için hazır istekler [API başvurusunda](/docs/api-reference); baştan sona kurulum sırası [Entegrasyon kılavuzunda](/docs/integration-guide); paketler [SDK'lar](/docs/integration-guide/sdks) sayfasındadır. Başvuruda yalnızca herkese açık ve kararlı uç noktalar yer alır; panelin kendi kullandığı iç uç noktalar API anahtarıyla çağrılamaz.
 
 **Temel adres:** `https://api.getclickfix.com/v1/public-api`
 
@@ -184,7 +184,7 @@ Sonraki sayfa için `offset` değerini `limit` kadar artırın; `items` boş gel
 | REST hook abone ol / ayrıl                | `POST /subscriptions`, `DELETE /subscriptions/{uuid}`            | `webhooks:write`                                  |
 | API kanalına müşteri mesajı               | `POST /v1/webhooks/channels/api/{instance}` (imzalı, anahtarsız) | [API kanalı](/docs/integration-guide/api-channel) |
 
-Gövde alanları, yanıt şemaları ve her uç nokta için curl, Node.js, Go ve PHP örnekleri [API başvurusunda](/docs/api-reference/conversations) yer alır.
+Gövde alanları, yanıt şemaları ve her uç nokta için curl, Node.js, Go ve PHP örnekleri [API başvurusunda](/docs/api-reference) yer alır.
 
 ## Sonraki adımlar [#next-steps]
 

@@ -50,3 +50,4 @@ test-results/
 # Fumadocs compilation and API reference (regenerated before builds).
 .source/
 content/docs/tr/api-reference/
+content/docs/en/api-reference/
