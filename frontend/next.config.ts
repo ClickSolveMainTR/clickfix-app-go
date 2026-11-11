@@ -51,6 +51,7 @@ const settingsRedirects = [
  */
 const docsRedirects = [
   { source: "/docs/sdks", destination: "/docs/integration-guide/sdks" },
+  { source: "/en/docs/sdks", destination: "/en/docs/integration-guide/sdks" },
 ].map((rule) => ({ ...rule, permanent: true }));
 
 /**
