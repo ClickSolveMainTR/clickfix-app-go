@@ -494,25 +494,7 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 			"After tool results (search_docs, read_document, get_setup_state, lists) FIRST write your answer for the user, THEN call suggest_replies; " +
 			"suggest_replies is refused while no answer text has been written, and it finishes the turn.\n"
 		req.Tools = append(req.Tools, suggestionTool())
-		runner = func(ctx context.Context, call ai.ToolCall) (ai.ToolResult, error) {
-			if err := stream.flush(); err != nil {
-				return ai.ToolResult{}, err
-			}
-			if err := emit("status", map[string]string{"tool": call.Name, "text": toolStatus(call.Name, locale)}); err != nil {
-				return ai.ToolResult{}, err
-			}
-			if call.Name == suggestionToolName {
-				// A reply that only proposes cards keeps its lead-in text
-				// (#115); otherwise the model must answer before suggesting.
-				answered := strings.TrimSpace(stream.raw) != "" || len(run.actions) > 0
-				replies, result := suggestionResult(call.Input, answered)
-				if !result.IsError {
-					run.suggestions = replies
-				}
-				return result, nil
-			}
-			return run.run(ctx, call)
-		}
+		runner = streamRunner(stream, run, emit, locale)
 	}
 	var delta ai.Delta
 	if emit != nil {

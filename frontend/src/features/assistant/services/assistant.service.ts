@@ -44,7 +44,12 @@ export const assistantService = {
     // The id travels to the API (X-Request-ID) and into its
     // assistant_stream_failed log line, so a failure seen in the browser
     // console can be matched with the server log (CF-207, #150).
-    const requestId = crypto.randomUUID();
+    // randomUUID is missing in insecure contexts (plain http on a LAN):
+    // then no id is sent and the server's own id is used.
+    const requestId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : undefined;
     const response = await fetch(
       `/api/v1/tenant/assistant/threads/${encodeURIComponent(thread)}/messages/stream?locale=${encodeURIComponent(locale)}`,
       {
@@ -55,7 +60,7 @@ export const assistantService = {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
           "X-Organization": slug,
-          "X-Request-ID": requestId,
+          ...(requestId ? { "X-Request-ID": requestId } : {}),
         },
         body: JSON.stringify({ content, context }),
       },
@@ -72,7 +77,7 @@ export const assistantService = {
         status: response.status,
         code,
         message: "Assistant request failed",
-        requestId,
+        ...(requestId ? { requestId } : {}),
       });
     }
     await readSSE(response.body, (name, data) => {
@@ -81,15 +86,13 @@ export const assistantService = {
           code: string;
           request_id?: string;
         };
-        console.error("assistant stream failed", {
-          code,
-          requestId: request_id || requestId,
-        });
+        const id = request_id || requestId;
+        console.error("assistant stream failed", { code, requestId: id });
         throw new ApiError({
           status: 503,
           code,
           message: "Assistant stream failed",
-          requestId: request_id || requestId,
+          ...(id ? { requestId: id } : {}),
         });
       }
       emit(name, data);

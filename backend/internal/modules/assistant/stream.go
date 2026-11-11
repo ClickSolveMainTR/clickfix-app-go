@@ -70,6 +70,33 @@ func suggestionTool() ai.Tool {
 		Schema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"replies"}, "properties": map[string]any{"replies": map[string]any{"type": "array", "maxItems": 4, "items": map[string]any{"type": "string", "maxLength": 80}}}}}
 }
 
+// streamRunner wraps the tool runner of a streamed reply: it flushes the
+// text streamed so far, reports the tool status and gates suggest_replies.
+// Text that streamed BEFORE a lookup ("let me check the docs…") does not
+// count as the answer: the gate only opens for text streamed after the
+// last tool ran, or for a proposed card (#115).
+func streamRunner(stream *safeStream, run *toolRun, emit Emit, locale string) ai.ToolRunner {
+	return func(ctx context.Context, call ai.ToolCall) (ai.ToolResult, error) {
+		if err := stream.flush(); err != nil {
+			return ai.ToolResult{}, err
+		}
+		if err := emit("status", map[string]string{"tool": call.Name, "text": toolStatus(call.Name, locale)}); err != nil {
+			return ai.ToolResult{}, err
+		}
+		if call.Name == suggestionToolName {
+			answered := strings.TrimSpace(stream.raw[run.lookupMark:]) != "" || len(run.actions) > 0
+			replies, result := suggestionResult(call.Input, answered)
+			if !result.IsError {
+				run.suggestions = replies
+			}
+			return result, nil
+		}
+		result, err := run.run(ctx, call)
+		run.lookupMark = len(stream.raw)
+		return result, err
+	}
+}
+
 // suggestionResult handles a suggest_replies call. While the reply has no
 // answer text (nor a card) the call is refused with an error result, which
 // does not end the turn: the model reads it and writes the answer first, so

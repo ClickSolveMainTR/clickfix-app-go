@@ -224,3 +224,42 @@ func TestSuggestionResultKeepsCardOnlyRule(t *testing.T) {
 		t.Fatal("invalid suggestions accepted")
 	}
 }
+
+// The gate of suggest_replies ignores text streamed before a lookup: an
+// intro ("let me check the docs…") followed by search_docs and a bare
+// suggest_replies still forces the model to write the answer (#150).
+func TestStreamRunnerIgnoresIntroBeforeLookup(t *testing.T) {
+	p := &turnsProvider{turns: []scriptedTurn{
+		{text: "Belgelere bakıyorum…", calls: []ai.ToolCall{toolCall("s1", "channels_list", `{}`)}},
+		{calls: []ai.ToolCall{toolCall("q1", suggestionToolName, `{"replies":["Devam"]}`)}},
+		{text: " Kanallar şöyle listelenir.", calls: []ai.ToolCall{toolCall("q2", suggestionToolName, `{"replies":["Kanal kur"]}`)}},
+	}}
+	pa := &PlatformAI{Routes: map[string]ai.Route{"reply": {Provider: p, ProviderName: "test", Model: "m"}}}
+	var events []string
+	emit := func(name string, data any) error {
+		if name == "delta" {
+			events = append(events, data.(map[string]string)["text"])
+		}
+		return nil
+	}
+	stream := &safeStream{emit: emit}
+	run := &toolRun{locale: "tr"} // channels_list is not offered here: "unknown tool" error, still a lookup
+	res, err := pa.Run(context.Background(), Call{Route: "reply", Rounds: toolRounds, Runner: streamRunner(stream, run, emit, "tr"),
+		Req:  ai.Request{Turns: []ai.Turn{{Role: "user", Text: "Kanallarımı listele"}}, Tools: lookupTools()},
+		Emit: stream.add})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.flush(); err != nil {
+		t.Fatal(err)
+	}
+	if len(run.suggestions) != 1 || run.suggestions[0] != "Kanal kur" || len(res.Calls) != 3 {
+		t.Fatalf("suggestions=%v calls=%d", run.suggestions, len(res.Calls))
+	}
+	if got := strings.Join(events, ""); got != "Belgelere bakıyorum… Kanallar şöyle listelenir." {
+		t.Fatalf("streamed %q", got)
+	}
+	if last := p.seen[2].Turns[len(p.seen[2].Turns)-1]; last.Role != "tool" || !strings.Contains(last.Text, "write your markdown answer") {
+		t.Fatalf("intro text opened the gate: %+v", last)
+	}
+}

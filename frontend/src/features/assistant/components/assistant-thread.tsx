@@ -29,7 +29,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   useSyncExternalStore,
   type KeyboardEvent,
   type ReactNode,
@@ -63,7 +62,7 @@ import { useLocale } from "@/providers/locale-provider";
 
 import { errorKey, errorKeyForCode } from "../lib/errors";
 import { PROPOSE_TOOL, type AssistantCustom } from "../lib/messages";
-import { PendingMessages, shouldSendQueued } from "../lib/queue";
+import { shouldSendQueued } from "../lib/queue";
 import { DOCUMENT_ACCEPT } from "../runtime/attachments";
 import { useAssistantSurface } from "../runtime/surface";
 
@@ -235,8 +234,8 @@ function FollowupSuggestions() {
 function Composer({ disabled }: { disabled: boolean }) {
   const { t } = useLocale();
   const aui = useAui();
+  const { queue } = useAssistantSurface();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [queue] = useState(() => new PendingMessages());
   const queued = useSyncExternalStore(
     (listener) => queue.subscribe(listener),
     () => queue.size,
@@ -246,8 +245,18 @@ function Composer({ disabled }: { disabled: boolean }) {
   const wasRunning = useRef(isRunning);
   useEffect(() => {
     if (shouldSendQueued(wasRunning.current, isRunning, queue.size)) {
-      const next = queue.next();
-      if (next) void aui.thread().append(next);
+      // Stop drops the queue: the user interrupted on purpose and would not
+      // expect the next question to go out on its own.
+      const last = aui.thread().getState().messages.at(-1);
+      if (
+        last?.status?.type === "incomplete" &&
+        last.status.reason === "cancelled"
+      ) {
+        queue.clear();
+      } else {
+        const next = queue.next();
+        if (next) void aui.thread().append(next);
+      }
     }
     wasRunning.current = isRunning;
   }, [aui, isRunning, queue, queued]);
