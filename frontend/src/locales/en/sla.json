@@ -90,6 +90,10 @@
   "holidays.closed": "Closed",
   "holidays.half_day": "Half day",
   "holidays.delete": "Delete holiday",
+  "holidays.columns.date": "Date",
+  "holidays.columns.name": "Name",
+  "holidays.columns.hours": "Hours",
+  "holidays.confirm_delete": "Delete the holiday \"{{name}}\"?",
   "channel.widget": "Web widget",
   "channel.email": "Email",
   "channel.whatsapp": "WhatsApp",
@@ -108,9 +112,15 @@
   "contracts.assign": "Assign",
   "contracts.empty": "No company has a contracted SLA.",
   "contracts.remove": "Remove contract",
+  "contracts.columns.company": "Company",
+  "contracts.columns.policy": "Policy",
+  "contracts.filter": "Search company names",
+  "contracts.confirm_remove": "Remove the contract for \"{{name}}\"?",
+  "contracts.confirm_remove_hint": "The company's conversations will get the policy whose conditions match.",
   "fields.company_plans": "Revenue plan",
   "fields.company_plans_placeholder": "Pro, Enterprise",
   "fields.min_company_mrr": "Min. MRR",
   "fields.min_company_mrr_hint": "Company MRR is at least this amount",
-  "policy.min_mrr": "MRR ≥ {{amount}}"
+  "policy.min_mrr": "MRR ≥ {{amount}}",
+  "fields.custom_fields": "Custom field (from the catalog)"
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/apierror"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
@@ -202,6 +203,40 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 		h.audit(r, "article_updated", key)
 		response.JSON(w, r, 200, row)
 	}
+}
+
+// Audience reads (GET) or replaces (PUT) who the widget offers an article
+// to, as custom field catalog conditions (CF-196).
+func (h *Handler) Audience(w http.ResponseWriter, r *http.Request) {
+	key, ok := id(w, r)
+	if !ok {
+		return
+	}
+	org := orgctx.Must(r.Context()).ID
+	if r.Method == http.MethodGet {
+		out, err := h.Service.ArticleAudience(r.Context(), org, key)
+		if err != nil {
+			Fail(w, r, err)
+			return
+		}
+		response.JSON(w, r, 200, out)
+		return
+	}
+	var in usecase.Audience
+	if !Decode(w, r, &in) {
+		return
+	}
+	out, err := h.Service.SetArticleAudience(r.Context(), org, key, in)
+	if err != nil {
+		if errors.Is(err, model.ErrInvalid) && err != model.ErrInvalid {
+			response.ValidationError(w, r, []response.Detail{{Field: "conditions", Code: "invalid", Message: strings.TrimPrefix(err.Error(), model.ErrInvalid.Error()+": ")}})
+			return
+		}
+		Fail(w, r, err)
+		return
+	}
+	h.audit(r, "article_audience_updated", key)
+	response.JSON(w, r, 200, out)
 }
 
 func (h *Handler) Versions(w http.ResponseWriter, r *http.Request) {

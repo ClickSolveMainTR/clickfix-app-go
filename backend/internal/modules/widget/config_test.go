@@ -10,6 +10,9 @@ import (
 
 	channelsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels/usecase"
 	convrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
+	formsengine "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/engine"
+	formsmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/model"
+	formsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
@@ -156,22 +159,40 @@ func (fakeFields) Definitions(context.Context, int64, string, *int64) ([]customf
 	}, nil
 }
 
-func TestPreChatConsentAttributesAndAI(t *testing.T) {
+// CF-198: the pre-chat form is a request form picked in the widget
+// settings; its required fields gate the first message, its answers land on
+// the contact, and the widget keeps only the consent box of its own.
+func TestPreChatIsARequestForm(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	e.svc.WithFields(fakeFields{})
+	formsSvc := formsusecase.New(e.pool, e.q)
+	e.svc.WithForms(formsSvc)
+	active := true
+	other, err := formsSvc.Create(ctx, e.org, formsmodel.FormInput{Name: "Web formu", IsActive: &active, Channels: []string{"web"},
+		Fields: []formsengine.Field{{Key: "subject", Source: "system", Label: "Konu", Required: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chosen, err := formsSvc.Create(ctx, e.org, formsmodel.FormInput{Name: "Ön sohbet", IsActive: &active, Channels: []string{"widget"},
+		Fields: []formsengine.Field{
+			{Key: "name", Source: "system", Label: "Ad", Required: true},
+			{Key: "email", Source: "system", Label: "E-posta", Required: true},
+			{Key: "phone", Source: "system", Label: "Telefon"},
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfgs := usecase.NewConfigs(e.q, convrepository.New(e.pool, e.q), e.ib.Channels)
 	settings := map[string]any{
 		"allowed_domains": []any{"shop.example.com"},
 		"prechat": map[string]any{
-			"enabled": true,
-			"fields":  []any{map[string]any{"key": "company_size", "label": "Ekip", "type": "select", "options": []any{"1-10", "11-50"}, "required": true, "attribute": "seats_hint"}},
+			"enabled": true, "form_uuid": chosen.UUID.String(),
 			"consent": map[string]any{"enabled": true, "required": true, "text": "KVKK metnini okudum"},
 		},
 		"attribute_mapping": []any{
 			map[string]any{"key": "plan", "target": "custom:plan"},
 			map[string]any{"key": "seats", "target": "custom:seats", "anonymous": true},
-			map[string]any{"key": "seats_hint", "target": "custom:plan"},
 		},
 		"ai":          map[string]any{"enabled": false},
 		"attachments": map[string]any{"types": []any{"image"}},
@@ -184,30 +205,41 @@ func TestPreChatConsentAttributesAndAI(t *testing.T) {
 	}
 	boot := e.call(http.MethodPost, "/bootstrap", "", siteOrigin, nil)
 	token := str(boot.Data, "visitor", "token")
-	if r := e.call(http.MethodPost, "/conversations", token, siteOrigin, map[string]any{"text": "selam", "prechat": map[string]any{"company_size": "1-10"}}); r.Code != http.StatusBadRequest || str(r.Err, "code") != handlerCodeConsent {
+	if got := str(boot.Data, "request_form", "uuid"); got != chosen.UUID.String() {
+		t.Fatalf("bootstrap serves the chosen form, got %q (other form %s)", got, other.UUID)
+	}
+	submission := map[string]any{"form_uuid": chosen.UUID.String(), "values": map[string]any{"name": "Ada", "email": "ada@example.com", "phone": "+90 555 000 00 00"}}
+	if r := e.call(http.MethodPost, "/conversations", token, siteOrigin, map[string]any{"text": "selam", "form": submission}); r.Code != http.StatusBadRequest || str(r.Err, "code") != handlerCodeConsent {
 		t.Fatalf("no consent = %d %v", r.Code, r.Err)
 	}
-	if r := e.call(http.MethodPost, "/conversations", token, siteOrigin, map[string]any{"text": "selam", "consent": true}); r.Code != http.StatusBadRequest {
-		t.Fatalf("missing required field = %d", r.Code)
+	if r := e.call(http.MethodPost, "/conversations", token, siteOrigin, map[string]any{"text": "selam", "consent": true,
+		"form": map[string]any{"form_uuid": chosen.UUID.String(), "values": map[string]any{"name": "Ada"}}}); r.Code/100 != 4 {
+		t.Fatalf("missing required form field = %d", r.Code)
 	}
 	// Attributes before the first message are pending.
 	if r := e.call(http.MethodPatch, "/attributes", token, siteOrigin, map[string]any{"attributes": map[string]any{"seats": 5}}); r.Data["pending"] != true {
 		t.Fatalf("attributes before contact = %v", r.Data)
 	}
 	created := e.call(http.MethodPost, "/conversations", token, siteOrigin, map[string]any{
-		"text": "selam", "consent": true, "prechat": map[string]any{"company_size": "1-10"}, "attributes": map[string]any{"seats": 5},
+		"text": "selam", "consent": true, "form": submission, "attributes": map[string]any{"seats": 5},
 	})
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create = %d %v", created.Code, created.Err)
 	}
 	var attrs []byte
-	if err := e.pool.QueryRow(ctx, "SELECT m.content_attributes FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.uuid = $1", str(created.Data, "conversation_uuid")).Scan(&attrs); err != nil {
+	var name, email, phone string
+	if err := e.pool.QueryRow(ctx, `SELECT m.content_attributes, ct.name, COALESCE(ct.email, ''), COALESCE(ct.phone, '')
+		FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN contacts ct ON ct.id = c.contact_id WHERE c.uuid = $1`,
+		str(created.Data, "conversation_uuid")).Scan(&attrs, &name, &email, &phone); err != nil {
 		t.Fatal(err)
 	}
 	var stored map[string]any
 	_ = json.Unmarshal(attrs, &stored)
-	if stored["ai_disabled"] != true || stored["prechat"].(map[string]any)["company_size"] != "1-10" || stored["consent"] == nil {
+	if stored["ai_disabled"] != true || stored["consent"] == nil || stored["prechat"] != nil {
 		t.Fatalf("message attributes = %v", stored)
+	}
+	if name != "Ada" || email != "ada@example.com" || phone == "" {
+		t.Fatalf("form answers must reach the contact: %q %q %q", name, email, phone)
 	}
 	// Anonymous visitors may only set attributes marked anonymous.
 	r := e.call(http.MethodPatch, "/attributes", token, siteOrigin, map[string]any{"attributes": map[string]any{"seats": 12, "plan": "pro", "unknown": 1}})
@@ -228,6 +260,14 @@ func TestPreChatConsentAttributesAndAI(t *testing.T) {
 		ConversationUUID: ptr(uuid.MustParse(str(created.Data, "conversation_uuid"))), File: &usecase.Upload{Filename: "a.pdf", ContentType: "application/pdf", Data: []byte("x")},
 	}); !errors.Is(err, usecase.ErrFileType) {
 		t.Fatalf("pdf on image-only widget = %v", err)
+	}
+	// Pre-chat off: no form on the bootstrap.
+	settings["prechat"] = map[string]any{"enabled": false}
+	if _, err := cfgs.Publish(ctx, e.org, e.agent, e.inst.UUID, usecase.PublishInput{Settings: settings, BaseVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if b := e.call(http.MethodPost, "/bootstrap", token, siteOrigin, nil); b.Data["request_form"] != nil {
+		t.Fatalf("pre-chat off must serve no form: %v", b.Data["request_form"])
 	}
 }
 

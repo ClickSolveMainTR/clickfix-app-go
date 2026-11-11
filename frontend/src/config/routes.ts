@@ -151,6 +151,8 @@ export const routes = {
       sla: "/settings/sla",
       /** API keys and REST hooks for Zapier / Make / n8n (CF-97). */
       integrations: "/settings/integrations",
+      /** Connected system: concepts, endpoints, actions, AI playbooks (CF-197). */
+      integrationsConnect: "/settings/integrations/connect",
       /** MCP connections: connected apps and the connection guide (CF-173). */
       mcp: "/settings/mcp",
       /** Jira / Linear / GitHub connections of product requests (CF-160). */

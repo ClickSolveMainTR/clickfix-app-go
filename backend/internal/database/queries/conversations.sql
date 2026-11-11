@@ -46,7 +46,8 @@ LIMIT 1;
 -- name: GetConversationView :one
 SELECT sqlc.embed(c),
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
-       co.uuid AS company_uuid, co.name AS company_name,
+       ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
@@ -77,6 +78,8 @@ WHERE c.organization_id = sqlc.arg(organization_id) AND c.uuid = sqlc.arg(uuid) 
 -- matched for q (CF-45, message text); they join the ILIKE matches.
 SELECT sqlc.embed(c),
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
+       ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
@@ -91,6 +94,7 @@ SELECT sqlc.embed(c),
                    AND m.direction <> 'internal'), 0)::int AS unread_count
 FROM conversations c
 JOIN contacts ct ON ct.organization_id = c.organization_id AND ct.id = c.contact_id
+LEFT JOIN companies co ON co.organization_id = c.organization_id AND co.id = c.company_id AND co.deleted_at IS NULL
 LEFT JOIN channel_instances inst ON inst.organization_id = c.organization_id AND inst.id = c.channel_instance_id
 LEFT JOIN users u ON u.id = c.assignee_user_id
 LEFT JOIN teams tm ON tm.organization_id = c.organization_id AND tm.id = c.assignee_team_id
@@ -131,6 +135,12 @@ WHERE c.organization_id = sqlc.arg(organization_id)
         WHERE m3.organization_id = c.organization_id AND m3.conversation_id = c.id
           AND m3.id > COALESCE(r.last_read_message_id, 0) AND m3.direction = 'in'))
   AND (sqlc.narg(sla_breached)::boolean IS NULL OR (c.sla_breached_at IS NOT NULL) = sqlc.narg(sla_breached))
+  -- CF-195: who the contact is (verified with user_hash, anonymous, or
+  -- named by itself without proof).
+  AND (sqlc.narg(identity_state)::text IS NULL
+       OR (sqlc.narg(identity_state)::text = 'verified' AND ct.verified_at IS NOT NULL)
+       OR (sqlc.narg(identity_state)::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
+       OR (sqlc.narg(identity_state)::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
   AND (sqlc.narg(sla_due_before)::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
         AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= sqlc.narg(sla_due_before)::timestamptz))
@@ -140,6 +150,7 @@ WHERE c.organization_id = sqlc.arg(organization_id)
        OR ct.name ILIKE '%' || sqlc.narg(q) || '%'
        OR ct.email ILIKE '%' || sqlc.narg(q) || '%'
        OR ct.phone ILIKE '%' || sqlc.narg(q) || '%'
+       OR ct.external_id = sqlc.narg(q)
        OR c.number::text = sqlc.narg(q)
        OR c.uuid = ANY(sqlc.arg(match_uuids)::uuid[]))
 ORDER BY
@@ -198,6 +209,12 @@ WHERE c.organization_id = sqlc.arg(organization_id)
         WHERE m3.organization_id = c.organization_id AND m3.conversation_id = c.id
           AND m3.id > COALESCE(r.last_read_message_id, 0) AND m3.direction = 'in'))
   AND (sqlc.narg(sla_breached)::boolean IS NULL OR (c.sla_breached_at IS NOT NULL) = sqlc.narg(sla_breached))
+  -- CF-195: who the contact is (verified with user_hash, anonymous, or
+  -- named by itself without proof).
+  AND (sqlc.narg(identity_state)::text IS NULL
+       OR (sqlc.narg(identity_state)::text = 'verified' AND ct.verified_at IS NOT NULL)
+       OR (sqlc.narg(identity_state)::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
+       OR (sqlc.narg(identity_state)::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
   AND (sqlc.narg(sla_due_before)::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
         AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= sqlc.narg(sla_due_before)::timestamptz))
@@ -207,6 +224,7 @@ WHERE c.organization_id = sqlc.arg(organization_id)
        OR ct.name ILIKE '%' || sqlc.narg(q) || '%'
        OR ct.email ILIKE '%' || sqlc.narg(q) || '%'
        OR ct.phone ILIKE '%' || sqlc.narg(q) || '%'
+       OR ct.external_id = sqlc.narg(q)
        OR c.number::text = sqlc.narg(q)
        OR c.uuid = ANY(sqlc.arg(match_uuids)::uuid[]));
 
@@ -629,3 +647,12 @@ SELECT id, uuid, name FROM teams WHERE organization_id = $1 AND uuid = $2;
 
 -- name: GetTeamRefByID :one
 SELECT id, uuid, name FROM teams WHERE organization_id = $1 AND id = $2;
+
+-- name: GetConversationExternalRefs :one
+-- CF-195: the contact's and company's external ids for event payloads
+-- (webhooks, integrations).
+SELECT ct.uuid AS contact_uuid, ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
+       co.uuid AS company_uuid, co.external_id AS company_external_id
+FROM contacts ct
+LEFT JOIN companies co ON co.organization_id = ct.organization_id AND co.id = sqlc.narg(company_id)::bigint
+WHERE ct.organization_id = sqlc.arg(organization_id) AND ct.id = sqlc.arg(contact_id);

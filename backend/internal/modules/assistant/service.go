@@ -25,6 +25,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/guides"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/onboarding"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -59,7 +60,13 @@ const (
 	historyMessages = 20
 	maxActions      = 3
 	maxSuggestions  = 4
-	toolRounds      = 4
+	// toolRounds: model turns that may call tools in one reply; a turn may
+	// call several tools at once (#150). After that the model answers with
+	// what it has instead of failing.
+	toolRounds = ai.MaxToolRounds
+	// chatMaxTokens is the output budget of one model turn; a turn cut off
+	// at the limit is continued automatically inside the same reply.
+	chatMaxTokens = 4096
 )
 
 // Settings are the platform switches (singleton row).
@@ -95,6 +102,9 @@ type Message struct {
 	Suggestions []string         `json:"suggestions,omitempty"`
 	Actions     []ProposedAction `json:"actions,omitempty"`
 	Interrupted bool             `json:"interrupted"`
+	// ErrorCode is the stream error code of a reply that failed (empty when
+	// the user stopped it or the connection dropped).
+	ErrorCode string `json:"error_code,omitempty"`
 }
 
 // Status is GET /v1/tenant/assistant/status.
@@ -148,7 +158,15 @@ type Service struct {
 	// Instances opens the support widget's instance (identity secret).
 	Instances InstanceLoader
 	Help      HelpSearcher
-	Now       func() time.Time
+	// Setup is the set-up checklist (CF-198): the assistant's "what did
+	// you leave out" follows its order.
+	Setup SetupChecklist
+	Now   func() time.Time
+}
+
+// SetupChecklist evaluates the organization's set-up steps in order.
+type SetupChecklist interface {
+	Checklist(ctx context.Context, orgID int64) (onboarding.State, error)
 }
 
 // GetSettings reads the platform settings.
@@ -246,7 +264,7 @@ func toThread(t db.AssistantThread) Thread {
 }
 
 func toMessage(m db.AssistantMessage) Message {
-	out := Message{UUID: m.Uuid, Role: m.Role, Content: m.Content, CreatedAt: m.CreatedAt.Time, Interrupted: m.Interrupted}
+	out := Message{UUID: m.Uuid, Role: m.Role, Content: m.Content, CreatedAt: m.CreatedAt.Time, Interrupted: m.Interrupted, ErrorCode: m.ErrorCode}
 	_ = json.Unmarshal(m.Suggestions, &out.Suggestions)
 	_ = json.Unmarshal(m.Actions, &out.Actions)
 	return out
@@ -462,7 +480,7 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 		tools = append(tools, readDocumentTool())
 	}
 	req := ai.Request{Instructions: s.instructions(c, settings, pc, page, setup, locale, caps, pageState) + documentsPrompt(docs),
-		Turns: turns, Tools: tools, Schema: replySchema(), MaxTokens: 2048}
+		Turns: turns, Tools: tools, Schema: replySchema(), MaxTokens: chatMaxTokens}
 	// Cache only stable instructions; changing page/setup data is a separate data turn.
 	if stable, dynamic, ok := strings.Cut(req.Instructions, "Current context:\n"); ok {
 		req.Instructions = stable + "Use the context data to choose the reply language and explain the current page.\n"
@@ -472,27 +490,11 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 	runner := run.run
 	if emit != nil {
 		req.Schema = nil
-		req.Instructions += "\nWrite your answer as plain markdown, never JSON. Stream your answer immediately when no lookup is needed. AFTER your complete answer, call suggest_replies to finish the turn.\n"
+		req.Instructions += "\nWrite your answer as plain markdown, never JSON. Stream your answer immediately when no lookup is needed. " +
+			"After tool results (search_docs, read_document, get_setup_state, lists) FIRST write your answer for the user, THEN call suggest_replies; " +
+			"suggest_replies is refused while no answer text has been written, and it finishes the turn.\n"
 		req.Tools = append(req.Tools, suggestionTool())
-		runner = func(ctx context.Context, call ai.ToolCall) (ai.ToolResult, error) {
-			if err := stream.flush(); err != nil {
-				return ai.ToolResult{}, err
-			}
-			if err := emit("status", map[string]string{"tool": call.Name, "text": toolStatus(call.Name, locale)}); err != nil {
-				return ai.ToolResult{}, err
-			}
-			if call.Name == "suggest_replies" {
-				var in struct {
-					Replies []string `json:"replies"`
-				}
-				if err := json.Unmarshal(call.Input, &in); err != nil {
-					return toolError("invalid suggestions"), nil
-				}
-				run.suggestions = in.Replies
-				return toolJSON(map[string]string{"status": "saved"}), nil
-			}
-			return run.run(ctx, call)
-		}
+		runner = streamRunner(stream, run, emit, locale)
 	}
 	var delta ai.Delta
 	if emit != nil {
@@ -508,6 +510,9 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 		Suggestions []string `json:"suggestions"`
 	}
 	if emit != nil {
+		if aiErr == nil && res.Truncated && strings.TrimSpace(stream.raw) != "" {
+			aiErr = stream.add("\n\n" + truncatedNote(locale))
+		}
 		reply.Reply, reply.Suggestions = stream.raw, run.suggestions
 		if aiErr == nil {
 			aiErr = stream.flush()
@@ -515,6 +520,9 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 	}
 	if emit == nil && aiErr == nil && json.Unmarshal([]byte(res.Text), &reply) != nil {
 		aiErr = ai.ErrInvalidOutput
+	}
+	if emit == nil && aiErr == nil && res.Truncated && strings.TrimSpace(reply.Reply) != "" {
+		reply.Reply += "\n\n" + truncatedNote(locale)
 	}
 	actions := run.actions
 	interrupted := ctx.Err() != nil || (emit != nil && aiErr != nil)
@@ -567,10 +575,16 @@ func (s *Service) send(ctx context.Context, c Caller, threadID uuid.UUID, conten
 		return SendResult{}, err
 	}
 	if interrupted {
-		if err := s.Q.AssistantMessageInterrupted(saveCtx, db.AssistantMessageInterruptedParams{OrganizationID: t.OrganizationID, Uuid: assistantMsg.UUID}); err != nil {
+		// A failed turn keeps its code so the history can tell it from a
+		// reply the user stopped (#150).
+		code := ""
+		if aiErr != nil && ctx.Err() == nil {
+			code = streamErrorCode(aiErr)
+		}
+		if err := s.Q.AssistantMessageInterrupted(saveCtx, db.AssistantMessageInterruptedParams{OrganizationID: t.OrganizationID, Uuid: assistantMsg.UUID, ErrorCode: code}); err != nil {
 			return SendResult{}, err
 		}
-		assistantMsg.Interrupted = true
+		assistantMsg.Interrupted, assistantMsg.ErrorCode = true, code
 	}
 	out := SendResult{Message: userMsg, Reply: assistantMsg, Usage: TokenUsage{InputTokens: res.InputTokens, OutputTokens: res.OutputTokens, Provider: res.Provider, Model: res.Model}}
 	if aiErr != nil && emit != nil {
@@ -604,6 +618,14 @@ func cardOnlyText(locale string, n int) string {
 		return "Önerim aşağıdaki kartta; kontrol edip onaylayabilir ya da vazgeçebilirsiniz."
 	}
 	return "Önerilerim aşağıdaki kartlarda; her birini kontrol edip onaylayabilir ya da vazgeçebilirsiniz."
+}
+
+// truncatedNote closes an answer that hit the output limit twice over (#150).
+func truncatedNote(locale string) string {
+	if locale == "en" {
+		return "_The answer was shortened because it reached the length limit; ask me to continue._"
+	}
+	return "_Yanıt uzunluk sınırına ulaştığı için kısaltıldı; devamını isteyebilirsiniz._"
 }
 
 func fallbackText(locale string) string {
@@ -698,22 +720,25 @@ func (s *Service) setupState(ctx context.Context, org int64) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
-	missing := []string{}
-	add := func(cond bool, step string) {
-		if cond {
-			missing = append(missing, step)
+	// The missing steps follow the set-up order (CF-198): customer,
+	// system, AI, knowledge base, automation and SLA. A skipped step is a
+	// warning, listed separately.
+	missing, skipped, next := []string{}, []string{}, ""
+	if s.Setup != nil {
+		cl, err := s.Setup.Checklist(ctx, org)
+		if err != nil {
+			return nil, err
+		}
+		missing = onboarding.MissingKeys(cl.Steps)
+		next = onboarding.Next(cl.Steps)
+		for _, st := range cl.Steps {
+			if st.Skipped {
+				skipped = append(skipped, st.Key)
+			}
 		}
 	}
-	add(r.Channels == 0, "connect_channel")
-	add(r.EmailChannels == 0, "email_channel")
-	add(r.Members <= 1 && r.PendingInvitations == 0, "invite_team")
-	add(r.BusinessHours == 0, "business_hours")
-	add(r.SlaPolicies == 0, "sla_policy")
-	add(!r.AiEnabled, "enable_ai")
-	add(r.Widgets == 0, "web_widget")
-	add(r.PublicArticles == 0, "help_center")
-	add(r.MobileDevices == 0, "mobile_app")
 	return map[string]any{
+		"setup_order": onboarding.StepOrder, "next_step": next, "skipped_steps": skipped,
 		"channels": r.Channels, "email_channels": r.EmailChannels, "web_widgets": r.Widgets, "members": r.Members,
 		"pending_invitations": r.PendingInvitations, "teams": r.Teams, "business_hours": r.BusinessHours,
 		"sla_policies": r.SlaPolicies, "ai_enabled": r.AiEnabled, "ai_agents": r.AiAgents,

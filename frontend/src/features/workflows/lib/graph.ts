@@ -47,6 +47,7 @@ export const ACTIONS: ActionType[] = [
   "add_note",
   "notify",
   "call_webhook",
+  "run_system_action",
   "run_ai_procedure",
   "create_engineering_issue",
   "route",
@@ -80,6 +81,11 @@ export const CONDITION_FIELDS = [
   "sla_breached",
   "clock.hour",
   "clock.weekday",
+  // Screen context of the latest widget message (CF-197).
+  "screen.page_url",
+  "screen.page_path",
+  "screen.last_event",
+  "screen.event_names",
 ] as const;
 
 export const NUMERIC_FIELDS = new Set<string>([
@@ -284,9 +290,7 @@ export function validateCondition(
   const field = c.field ?? "";
   const known =
     (CONDITION_FIELDS as readonly string[]).includes(field) ||
-    (field.startsWith("custom_fields.") &&
-      field.length <= 180 &&
-      field !== "custom_fields.");
+    isCustomFieldPath(field);
   if (!known)
     return { key: "workflows.issues.condition_field", params: { field } };
   if (!c.operator || !OPERATORS.includes(c.operator))
@@ -317,6 +321,10 @@ export function validateAction(a: WorkflowAction): Issue | null {
       return (PRIORITIES as readonly string[]).includes(a.value ?? "")
         ? null
         : { key: "workflows.issues.action_priority" };
+    case "run_system_action":
+      return /^[a-z][a-z0-9_]{1,49}$/.test(a.value ?? "")
+        ? null
+        : { key: "workflows.issues.action_system" };
     case "add_note":
     case "send_canned_reply":
       return content && [...content].length <= LIMITS.maxContent
@@ -662,4 +670,23 @@ export function splitDelay(seconds: number): {
 /** i18n key segment for dotted backend names (`conversation.created`). */
 export function slug(name: string) {
   return name.replace(/\./g, "_");
+}
+
+/**
+ * Custom field paths a condition may test (CF-196): the conversation's own
+ * fields and the contact's and company's. List fields compare by option id.
+ */
+export const CUSTOM_FIELD_PREFIXES = [
+  "custom_fields.",
+  "contact.custom_fields.",
+  "company.custom_fields.",
+] as const;
+
+export function isCustomFieldPath(field: string): boolean {
+  if (field.length > 180) return false;
+  return CUSTOM_FIELD_PREFIXES.some((p) => {
+    if (!field.startsWith(p)) return false;
+    const key = field.slice(p.length);
+    return key !== "" && !key.includes(".");
+  });
 }

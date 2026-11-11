@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
+  Circle,
   Loader2,
   PartyPopper,
   RefreshCw,
@@ -26,111 +28,140 @@ import type {
   OnboardingState,
   OnboardingStepKey,
 } from "../services/onboarding.service";
-import { ChannelStep } from "./channel-step";
 import { CreateOrganizationForm } from "./create-organization-form";
 import { ProgressRing } from "./progress-ring";
 import { SmartSetupBanner } from "./smart-setup/smart-setup-banner";
 
+/** Links a step's panel offers, in the order the work is done. */
+const STEP_LINKS: Record<OnboardingStepKey, { key: string; href: string }[]> = {
+  customer: [
+    { key: "widget", href: "/widget" },
+    { key: "contacts", href: "/contacts" },
+    { key: "companies", href: "/companies" },
+    { key: "organization", href: routes.cms.settings.organization },
+  ],
+  system: [{ key: "system", href: routes.cms.settings.integrationsConnect }],
+  ai: [{ key: "ai", href: `${routes.cms.settings.ai}?tab=procedures` }],
+  knowledge: [{ key: "knowledge", href: routes.cms.settings.knowledge.root }],
+  automation: [
+    { key: "sla", href: routes.cms.settings.sla },
+    { key: "rules", href: routes.cms.rules.root },
+  ],
+};
+
+/**
+ * One step: its "done" conditions (each ticks itself from the product),
+ * where to do the work, and a "skip" that leaves the step as a warning.
+ */
 function StepPanel({
   stepKey,
   state,
   slug,
-  organizationName,
 }: {
   stepKey: OnboardingStepKey;
   state: OnboardingState;
   slug: string;
-  organizationName: string;
 }) {
   const { t } = useLocale();
-  const { completeStep, refresh } = useOnboardingActions(slug);
+  const { skipStep, refresh } = useOnboardingActions(slug);
   const step = state.steps.find((s) => s.key === stepKey);
-  const done = Boolean(step?.done);
+  if (!step) return null;
 
-  const confirm = (key: "team" | "widget", labelKey: string) =>
-    done ? (
-      <p className="bg-signal-soft text-signal-text flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
-        <Check className="size-4" aria-hidden />
-        {t("onboarding.wizard.step_done")}
-      </p>
-    ) : (
-      <Button
-        variant="outline"
-        className="w-fit"
-        disabled={completeStep.isPending}
-        onClick={() => completeStep.mutate(key)}
+  return (
+    <div className="flex flex-col gap-5">
+      <ul
+        className="flex flex-col gap-2"
+        aria-label={t("onboarding.wizard.conditions_label")}
       >
-        {completeStep.isPending ? <Loader2 className="animate-spin" /> : null}
-        {t(labelKey)}
-      </Button>
-    );
+        {step.conditions.map((c) => (
+          <li
+            key={c.key}
+            className={cn(
+              "flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm",
+              c.done
+                ? "bg-muted/60 text-muted-foreground border-transparent"
+                : "bg-background/60",
+            )}
+          >
+            <span
+              className={cn(
+                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
+                c.done
+                  ? "bg-signal text-signal-foreground"
+                  : "bg-muted text-foreground/70",
+              )}
+              aria-hidden
+            >
+              {c.done ? (
+                <Check className="size-3" />
+              ) : (
+                <Circle className="size-2.5" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span
+                className={cn("block font-medium", c.done && "line-through")}
+              >
+                {t(`onboarding.conditions.${c.key}`)}
+              </span>
+              {!c.done ? (
+                <span className="text-muted-foreground block text-xs">
+                  {t(`onboarding.conditions.${c.key}_hint`)}
+                </span>
+              ) : null}
+            </span>
+            <span className="sr-only">
+              {c.done
+                ? t("onboarding.card.step_done")
+                : t("onboarding.card.step_todo")}
+            </span>
+          </li>
+        ))}
+      </ul>
 
-  switch (stepKey) {
-    case "organization":
-      return (
+      {step.done ? (
         <p className="bg-signal-soft text-signal-text flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
           <Check className="size-4" aria-hidden />
-          {t("onboarding.wizard.organization_ready", {
-            name: organizationName,
-          })}
+          {t("onboarding.wizard.step_done")}
         </p>
-      );
-    case "channel":
-      return <ChannelStep slug={slug} done={done} />;
-    case "team":
-      return (
-        <div className="flex flex-col gap-4">
-          <ul className="text-muted-foreground list-inside list-disc space-y-1 text-sm">
-            <li>{t("onboarding.wizard.team_point_roles")}</li>
-            <li>{t("onboarding.wizard.team_point_invite")}</li>
-            <li>{t("onboarding.wizard.team_point_auto")}</li>
-          </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild className="w-fit">
-              <Link href={`${routes.cms.settings.members}?tab=invitations`}>
-                {t("onboarding.wizard.team_invite")}
-              </Link>
-            </Button>
-            {confirm("team", "onboarding.wizard.team_solo")}
-          </div>
-        </div>
-      );
-    case "widget":
-      return (
-        <div className="flex flex-col gap-4">
-          <ol className="text-muted-foreground list-inside list-decimal space-y-1 text-sm">
-            <li>{t("onboarding.wizard.widget_point_channel")}</li>
-            <li>{t("onboarding.wizard.widget_point_snippet")}</li>
-            <li>{t("onboarding.wizard.widget_point_test")}</li>
-          </ol>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild className="w-fit">
-              <Link href="/widget">{t("onboarding.wizard.widget_open")}</Link>
-            </Button>
-            {confirm("widget", "onboarding.wizard.widget_confirm")}
-          </div>
-        </div>
-      );
-    case "first_conversation":
-      return (
-        <div className="flex flex-col gap-4">
-          <p className="text-muted-foreground text-sm">
-            {t("onboarding.wizard.first_conversation_hint")}
-          </p>
-          {done ? (
-            <p className="bg-signal-soft text-signal-text flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
-              <Check className="size-4" aria-hidden />
-              {t("onboarding.wizard.first_conversation_done")}
-            </p>
-          ) : (
-            <Button variant="outline" className="w-fit" onClick={refresh}>
-              <RefreshCw />
-              {t("onboarding.wizard.check_again")}
-            </Button>
-          )}
-        </div>
-      );
-  }
+      ) : step.skipped ? (
+        <p className="bg-warning/10 text-warning flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
+          <AlertTriangle className="size-4" aria-hidden />
+          {t("onboarding.wizard.step_skipped")}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        {STEP_LINKS[stepKey].map((link, i) => (
+          <Button
+            key={link.key}
+            asChild
+            variant={i === 0 ? "default" : "outline"}
+            className="w-fit"
+          >
+            <Link href={link.href}>
+              {t(`onboarding.wizard.links.${link.key}`)}
+            </Link>
+          </Button>
+        ))}
+        <Button variant="ghost" className="w-fit" onClick={refresh}>
+          <RefreshCw />
+          {t("onboarding.wizard.check_again")}
+        </Button>
+        {!step.done && !step.skipped ? (
+          <Button
+            variant="ghost"
+            className="text-muted-foreground w-fit"
+            disabled={skipStep.isPending}
+            onClick={() => skipStep.mutate(stepKey)}
+          >
+            {skipStep.isPending ? <Loader2 className="animate-spin" /> : null}
+            {t("onboarding.wizard.skip")}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -220,9 +251,11 @@ export function SetupWizardPage() {
   const requested = params.get("adim") as OnboardingStepKey | null;
   const current =
     data.steps.find((s) => s.key === requested) ??
+    data.steps.find((s) => !s.done && !s.skipped) ??
     data.steps.find((s) => !s.done) ??
     data.steps[data.steps.length - 1];
-  const allDone = data.completed === data.total;
+  // Skipped steps count towards finishing but stay as warnings.
+  const allDone = data.completed + data.skipped === data.total;
   const select = (key: OnboardingStepKey) =>
     router.replace(`${routes.cms.onboarding}?adim=${key}`, { scroll: false });
 
@@ -268,13 +301,17 @@ export function SetupWizardPage() {
                         "font-accent flex size-7 shrink-0 items-center justify-center rounded-full text-xs",
                         step.done
                           ? "bg-signal text-signal-foreground"
-                          : isCurrent
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground",
+                          : step.skipped
+                            ? "bg-warning/10 text-warning"
+                            : isCurrent
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground",
                       )}
                     >
                       {step.done ? (
                         <Check className="size-3.5" aria-hidden />
+                      ) : step.skipped ? (
+                        <AlertTriangle className="size-3.5" aria-hidden />
                       ) : (
                         i + 1
                       )}
@@ -331,12 +368,7 @@ export function SetupWizardPage() {
               {t(`onboarding.steps.${current.key}_body`)}
             </p>
           </div>
-          <StepPanel
-            stepKey={current.key}
-            state={data}
-            slug={slug}
-            organizationName={organization.name}
-          />
+          <StepPanel stepKey={current.key} state={data} slug={slug} />
         </motion.section>
       </div>
     </div>

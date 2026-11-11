@@ -81,7 +81,12 @@ const (
 	errorRateWarn   = 0.2
 )
 
-type outboundStats struct{ sent, failed int64 }
+type outboundStats struct {
+	sent, failed int64
+	// identityRejection is the code of the widget's last rejected identify
+	// call of the week (CF-176 record), "" without one.
+	identityRejection string
+}
 
 func (s *Service) stats(ctx context.Context, orgID int64) (map[int64]outboundStats, error) {
 	rows, err := s.q.ChannelInstanceOutboundStats(ctx, db.ChannelInstanceOutboundStatsParams{
@@ -101,7 +106,40 @@ func (s *Service) stats(ctx context.Context, orgID int64) (map[int64]outboundSta
 		}
 		out[r.InstanceID] = st
 	}
+	// CF-195: rejected identify calls warn on the widget's health.
+	rejections, err := s.q.ListWidgetIdentityRejections(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rejections {
+		st := out[r.ChannelInstanceID]
+		st.identityRejection = r.Code
+		out[r.ChannelInstanceID] = st
+	}
 	return out, nil
+}
+
+// Health details of a widget whose signed-in users cannot be verified
+// (CF-195). The panel translates them.
+const (
+	DetailIdentitySecretMissing = "identity_secret_missing"
+	DetailIdentityRejected      = "identity_rejected"
+)
+
+// widgetIdentityHealth turns a working widget's health into a warning
+// when no identity secret is set (every visitor stays anonymous, identify
+// is refused) or identify calls were rejected recently (a wrong secret or
+// user_hash on the customer's site). Errors and pauses keep their state.
+func widgetIdentityHealth(h *Health, hasSecret bool, rejection string) {
+	if h.State == "error" || h.State == "paused" || h.State == "warning" {
+		return
+	}
+	switch {
+	case !hasSecret:
+		h.State, h.Detail = "warning", DetailIdentitySecretMissing
+	case rejection != "":
+		h.State, h.Detail = "warning", DetailIdentityRejected+":"+rejection
+	}
 }
 
 func (s *Service) health(row db.ChannelInstance, st outboundStats) Health {

@@ -27,6 +27,55 @@ func (q *Queries) ClearWidgetIdentityRejection(ctx context.Context, arg ClearWid
 	return err
 }
 
+const createWidgetAppKey = `-- name: CreateWidgetAppKey :one
+
+INSERT INTO widget_app_keys (organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at
+`
+
+type CreateWidgetAppKeyParams struct {
+	OrganizationID    int64       `json:"organization_id"`
+	ChannelInstanceID int64       `json:"channel_instance_id"`
+	Platform          string      `json:"platform"`
+	PackageName       string      `json:"package_name"`
+	Label             string      `json:"label"`
+	KeyPrefix         string      `json:"key_prefix"`
+	KeyHash           string      `json:"key_hash"`
+	CreatedBy         pgtype.Int8 `json:"created_by"`
+}
+
+// CF-201: mobile app keys (hash only; the key is shown once on creation).
+func (q *Queries) CreateWidgetAppKey(ctx context.Context, arg CreateWidgetAppKeyParams) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, createWidgetAppKey,
+		arg.OrganizationID,
+		arg.ChannelInstanceID,
+		arg.Platform,
+		arg.PackageName,
+		arg.Label,
+		arg.KeyPrefix,
+		arg.KeyHash,
+		arg.CreatedBy,
+	)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const deleteWidgetDraft = `-- name: DeleteWidgetDraft :exec
 DELETE FROM widget_drafts
 WHERE organization_id = $1 AND channel_instance_id = $2
@@ -43,7 +92,7 @@ func (q *Queries) DeleteWidgetDraft(ctx context.Context, arg DeleteWidgetDraftPa
 }
 
 const getCompanyByExternalID = `-- name: GetCompanyByExternalID :one
-SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id FROM companies
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
 WHERE organization_id = $1 AND external_id = $2::text AND deleted_at IS NULL
 ORDER BY id ASC
 LIMIT 1
@@ -72,6 +121,7 @@ func (q *Queries) GetCompanyByExternalID(ctx context.Context, arg GetCompanyByEx
 		&i.Tier,
 		&i.AccountOwnerID,
 		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -98,6 +148,69 @@ func (q *Queries) GetConversationRating(ctx context.Context, arg GetConversation
 		&i.Score,
 		&i.Comment,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getWidgetAppKeyByHash = `-- name: GetWidgetAppKeyByHash :one
+SELECT id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at FROM widget_app_keys WHERE key_hash = $1
+`
+
+// The visitor API looks the key up by its hash; the caller checks the
+// instance, the package name and revoked_at (a revoked key must fail the
+// same way as an unknown one).
+func (q *Queries) GetWidgetAppKeyByHash(ctx context.Context, keyHash string) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, getWidgetAppKeyByHash, keyHash)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getWidgetCompanyByID = `-- name: GetWidgetCompanyByID :one
+
+SELECT id, uuid, organization_id, name, domain, external_id, notes, custom_fields, created_at, updated_at, deleted_at, tier, account_owner_id, sla_policy_id, verified_at FROM companies
+WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+`
+
+type GetWidgetCompanyByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+// CF-206: a signed company id (user_hash covers user_id and company.id).
+func (q *Queries) GetWidgetCompanyByID(ctx context.Context, arg GetWidgetCompanyByIDParams) (Company, error) {
+	row := q.db.QueryRow(ctx, getWidgetCompanyByID, arg.OrganizationID, arg.ID)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Domain,
+		&i.ExternalID,
+		&i.Notes,
+		&i.CustomFields,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Tier,
+		&i.AccountOwnerID,
+		&i.SlaPolicyID,
+		&i.VerifiedAt,
 	)
 	return i, err
 }
@@ -459,6 +572,52 @@ func (q *Queries) ListUnreadOutboundExternalIDs(ctx context.Context, arg ListUnr
 	return items, nil
 }
 
+const listWidgetAppKeys = `-- name: ListWidgetAppKeys :many
+SELECT id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at FROM widget_app_keys
+WHERE organization_id = $1 AND channel_instance_id = $2
+ORDER BY revoked_at IS NOT NULL, created_at DESC
+LIMIT 100
+`
+
+type ListWidgetAppKeysParams struct {
+	OrganizationID    int64 `json:"organization_id"`
+	ChannelInstanceID int64 `json:"channel_instance_id"`
+}
+
+func (q *Queries) ListWidgetAppKeys(ctx context.Context, arg ListWidgetAppKeysParams) ([]WidgetAppKey, error) {
+	rows, err := q.db.Query(ctx, listWidgetAppKeys, arg.OrganizationID, arg.ChannelInstanceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WidgetAppKey{}
+	for rows.Next() {
+		var i WidgetAppKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.ChannelInstanceID,
+			&i.Platform,
+			&i.PackageName,
+			&i.Label,
+			&i.KeyPrefix,
+			&i.KeyHash,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWidgetConversations = `-- name: ListWidgetConversations :many
 
 SELECT c.uuid, c.number, c.status, c.subject, c.last_message_at, c.last_message_preview,
@@ -761,6 +920,25 @@ func (q *Queries) ListWidgetVersions(ctx context.Context, arg ListWidgetVersions
 	return items, nil
 }
 
+const markCompanyVerified = `-- name: MarkCompanyVerified :exec
+UPDATE companies SET verified_at = $1, updated_at = NOW()
+WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
+  AND (verified_at IS NULL OR verified_at < $1::timestamptz - interval '1 hour')
+`
+
+type MarkCompanyVerifiedParams struct {
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// Rewritten at most once an hour: every signed identify would otherwise
+// write the company row.
+func (q *Queries) MarkCompanyVerified(ctx context.Context, arg MarkCompanyVerifiedParams) error {
+	_, err := q.db.Exec(ctx, markCompanyVerified, arg.VerifiedAt, arg.OrganizationID, arg.ID)
+	return err
+}
+
 const mergeWidgetContactCustomFields = `-- name: MergeWidgetContactCustomFields :exec
 UPDATE contacts SET custom_fields = custom_fields || $1::jsonb, updated_at = now()
 WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
@@ -775,6 +953,86 @@ type MergeWidgetContactCustomFieldsParams struct {
 // Mapped visitor attributes (already validated against the definitions).
 func (q *Queries) MergeWidgetContactCustomFields(ctx context.Context, arg MergeWidgetContactCustomFieldsParams) error {
 	_, err := q.db.Exec(ctx, mergeWidgetContactCustomFields, arg.Patch, arg.OrganizationID, arg.ID)
+	return err
+}
+
+const revokeWidgetAppKey = `-- name: RevokeWidgetAppKey :one
+UPDATE widget_app_keys SET revoked_at = now()
+WHERE organization_id = $1 AND channel_instance_id = $2
+  AND uuid = $3 AND revoked_at IS NULL
+RETURNING id, uuid, organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by, created_at, last_used_at, revoked_at
+`
+
+type RevokeWidgetAppKeyParams struct {
+	OrganizationID    int64     `json:"organization_id"`
+	ChannelInstanceID int64     `json:"channel_instance_id"`
+	Uuid              uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) RevokeWidgetAppKey(ctx context.Context, arg RevokeWidgetAppKeyParams) (WidgetAppKey, error) {
+	row := q.db.QueryRow(ctx, revokeWidgetAppKey, arg.OrganizationID, arg.ChannelInstanceID, arg.Uuid)
+	var i WidgetAppKey
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.ChannelInstanceID,
+		&i.Platform,
+		&i.PackageName,
+		&i.Label,
+		&i.KeyPrefix,
+		&i.KeyHash,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const setCompanyExternalIDIfEmpty = `-- name: SetCompanyExternalIDIfEmpty :exec
+UPDATE companies SET external_id = $1::text, updated_at = NOW()
+WHERE organization_id = $2 AND id = $3 AND external_id IS NULL AND deleted_at IS NULL
+`
+
+type SetCompanyExternalIDIfEmptyParams struct {
+	ExternalID     string `json:"external_id"`
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+}
+
+// The company matched by domain takes the proved external id when it has
+// none (the id was looked up first, so no other live company holds it).
+func (q *Queries) SetCompanyExternalIDIfEmpty(ctx context.Context, arg SetCompanyExternalIDIfEmptyParams) error {
+	_, err := q.db.Exec(ctx, setCompanyExternalIDIfEmpty, arg.ExternalID, arg.OrganizationID, arg.ID)
+	return err
+}
+
+const setContactCompany = `-- name: SetContactCompany :exec
+UPDATE contacts SET company_id = $1, company_verified_at = $2, updated_at = NOW()
+WHERE organization_id = $3 AND id = $4 AND deleted_at IS NULL
+  AND (company_id IS DISTINCT FROM $1
+       OR company_verified_at IS NULL OR company_verified_at < $2::timestamptz - interval '1 hour')
+`
+
+type SetContactCompanyParams struct {
+	CompanyID      pgtype.Int8        `json:"company_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+}
+
+// A proved company id moves the contact to that company even when it had
+// another one (the unsigned path only fills an empty company) and records
+// the proof on the contact (company_verified_at, rewritten at most once an
+// hour when nothing else changes).
+func (q *Queries) SetContactCompany(ctx context.Context, arg SetContactCompanyParams) error {
+	_, err := q.db.Exec(ctx, setContactCompany,
+		arg.CompanyID,
+		arg.VerifiedAt,
+		arg.OrganizationID,
+		arg.ID,
+	)
 	return err
 }
 
@@ -835,6 +1093,17 @@ func (q *Queries) SetWidgetInstanceSettings(ctx context.Context, arg SetWidgetIn
 		&i.BrandID,
 	)
 	return i, err
+}
+
+const touchWidgetAppKey = `-- name: TouchWidgetAppKey :exec
+UPDATE widget_app_keys SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes')
+`
+
+// last_used_at is rewritten at most every five minutes (busy apps).
+func (q *Queries) TouchWidgetAppKey(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, touchWidgetAppKey, id)
+	return err
 }
 
 const touchWidgetIdentityRejection = `-- name: TouchWidgetIdentityRejection :exec

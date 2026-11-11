@@ -428,6 +428,7 @@ type AssistantMessage struct {
 	Actions        []byte             `json:"actions"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Interrupted    bool               `json:"interrupted"`
+	ErrorCode      string             `json:"error_code"`
 }
 
 type AssistantSetting struct {
@@ -502,6 +503,13 @@ type AuthSetting struct {
 	CreatedAt               pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
 	SignupMode              string             `json:"signup_mode"`
+}
+
+type AutoReply struct {
+	OrganizationID int64              `json:"organization_id"`
+	Settings       []byte             `json:"settings"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AutomationExecution struct {
@@ -1287,7 +1295,6 @@ type Brand struct {
 	HelpPath         string             `json:"help_path"`
 	WidgetDefaults   []byte             `json:"widget_defaults"`
 	Signature        string             `json:"signature"`
-	BusinessHours    []byte             `json:"business_hours"`
 	SlaPolicyID      pgtype.UUID        `json:"sla_policy_id"`
 	AiPersona        string             `json:"ai_persona"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
@@ -1532,6 +1539,7 @@ type Company struct {
 	Tier           string             `json:"tier"`
 	AccountOwnerID pgtype.Int8        `json:"account_owner_id"`
 	SlaPolicyID    pgtype.Int8        `json:"sla_policy_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
 }
 
 type CompanyEvent struct {
@@ -1625,25 +1633,28 @@ type CompanyRevenueHistory struct {
 }
 
 type Contact struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	CompanyID      pgtype.Int8        `json:"company_id"`
-	Name           string             `json:"name"`
-	Email          pgtype.Text        `json:"email"`
-	Phone          pgtype.Text        `json:"phone"`
-	Locale         pgtype.Text        `json:"locale"`
-	Timezone       pgtype.Text        `json:"timezone"`
-	Notes          string             `json:"notes"`
-	CustomFields   []byte             `json:"custom_fields"`
-	Blocked        bool               `json:"blocked"`
-	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
-	MergedIntoID   pgtype.Int8        `json:"merged_into_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	JobTitle       string             `json:"job_title"`
-	ErasedAt       pgtype.Timestamptz `json:"erased_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	CompanyID         pgtype.Int8        `json:"company_id"`
+	Name              string             `json:"name"`
+	Email             pgtype.Text        `json:"email"`
+	Phone             pgtype.Text        `json:"phone"`
+	Locale            pgtype.Text        `json:"locale"`
+	Timezone          pgtype.Text        `json:"timezone"`
+	Notes             string             `json:"notes"`
+	CustomFields      []byte             `json:"custom_fields"`
+	Blocked           bool               `json:"blocked"`
+	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
+	MergedIntoID      pgtype.Int8        `json:"merged_into_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+	JobTitle          string             `json:"job_title"`
+	ErasedAt          pgtype.Timestamptz `json:"erased_at"`
+	ExternalID        pgtype.Text        `json:"external_id"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	CompanyVerifiedAt pgtype.Timestamptz `json:"company_verified_at"`
 }
 
 type ContactConsent struct {
@@ -1864,6 +1875,37 @@ type CustomFieldDefinition struct {
 	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	Visibility     []byte             `json:"visibility"`
+	Sensitive      bool               `json:"sensitive"`
+	WidgetAccess   string             `json:"widget_access"`
+}
+
+type CustomFieldUnknownKey struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	EntityType        string             `json:"entity_type"`
+	Key               string             `json:"key"`
+	Source            string             `json:"source"`
+	ChannelInstanceID pgtype.Int8        `json:"channel_instance_id"`
+	ValueKind         string             `json:"value_kind"`
+	Hits              int64              `json:"hits"`
+	LastContactID     pgtype.Int8        `json:"last_contact_id"`
+	FirstSeenAt       pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
+	DismissedAt       pgtype.Timestamptz `json:"dismissed_at"`
+	ResolvedAt        pgtype.Timestamptz `json:"resolved_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CustomFieldUnknownValue struct {
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	Key            string             `json:"key"`
+	Value          []byte             `json:"value"`
+	Verified       bool               `json:"verified"`
+	ReceivedAt     pgtype.Timestamptz `json:"received_at"`
 }
 
 type CustomObjectRecord struct {
@@ -2386,10 +2428,88 @@ type ImportJob struct {
 	OrganizationID pgtype.Int8        `json:"organization_id"`
 }
 
+type IntegrationAction struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	Key              string             `json:"key"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	ObjectTypeID     pgtype.Int8        `json:"object_type_id"`
+	Method           string             `json:"method"`
+	PathTemplate     string             `json:"path_template"`
+	Params           []byte             `json:"params"`
+	RequiresApproval bool               `json:"requires_approval"`
+	AllowedFor       []string           `json:"allowed_for"`
+	Enabled          bool               `json:"enabled"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationCall struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	Kind           string             `json:"kind"`
+	Target         string             `json:"target"`
+	Channel        string             `json:"channel"`
+	Method         string             `json:"method"`
+	MaskedPath     string             `json:"masked_path"`
+	StatusCode     int32              `json:"status_code"`
+	Ok             bool               `json:"ok"`
+	ErrorCode      string             `json:"error_code"`
+	DurationMs     int32              `json:"duration_ms"`
+	ActorUserID    pgtype.Int8        `json:"actor_user_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type IntegrationConnection struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	BaseUrl        string             `json:"base_url"`
+	AuthType       string             `json:"auth_type"`
+	AuthHeader     string             `json:"auth_header"`
+	AuthEnc        string             `json:"auth_enc"`
+	TimeoutMs      int32              `json:"timeout_ms"`
+	UpdatedBy      pgtype.Int8        `json:"updated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type IntegrationEventCursor struct {
 	OrganizationID int64 `json:"organization_id"`
 	LastSequence   int64 `json:"last_sequence"`
 	PrunedSequence int64 `json:"pruned_sequence"`
+}
+
+type IntegrationPlaybook struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Intent         string             `json:"intent"`
+	Title          string             `json:"title"`
+	Instructions   string             `json:"instructions"`
+	ConceptKeys    []string           `json:"concept_keys"`
+	ActionKeys     []string           `json:"action_keys"`
+	ProcedureID    pgtype.Int8        `json:"procedure_id"`
+	Enabled        bool               `json:"enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationSource struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ObjectTypeID   int64              `json:"object_type_id"`
+	PathTemplate   string             `json:"path_template"`
+	IdentityKey    string             `json:"identity_key"`
+	ItemsPath      string             `json:"items_path"`
+	Fields         []byte             `json:"fields"`
+	Enabled        bool               `json:"enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type IntegrationTriggerEvent struct {
@@ -2455,6 +2575,13 @@ type KnowledgeArticle struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	BrandID             pgtype.UUID        `json:"brand_id"`
+}
+
+type KnowledgeArticleAudience struct {
+	OrganizationID int64              `json:"organization_id"`
+	ArticleID      int64              `json:"article_id"`
+	Conditions     []byte             `json:"conditions"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type KnowledgeArticleFeedback struct {
@@ -4011,6 +4138,22 @@ type WebauthnCredential struct {
 	LastUsedAt        pgtype.Timestamptz `json:"last_used_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type WidgetAppKey struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	ChannelInstanceID int64              `json:"channel_instance_id"`
+	Platform          string             `json:"platform"`
+	PackageName       string             `json:"package_name"`
+	Label             string             `json:"label"`
+	KeyPrefix         string             `json:"key_prefix"`
+	KeyHash           string             `json:"key_hash"`
+	CreatedBy         pgtype.Int8        `json:"created_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt        pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt         pgtype.Timestamptz `json:"revoked_at"`
 }
 
 type WidgetDiagnostic struct {

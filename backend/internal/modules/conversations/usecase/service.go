@@ -16,6 +16,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/access"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -111,8 +112,27 @@ type Service struct {
 	indexer      SearchIndexer
 	finder       SearchFinder
 	settings     Settings
-	log          *slog.Logger
-	now          func() time.Time
+	// hours is the organization's working-hours source (CF-198).
+	hours businesshours.Source
+	log   *slog.Logger
+	now   func() time.Time
+}
+
+// WithHours sets the working-hours source (the SLA schedule, CF-198).
+func (s *Service) WithHours(h businesshours.Source) *Service { s.hours = h; return s }
+
+// open reports whether the organization is inside its working hours now;
+// without a source or on error it is open.
+func (s *Service) open(ctx context.Context, org int64) bool {
+	if s.hours == nil {
+		return true
+	}
+	st, err := s.hours.HoursState(ctx, org, s.now())
+	if err != nil {
+		s.log.Warn("hours_state_failed", "organization_id", org, "error", err)
+		return true
+	}
+	return st.Open
 }
 
 // New builds the service.
@@ -190,6 +210,12 @@ func (s *Service) emit(ctx context.Context, tx *repository.Tx, name string, orgI
 	if trace := events.AutomationTrace(ctx); len(trace) > 0 {
 		payload["_automation_trace"] = trace
 	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	if err := addExternalRefs(ctx, tx, orgID, conv, payload); err != nil {
+		return err
+	}
 	ev := events.New(name).WithTenant(orgID).WithEntity("conversation", &conv.ID, &conv.Uuid).WithPayload(payload)
 	if actor > 0 {
 		ev = ev.WithActor(actor)
@@ -197,6 +223,37 @@ func (s *Service) emit(ctx context.Context, tx *repository.Tx, name string, orgI
 	if err := s.outbox.Enqueue(ctx, tx.Raw, ev); err != nil {
 		return fmt.Errorf("conversations: outbox %s: %w", name, err)
 	}
+	return nil
+}
+
+// addExternalRefs puts the contact's and the company's external ids on a
+// conversation event (CF-195), so webhook receivers can match their own
+// records without another call. Keys already set by the caller win.
+func addExternalRefs(ctx context.Context, tx *repository.Tx, orgID int64, conv db.Conversation, payload map[string]any) error {
+	if conv.ContactID == 0 {
+		return nil
+	}
+	r, err := tx.Q.GetConversationExternalRefs(ctx, db.GetConversationExternalRefsParams{
+		OrganizationID: orgID, ContactID: conv.ContactID, CompanyID: conv.CompanyID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("conversations: external refs: %w", err)
+	}
+	set := func(k string, v any) {
+		if _, ok := payload[k]; !ok {
+			payload[k] = v
+		}
+	}
+	set("contact_uuid", r.ContactUuid.String())
+	set("contact_external_id", textPtr(r.ContactExternalID))
+	set("contact_verified", r.ContactVerifiedAt.Valid)
+	if r.CompanyUuid.Valid {
+		set("company_uuid", uuid.UUID(r.CompanyUuid.Bytes).String())
+	}
+	set("company_external_id", textPtr(r.CompanyExternalID))
 	return nil
 }
 

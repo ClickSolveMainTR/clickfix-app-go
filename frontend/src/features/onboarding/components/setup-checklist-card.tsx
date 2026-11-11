@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,9 @@ export function SetupChecklistCard() {
   }
   if (!data?.active) return null;
 
-  const next = data.steps.find((s) => !s.done);
+  // The next step is the first that is neither done nor skipped; skipped
+  // steps stay as warnings and count towards finishing (CF-198).
+  const next = data.steps.find((s) => !s.done && !s.skipped);
   const allDone = !next;
 
   return (
@@ -79,9 +81,11 @@ export function SetupChecklistCard() {
                 "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm",
                 step.done
                   ? "bg-muted/60 text-muted-foreground border-transparent"
-                  : step.key === next?.key
-                    ? "border-signal-text/40 bg-signal-soft/50"
-                    : "bg-background/60",
+                  : step.skipped
+                    ? "border-warning/40 bg-warning/10"
+                    : step.key === next?.key
+                      ? "border-signal-text/40 bg-signal-soft/50"
+                      : "bg-background/60",
               )}
             >
               <span
@@ -94,6 +98,8 @@ export function SetupChecklistCard() {
               >
                 {step.done ? (
                   <Check className="size-3.5" aria-hidden />
+                ) : step.skipped ? (
+                  <AlertTriangle className="size-3.5" aria-hidden />
                 ) : (
                   <Icon className="size-3.5" aria-hidden />
                 )}
@@ -106,7 +112,9 @@ export function SetupChecklistCard() {
               <span className="sr-only">
                 {step.done
                   ? t("onboarding.card.step_done")
-                  : t("onboarding.card.step_todo")}
+                  : step.skipped
+                    ? t("onboarding.card.step_skipped")
+                    : t("onboarding.card.step_todo")}
               </span>
             </li>
           );

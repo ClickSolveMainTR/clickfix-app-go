@@ -18,7 +18,10 @@ import (
 	coremodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	core "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
+	sysmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/model"
+	systems "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/google/uuid"
@@ -32,6 +35,17 @@ type Engine interface {
 type BotSender interface {
 	PostAI(context.Context, int64, uuid.UUID, string, int32) (uuid.UUID, error)
 }
+
+// SystemProvider is the organization's connected system (CF-197): its
+// playbook intents go to triage, the matched playbook's concept data and
+// instructions go to the reply, and its AI-allowed actions are tools.
+type SystemProvider interface {
+	Intents(ctx context.Context, org int64) ([]sysmodel.Intent, error)
+	Context(ctx context.Context, org, conversation int64, intent string) (systems.AIContext, error)
+	Tools(ctx context.Context, org int64, only []string) ([]ai.Tool, error)
+	InvokeTool(ctx context.Context, org, conversation int64, name string, args json.RawMessage) (string, error)
+}
+
 type Service struct {
 	Sources  *SourceService
 	Feedback AIFeedback
@@ -40,6 +54,53 @@ type Service struct {
 	Sender   BotSender
 	Now      func() time.Time
 	Tools    *ToolService
+	Systems  SystemProvider
+	// Fields adds the AI-visible contact/company custom fields to the
+	// context (CF-196); nil leaves them out.
+	Fields FieldSource
+	// Hours is the organization's working-hours source (the SLA schedule,
+	// CF-198); nil means always open.
+	Hours businesshours.Source
+	// Notices tells the customer when the agent hands the conversation to a
+	// person (CF-198); nil sends nothing.
+	Notices HandoffNotifier
+}
+
+// HandoffNotifier posts the handoff notice to the customer.
+type HandoffNotifier interface {
+	NotifyHandoff(ctx context.Context, org, conversationID int64) error
+}
+
+// notifyHandoff tells the customer a person takes over when the agent was
+// the one talking to them: the customer asked for a person, or the agent
+// had answered in this conversation before. A draft-mode agent never spoke
+// to the customer, so a draft handoff stays silent.
+func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversation, cfg model.Config, requested bool) {
+	if s.Notices == nil || cfg.Mode != "autonomous" {
+		return
+	}
+	if !requested {
+		spoke, err := s.Repo.Q.ConversationHasAIReply(ctx, db.ConversationHasAIReplyParams{OrganizationID: org, ConversationID: conv.ID})
+		if err != nil || !spoke {
+			return
+		}
+	}
+	if err := s.Notices.NotifyHandoff(ctx, org, conv.ID); err != nil {
+		slog.WarnContext(ctx, "ai_handoff_notice_failed", "organization_id", org, "conversation_id", conv.ID, "error", err)
+	}
+}
+
+// open reports whether the organization is inside its working hours now.
+func (s *Service) open(ctx context.Context, org int64) bool {
+	if s.Hours == nil {
+		return true
+	}
+	st, err := s.Hours.HoursState(ctx, org, s.Now())
+	if err != nil {
+		slog.WarnContext(ctx, "ai_hours_state_failed", "organization_id", org, "error", err)
+		return true
+	}
+	return st.Open
 }
 
 func New(repo *repository.Store, engine Engine, sender BotSender) *Service {
@@ -73,7 +134,7 @@ func (s *Service) context(ctx context.Context, org int64, conv db.Conversation) 
 	}
 	// Retain the newest context within the core's 24 KB input limit.
 	parts := []string{}
-	size := 0
+	size := 0 // the fields header is capped at maxFieldsBlock on top
 	for i := len(rows) - 1; i >= 0; i-- {
 		line := fmt.Sprintf("%s: %s\n", rows[i].SenderType, rows[i].Content)
 		if len(line) > 16000 {
@@ -86,7 +147,11 @@ func (s *Service) context(ctx context.Context, org int64, conv db.Conversation) 
 		size += len(line)
 	}
 	slices.Reverse(parts)
-	return strings.Join(parts, ""), nil
+	fields, err := s.fieldsContext(ctx, org, conv)
+	if err != nil {
+		return "", err
+	}
+	return fields + strings.Join(parts, ""), nil
 }
 
 func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) error {
@@ -127,7 +192,7 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	var knowledge <-chan core.RetrievalResult
 	if prefetcher, ok := s.Engine.(interface {
 		PrefetchReply(context.Context, int64, string, string) <-chan core.RetrievalResult
-	}); ok && cfg.Mode != "off" && cfg.Mode != "summary" && !conv.AssigneeUserID.Valid && conv.Status != "closed" && conv.Status != "resolved" && cfg.Active(s.Now(), conv.ChannelType) {
+	}); ok && cfg.Mode != "off" && cfg.Mode != "summary" && !conv.AssigneeUserID.Valid && conv.Status != "closed" && conv.Status != "resolved" && cfg.Active(conv.ChannelType, s.open(ctx, org)) {
 		retrievalCtx, cancel := context.WithCancel(ctx)
 		knowledge = prefetcher.PrefetchReply(retrievalCtx, org, transcript, cfg.Locale)
 		defer func() {
@@ -168,7 +233,17 @@ func (s *Service) triage(ctx context.Context, org int64, msg db.Message, conv db
 	if e != nil {
 		return e
 	}
-	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: transcript + "\nAllowed assignment candidates (untrusted labels; UUIDs only): " + string(candidatesJSON), Locale: cfg.Locale, MaxTokens: 512}, core.AgentOptions{
+	triageInput := transcript + "\nAllowed assignment candidates (untrusted labels; UUIDs only): " + string(candidatesJSON)
+	if s.Systems != nil {
+		// Playbook intents make the model classify a free sentence onto the
+		// organization's own intents (CF-197); a failure only drops the hint.
+		if intents, err := s.Systems.Intents(ctx, org); err != nil {
+			slog.WarnContext(ctx, "ai_system_intents_unavailable", "error", err)
+		} else {
+			triageInput += systems.TriageHint(intents)
+		}
+	}
+	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: triageInput, Locale: cfg.Locale, MaxTokens: 512}, core.AgentOptions{
 		ConversationID: conv.ID, Instructions: triageInstructions, Schema: triageSchema,
 	})
 	status, reason := "completed", ""
@@ -227,6 +302,13 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		return err
 	}
 	handoff := func(reason string) error {
+		s.notifyHandoff(ctx, org, conv, cfg, false)
+		return s.finish(ctx, job, uuid.Nil, "handoff", reason, model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
+	}
+	// The customer asked for a person: say so even when the agent never
+	// spoke in this conversation.
+	requestedHuman := func(reason string) error {
+		s.notifyHandoff(ctx, org, conv, cfg, true)
 		return s.finish(ctx, job, uuid.Nil, "handoff", reason, model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 	}
 	if conv.AssigneeUserID.Valid || conv.Status == "closed" || conv.Status == "resolved" {
@@ -239,7 +321,7 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	if human {
 		return handoff("Human public reply exists in this conversation")
 	}
-	if !cfg.Active(s.Now(), conv.ChannelType) {
+	if !cfg.Active(conv.ChannelType, s.open(ctx, org)) {
 		return handoff("Outside configured channels or business hours")
 	}
 	// The web widget can turn the AI agent off or let the visitor ask for a
@@ -253,11 +335,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		return handoff("AI agent is turned off for this widget")
 	}
 	if widgetFlags.HandoffRequested {
-		return handoff("Customer requested a human")
+		return requestedHuman("Customer requested a human")
 	}
 	for _, keyword := range cfg.HandoffKeywords {
 		if strings.Contains(strings.ToLower(msg.Content), strings.ToLower(keyword)) {
-			return handoff("Customer requested a human")
+			return requestedHuman("Customer requested a human")
 		}
 	}
 	// Categories are an allowlist; a missing/uncertain triage never grants autonomy.
@@ -280,9 +362,21 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 	}
 	input := transcript
+	if screen := screenOf(msg); screen != nil {
+		input += "\n" + screen.Prompt()
+	}
 	procedure, err := s.procedure(ctx, org, conv.Uuid, msg.ID, cfg.Locale)
 	if err != nil {
 		return err
+	}
+	system := s.systemContext(ctx, org, conv, msg.ID)
+	if procedure == nil && system.ProcedureIntent != "" {
+		if procedure, err = s.publishedProcedure(ctx, org, system.ProcedureIntent, cfg.Locale); err != nil {
+			return err
+		}
+	}
+	if system.Text != "" {
+		input += clipInput(system.Text, maxInputBytes-len(input)-1024)
 	}
 	if procedure != nil {
 		raw, _ := json.Marshal(procedure)
@@ -305,18 +399,25 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			}
 			offered = filtered
 		}
+		offered = append(offered, s.systemTools(ctx, org, system)...)
 		options.Tools = offered
 		options.Runner = func(ctx context.Context, call ai.ToolCall) (ai.ToolResult, error) {
+			if s.Systems != nil && strings.HasPrefix(call.Name, systems.ToolPrefix) {
+				value, err := s.Systems.InvokeTool(ctx, org, conv.ID, call.Name, call.Input)
+				return ai.ToolResult{Content: value}, err
+			}
 			value, err := s.Tools.Invoke(ctx, org, 0, conv.Uuid, Invocation{Name: call.Name, Arguments: call.Input, Key: uuid.NewSHA1(job.Uuid, []byte(call.ID))})
 			return ai.ToolResult{Content: value}, err
 		}
 	}
 	run, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: 2048}, options)
 	if runErr != nil {
+		s.notifyHandoff(ctx, org, conv, cfg, false)
 		return s.finish(ctx, job, run.UUID, "handoff", "AI unavailable, guard rejected, or credits exhausted", model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 	}
 	var answer model.Reply
 	if err = json.Unmarshal([]byte(run.Text), &answer); err != nil {
+		s.notifyHandoff(ctx, org, conv, cfg, false)
 		return s.finish(ctx, job, run.UUID, "handoff", "Invalid answer", model.Reply{}, "ai.handoff")
 	}
 	grounded := len(answer.Citations) > 0
@@ -329,6 +430,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 		grounded = grounded && found
 	}
+	// Connected system data about this customer grounds an answer that
+	// cites no public chunk (CF-197); a wrong citation still does not.
+	if system.Grounded && len(answer.Citations) == 0 {
+		grounded = true
+	}
 	status, reason := "draft", "Agent review required"
 	if answer.Handoff || answer.Confidence < cfg.Confidence || !grounded || strings.TrimSpace(answer.Text) == "" {
 		status, reason = "handoff", "Low confidence or insufficient public sources"
@@ -338,7 +444,7 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		if err != nil {
 			return err
 		}
-		if currentRevision != revision || current.Mode != "autonomous" || !current.Active(s.Now(), conv.ChannelType) {
+		if currentRevision != revision || current.Mode != "autonomous" || !current.Active(conv.ChannelType, s.open(ctx, org)) {
 			status, reason = "handoff", "Policy changed during generation"
 		} else if s.Sender == nil {
 			status, reason = "handoff", "Delivery unavailable"
@@ -352,6 +458,7 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	event := "ai.reply_suggested"
 	if status == "handoff" {
 		event = "ai.handoff"
+		s.notifyHandoff(ctx, org, conv, cfg, false)
 	}
 	return s.finish(ctx, job, run.UUID, status, reason, answer, event)
 }

@@ -8,7 +8,10 @@ import type {
   CustomFieldOption,
   CustomFieldType,
   CustomFieldUpdateRequest,
+  CustomFieldVisibility,
+  CustomFieldWidgetAccess,
 } from "../types";
+import { DEFAULT_VISIBILITY } from "../types";
 import { isEmptyValue } from "./conditions";
 import { slugifyKey, toApiValue, toInputValue } from "./values";
 
@@ -51,6 +54,12 @@ export type DefinitionDraft = {
   /** Input shape of this field (see `toInputValue`). */
   default: unknown;
   condition: ConditionDraft;
+  /** CF-196: who reads the value, masking and widget write access. */
+  visibility: CustomFieldVisibility;
+  sensitive: boolean;
+  widgetAccess: CustomFieldWidgetAccess;
+  /** Received key of the "tanımsız alan" warning this field answers. */
+  fromUnknownKey: string;
 };
 
 export const OPTION_TYPES: readonly CustomFieldType[] = [
@@ -106,6 +115,10 @@ export function emptyDraft(type: CustomFieldType = "text"): DefinitionDraft {
     config: { ...EMPTY_CONFIG },
     default: toInputValue({ type, config: {} }, undefined),
     condition: { enabled: false, field: "", operator: "equals", value: "" },
+    visibility: { ...DEFAULT_VISIBILITY },
+    sensitive: false,
+    widgetAccess: "verified",
+    fromUnknownKey: "",
   };
 }
 
@@ -188,6 +201,10 @@ export function draftFromDefinition(
           ),
         }
       : { enabled: false, field: "", operator: "equals", value: "" },
+    visibility: { ...DEFAULT_VISIBILITY, ...(def.visibility ?? {}) },
+    sensitive: Boolean(def.sensitive),
+    widgetAccess: def.widget_access ?? "verified",
+    fromUnknownKey: "",
   };
 }
 
@@ -278,6 +295,10 @@ export function createRequestFromDraft(
     config,
     default: defaultFromDraft(draft, config),
     condition: conditionFromDraft(draft.condition, others),
+    visibility: draft.visibility,
+    sensitive: draft.sensitive,
+    widget_access: draft.widgetAccess,
+    from_unknown_key: draft.fromUnknownKey || undefined,
   };
 }
 
@@ -294,6 +315,9 @@ export function updateRequestFromDraft(
     config,
     default: defaultFromDraft(draft, config),
     condition: conditionFromDraft(draft.condition, others),
+    visibility: draft.visibility,
+    sensitive: draft.sensitive,
+    widget_access: draft.widgetAccess,
   };
 }
 

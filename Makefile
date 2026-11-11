@@ -146,9 +146,18 @@ search-reindex:
 check-i18n:
 	node scripts/check-i18n.mjs
 
-.PHONY: sdks sdks-check
+.PHONY: sdks sdks-check guide-examples guide-examples-check
 sdks:
 	cd sdks && pnpm install --frozen-lockfile && pnpm generate
 
 sdks-check:
-	cd sdks && pnpm install --frozen-lockfile && pnpm check
+	cd sdks && pnpm install --frozen-lockfile && pnpm check && pnpm examples:check
+
+# Integration guide samples (sdks/examples): compiled, type-checked and run.
+# Without CLICKFIX_BASE_URL a stub API stands in; set it (plus the keys in
+# sdks/examples/README.md) to run them against a local backend.
+guide-examples:
+	cd sdks && pnpm install --frozen-lockfile && pnpm build && pnpm examples
+
+guide-examples-check:
+	cd sdks && pnpm install --frozen-lockfile && pnpm build && pnpm examples:check

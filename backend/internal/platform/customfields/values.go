@@ -128,11 +128,11 @@ func Normalize(d Definition, v any) (any, error) {
 		if !ok {
 			return nil, errors.New("must be one of the options")
 		}
-		s = strings.TrimSpace(s)
-		if !hasOption(d, s, true) {
-			return nil, fmt.Errorf("%q is not an option", s)
+		v, ok := ResolveOption(d, s)
+		if !ok {
+			return nil, fmt.Errorf("%q is not an option", strings.TrimSpace(s))
 		}
-		return s, nil
+		return v, nil
 	case TypeMultiselect:
 		return normalizeMulti(d, v)
 	case TypeURL:
@@ -284,10 +284,11 @@ func normalizeMulti(d Definition, v any) (any, error) {
 	}
 	picked := map[string]bool{}
 	for _, s := range raw {
-		if !hasOption(d, s, true) {
+		v, ok := ResolveOption(d, s)
+		if !ok {
 			return nil, fmt.Errorf("%q is not an option", s)
 		}
-		picked[s] = true
+		picked[v] = true
 	}
 	// Store in option order so equal sets compare equal.
 	out := []any{}
@@ -300,6 +301,34 @@ func normalizeMulti(d Definition, v any) (any, error) {
 		return nil, fmt.Errorf("at most %d options", d.Config.MaxSelected)
 	}
 	return out, nil
+}
+
+// ResolveOption maps input to an option id (Option.Value). The id is the
+// stable key every consumer stores (SLA, workflows, article audiences,
+// templates); labels may be renamed freely. An exact id wins, then a
+// case-insensitive id, then a case-insensitive label, so "Pro Paket" and
+// "PRO" both resolve to the option "pro" (CF-196).
+func ResolveOption(d Definition, s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+	for _, o := range d.Options {
+		if o.Value == s {
+			return o.Value, true
+		}
+	}
+	for _, o := range d.Options {
+		if strings.EqualFold(o.Value, s) {
+			return o.Value, true
+		}
+	}
+	for _, o := range d.Options {
+		if strings.EqualFold(strings.TrimSpace(o.Label), s) {
+			return o.Value, true
+		}
+	}
+	return "", false
 }
 
 func hasOption(d Definition, v string, allowArchived bool) bool {

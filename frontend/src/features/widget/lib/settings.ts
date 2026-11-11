@@ -25,11 +25,9 @@ export {
   type Locale,
   type Trigger,
   type HomeCard,
-  type PreChatField,
   type URLRule,
 } from "@widget/shared/schema";
 
-export type FieldMode = "required" | "optional" | "hidden";
 export type DayKey = SharedDayKey;
 export type Period = { start: string; end: string };
 
@@ -66,26 +64,17 @@ export const DAYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 export const DEFAULT_SETTINGS: WidgetSettings = {
   ...defaults(),
-  business_hours: {
-    enabled: false,
-    timezone: "Europe/Istanbul",
-    days: Object.fromEntries(
-      (["mon", "tue", "wed", "thu", "fri"] as DayKey[]).map((d) => [
-        d,
-        [{ start: "09:00", end: "18:00" }],
-      ]),
-    ),
-  },
   replay: DEFAULT_REPLAY,
 };
 
-/** Reads stored (or draft) settings with the API's fallbacks. */
+/**
+ * Reads stored (or draft) settings with the API's fallbacks. A
+ * `business_hours` key of widgets saved before CF-198 is dropped: working
+ * hours now come from the SLA schedule.
+ */
 export function readSettings(raw: unknown): WidgetSettings {
   const s = normalize(raw);
   const r = (raw ?? {}) as Record<string, unknown>;
-  const hours = (r.business_hours ?? null) as Record<string, unknown> | null;
-  if (!hours || !hours.days)
-    s.business_hours.days = DEFAULT_SETTINGS.business_hours.days;
   return { ...s, replay: readReplay(r.replay) };
 }
 
@@ -210,11 +199,6 @@ export function quickChecks(s: WidgetSettings): Issue[] {
     err("targeting.countries.list", "required", "required");
   if (s.require_identity === true && s.privacy.cookieless)
     warn("privacy.cookieless", "identity", "identity");
-  for (const [day, list] of Object.entries(s.business_hours.days))
-    (list ?? []).forEach((p, i) => {
-      if (!isClock(p.start) || !isClock(p.end) || p.start >= p.end)
-        err(`business_hours.days.${day}.${i}`, "out_of_range", "hours");
-    });
   return out;
 }
 
@@ -237,9 +221,9 @@ export type SectionId =
   | "ai"
   | "triggers"
   | "targeting"
-  | "hours"
   | "privacy"
   | "security"
+  | "mobile_apps"
   | "replay"
   | "install";
 
@@ -308,7 +292,7 @@ export const SECTIONS: {
     group: "content",
     paths: ["prechat", "attribute_mapping"],
     keywords:
-      "ön sohbet prechat form alan field onay consent kvkk gdpr öznitelik attribute eşleme mapping",
+      "ön sohbet prechat form talep formu request form onay consent kvkk gdpr öznitelik attribute eşleme mapping",
   },
   {
     id: "conversation",
@@ -324,7 +308,7 @@ export const SECTIONS: {
       "rate_limit",
     ],
     keywords:
-      "csat memnuniyet anket dosya ek attachment emoji yazıyor typing okundu read ses sound bildirim notification markdown çevrimdışı offline uzakta away hız rate",
+      "csat memnuniyet anket dosya ek attachment emoji yazıyor typing okundu read ses sound bildirim notification markdown çevrimdışı offline uzakta away hız rate çalışma saatleri business hours",
   },
   {
     id: "channels",
@@ -354,12 +338,6 @@ export const SECTIONS: {
       "hedefleme targeting sayfa page url cihaz device mobil ülke country gizle hide göster show",
   },
   {
-    id: "hours",
-    group: "behaviour",
-    paths: ["business_hours"],
-    keywords: "çalışma saatleri business hours saat dilimi timezone",
-  },
-  {
     id: "privacy",
     group: "security",
     paths: ["privacy"],
@@ -372,6 +350,13 @@ export const SECTIONS: {
     paths: ["allowed_domains", "require_identity"],
     keywords:
       "güvenlik security alan adı domain kimlik identity hmac hash gizli secret",
+  },
+  {
+    id: "mobile_apps",
+    group: "security",
+    paths: [],
+    keywords:
+      "mobil mobile uygulama app ios android anahtar key paket package bundle react native flutter sdk",
   },
   {
     id: "replay",
@@ -547,7 +532,7 @@ export function snippet(
       ].join("\n");
     case "react":
       return [
-        'import { useClickFix } from "@clickfix/react-widget";',
+        'import { useClickFix } from "@getclickfix/react-widget";',
         "",
         `const options = { appOrigin: "${origin}", widgetId: "${widgetId}" };`,
         "",
@@ -672,4 +657,48 @@ export function identityWarning(
   if (rejection.code === "WIDGET_IDENTITY_DISABLED")
     return hasSecret ? null : "disabled";
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Basic set-up (CF-198): three steps a new widget needs before it goes live.
+// Everything else is the advanced editor; every basic path is also an
+// advanced path (tested), so the two views never disagree.
+
+export type BasicStepId = "appearance" | "identity" | "channel";
+
+export const BASIC_STEPS: { id: BasicStepId; paths: string[] }[] = [
+  {
+    id: "appearance",
+    paths: ["color", "position", "appearance.theme", "appearance.launcher"],
+  },
+  {
+    id: "identity",
+    paths: ["locale", "texts", "appearance.logo_url", "show_team"],
+  },
+  {
+    id: "channel",
+    paths: [
+      "ai.enabled",
+      "prechat.enabled",
+      "prechat.form_uuid",
+      "allowed_domains",
+    ],
+  },
+];
+
+/** The advanced section that edits a basic path (undefined: none). */
+export function advancedSectionFor(path: string): SectionId | undefined {
+  return SECTIONS.find((s) =>
+    s.paths.some((p) => path === p || path.startsWith(`${p}.`)),
+  )?.id;
+}
+
+/** Issues of a basic step (its paths and their children). */
+export function basicStepIssues(issues: Issue[], step: BasicStepId): number {
+  const paths = BASIC_STEPS.find((s) => s.id === step)?.paths ?? [];
+  return issues.filter(
+    (i) =>
+      (i.level ?? "error") === "error" &&
+      paths.some((p) => i.path === p || i.path.startsWith(`${p}.`)),
+  ).length;
 }

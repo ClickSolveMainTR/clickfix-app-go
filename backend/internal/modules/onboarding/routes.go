@@ -27,7 +27,7 @@ func RegisterRoutes(mux *http.ServeMux, h *Handler, tokens *jwt.Manager, loader 
 		mux.Handle(pattern, middleware.Chain(fn, append([]func(http.Handler) http.Handler{authn, org}, guards...)...))
 	}
 	route("GET /v1/tenant/onboarding", h.Get, read)
-	route("POST /v1/tenant/onboarding/steps/{step}", h.CompleteStep, read, write)
+	route("POST /v1/tenant/onboarding/steps/{step}/skip", h.SkipStep, read, write)
 	route("POST /v1/tenant/onboarding/finish", h.Finish, read, write)
 }
 

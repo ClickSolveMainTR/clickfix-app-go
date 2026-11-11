@@ -12,12 +12,14 @@ package ioadapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/contacts/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/i18n"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -52,11 +54,67 @@ func orgOf(ctx context.Context) (int64, error) {
 // ---------------------------------------------------------------------------
 // Contacts
 
+// FieldSource lists custom field definitions (customfields usecase).
+type FieldSource interface {
+	Definitions(ctx context.Context, orgID int64, entity string, objectTypeID *int64) ([]customfields.Definition, error)
+}
+
+// reportFields returns the definitions an export may carry (CF-196):
+// "kim görsün: raporlar" on, not sensitive, not archived.
+func reportFields(ctx context.Context, src FieldSource, orgID int64, entity string) ([]customfields.Definition, error) {
+	if src == nil {
+		return nil, nil
+	}
+	defs, err := src.Definitions(ctx, orgID, entity, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := []customfields.Definition{}
+	for _, d := range defs {
+		if d.Allows(customfields.AudienceReports) {
+			out = append(out, d)
+		}
+	}
+	return out, nil
+}
+
+// fieldColumns are the export columns of reportable fields ("cf.<key>",
+// headed by the field label).
+func fieldColumns(defs []customfields.Definition) []ioengine.Column {
+	out := make([]ioengine.Column, 0, len(defs))
+	for _, d := range defs {
+		out = append(out, ioengine.Column{Key: "cf." + d.Key, LabelKey: d.Label, Type: ioengine.ColumnTypeString})
+	}
+	return out
+}
+
+// fieldCells fills row with the display text of the reportable fields.
+func fieldCells(row map[string]any, defs []customfields.Definition, raw any) {
+	values, ok := raw.(map[string]any)
+	if !ok && raw != nil {
+		if b, err := json.Marshal(raw); err == nil {
+			_ = json.Unmarshal(b, &values)
+		}
+	}
+	for _, fv := range customfields.Project(defs, values, customfields.AudienceReports) {
+		row["cf."+fv.Key] = fv.Display
+	}
+	for _, d := range defs {
+		if _, set := row["cf."+d.Key]; !set {
+			row["cf."+d.Key] = ""
+		}
+	}
+}
+
 // Contacts is the tenant.contacts adapter.
 type Contacts struct {
-	svc *usecase.Service
-	q   *db.Queries
+	svc    *usecase.Service
+	q      *db.Queries
+	fields FieldSource
 }
+
+// WithFields adds the reportable custom fields to exports.
+func (a *Contacts) WithFields(f FieldSource) *Contacts { a.fields = f; return a }
 
 // NewContacts builds the contacts adapter.
 func NewContacts(svc *usecase.Service, q *db.Queries) *Contacts { return &Contacts{svc: svc, q: q} }
@@ -97,6 +155,10 @@ func (a *Contacts) Export(ctx context.Context, query ioengine.ExportQuery, _ i18
 		}
 		f.Company = &id
 	}
+	defs, err := reportFields(ctx, a.fields, orgID, customfields.EntityContact)
+	if err != nil {
+		return ioengine.Dataset{}, err
+	}
 	rows := make([]map[string]any, 0, exportPage)
 	for f.Offset = 0; f.Offset < exportLimit; f.Offset += exportPage {
 		items, _, err := a.svc.ListContacts(ctx, orgID, f)
@@ -108,18 +170,20 @@ func (a *Contacts) Export(ctx context.Context, query ioengine.ExportQuery, _ i18
 			if c.Company != nil {
 				company = c.Company.Name
 			}
-			rows = append(rows, map[string]any{
+			row := map[string]any{
 				"uuid": c.UUID.String(), "name": c.Name, "email": deref(c.Email), "phone": deref(c.Phone),
 				"job_title": c.JobTitle, "company": company, "locale": deref(c.Locale), "timezone": deref(c.Timezone),
 				"channels": strings.Join(c.ChannelTypes, ","), "conversation_count": fmt.Sprint(c.ConversationCount),
 				"blocked": c.Blocked, "notes": c.Notes, "created_at": c.CreatedAt,
-			})
+			}
+			fieldCells(row, defs, c.CustomFields)
+			rows = append(rows, row)
 		}
 		if len(items) < exportPage {
 			break
 		}
 	}
-	return ioengine.Dataset{Resource: ResourceContacts, Columns: a.ExportColumns(), Rows: rows}, nil
+	return ioengine.Dataset{Resource: ResourceContacts, Columns: append(a.ExportColumns(), fieldColumns(defs)...), Rows: rows}, nil
 }
 
 // ImportSchema implements ioengine.ResourceAdapter.
@@ -342,9 +406,13 @@ func (a *Contacts) SampleRows() []map[string]any {
 
 // Companies is the tenant.companies adapter.
 type Companies struct {
-	svc *usecase.Service
-	q   *db.Queries
+	svc    *usecase.Service
+	q      *db.Queries
+	fields FieldSource
 }
+
+// WithFields adds the reportable custom fields to exports.
+func (a *Companies) WithFields(f FieldSource) *Companies { a.fields = f; return a }
 
 // NewCompanies builds the companies adapter.
 func NewCompanies(svc *usecase.Service, q *db.Queries) *Companies { return &Companies{svc: svc, q: q} }
@@ -377,6 +445,10 @@ func (a *Companies) Export(ctx context.Context, query ioengine.ExportQuery, _ i1
 	if err != nil {
 		return ioengine.Dataset{}, err
 	}
+	defs, err := reportFields(ctx, a.fields, orgID, customfields.EntityCompany)
+	if err != nil {
+		return ioengine.Dataset{}, err
+	}
 	rows := make([]map[string]any, 0, exportPage)
 	for offset := int32(0); offset < exportLimit; offset += exportPage {
 		items, _, err := a.svc.ListCompanies(ctx, orgID, query["q"], exportPage, offset)
@@ -395,18 +467,20 @@ func (a *Companies) Export(ctx context.Context, query ioengine.ExportQuery, _ i1
 			if c.Health != nil && c.Health.Score != nil {
 				health = fmt.Sprint(*c.Health.Score)
 			}
-			rows = append(rows, map[string]any{
+			row := map[string]any{
 				"uuid": c.UUID.String(), "name": c.Name, "domain": deref(c.Domain), "external_id": deref(c.ExternalID),
 				"tier": c.Tier, "account_owner": owner, "contact_count": fmt.Sprint(c.ContactCount),
 				"open_conversations": fmt.Sprint(c.OpenConversations), "plan": plan, "mrr": mrr, "health_score": health,
 				"notes": c.Notes, "created_at": c.CreatedAt,
-			})
+			}
+			fieldCells(row, defs, c.CustomFields)
+			rows = append(rows, row)
 		}
 		if len(items) < exportPage {
 			break
 		}
 	}
-	return ioengine.Dataset{Resource: ResourceCompanies, Columns: a.ExportColumns(), Rows: rows}, nil
+	return ioengine.Dataset{Resource: ResourceCompanies, Columns: append(a.ExportColumns(), fieldColumns(defs)...), Rows: rows}, nil
 }
 
 // ImportSchema implements ioengine.ResourceAdapter.

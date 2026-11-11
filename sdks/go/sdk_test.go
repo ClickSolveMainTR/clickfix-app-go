@@ -83,3 +83,27 @@ func TestPaginationAndCancellation(t *testing.T) {
 		t.Fatal("cancellation lost")
 	}
 }
+
+// CF-206: the company-signed user_hash is HMAC over user id, newline,
+// company id; it never collides with the user-only hash or with plain
+// concatenation, and the backend verifies exactly these bytes.
+func TestIdentityCompanyHash(t *testing.T) {
+	const secret = "identity-secret-0123456789abcdef"
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte("1001\nF-77"))
+	if got, want := IdentityCompanyHash(secret, "1001", "F-77"), hex.EncodeToString(mac.Sum(nil)); got != want {
+		t.Fatalf("IdentityCompanyHash = %s, want %s", got, want)
+	}
+	if IdentityCompanyHash(secret, "1001", "") != IdentityHash(secret, "1001") {
+		t.Fatal("empty company id must fall back to the user-only hash")
+	}
+	if IdentityCompanyHash(secret, "1001", "F-77") == IdentityHash(secret, "1001F-77") {
+		t.Fatal("company hash must not equal the hash of the concatenated ids")
+	}
+	if IdentityCompanyHash(secret, "1", "12") == IdentityCompanyHash(secret, "11", "2") {
+		t.Fatal("the separator must keep the ids apart")
+	}
+	if IdentityCompanyHash(secret, "10\n01", "F-77") != "" || IdentityCompanyHash(secret, "1001", "F\r77") != "" {
+		t.Fatal("ids with line breaks must not be signed")
+	}
+}

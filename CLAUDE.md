@@ -15,7 +15,7 @@ Project setup checked into the repo (works the same in every app cloned from thi
 
 ## Repo kuralları
 
-Repo `ClickSolveMainTR/clickfix-app-go` (private). Eski `furkanmeclis/clickfix-app-go` artık kullanılmaz; oraya push ve PR yapılmaz.
+Repo `ClickSolveMainTR/clickfix-app-go` (11 Kas 2026'dan beri public; CI GitHub-hosted runner'larda, `CI_RUNNER` değişkeni). Eski `furkanmeclis/clickfix-app-go` artık kullanılmaz; oraya push ve PR yapılmaz.
 
 GitHub'ın Free planında private repoda branch protection yok, bu yüzden aşağıdaki kuralları GitHub zorlamaz; herkes (insan ve ajan) kendisi uyar:
 

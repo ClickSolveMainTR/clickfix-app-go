@@ -136,6 +136,9 @@ func (p *HTTPProvider) body(req Request, stream bool) (string, map[string]any) {
 		}
 		if len(tools) > 0 {
 			body["tools"] = tools
+			if req.ToolChoice == "none" {
+				body["tool_choice"] = map[string]any{"type": "none"}
+			}
 		}
 		if len(req.Schema) > 0 {
 			config["format"] = map[string]any{"type": "json_schema", "schema": anthropicSchema(req.Schema)}
@@ -168,6 +171,9 @@ func (p *HTTPProvider) body(req Request, stream bool) (string, map[string]any) {
 	}
 	if len(tools) > 0 {
 		body["tools"] = tools
+		if req.ToolChoice == "none" {
+			body["tool_choice"] = "none"
+		}
 	}
 	if len(req.Schema) > 0 {
 		body["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "answer", "strict": true, "schema": anthropicSchema(req.Schema)}}

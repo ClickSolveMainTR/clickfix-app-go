@@ -250,11 +250,25 @@ func (s *Service) CreateDefinition(ctx context.Context, orgID int64, in model.Cr
 	def := customfields.Definition{
 		Key: in.Key, Label: in.Label, Type: in.Type, Required: in.Required, Options: in.Options,
 		Config: in.Config, Default: in.Default, Condition: in.Condition,
+		Visibility: customfields.DefaultVisibility, Sensitive: in.Sensitive, WidgetAccess: in.WidgetAccess,
+	}
+	if in.Visibility != nil {
+		def.Visibility = *in.Visibility
+	}
+	if def.WidgetAccess == "" {
+		def.WidgetAccess = customfields.WidgetAccessVerified
 	}
 	if errs := customfields.ValidateDefinition(def, others); len(errs) > 0 {
 		return model.FieldDefinition{}, &customfields.ValidationError{Errors: errs}
 	}
+	visibility, err := json.Marshal(def.Visibility)
+	if err != nil {
+		return model.FieldDefinition{}, err
+	}
 	params := db.CreateCustomFieldDefinitionParams{
+		Visibility:     visibility,
+		Sensitive:      def.Sensitive,
+		WidgetAccess:   def.WidgetAccess,
 		OrganizationID: orgID,
 		EntityType:     in.EntityType,
 		ObjectTypeID:   objectTypeID,
@@ -306,13 +320,27 @@ func (s *Service) withObjectType(ctx context.Context, orgID int64, row db.Custom
 
 // UpdateDefinition changes the mutable parts of a field.
 func (s *Service) UpdateDefinition(ctx context.Context, orgID int64, id uuid.UUID, in model.UpdateDefinitionInput) (model.FieldDefinition, error) {
+	def, _, err := s.UpdateDefinitionAudited(ctx, orgID, id, in)
+	return def, err
+}
+
+// UpdateDefinitionAudited is UpdateDefinition plus the audit payload of what
+// changed. Changes apply at once (there is no draft or publish step), so the
+// audit log is the history: renamed options, visibility switches, the
+// sensitive flag and widget access are recorded before → after.
+func (s *Service) UpdateDefinitionAudited(ctx context.Context, orgID int64, id uuid.UUID, in model.UpdateDefinitionInput) (model.FieldDefinition, map[string]any, error) {
+	out, changes, err := s.updateDefinition(ctx, orgID, id, in)
+	return out, changes, err
+}
+
+func (s *Service) updateDefinition(ctx context.Context, orgID int64, id uuid.UUID, in model.UpdateDefinitionInput) (model.FieldDefinition, map[string]any, error) {
 	row, err := s.getRow(ctx, orgID, id)
 	if err != nil {
-		return model.FieldDefinition{}, err
+		return model.FieldDefinition{}, nil, err
 	}
 	current, err := toDefinition(row, nil)
 	if err != nil {
-		return model.FieldDefinition{}, err
+		return model.FieldDefinition{}, nil, err
 	}
 	def := current.Engine()
 	description := current.Description
@@ -331,11 +359,20 @@ func (s *Service) UpdateDefinition(ctx context.Context, orgID int64, id uuid.UUI
 	if in.Config != nil {
 		def.Config = *in.Config
 	}
+	if in.Visibility != nil {
+		def.Visibility = *in.Visibility
+	}
+	if in.Sensitive != nil {
+		def.Sensitive = *in.Sensitive
+	}
+	if in.WidgetAccess != nil {
+		def.WidgetAccess = strings.TrimSpace(*in.WidgetAccess)
+	}
 	if in.Default != nil {
 		def.Default = nil
 		if string(in.Default) != "null" {
 			if err := json.Unmarshal(in.Default, &def.Default); err != nil {
-				return model.FieldDefinition{}, invalid("default is not valid JSON")
+				return model.FieldDefinition{}, nil, invalid("default is not valid JSON")
 			}
 		}
 	}
@@ -343,26 +380,30 @@ func (s *Service) UpdateDefinition(ctx context.Context, orgID int64, id uuid.UUI
 		def.Condition = nil
 		if string(in.Condition) != "null" {
 			if err := json.Unmarshal(in.Condition, &def.Condition); err != nil {
-				return model.FieldDefinition{}, invalid("condition is not valid JSON")
+				return model.FieldDefinition{}, nil, invalid("condition is not valid JSON")
 			}
 		}
 	}
 	others, err := s.engineDefs(ctx, orgID, row.EntityType, row.ObjectTypeID, row.Uuid)
 	if err != nil {
-		return model.FieldDefinition{}, err
+		return model.FieldDefinition{}, nil, err
 	}
 	if errs := customfields.ValidateDefinition(def, others); len(errs) > 0 {
-		return model.FieldDefinition{}, &customfields.ValidationError{Errors: errs}
+		return model.FieldDefinition{}, nil, &customfields.ValidationError{Errors: errs}
 	}
 	// Removing an option would orphan stored values: archive it instead.
 	if in.Options != nil {
 		for _, o := range current.Options {
 			if !slices.ContainsFunc(def.Options, func(n customfields.Option) bool { return n.Value == o.Value }) {
-				return model.FieldDefinition{}, &customfields.ValidationError{Errors: []customfields.FieldError{{
+				return model.FieldDefinition{}, nil, &customfields.ValidationError{Errors: []customfields.FieldError{{
 					Field: "options", Code: customfields.CodeInvalid, Message: fmt.Sprintf("option %q cannot be removed; archive it", o.Value),
 				}}}
 			}
 		}
+	}
+	visibility, err := json.Marshal(def.Visibility)
+	if err != nil {
+		return model.FieldDefinition{}, nil, err
 	}
 	params := db.UpdateCustomFieldDefinitionParams{
 		OrganizationID: orgID,
@@ -370,15 +411,22 @@ func (s *Service) UpdateDefinition(ctx context.Context, orgID int64, id uuid.UUI
 		Label:          def.Label,
 		Description:    description,
 		Required:       def.Required,
+		Visibility:     visibility,
+		Sensitive:      def.Sensitive,
+		WidgetAccess:   def.WidgetAccess,
 	}
 	if params.Options, params.Config, params.DefaultValue, params.Condition, err = encodeDef(def); err != nil {
-		return model.FieldDefinition{}, err
+		return model.FieldDefinition{}, nil, err
 	}
 	updated, err := s.q.UpdateCustomFieldDefinition(ctx, params)
 	if err != nil {
-		return model.FieldDefinition{}, err
+		return model.FieldDefinition{}, nil, err
 	}
-	return s.withObjectType(ctx, orgID, updated)
+	out, err := s.withObjectType(ctx, orgID, updated)
+	if err != nil {
+		return model.FieldDefinition{}, nil, err
+	}
+	return out, definitionChanges(current, out), nil
 }
 
 // SetArchived archives (hides, keeps stored values) or restores a field.
@@ -492,6 +540,13 @@ func toDefinition(r db.CustomFieldDefinition, objectTypeUUID *uuid.UUID) (model.
 	}
 	if err := json.Unmarshal(r.Config, &f.Config); err != nil {
 		return f, fmt.Errorf("customfields: config of %s: %w", r.Key, err)
+	}
+	f.Sensitive, f.WidgetAccess = r.Sensitive, r.WidgetAccess
+	f.Visibility = customfields.DefaultVisibility
+	if len(r.Visibility) > 0 {
+		if err := json.Unmarshal(r.Visibility, &f.Visibility); err != nil {
+			return f, fmt.Errorf("customfields: visibility of %s: %w", r.Key, err)
+		}
 	}
 	if len(r.DefaultValue) > 0 {
 		if err := json.Unmarshal(r.DefaultValue, &f.Default); err != nil {

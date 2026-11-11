@@ -16,7 +16,7 @@ import (
 
 type fakeQueries struct {
 	rows    map[int64]*db.OrganizationOnboarding
-	counts  db.OrganizationOnboardingCountsRow
+	counts  db.OrganizationSetupCountsRow
 	owned   int64
 	allowed map[uuid.UUID]bool
 }
@@ -54,7 +54,7 @@ func (f *fakeQueries) FinishOrganizationOnboarding(_ context.Context, id int64) 
 	return 1, nil
 }
 
-func (f *fakeQueries) OrganizationOnboardingCounts(context.Context, int64) (db.OrganizationOnboardingCountsRow, error) {
+func (f *fakeQueries) OrganizationSetupCounts(context.Context, int64) (db.OrganizationSetupCountsRow, error) {
 	return f.counts, nil
 }
 
@@ -122,7 +122,7 @@ func TestCreateOrganizationStartsChecklist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !st.Active || st.Total != 5 || st.Completed != 1 || !stepDone(st, StepOrganization) {
+	if !st.Active || st.Total != 5 || st.Completed != 0 || Next(st.Steps) != StepCustomer {
 		t.Fatalf("fresh checklist: %+v", st)
 	}
 }
@@ -147,28 +147,97 @@ func TestCreateOrganizationTrialPrice(t *testing.T) {
 	}
 }
 
-func TestStepsFollowCountsAndManualConfirmations(t *testing.T) {
+// CF-198: the steps follow the set-up order, each with its "done"
+// conditions; a skipped step stays as a warning until its conditions hold.
+func TestStepsFollowTheSetupOrderAndConditions(t *testing.T) {
 	q := newFake()
 	_ = q.CreateOrganizationOnboarding(context.Background(), 1)
-	q.counts = db.OrganizationOnboardingCountsRow{Channels: 1, Members: 1}
-	svc := New(q, &fakeOrgs{}, Config{})
+	q.counts = db.OrganizationSetupCountsRow{Widgets: 1, CompanyProfile: true, Articles: 3}
+	identity := false
+	svc := New(q, &fakeOrgs{}, Config{}).WithIdentityKeys(func(context.Context, int64) (bool, error) { return identity, nil })
 
-	st, _ := svc.Get(context.Background(), 1)
-	if !stepDone(st, StepChannel) || stepDone(st, StepTeam) || stepDone(st, StepWidget) {
-		t.Fatalf("counts not applied: %+v", st)
+	st, err := svc.Get(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := svc.CompleteStep(context.Background(), 1, StepChannel); !errors.Is(err, ErrUnknownStep) {
-		t.Fatalf("channel is automatic: want ErrUnknownStep, got %v", err)
+	keys := make([]string, 0, len(st.Steps))
+	for _, s := range st.Steps {
+		keys = append(keys, s.Key)
 	}
-	st, err := svc.CompleteStep(context.Background(), 1, StepWidget)
-	if err != nil || !stepDone(st, StepWidget) {
-		t.Fatalf("widget confirm: %+v %v", st, err)
+	if want := []string{StepCustomer, StepSystem, StepAI, StepKnowledge, StepAutomation}; !equal(keys, want) {
+		t.Fatalf("order %v, want %v", keys, want)
 	}
-	q.counts.Invitations = 2
+	// Articles alone do not finish the customer step: the order is the
+	// point (the customer is introduced first).
+	if stepDone(st, StepCustomer) || !stepDone(st, StepKnowledge) || st.Completed != 1 || Next(st.Steps) != StepCustomer {
+		t.Fatalf("partial facts: %+v", st)
+	}
+	customer := st.Steps[0]
+	want := map[string]bool{CondIdentityKey: false, CondExternalIdentity: false, CondPackage: false, CondCompany: true}
+	for _, c := range customer.Conditions {
+		if want[c.Key] != c.Done {
+			t.Fatalf("condition %s = %v, want %v", c.Key, c.Done, want[c.Key])
+		}
+	}
+	if got := MissingKeys(st.Steps); got[0] != "customer.identity_key" || got[len(got)-1] != "automation.automation" {
+		t.Fatalf("missing keys: %v", got)
+	}
+
+	// Every customer condition holds once the key, an external id and a
+	// package exist.
+	identity = true
+	q.counts.ExternalContacts, q.counts.PackagedCompanies = 1, 1
 	st, _ = svc.Get(context.Background(), 1)
-	if !stepDone(st, StepTeam) || st.Completed != 4 {
-		t.Fatalf("pending invitation should tick team: %+v", st)
+	if !stepDone(st, StepCustomer) || Next(st.Steps) != StepSystem {
+		t.Fatalf("customer step: %+v", st.Steps[0])
 	}
+
+	// Skipping the system step leaves it as a warning and moves on.
+	if _, err := svc.SkipStep(context.Background(), 1, "channel"); !errors.Is(err, ErrUnknownStep) {
+		t.Fatalf("old step keys are gone: want ErrUnknownStep, got %v", err)
+	}
+	st, err = svc.SkipStep(context.Background(), 1, StepSystem)
+	if err != nil || !st.Steps[1].Skipped || st.Steps[1].Done || st.Skipped != 1 || Next(st.Steps) != StepAI {
+		t.Fatalf("skip: %+v %v", st, err)
+	}
+	if got := MissingKeys(st.Steps); got[0] != "system.system" {
+		t.Fatalf("skipped steps stay in the missing list: %v", got)
+	}
+	// A skipped step that later gets done is done, not skipped.
+	q.counts.Systems = 1
+	st, _ = svc.Get(context.Background(), 1)
+	if !st.Steps[1].Done || st.Steps[1].Skipped || st.Skipped != 0 {
+		t.Fatalf("done after skip: %+v", st.Steps[1])
+	}
+	// AI needs both the switch and a published procedure; automation
+	// needs an SLA policy and a rule or workflow.
+	q.counts.AiEnabled, q.counts.Procedures, q.counts.SlaPolicies, q.counts.Automations = true, 0, 1, 0
+	st, _ = svc.Get(context.Background(), 1)
+	if stepDone(st, StepAI) || stepDone(st, StepAutomation) {
+		t.Fatalf("half-met steps must not be done: %+v", st)
+	}
+	q.counts.Procedures, q.counts.Automations = 1, 1
+	st, _ = svc.Get(context.Background(), 1)
+	if st.Completed != 5 || Next(st.Steps) != "" || len(MissingKeys(st.Steps)) != 0 {
+		t.Fatalf("all done: %+v", st)
+	}
+	// Checklist evaluates organizations without a checklist row too.
+	cl, err := svc.Checklist(context.Background(), 99)
+	if err != nil || cl.Active || len(cl.Steps) != 5 {
+		t.Fatalf("legacy organization checklist: %+v %v", cl, err)
+	}
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestFinishClosesChecklist(t *testing.T) {
@@ -182,7 +251,7 @@ func TestFinishClosesChecklist(t *testing.T) {
 	if _, err := svc.Finish(context.Background(), 1); !errors.Is(err, ErrNotActive) {
 		t.Fatalf("second finish: want ErrNotActive, got %v", err)
 	}
-	if _, err := svc.CompleteStep(context.Background(), 1, StepWidget); !errors.Is(err, ErrNotActive) {
+	if _, err := svc.SkipStep(context.Background(), 1, StepSystem); !errors.Is(err, ErrNotActive) {
 		t.Fatalf("step after finish: want ErrNotActive, got %v", err)
 	}
 }

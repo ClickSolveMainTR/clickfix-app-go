@@ -1,10 +1,11 @@
 /**
  * ClickFix web widget SDK — public TypeScript contract (protocol version 1,
- * SDK 2.x; every 1.x call keeps working).
+ * SDK 2.x; every 1.x call keeps working). SDK 2.1 adds the webview bridge
+ * (docs/webview-bridge.md).
  *
  * Served at https://<app>/widget.d.ts next to https://<app>/widget.js.
  * Copy it into your project (e.g. `types/clickfix-widget.d.ts`) to type
- * `window.ClickFix`, or use @clickfix/react-widget. Source:
+ * `window.ClickFix`, or use @getclickfix/react-widget. Source:
  * frontend/widget-sdk/src/widget.ts. Docs: docs/widget-sdk.md.
  */
 
@@ -55,10 +56,24 @@ export interface ClickFixInitOptions {
    * from the page's own origin, so it has no effect on other sites.
    */
   assistant?: { organization: string };
+  /**
+   * Webview bridge for native apps (docs/webview-bridge.md): the host app
+   * drives the widget through `window.ClickFixBridge.receive(json)` or
+   * postMessage and receives every SDK event, external links and command
+   * results. `{ origin }` names the parent frame allowed to drive the
+   * widget when it runs inside an iframe (never "*"). The hosted page
+   * https://<app>/widget-embed.html?widget=<id> turns it on for you.
+   */
+  bridge?: boolean | { origin?: string };
 }
 
 export interface ClickFixCompany {
-  /** Your id of the company (preferred match key). */
+  /**
+   * Your id of the company (preferred match key). It binds the contact to
+   * the company only when `user_hash` signs it together with `user_id`
+   * (hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))); an
+   * unsigned id is ignored and `name`/`domain` stay hints.
+   */
   id?: string;
   name?: string;
   /** Company web domain, e.g. "acme.com" (second match key). */
@@ -67,7 +82,9 @@ export interface ClickFixCompany {
 
 /**
  * Proves the visitor is one of your signed-in users. Compute `user_hash` on
- * your server: hex(HMAC-SHA256(identity_secret, user_id)). Never ship the
+ * your server: hex(HMAC-SHA256(identity_secret, user_id)), or with the
+ * user's company hex(HMAC-SHA256(identity_secret, user_id + "\n" +
+ * company.id)) so the user cannot claim another company. Never ship the
  * identity secret to the browser.
  */
 export interface ClickFixIdentity {
@@ -149,7 +166,11 @@ export interface ClickFixEventMap {
   "conversation:ended": { conversation_uuid: string; status: string };
   /** Unread agent replies across the visitor's conversations changed. */
   unread: { count: number };
-  identify: { verified: boolean };
+  /**
+   * `company_verified`: the contact's company was proved by a user_hash that
+   * signs `company.id` too; false when the company came only as a hint.
+   */
+  identify: { verified: boolean; company_verified: boolean };
   /** The CSAT survey was answered (alias: "csat"). */
   rating: { conversation_uuid: string; score: number; existing: boolean };
   csat: { conversation_uuid: string; score: number; existing: boolean };
@@ -282,8 +303,62 @@ export interface ClickFixSDK extends ClickFixCommand {
   shutdown(): void;
 }
 
+/** Host -> widget messages of the webview bridge (docs/webview-bridge.md). */
+export type ClickFixBridgeCommand =
+  | { type: "clickfix:identify"; id?: string; user: ClickFixIdentity }
+  | {
+      type: "clickfix:track";
+      id?: string;
+      name: string;
+      properties?: Record<string, unknown>;
+    }
+  | {
+      type: "clickfix:open";
+      id?: string;
+      view?: ClickFixView;
+      conversation?: string;
+    }
+  | { type: "clickfix:close"; id?: string }
+  | { type: "clickfix:update"; id?: string; update: ClickFixUpdate }
+  | { type: "clickfix:consent"; id?: string; granted: boolean }
+  | { type: "clickfix:reset"; id?: string }
+  | { type: "clickfix:get-state"; id?: string }
+  /** Continue the session the app started natively (@getclickfix/visitor-core, CF-201). */
+  | { type: "clickfix:session"; id?: string; token: string };
+
+/** Widget -> host messages of the webview bridge. */
+export type ClickFixBridgeMessage =
+  | ({ type: "clickfix:ready"; bridge_version: 1 } & ClickFixEventMap["ready"])
+  | {
+      [E in ClickFixEvent]: {
+        type: "clickfix:event";
+        event: E;
+        payload: ClickFixEventMap[E];
+      };
+    }[ClickFixEvent]
+  | { type: "clickfix:link"; url: string }
+  | {
+      type: "clickfix:result";
+      id: string;
+      ok: boolean;
+      data?: unknown;
+      error?: { code: string; message: string };
+    }
+  /** The webview's visitor token after ready, identify and reset. */
+  | { type: "clickfix:session"; token: string; visitor_id: string };
+
+export interface ClickFixBridge {
+  version: 1;
+  /** Detected host transport, or null when no host object was found. */
+  transport: "react-native" | "ios" | "android" | "flutter" | "frame" | null;
+  /** Entry point for the host app: a JSON string or an object. */
+  receive(message: string | ClickFixBridgeCommand): Promise<void>;
+}
+
 declare global {
   interface Window {
     ClickFix: ClickFixSDK;
+    /** Present only while the webview bridge is on. */
+    ClickFixBridge?: ClickFixBridge;
   }
 }

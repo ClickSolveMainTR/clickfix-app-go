@@ -22,10 +22,24 @@ import { useOrgKey } from "./use-custom-fields";
 function useInvalidateDefinitions() {
   const queryClient = useQueryClient();
   const org = useOrgKey();
+  // A new field closes its unknown-key warning and fills contact values.
   return () =>
-    queryClient.invalidateQueries({
-      queryKey: customFieldsKeys.definitions(org),
-    });
+    queryClient.invalidateQueries({ queryKey: customFieldsKeys.all(org) });
+}
+
+export function useDismissUnknownKey() {
+  const { t } = useLocale();
+  const queryClient = useQueryClient();
+  const org = useOrgKey();
+  return useAppMutation({
+    mutationFn: (uuid: string) => customFieldsService.dismissUnknownKey(uuid),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: [...customFieldsKeys.all(org), "unknown-keys"],
+      });
+      appToast.success(t("custom_fields.unknown.dismissed"));
+    },
+  });
 }
 
 export function useCreateCustomField() {

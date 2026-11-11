@@ -140,6 +140,10 @@ export const Permission = {
   TenantCustomObjectsRead: "tenant.custom_objects.read",
   TenantCustomObjectsWrite: "tenant.custom_objects.write",
   TenantOnboardingManage: "tenant.onboarding.manage",
+  /** Connected system, "Sistemini bağla" (CF-197). */
+  TenantIntegrationsRead: "tenant.integrations.read",
+  TenantIntegrationsManage: "tenant.integrations.manage",
+  TenantIntegrationsUse: "tenant.integrations.use",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];
@@ -384,6 +388,11 @@ export const permissions = {
     },
     onboarding: {
       manage: Permission.TenantOnboardingManage,
+    },
+    integrations: {
+      read: Permission.TenantIntegrationsRead,
+      manage: Permission.TenantIntegrationsManage,
+      use: Permission.TenantIntegrationsUse,
     },
   },
 } as const;

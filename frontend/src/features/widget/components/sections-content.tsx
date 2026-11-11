@@ -1,7 +1,10 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Plus, Trash2, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { routes } from "@/config/routes";
 import {
   FieldIssues,
   Group,
@@ -23,12 +27,10 @@ import {
   TextRow,
   useEditor,
 } from "@/features/widget/components/fields";
-import {
-  LIMITS,
-  newId,
-  type HomeCard,
-  type PreChatField,
-} from "@/features/widget/lib/settings";
+import { LIMITS, newId, type HomeCard } from "@/features/widget/lib/settings";
+import { TemplateVariableChips } from "@/features/custom-fields";
+import { getActiveOrganizationSlug } from "@/features/organizations";
+import { requestFormsService } from "@/features/request-forms/services/request-forms.service";
 import { useLocale } from "@/providers/locale-provider";
 
 const TEXT_FIELDS = [
@@ -61,6 +63,19 @@ export function TextsSection() {
         {TEXT_FIELDS.map(([key, max, multiline]) => (
           <div key={key} className="space-y-2">
             <p className="text-sm font-medium">{t(`widget.text.${key}`)}</p>
+            {key === "greeting_title" || key === "greeting_text" ? (
+              <div className="space-y-1">
+                <p className="text-muted-foreground text-xs">
+                  {t("widget.text.greeting_variables_hint")}
+                </p>
+                <TemplateVariableChips
+                  audience="ai"
+                  onPick={(token) => {
+                    void navigator.clipboard?.writeText(token);
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
               {(["tr", "en"] as const).map((loc) => (
                 <TextRow
@@ -293,26 +308,80 @@ export function HomeSection() {
   );
 }
 
-const FIELD_TYPES: PreChatField["type"][] = [
-  "text",
-  "textarea",
-  "email",
-  "phone",
-  "number",
-  "select",
-  "checkbox",
-];
+/**
+ * The pre-chat form is a request form (CF-198): the organization's forms
+ * live under Settings > Request forms, the widget only picks one.
+ */
+export function PreChatFormPicker({ disabled }: { disabled: boolean }) {
+  const { t } = useLocale();
+  const ed = useEditor();
+  const slug = getActiveOrganizationSlug() ?? "";
+  const forms = useQuery({
+    queryKey: ["tenant", slug, "request-forms"],
+    queryFn: () => requestFormsService.list(),
+    enabled: Boolean(slug),
+  });
+  const widgetForms = (forms.data ?? []).filter(
+    (f) => f.is_active && f.channels.includes("widget"),
+  );
+  const value = ed.settings.prechat.form_uuid || AUTO_FORM;
+  const chosen = widgetForms.find((f) => f.uuid === value);
+  return (
+    <Row
+      label={t("widget.f.prechat_form")}
+      hint={t("widget.f.prechat_form_hint")}
+      path="prechat.form_uuid"
+    >
+      <Select
+        value={value}
+        disabled={disabled || forms.isLoading}
+        onValueChange={(v) =>
+          ed.set("prechat.form_uuid", v === AUTO_FORM ? "" : v)
+        }
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={AUTO_FORM}>
+            {t("widget.f.prechat_form_auto")}
+          </SelectItem>
+          {widgetForms.map((f) => (
+            <SelectItem key={f.uuid} value={f.uuid}>
+              {f.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {!forms.isLoading && widgetForms.length === 0 ? (
+        <Alert>
+          <TriangleAlert />
+          <AlertDescription>{t("widget.f.prechat_form_none")}</AlertDescription>
+        </Alert>
+      ) : null}
+      <p className="text-muted-foreground text-xs">
+        {chosen
+          ? t("widget.f.prechat_form_fields", {
+              fields: chosen.fields.map((f) => f.label || f.key).join(", "),
+            })
+          : null}{" "}
+        <Link
+          href={routes.cms.settings.requestForms}
+          className="text-foreground underline underline-offset-4"
+        >
+          {t("widget.f.prechat_form_manage")}
+        </Link>
+      </p>
+    </Row>
+  );
+}
+
+const AUTO_FORM = "_auto";
 
 export function PreChatSection() {
   const { t } = useLocale();
   const ed = useEditor();
   const pc = ed.settings.prechat;
-  const modes = (["required", "optional", "hidden"] as const).map(
-    (m) => [m, t(`widget.mode.${m}`)] as [string, string],
-  );
-  const fields = pc.fields;
-  const mappings = ed.settings.attribute_mapping;
-  const setFields = (next: PreChatField[]) => ed.set("prechat.fields", next);
   return (
     <div className="space-y-4">
       <Group
@@ -324,168 +393,7 @@ export function PreChatSection() {
           label={t("widget.fields.prechat")}
           hint={t("widget.fields.prechat_hint")}
         />
-        <div className="grid gap-4 sm:grid-cols-3">
-          <SelectRow
-            path="prechat.name"
-            label={t("widget.fields.prechat_name")}
-            options={modes}
-            disabled={!pc.enabled}
-          />
-          <SelectRow
-            path="prechat.email"
-            label={t("widget.fields.prechat_email")}
-            options={modes}
-            disabled={!pc.enabled}
-          />
-          <SelectRow
-            path="prechat.phone"
-            label={t("widget.f.prechat_phone")}
-            options={modes}
-            disabled={!pc.enabled}
-          />
-        </div>
-      </Group>
-      <Group
-        title={t("widget.g.prechat_fields")}
-        description={t("widget.g.prechat_fields_hint")}
-      >
-        {fields.map((f, i) => (
-          <div key={i} className="space-y-3 rounded-lg border p-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Row
-                label={t("widget.f.field_key")}
-                path={`prechat.fields.${i}.key`}
-              >
-                <Input
-                  value={f.key}
-                  maxLength={40}
-                  className="font-mono"
-                  disabled={ed.disabled}
-                  onChange={(e) =>
-                    ed.set(
-                      `prechat.fields.${i}.key`,
-                      e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"),
-                    )
-                  }
-                />
-              </Row>
-              <Row label={t("widget.f.field_type")}>
-                <Select
-                  value={f.type}
-                  disabled={ed.disabled}
-                  onValueChange={(v) => ed.set(`prechat.fields.${i}.type`, v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIELD_TYPES.map((ty) => (
-                      <SelectItem key={ty} value={ty}>
-                        {t(`widget.field_type.${ty}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Row>
-              <Row
-                label={t("widget.f.field_attribute")}
-                hint={t("widget.f.field_attribute_hint")}
-                path={`prechat.fields.${i}.attribute`}
-              >
-                <Select
-                  value={f.attribute || "_none"}
-                  disabled={ed.disabled}
-                  onValueChange={(v) =>
-                    ed.set(
-                      `prechat.fields.${i}.attribute`,
-                      v === "_none" ? "" : v,
-                    )
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">{t("widget.f.none")}</SelectItem>
-                    {mappings.map((m) => (
-                      <SelectItem key={m.key} value={m.key}>
-                        {m.key}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Row>
-            </div>
-            <LocalizedRow
-              path={`prechat.fields.${i}.label`}
-              label={t("widget.f.field_label")}
-              maxLength={100}
-            />
-            {f.type === "select" ? (
-              <Row
-                label={t("widget.f.field_options")}
-                hint={t("widget.f.field_options_hint")}
-                path={`prechat.fields.${i}.options`}
-              >
-                <Input
-                  value={f.options.join(", ")}
-                  disabled={ed.disabled}
-                  onChange={(e) =>
-                    ed.set(
-                      `prechat.fields.${i}.options`,
-                      e.target.value.split(",").map((o) => o.trimStart()),
-                    )
-                  }
-                />
-              </Row>
-            ) : null}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={f.required}
-                  disabled={ed.disabled}
-                  onCheckedChange={(v) =>
-                    ed.set(`prechat.fields.${i}.required`, v)
-                  }
-                />
-                {t("widget.mode.required")}
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={ed.disabled}
-                onClick={() => setFields(fields.filter((_, n) => n !== i))}
-              >
-                <Trash2 className="size-4" />
-                {t("widget.editor.remove")}
-              </Button>
-            </div>
-            <FieldIssues path={`prechat.fields.${i}`} />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={ed.disabled || fields.length >= LIMITS.preChatFields}
-          onClick={() =>
-            setFields([
-              ...fields,
-              {
-                key: `field_${fields.length + 1}`,
-                label: { tr: "", en: "" },
-                type: "text",
-                required: false,
-                options: [],
-                attribute: "",
-              },
-            ])
-          }
-        >
-          <Plus className="size-4" />
-          {t("widget.editor.add_field")}
-        </Button>
+        <PreChatFormPicker disabled={ed.disabled || !pc.enabled} />
       </Group>
       <Group
         title={t("widget.g.consent")}
@@ -530,6 +438,12 @@ function AttributeMapping() {
       title={t("widget.g.attributes")}
       description={t("widget.g.attributes_hint")}
     >
+      <Alert>
+        <TriangleAlert />
+        <AlertDescription>
+          {t("widget.g.attributes_publish_notice")}
+        </AlertDescription>
+      </Alert>
       {list.map((m, i) => (
         <div
           key={i}

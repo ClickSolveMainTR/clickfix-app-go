@@ -221,6 +221,8 @@ info:
 
     `data` içeriği olaya göre değişir ve yalnızca kimlikleri ve özet alanları taşır. Ayrıntı gerekiyorsa kaydı API ile okuyun.
 
+    Konuşma olayları kişinin ve şirketin dış kimliğini de taşır (`contact_external_id`, `company_external_id`); ayrıntı için **Dış kimlik ve doğrulanmış müşteri** bölümüne bakın.
+
     ## İmza doğrulama
 
     ```text
@@ -280,7 +282,7 @@ info:
 
     # SDK'lar ve örnek kod
 
-    Go ve Node.js için sunucu SDK'ları vardır; henüz paket olarak yayımlanmadılar. Tüm diller için kullanım örnekleri [SDK'lar ve örnek kod](https://getclickfix.com/docs/sdks) sayfasındadır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar. Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). Her uç noktanın sağ panelinde curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
+    Go ve Node.js için sunucu SDK'ları vardır: `@getclickfix/node` (npm, Node 22+), `@getclickfix/react-widget` (npm, React 18+) ve `github.com/ClickSolveMainTR/clickfix-sdks/go` (Go modülü, `go/vX.Y.Z` etiketleri). Tüm diller için kullanım örnekleri [SDK'lar ve örnek kod](https://getclickfix.com/docs/sdks) sayfasında, baştan sona kurulum sırası ve her adımda doğrulanmış örnekler [Entegrasyon kılavuzu](https://getclickfix.com/docs/integration-guide) sayfasındadır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar. Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). Her uç noktanın sağ panelinde curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
 
     **curl**
 
@@ -295,7 +297,7 @@ info:
     **JavaScript / TypeScript (Node.js 22+)**
 
     ```ts
-    import { createClient } from "@clickfix/node";
+    import { createClient } from "@getclickfix/node";
 
     const client = createClient({
       baseURL: "https://api.getclickfix.com",
@@ -349,6 +351,63 @@ info:
     ```
 
     `Idempotency-Key` için işlemi tanımlayan sabit bir değer (ör. sipariş numarası) kullanın ve tekrar denemelerde aynı değeri gönderin; her denemede yeni değer üretmeyin.
+
+    # Dış kimlik ve doğrulanmış müşteri
+
+    Kendi sisteminizdeki kullanıcı numarasını ClickFix'te **dış kimlik** (`external_id`) olarak tutarsınız. Kişi ve şirket dış kimlikleri ayrı alanlardır: kişinin `external_id` değeri sizin kullanıcı numaranızdır, şirketin `external_id` değeri sizin firma numaranızdır. İkisi de organizasyon içinde tekildir.
+
+    | Kayıt | Alan | Widget `identify` karşılığı |
+    |---|---|---|
+    | Kişi | `external_id` | `user_id` |
+    | Şirket | `external_id` | `company.id` |
+
+    ## Kişiyi dış kimlikle senkron tutun
+
+    `PUT /contacts/by-external-id` kişiyi dış kimliğiyle oluşturur ya da günceller. Aynı dış kimlikle ikinci çağrı yeni kişi açmaz, mevcut kişiyi günceller. Yanıt kişi oluşturulduysa `201`, güncellendiyse `200` döner. Kapsam `contacts:write`; anahtarı oluşturan üyenin kişi yazma yetkisi de aranır.
+
+    ```bash
+    curl -X PUT "https://api.getclickfix.com/v1/public-api/contacts/by-external-id" \
+      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: kullanici-1001-v3" \
+      -d '{ "external_id": "1001", "name": "Ayşe Yılmaz", "email": "ayse@example.com" }'
+    ```
+
+    - Eşleşme yalnızca dış kimlikle yapılır. E-posta veya telefon üzerinden başka bir kişi devralınmaz; sitede adresini yazmış anonim bir ziyaretçi bu kişiye karışmaz.
+    - Başka bir kişide olan bir dış kimliği atamaya çalışırsanız `409 EXTERNAL_ID_EXISTS` döner.
+    - Her değişiklik için yeni bir `Idempotency-Key` kullanın; aynı anahtar ilk yanıtı tekrar döndürür.
+
+    Kişiyi bulmak için `GET /contacts?external_id=1001`, şirketi bulmak için `GET /companies?external_id=F-77` kullanın.
+
+    ## Müşteri siteye girmeden ilk mesaj
+
+    Konuşmayı `contact_external_id` ile açabilirsiniz; ayrı bir kanal gerekmez:
+
+    ```bash
+    curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
+      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+      -H "Content-Type: application/json" \
+      -H "Idempotency-Key: hosgeldin-1001" \
+      -d '{ "contact_external_id": "1001", "inbox_uuid": "WIDGET_KANAL_UUID", "subject": "Hoş geldiniz" }'
+    ```
+
+    Ardından `POST /conversations/{uuid}/messages` ile mesajı yazın. Kanal web widget'ı ise kullanıcı sitenize girip `identify` ile oturum açtığında konuşmayı ve mesajı widget'ta görür.
+
+    ## Doğrulanmış, anonim, adını kendisi yazdı
+
+    Kişi ve konuşma yanıtlarında `identity_state` alanı vardır:
+
+    | Değer | Anlamı |
+    |---|---|
+    | `verified` | Kişi widget `identify` çağrısında `user_hash` ile kimliğini kanıtladı. `verified_at` son doğrulama zamanıdır. |
+    | `anonymous` | Ad, e-posta veya telefon yok. |
+    | `self_named` | Kişi ya da kanalı bir ad, e-posta veya telefon verdi, ama kanıtlanmadı. |
+
+    API ile oluşturulan kişi, kullanıcı `identify` ile oturum açana kadar doğrulanmış sayılmaz.
+
+    ## Webhook'larda dış kimlik
+
+    Konuşma olaylarının `data` alanı `contact_external_id`, `contact_verified`, `company_uuid` ve `company_external_id` taşır; `contact.created` olayı `contact_external_id` taşır. Kendi kaydınızı ek bir istek atmadan eşleştirebilirsiniz.
 servers:
   - url: https://api.getclickfix.com
     description: Üretim
@@ -358,7 +417,7 @@ tags:
   - name: Konuşmalar
     description: Konuşma oluşturma, okuma, güncelleme; mesaj ve iç not ekleme.
   - name: Kişiler
-    description: Son müşterilerinizin kişi kayıtları.
+    description: Son müşterilerinizin kişi kayıtları; kendi kullanıcı numaranızla (dış kimlik) senkron tutulabilir.
   - name: Şirketler
     description: Şirket listesi ve müşteri sağlığı için gelir, kullanım ve ürün olayı sinyalleri.
   - name: Webhook'lar
@@ -411,7 +470,7 @@ paths:
         - Konuşmalar
       security:
         - integrationKey: []
-      description: "Kapsam: `conversations:write`. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
+      description: "Kapsam: `conversations:write`. Kişiyi `contact_uuid` ya da kendi kullanıcı numaranızla `contact_external_id` olarak verin. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Web widget kanalında kişi siteye girip `identify` ile oturum açtığında konuşmayı görür. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
       responses:
         "201":
           description: Success
@@ -625,6 +684,7 @@ paths:
         - Kişiler
       operationId: getV1PublicApiContacts
       summary: Kişileri listele
+      description: "Kapsam: `contacts:read`. `q` ile kişi adında veya e-postasında arama yapılabilir (büyük/küçük harf duyarsız). `external_id` kendi kullanıcı numaranızla tam eşleşir. Kayıtlar `external_id`, `verified_at` ve şirketin `company_external_id` alanını taşır."
       security:
         - integrationKey: []
       responses:
@@ -640,7 +700,6 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `contacts:read`. `q` ile kişi adında arama yapılabilir (büyük/küçük harf duyarsız)."
       parameters:
         - name: limit
           in: query
@@ -657,15 +716,105 @@ paths:
             default: 0
         - name: q
           in: query
-          description: Case-insensitive match on the contact name.
+          description: Case-insensitive match on the contact name or e-mail.
           schema:
             type: string
+        - name: external_id
+          in: query
+          description: "CF-195: the customer's own user id, exact match."
+          schema:
+            type: string
+            maxLength: 200
+    post:
+      tags:
+        - Kişiler
+      operationId: postV1PublicApiContacts
+      summary: Kişi oluştur
+      description: "Kapsam: `contacts:write`. Kendi sisteminizdeki kullanıcıları senkron tutmak için `PUT /contacts/by-external-id` tercih edin. `Idempotency-Key` zorunludur."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeContact"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /v1/public-api/contacts/by-external-id:
+    put:
+      tags:
+        - Kişiler
+      operationId: putV1PublicApiContactByExternalId
+      summary: Kişiyi dış kimlikle oluştur veya güncelle
+      description: "Kapsam: `contacts:write`. `external_id` zorunludur ve sizin kullanıcı numaranızdır (widget `identify` içindeki `user_id`). Bu kimlikte kişi varsa güncellenir (`200`), yoksa oluşturulur (`201`); e-posta veya telefonla eşleşme yapılmaz. Başka kişideki bir kimlik `409 EXTERNAL_ID_EXISTS` döner. `Idempotency-Key` zorunludur."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 200
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - type: object
+                  required:
+                    - external_id
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeContact"
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeContact"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /v1/public-api/companies:
     get:
       tags:
         - Şirketler
       operationId: getV1PublicApiCompanies
       summary: Şirketleri listele
+      description: "Kapsam: `companies:read`. `external_id` firmanın sizin sisteminizdeki numarasıyla tam eşleşir; kişi dış kimliklerinden ayrıdır."
       security:
         - integrationKey: []
       responses:
@@ -681,7 +830,6 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `companies:read`."
       parameters:
         - name: limit
           in: query
@@ -696,6 +844,12 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - name: external_id
+          in: query
+          description: "CF-195: the company's id in your system, exact match."
+          schema:
+            type: string
+            maxLength: 200
   /v1/public-api/company-usage:
     put:
       tags:
@@ -1537,6 +1691,179 @@ components:
           type: integer
           minimum: 0
           maximum: 100
+    Contact:
+      type: object
+      required:
+        - uuid
+        - name
+        - email
+        - phone
+        - external_id
+        - identity_state
+        - verified_at
+        - job_title
+        - company
+        - locale
+        - timezone
+        - notes
+        - custom_fields
+        - blocked
+        - channel_types
+        - conversation_count
+        - last_seen_at
+        - created_at
+        - updated_at
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type:
+            - string
+            - "null"
+        phone:
+          type:
+            - string
+            - "null"
+        external_id:
+          type:
+            - string
+            - "null"
+          description: the customer's own user id, unique in the organization.
+        identity_state:
+          $ref: "#/components/schemas/ContactIdentityState"
+        verified_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Last widget identify that proved the id with user_hash.
+        job_title:
+          type: string
+        company:
+          oneOf:
+            - $ref: "#/components/schemas/InboxRef"
+            - type: "null"
+        locale:
+          type:
+            - string
+            - "null"
+        timezone:
+          type:
+            - string
+            - "null"
+        notes:
+          type: string
+        custom_fields:
+          type: object
+          additionalProperties: true
+        blocked:
+          type: boolean
+        channel_types:
+          type: array
+          items:
+            type: string
+        conversation_count:
+          type: integer
+          format: int64
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactIdentity"
+        last_seen_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ContactIdentity:
+      type: object
+      required:
+        - id
+        - channel_type
+        - inbox_uuid
+        - external_id
+        - display_name
+        - username
+        - last_seen_at
+        - created_at
+      properties:
+        id:
+          type: integer
+          format: int64
+        channel_type:
+          type: string
+        inbox_uuid:
+          type:
+            - string
+            - "null"
+          format: uuid
+        external_id:
+          type: string
+        display_name:
+          type: string
+        username:
+          type: string
+        last_seen_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    ContactIdentityState:
+      type: string
+      enum:
+        - verified
+        - anonymous
+        - self_named
+      description: |
+        . verified: the contact proved the customer's user id with
+        user_hash (widget identify). anonymous: no name, e-mail or phone.
+        self_named: a name, e-mail or phone the contact or its channel gave,
+        not proved.
+    ContactInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+        phone:
+          type: string
+        job_title:
+          type: string
+          maxLength: 120
+        company:
+          type:
+            - string
+            - "null"
+          format: uuid
+        locale:
+          type: string
+        timezone:
+          type: string
+        notes:
+          type: string
+        custom_fields:
+          type: object
+          additionalProperties: true
+        blocked:
+          type: boolean
+        external_id:
+          type: string
+          maxLength: 200
+          description: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
     ConversationPriority:
       type: string
       enum:
@@ -1640,6 +1967,21 @@ components:
               type: integer
         meta:
           $ref: "#/components/schemas/ResponseMeta"
+    EnvelopeContact:
+      type: object
+      required:
+        - success
+        - data
+        - meta
+      properties:
+        success:
+          type: boolean
+          enum:
+            - true
+        data:
+          $ref: "#/components/schemas/Contact"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
     EnvelopeWebhookReceived:
       type: object
       required:
@@ -1729,6 +2071,17 @@ components:
           type: string
         code:
           type: string
+    InboxRef:
+      type: object
+      required:
+        - uuid
+        - name
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
     IntegrationContactUpdate:
       type: object
       properties:
@@ -1743,10 +2096,14 @@ components:
       additionalProperties: false
     IntegrationCreateConversation:
       type: object
+      description: Name the contact by contact_uuid or contact_external_id (, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
       properties:
         contact_uuid:
           type: string
           format: uuid
+        contact_external_id:
+          type: string
+          maxLength: 200
         inbox_uuid:
           type: string
           format: uuid
@@ -1755,7 +2112,6 @@ components:
           minLength: 1
           maxLength: 500
       required:
-        - contact_uuid
         - inbox_uuid
         - subject
       additionalProperties: false
@@ -1909,7 +2265,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     ValidationError:
-      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`)"
+      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:

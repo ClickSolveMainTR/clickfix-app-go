@@ -498,7 +498,7 @@ func (s *seeder) seedChannels(ctx context.Context) error {
 			settings = map[string]any{
 				"demo": true, "color": "#0f766e", "locale": "tr", "greeting_title": "Merhaba 👋",
 				"greeting_text": s.brand() + " destek ekibi genellikle birkaç dakika içinde yanıt verir.",
-				"show_team":     true, "prechat": map[string]any{"enabled": true, "name": "optional", "email": "required"},
+				"show_team":     true, "prechat": map[string]any{"enabled": true},
 				"csat": true, "file_upload": true,
 			}
 		}

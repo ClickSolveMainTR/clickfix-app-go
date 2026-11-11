@@ -3,6 +3,11 @@ export { useDataTable } from "./use-data-table";
 export { createColumn } from "./create-column";
 export { createSelectColumnDef } from "./select-column";
 export { createReorderColumnDef, REORDER_COLUMN_ID } from "./reorder-column";
+export {
+  createExpandColumnDef,
+  EXPAND_COLUMN_ID,
+  ExpandToggle,
+} from "./expand-column";
 export { reorderRowsById } from "./reorder-rows";
 export { ColumnHeader } from "./column-header";
 export { ColumnFilter } from "./column-filter";

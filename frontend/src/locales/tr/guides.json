@@ -1,7 +1,5 @@
 {
   "all": "Tümü",
-  "next": "Sonraki",
-  "prev": "Önceki",
   "ask_about": "“{{title}}” hakkında daha fazla bilgi verir misin?",
   "tour.next": "İleri",
   "tour.back": "Geri",
@@ -90,5 +88,11 @@
   "platform_feedback.status.reviewed": "İncelendi",
   "platform_feedback.status.closed": "Kapandı",
   "platform_feedback.empty": "Geri bildirim yok.",
+  "platform_feedback.columns.kind": "Tür",
+  "platform_feedback.columns.message": "Mesaj",
+  "platform_feedback.columns.organization": "İşletme",
+  "platform_feedback.columns.source": "Kaynak",
+  "platform_feedback.columns.created": "Tarih",
+  "platform_feedback.columns.status": "Durum",
   "platform_feedback.attachments": "{{count}} ekran görüntüsü"
 }

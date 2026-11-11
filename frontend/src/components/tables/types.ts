@@ -171,6 +171,17 @@ export type DataTableProps<TData> = {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
   getRowId?: (originalRow: TData, index: number) => string;
+  /**
+   * With `features.rowSelection`: rows that can be selected (the others get a
+   * disabled checkbox). Every row by default.
+   */
+  getRowCanSelect?: (row: TData) => boolean;
+  /**
+   * With `features.rowSelection`: most rows selectable at once. At the
+   * ceiling the other checkboxes are disabled; "select all" takes the first
+   * rows of the page up to it.
+   */
+  maxSelection?: number;
 
   isLoading?: boolean;
   /**
@@ -212,6 +223,14 @@ export type DataTableProps<TData> = {
         table: Table<TData>,
       ) => DataTableBulkAction<TData>[] | ReactNode);
   rowActions?: (row: TData, table: Table<TData>) => ReactNode;
+  /**
+   * Detail of a row, opened with a chevron column in front of the columns:
+   * a full-width row under the row (table view) or the bottom of the card
+   * (grid view). Without `onRowClick`, clicking the row also toggles it.
+   */
+  renderSubRow?: (row: TData) => ReactNode;
+  /** Rows that have a detail to open; every row by default. */
+  getRowCanExpand?: (row: TData) => boolean;
   /** Custom card renderer for grid view */
   renderGridItem?: (row: TData, table: Table<TData>) => ReactNode;
 
@@ -246,10 +265,13 @@ export type UseDataTableOptions<TData> = Pick<
   | "columns"
   | "data"
   | "getRowId"
+  | "getRowCanSelect"
+  | "maxSelection"
   | "features"
   | "manual"
   | "state"
   | "initialState"
   | "pageCount"
   | "rowCount"
+  | "getRowCanExpand"
 >;

@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { parse } from 'yaml';
 import openapiTS, { astToString } from 'openapi-typescript';
 import { buildPublicSpec } from './public-api.mjs';
+import { renderPhpEndpoints } from './php-endpoints.mjs';
 const root = new URL('../', import.meta.url);
 const spec = parse(await readFile(new URL('../../backend/docs/openapi.yaml', import.meta.url), 'utf8'));
 const check = process.argv.includes('--check');
@@ -43,7 +44,8 @@ try {
   const server = subset(p => p.startsWith('/v1/public-api/'));
   const widget = subset(p => p.startsWith('/v1/widget/'));
   await output('node/src/schema.d.ts', astToString(await openapiTS(server)));
-  await output('react-widget/src/schema.d.ts', astToString(await openapiTS(widget)));
+  await output('visitor-core/src/schema.d.ts', astToString(await openapiTS(widget)));
+  await output('php/src/Endpoints.php', renderPhpEndpoints(parse(await readFile(new URL('../../backend/docs/public-api.yaml', import.meta.url), 'utf8'))));
   const input = join(temp, 'public-api.json');
   await writeFile(input, JSON.stringify(server));
   const generated = execFileSync('go', ['run', 'github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0', '-package', 'clickfix', '-generate', 'types,client', input], {encoding:'utf8', env:{...process.env,GOMAXPROCS:'2'}});

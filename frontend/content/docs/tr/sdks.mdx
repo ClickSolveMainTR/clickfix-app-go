@@ -1,18 +1,23 @@
 ---
 title: SDK'lar ve örnek kod
-description: Go, Node.js ve React için ClickFix SDK kullanım örnekleri; kimlik doğrulama, tekrar deneme, sayfalama, webhook imzası ve SDK'sız istekler.
+description: Go, Node.js, PHP ve React için ClickFix SDK kullanım örnekleri; kimlik doğrulama, tekrar deneme, sayfalama, webhook imzası ve SDK'sız istekler.
 section: developers
 order: 2
 ---
 
-ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için arayüzsüz bir widget istemcisi vardır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar.
+ClickFix'in Go, Node.js ve PHP için sunucu SDK'ları ile React için arayüzsüz bir widget istemcisi vardır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar.
 
-<Callout title="Paketler henüz yayımlanmadı">
-  SDK paketleri (`@clickfix/node`, `@clickfix/react-widget` ve Go modülü)
-  yayımlandığında bu sayfada duyurulacak. O zamana kadar aşağıdaki [SDK'sız
-  örnekler](#without-an-sdk) aynı işlemleri doğrudan HTTP ile yapar; [API
-  başvurusundaki](/docs/api-reference/conversations) her uç noktanın yanında
-  curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
+<Callout title="Paketler">
+  `npm install @getclickfix/node` (0.1.0, Node 22+), `npm install
+  @getclickfix/react-widget` (0.1.0, React 18+), `composer require clickfix/sdk`
+  (0.1.0, PHP 8.1+) ve `go get
+  github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`. Baştan sona kurulum
+  sırası ve her adımda doğrulanmış örnekler: [Entegrasyon
+  kılavuzu](/docs/integration-guide). Laravel 10-13 için `composer require
+  clickfix/laravel` (0.1.0): [Laravel paketi](/docs/integration-guide#laravel).
+  Aşağıdaki [SDK'sız örnekler](#without-an-sdk) aynı işlemleri doğrudan HTTP ile
+  yapar; [API başvurusundaki](/docs/api-reference/conversations) her uç noktanın
+  yanında curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
 </Callout>
 
 Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). API anahtarları yalnızca sunucuda kalmalıdır; tarayıcı koduna koymayın. Anahtar oluşturma ve kapsamlar: [API](/docs/api).
@@ -22,7 +27,7 @@ Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin).
 Yazma işlemlerinde işlemi tanımlayan sabit bir `Idempotency-Key` verin (ör. sipariş numarası) ve tekrar denemelerde aynı değeri gönderin.
 
 ```ts tab="Node.js"
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: "https://api.getclickfix.com",
@@ -59,7 +64,7 @@ API tamamlanmış yazma yanıtlarını (hatalar dahil) saklar: aynı anahtarla t
 ## Sayfalama [#pagination]
 
 ```ts tab="Node.js"
-import { paginate } from "@clickfix/node";
+import { paginate } from "@getclickfix/node";
 
 for await (const contact of paginate(async (limit, offset) => {
   const envelope = await client.request(
@@ -96,7 +101,7 @@ Ofset sayfalama anlık görüntüler içindir; eşzamanlı eklemeler sayfaları 
 ## Webhook imzası ve kimlik özeti [#webhook-signature]
 
 ```ts tab="Node.js"
-import { identityHash, verifyWebhook } from "@clickfix/node";
+import { identityHash, verifyWebhook } from "@getclickfix/node";
 
 const valid = verifyWebhook(
   secret,
@@ -126,7 +131,7 @@ Hazır mesajlaşma arayüzünü (balon, ana sayfa, yardım merkezi) kendi düğm
 ```tsx tab="Hazır widget"
 "use client";
 import { useMemo } from "react";
-import { useClickFix, useClickFixEvent } from "@clickfix/react-widget";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
 
 export function Support({ consent }: { consent: boolean }) {
   const options = useMemo(
@@ -154,7 +159,7 @@ export function Support({ consent }: { consent: boolean }) {
 ```tsx tab="Kendi arayüzünüz"
 "use client";
 import { useEffect, useState } from "react";
-import { createWidgetClient, useWidget } from "@clickfix/react-widget";
+import { createWidgetClient, useWidget } from "@getclickfix/react-widget";
 
 export function Support() {
   const [client] = useState(() =>

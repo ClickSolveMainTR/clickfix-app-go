@@ -104,6 +104,35 @@ WHERE organization_id = $1 AND external_id = sqlc.arg(external_id)::text AND del
 ORDER BY id ASC
 LIMIT 1;
 
+-- CF-206: a signed company id (user_hash covers user_id and company.id).
+
+-- name: GetWidgetCompanyByID :one
+SELECT * FROM companies
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL;
+
+-- name: SetCompanyExternalIDIfEmpty :exec
+-- The company matched by domain takes the proved external id when it has
+-- none (the id was looked up first, so no other live company holds it).
+UPDATE companies SET external_id = sqlc.arg(external_id)::text, updated_at = NOW()
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND external_id IS NULL AND deleted_at IS NULL;
+
+-- name: MarkCompanyVerified :exec
+-- Rewritten at most once an hour: every signed identify would otherwise
+-- write the company row.
+UPDATE companies SET verified_at = sqlc.arg(verified_at), updated_at = NOW()
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
+  AND (verified_at IS NULL OR verified_at < sqlc.arg(verified_at)::timestamptz - interval '1 hour');
+
+-- name: SetContactCompany :exec
+-- A proved company id moves the contact to that company even when it had
+-- another one (the unsigned path only fills an empty company) and records
+-- the proof on the contact (company_verified_at, rewritten at most once an
+-- hour when nothing else changes).
+UPDATE contacts SET company_id = sqlc.arg(company_id), company_verified_at = sqlc.arg(verified_at), updated_at = NOW()
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
+  AND (company_id IS DISTINCT FROM sqlc.arg(company_id)
+       OR company_verified_at IS NULL OR company_verified_at < sqlc.arg(verified_at)::timestamptz - interval '1 hour');
+
 -- CF-150: editor drafts, published versions and install detection.
 
 -- name: GetWidgetDraft :one
@@ -199,3 +228,33 @@ WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc
 -- Mapped visitor attributes (already validated against the definitions).
 UPDATE contacts SET custom_fields = custom_fields || sqlc.arg(patch)::jsonb, updated_at = now()
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL;
+
+-- CF-201: mobile app keys (hash only; the key is shown once on creation).
+
+-- name: CreateWidgetAppKey :one
+INSERT INTO widget_app_keys (organization_id, channel_instance_id, platform, package_name, label, key_prefix, key_hash, created_by)
+VALUES (sqlc.arg(organization_id), sqlc.arg(channel_instance_id), sqlc.arg(platform), sqlc.arg(package_name), sqlc.arg(label), sqlc.arg(key_prefix), sqlc.arg(key_hash), sqlc.narg(created_by))
+RETURNING *;
+
+-- name: ListWidgetAppKeys :many
+SELECT * FROM widget_app_keys
+WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc.arg(channel_instance_id)
+ORDER BY revoked_at IS NOT NULL, created_at DESC
+LIMIT 100;
+
+-- name: RevokeWidgetAppKey :one
+UPDATE widget_app_keys SET revoked_at = now()
+WHERE organization_id = sqlc.arg(organization_id) AND channel_instance_id = sqlc.arg(channel_instance_id)
+  AND uuid = sqlc.arg(uuid) AND revoked_at IS NULL
+RETURNING *;
+
+-- name: GetWidgetAppKeyByHash :one
+-- The visitor API looks the key up by its hash; the caller checks the
+-- instance, the package name and revoked_at (a revoked key must fail the
+-- same way as an unknown one).
+SELECT * FROM widget_app_keys WHERE key_hash = sqlc.arg(key_hash);
+
+-- name: TouchWidgetAppKey :exec
+-- last_used_at is rewritten at most every five minutes (busy apps).
+UPDATE widget_app_keys SET last_used_at = now()
+WHERE id = sqlc.arg(id) AND (last_used_at IS NULL OR last_used_at < now() - interval '5 minutes');

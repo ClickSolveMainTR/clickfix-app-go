@@ -29,6 +29,8 @@ import (
 	convmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations"
 	convh "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/handler"
 	convuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
+	cfrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
+	cfusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
 	engmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/engineering"
 	engh "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/engineering/handler"
 	engrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/engineering/repository"
@@ -126,7 +128,8 @@ func Mount(d Deps) (*Runtime, error) {
 	bridge := &apibridge.Bridge{Handler: d.Router, Tokens: d.Tokens}
 	hooks := hookuc.New(d.Q, box)
 	public := &publicuc.Service{Store: publicrepo.New(d.Q), Bridge: bridge, Box: box, Limiter: limiter, Resolver: d.Resolver}
-	auto := &autouc.Service{Store: autorepo.New(d.Q), Conversations: d.Conversations, Bridge: bridge, Resolver: d.Resolver, Webhooks: hooks, Notifications: d.Notifications}
+	auto := &autouc.Service{Store: autorepo.New(d.Q), Conversations: d.Conversations, Bridge: bridge, Resolver: d.Resolver, Webhooks: hooks, Notifications: d.Notifications,
+		Fields: cfusecase.New(cfrepo.New(d.DB, d.Q))}
 	auto.Workflows = &autouc.Workflows{Store: &autorepo.WorkflowStore{Pool: d.DB, Q: d.Q}, Automation: auto,
 		Entitlements: entitlements.New(billingrepo.New(d.DB, d.Q), d.Redis, d.Config.App.Env), ExtraAction: workflowActions(d, auto)}
 	apps, err := appuc.New(apprepo.New(d.Q), d.Conversations, bridge, d.Config.Encryption.Key)

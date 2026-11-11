@@ -13,18 +13,20 @@ import {
   type ColumnOrderState,
   type ColumnPinningState,
   type ColumnSizingState,
+  type ExpandedState,
   type PaginationState,
   type RowSelectionState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fromPersistedState,
   toPersistedState,
 } from "@/components/tables/persist-state";
 import { searchTextIncludes } from "@/components/tables/search-text";
+import { capSelection, selectedCount } from "@/components/tables/selection-cap";
 import type {
   DataTableFeatures,
   DataTableState,
@@ -99,12 +101,15 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     columns,
     data,
     getRowId,
+    getRowCanSelect,
+    maxSelection,
     features: featuresProp,
     manual,
     state: controlled,
     initialState,
     pageCount,
     rowCount,
+    getRowCanExpand,
   } = options;
 
   const features = { ...DEFAULT_FEATURES, ...featuresProp };
@@ -152,6 +157,8 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>(
     controlled?.rowSelection ?? initialState?.rowSelection ?? {},
   );
+  // Open detail rows; UI only, never persisted.
+  const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>(
     controlled?.pagination ??
       persisted?.pagination ??
@@ -183,6 +190,27 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     }
   }, [controlled?.globalFilter]);
 
+  // Controlled pagination (`useServerListState`): the stored page size is
+  // handed to the owner once, on mount. The local state above only feeds the
+  // uncontrolled case.
+  const restoredPageSize = useRef(false);
+  const onControlledPagination = controlled?.onPaginationChange;
+  const controlledPageSize = controlled?.pagination?.pageSize;
+  const storedPageSize = persisted?.pagination?.pageSize;
+  useEffect(() => {
+    if (restoredPageSize.current) return;
+    restoredPageSize.current = true;
+    if (
+      onControlledPagination &&
+      storedPageSize &&
+      storedPageSize !== controlledPageSize
+    ) {
+      onControlledPagination({ pageIndex: 0, pageSize: storedPageSize });
+    }
+  }, [onControlledPagination, storedPageSize, controlledPageSize]);
+
+  const effectivePagination = controlled?.pagination ?? pagination;
+
   useEffect(() => {
     writePersisted(features.persistKey, {
       sorting,
@@ -192,7 +220,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       columnOrder,
       columnPinning,
       columnSizing,
-      pagination,
+      pagination: effectivePagination,
       density,
       viewMode,
     });
@@ -205,10 +233,24 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     columnOrder,
     columnPinning,
     columnSizing,
-    pagination,
+    effectivePagination,
     density,
     viewMode,
   ]);
+
+  const currentSelection = controlled?.rowSelection ?? rowSelection;
+  const atSelectionCap =
+    maxSelection !== undefined &&
+    selectedCount(currentSelection) >= maxSelection;
+  const onRowSelectionChange = (
+    updater: Parameters<typeof setRowSelection>[0],
+  ) => {
+    const set = controlled?.onRowSelectionChange ?? setRowSelection;
+    if (maxSelection === undefined) return set(updater);
+    const next =
+      typeof updater === "function" ? updater(currentSelection) : updater;
+    set(capSelection(currentSelection, next, maxSelection));
+  };
 
   // Uncontrolled pagination only: a controlled list (`useServerListState`)
   // resets its own page when search, filters or sorting change.
@@ -237,6 +279,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
       columnSizing: controlled?.columnSizing ?? columnSizing,
       rowSelection: controlled?.rowSelection ?? rowSelection,
       pagination: controlled?.pagination ?? pagination,
+      expanded,
     },
     onSortingChange: (updater) => {
       (controlled?.onSortingChange ?? setSorting)(updater);
@@ -256,8 +299,12 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     onColumnPinningChange:
       controlled?.onColumnPinningChange ?? setColumnPinning,
     onColumnSizingChange: controlled?.onColumnSizingChange ?? setColumnSizing,
-    onRowSelectionChange: controlled?.onRowSelectionChange ?? setRowSelection,
+    onRowSelectionChange,
     onPaginationChange: controlled?.onPaginationChange ?? setPagination,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: getRowCanExpand
+      ? (row) => getRowCanExpand(row.original)
+      : () => false,
 
     enableSorting: features.sorting,
     // Hiding a column needs a way to bring it back: the toolbar's column
@@ -268,7 +315,12 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     enableFilters: features.columnFilters || features.globalFilter,
     enableColumnFilters: features.columnFilters,
     enableGlobalFilter: features.globalFilter,
-    enableRowSelection: features.rowSelection,
+    enableRowSelection:
+      features.rowSelection && (getRowCanSelect || atSelectionCap)
+        ? (row) =>
+            (!getRowCanSelect || getRowCanSelect(row.original)) &&
+            (!atSelectionCap || row.getIsSelected())
+        : features.rowSelection,
     enableColumnResizing: features.columnResizing,
     columnResizeMode: "onChange",
     enableColumnPinning: features.columnPinning,
@@ -312,6 +364,7 @@ export function useDataTable<TData>(options: UseDataTableOptions<TData>) {
     table.resetColumnPinning();
     table.resetColumnSizing();
     table.resetRowSelection();
+    table.resetExpanded();
     // Back to the first page only: `resetPagination()` would also drop the
     // page size to TanStack's default (10), whatever the screen started with.
     table.setPageIndex(0);

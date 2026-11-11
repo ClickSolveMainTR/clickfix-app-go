@@ -312,5 +312,17 @@
   "shortcuts.save": "Save draft",
   "shortcuts.zoom": "Zoom in / out",
   "shortcuts.fit": "Fit view",
-  "shortcuts.layout": "Auto layout"
+  "shortcuts.layout": "Auto layout",
+  "actions.run_system_action": "Run a connected system action",
+  "action_help.run_system_action": "Runs an action of your connected system for the conversation's customer. Only actions open to workflows that need no approval and no required params can be used.",
+  "fields.screen_page_url": "Screen: page URL",
+  "fields.screen_page_path": "Screen: page path",
+  "fields.screen_last_event": "Screen: last event",
+  "fields.screen_event_names": "Screen: events",
+  "fields_ui.system_action": "Action",
+  "issues.action_system": "Pick a connected system action.",
+  "system_action.none": "No action is open to workflows. Define one under Connect your system.",
+  "fields.catalog_contact": "Contact",
+  "fields.catalog_company": "Company",
+  "fields.catalog_conversation": "Conversation"
 }

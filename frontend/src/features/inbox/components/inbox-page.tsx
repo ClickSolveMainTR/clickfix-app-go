@@ -119,6 +119,8 @@ export function InboxPage() {
   const chParam = params.get("ch");
   const tgParam = params.get("tg");
   const brParam = params.get("br");
+  // CF-195: contact identity (?id=verified|anonymous|self_named).
+  const idParam = asIdentity(params.get("id"));
   const savedView = params.get("sv");
   const savedViews = useConversationViews();
   const saved = savedViews.data?.find((v) => v.uuid === savedView)?.filters;
@@ -162,6 +164,7 @@ export function InboxPage() {
       channelTypes: chParam ? chParam.split(",") : undefined,
       tags: tgParam ? tgParam.split(",") : undefined,
       brand: brParam ?? undefined,
+      identity: idParam,
       saved,
     }),
     [
@@ -175,6 +178,7 @@ export function InboxPage() {
       chParam,
       tgParam,
       brParam,
+      idParam,
       saved,
     ],
   );
@@ -793,4 +797,12 @@ function EmptyPane({ title, hint }: { title: string; hint: string }) {
       {hint && <p className="text-muted-foreground max-w-xs text-xs">{hint}</p>}
     </div>
   );
+}
+
+const IDENTITY_STATES = ["verified", "anonymous", "self_named"] as const;
+
+function asIdentity(
+  v: string | null,
+): (typeof IDENTITY_STATES)[number] | undefined {
+  return IDENTITY_STATES.find((s) => s === v);
 }

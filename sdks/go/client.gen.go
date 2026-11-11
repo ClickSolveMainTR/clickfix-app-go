@@ -117,6 +117,27 @@ func (e CompanyRevenueUpsertInputSource) Valid() bool {
 	}
 }
 
+// Defines values for ContactIdentityState.
+const (
+	Anonymous ContactIdentityState = "anonymous"
+	SelfNamed ContactIdentityState = "self_named"
+	Verified  ContactIdentityState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the ContactIdentityState enum.
+func (e ContactIdentityState) Valid() bool {
+	switch e {
+	case Anonymous:
+		return true
+	case SelfNamed:
+		return true
+	case Verified:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConversationPriority.
 const (
 	High   ConversationPriority = "high"
@@ -207,6 +228,21 @@ const (
 func (e EnvelopeCompanyUsageSuccess) Valid() bool {
 	switch e {
 	case EnvelopeCompanyUsageSuccessTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvelopeContactSuccess.
+const (
+	EnvelopeContactSuccessTrue EnvelopeContactSuccess = true
+)
+
+// Valid indicates whether the value is a known member of the EnvelopeContactSuccess enum.
+func (e EnvelopeContactSuccess) Valid() bool {
+	switch e {
+	case EnvelopeContactSuccessTrue:
 		return true
 	default:
 		return false
@@ -458,6 +494,74 @@ type CompanyUsageInput struct {
 	Score       int                 `json:"score"`
 }
 
+// Contact defines model for Contact.
+type Contact struct {
+	Blocked           bool                   `json:"blocked"`
+	ChannelTypes      []string               `json:"channel_types"`
+	Company           *InboxRef              `json:"company"`
+	ConversationCount int64                  `json:"conversation_count"`
+	CreatedAt         time.Time              `json:"created_at"`
+	CustomFields      map[string]interface{} `json:"custom_fields"`
+	Email             *string                `json:"email"`
+
+	// ExternalId CF-195: the customer's own user id, unique in the organization.
+	ExternalId *string            `json:"external_id"`
+	Identities *[]ContactIdentity `json:"identities,omitempty"`
+
+	// IdentityState CF-195. verified: the contact proved the customer's user id with
+	// user_hash (widget identify). anonymous: no name, e-mail or phone.
+	// self_named: a name, e-mail or phone the contact or its channel gave,
+	// not proved.
+	IdentityState ContactIdentityState `json:"identity_state"`
+	JobTitle      string               `json:"job_title"`
+	LastSeenAt    *time.Time           `json:"last_seen_at"`
+	Locale        *string              `json:"locale"`
+	Name          string               `json:"name"`
+	Notes         string               `json:"notes"`
+	Phone         *string              `json:"phone"`
+	Timezone      *string              `json:"timezone"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	Uuid          openapi_types.UUID   `json:"uuid"`
+
+	// VerifiedAt Last widget identify that proved the id with user_hash.
+	VerifiedAt *time.Time `json:"verified_at"`
+}
+
+// ContactIdentity defines model for ContactIdentity.
+type ContactIdentity struct {
+	ChannelType string              `json:"channel_type"`
+	CreatedAt   time.Time           `json:"created_at"`
+	DisplayName string              `json:"display_name"`
+	ExternalId  string              `json:"external_id"`
+	Id          int64               `json:"id"`
+	InboxUuid   *openapi_types.UUID `json:"inbox_uuid"`
+	LastSeenAt  *time.Time          `json:"last_seen_at"`
+	Username    string              `json:"username"`
+}
+
+// ContactIdentityState CF-195. verified: the contact proved the customer's user id with
+// user_hash (widget identify). anonymous: no name, e-mail or phone.
+// self_named: a name, e-mail or phone the contact or its channel gave,
+// not proved.
+type ContactIdentityState string
+
+// ContactInput defines model for ContactInput.
+type ContactInput struct {
+	Blocked      *bool                   `json:"blocked,omitempty"`
+	Company      *openapi_types.UUID     `json:"company,omitempty"`
+	CustomFields *map[string]interface{} `json:"custom_fields,omitempty"`
+	Email        *string                 `json:"email,omitempty"`
+
+	// ExternalId CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+	ExternalId *string `json:"external_id,omitempty"`
+	JobTitle   *string `json:"job_title,omitempty"`
+	Locale     *string `json:"locale,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	Notes      *string `json:"notes,omitempty"`
+	Phone      *string `json:"phone,omitempty"`
+	Timezone   *string `json:"timezone,omitempty"`
+}
+
 // ConversationPriority defines model for ConversationPriority.
 type ConversationPriority string
 
@@ -514,6 +618,16 @@ type EnvelopeCompanyUsage struct {
 // EnvelopeCompanyUsageSuccess defines model for EnvelopeCompanyUsage.Success.
 type EnvelopeCompanyUsageSuccess bool
 
+// EnvelopeContact defines model for EnvelopeContact.
+type EnvelopeContact struct {
+	Data    Contact                `json:"data"`
+	Meta    ResponseMeta           `json:"meta"`
+	Success EnvelopeContactSuccess `json:"success"`
+}
+
+// EnvelopeContactSuccess defines model for EnvelopeContact.Success.
+type EnvelopeContactSuccess bool
+
 // Error defines model for Error.
 type Error struct {
 	Error   ErrorBody    `json:"error"`
@@ -541,6 +655,12 @@ type ErrorDetail struct {
 	Message string  `json:"message"`
 }
 
+// InboxRef defines model for InboxRef.
+type InboxRef struct {
+	Name string             `json:"name"`
+	Uuid openapi_types.UUID `json:"uuid"`
+}
+
 // IntegrationContactUpdate defines model for IntegrationContactUpdate.
 type IntegrationContactUpdate struct {
 	Email *string `json:"email,omitempty"`
@@ -549,11 +669,12 @@ type IntegrationContactUpdate struct {
 	Phone *string `json:"phone,omitempty"`
 }
 
-// IntegrationCreateConversation defines model for IntegrationCreateConversation.
+// IntegrationCreateConversation Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
 type IntegrationCreateConversation struct {
-	ContactUuid openapi_types.UUID `json:"contact_uuid"`
-	InboxUuid   openapi_types.UUID `json:"inbox_uuid"`
-	Subject     string             `json:"subject"`
+	ContactExternalId *string             `json:"contact_external_id,omitempty"`
+	ContactUuid       *openapi_types.UUID `json:"contact_uuid,omitempty"`
+	InboxUuid         openapi_types.UUID  `json:"inbox_uuid"`
+	Subject           string              `json:"subject"`
 }
 
 // IntegrationEnvelope defines model for IntegrationEnvelope.
@@ -632,6 +753,9 @@ type ValidationError = Error
 type GetV1PublicApiCompaniesParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// ExternalId CF-195: the company's id in your system, exact match.
+	ExternalId *string `form:"external_id,omitempty" json:"external_id,omitempty"`
 }
 
 // PostV1PublicApiCompanyEventParams defines parameters for PostV1PublicApiCompanyEvent.
@@ -654,8 +778,38 @@ type GetV1PublicApiContactsParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 
-	// Q Case-insensitive match on the contact name.
+	// Q Case-insensitive match on the contact name or e-mail.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// ExternalId CF-195: the customer's own user id, exact match.
+	ExternalId *string `form:"external_id,omitempty" json:"external_id,omitempty"`
+}
+
+// PostV1PublicApiContactsParams defines parameters for PostV1PublicApiContacts.
+type PostV1PublicApiContactsParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
+}
+
+// PutV1PublicApiContactByExternalIdJSONBody defines parameters for PutV1PublicApiContactByExternalId.
+type PutV1PublicApiContactByExternalIdJSONBody struct {
+	Blocked      *bool                   `json:"blocked,omitempty"`
+	Company      *openapi_types.UUID     `json:"company,omitempty"`
+	CustomFields *map[string]interface{} `json:"custom_fields,omitempty"`
+	Email        *string                 `json:"email,omitempty"`
+
+	// ExternalId CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+	ExternalId string  `json:"external_id"`
+	JobTitle   *string `json:"job_title,omitempty"`
+	Locale     *string `json:"locale,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	Notes      *string `json:"notes,omitempty"`
+	Phone      *string `json:"phone,omitempty"`
+	Timezone   *string `json:"timezone,omitempty"`
+}
+
+// PutV1PublicApiContactByExternalIdParams defines parameters for PutV1PublicApiContactByExternalId.
+type PutV1PublicApiContactByExternalIdParams struct {
+	IdempotencyKey string `json:"Idempotency-Key"`
 }
 
 // UpdateIntegrationContactParams defines parameters for UpdateIntegrationContact.
@@ -755,6 +909,12 @@ type PutV1PublicApiCompanyRevenueJSONRequestBody = CompanyRevenueUpsertInput
 // PutV1PublicApiCompanyUsageJSONRequestBody defines body for PutV1PublicApiCompanyUsage for application/json ContentType.
 type PutV1PublicApiCompanyUsageJSONRequestBody = CompanyUsageInput
 
+// PostV1PublicApiContactsJSONRequestBody defines body for PostV1PublicApiContacts for application/json ContentType.
+type PostV1PublicApiContactsJSONRequestBody = ContactInput
+
+// PutV1PublicApiContactByExternalIdJSONRequestBody defines body for PutV1PublicApiContactByExternalId for application/json ContentType.
+type PutV1PublicApiContactByExternalIdJSONRequestBody PutV1PublicApiContactByExternalIdJSONBody
+
 // UpdateIntegrationContactJSONRequestBody defines body for UpdateIntegrationContact for application/json ContentType.
 type UpdateIntegrationContactJSONRequestBody = IntegrationContactUpdate
 
@@ -852,7 +1012,7 @@ type ClientInterface interface {
 
 	// GetV1PublicApiCompanies Public API: get companies
 	//
-	// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+	// API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
 	//
 	// Corresponds with GET /v1/public-api/companies (the `GetV1PublicApiCompanies` operationId).
 	GetV1PublicApiCompanies(ctx context.Context, params *GetV1PublicApiCompaniesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -913,10 +1073,46 @@ type ClientInterface interface {
 
 	// GetV1PublicApiContacts Public API: get contacts
 	//
-	// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+	// API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
 	//
 	// Corresponds with GET /v1/public-api/contacts (the `GetV1PublicApiContacts` operationId).
 	GetV1PublicApiContacts(ctx context.Context, params *GetV1PublicApiContactsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostV1PublicApiContactsWithBody Public API: create a contact (CF-195)
+	//
+	// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+	PostV1PublicApiContactsWithBody(ctx context.Context, params *PostV1PublicApiContactsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostV1PublicApiContacts Public API: create a contact (CF-195)
+	//
+	// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+	PostV1PublicApiContacts(ctx context.Context, params *PostV1PublicApiContactsParams, body PostV1PublicApiContactsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutV1PublicApiContactByExternalIdWithBody Public API: create or update a contact by your user id (CF-195)
+	//
+	// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+	PutV1PublicApiContactByExternalIdWithBody(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutV1PublicApiContactByExternalId Public API: create or update a contact by your user id (CF-195)
+	//
+	// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+	PutV1PublicApiContactByExternalId(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, body PutV1PublicApiContactByExternalIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateIntegrationContactWithBody Update contact
 	//
@@ -1096,7 +1292,7 @@ type ClientInterface interface {
 
 // GetV1PublicApiCompanies Public API: get companies
 //
-// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+// API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
 //
 // Corresponds with GET /v1/public-api/companies (the `GetV1PublicApiCompanies` operationId).
 func (c *Client) GetV1PublicApiCompanies(ctx context.Context, params *GetV1PublicApiCompaniesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1227,11 +1423,87 @@ func (c *Client) PutV1PublicApiCompanyUsage(ctx context.Context, params *PutV1Pu
 
 // GetV1PublicApiContacts Public API: get contacts
 //
-// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+// API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
 //
 // Corresponds with GET /v1/public-api/contacts (the `GetV1PublicApiContacts` operationId).
 func (c *Client) GetV1PublicApiContacts(ctx context.Context, params *GetV1PublicApiContactsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetV1PublicApiContactsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostV1PublicApiContactsWithBody Public API: create a contact (CF-195)
+//
+// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+func (c *Client) PostV1PublicApiContactsWithBody(ctx context.Context, params *PostV1PublicApiContactsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1PublicApiContactsRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostV1PublicApiContacts Public API: create a contact (CF-195)
+//
+// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+func (c *Client) PostV1PublicApiContacts(ctx context.Context, params *PostV1PublicApiContactsParams, body PostV1PublicApiContactsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV1PublicApiContactsRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutV1PublicApiContactByExternalIdWithBody Public API: create or update a contact by your user id (CF-195)
+//
+// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+func (c *Client) PutV1PublicApiContactByExternalIdWithBody(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutV1PublicApiContactByExternalIdRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutV1PublicApiContactByExternalId Public API: create or update a contact by your user id (CF-195)
+//
+// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+func (c *Client) PutV1PublicApiContactByExternalId(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, body PutV1PublicApiContactByExternalIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutV1PublicApiContactByExternalIdRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1679,6 +1951,18 @@ func NewGetV1PublicApiCompaniesRequest(server string, params *GetV1PublicApiComp
 
 		}
 
+		if params.ExternalId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "external_id", *params.ExternalId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1916,6 +2200,18 @@ func NewGetV1PublicApiContactsRequest(server string, params *GetV1PublicApiConta
 
 		}
 
+		if params.ExternalId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "external_id", *params.ExternalId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -1925,6 +2221,112 @@ func NewGetV1PublicApiContactsRequest(server string, params *GetV1PublicApiConta
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostV1PublicApiContactsRequest calls the generic PostV1PublicApiContacts builder with application/json body
+func NewPostV1PublicApiContactsRequest(server string, params *PostV1PublicApiContactsParams, body PostV1PublicApiContactsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostV1PublicApiContactsRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPostV1PublicApiContactsRequestWithBody constructs an http.Request for the PostV1PublicApiContacts method, with any body, and a specified content type
+func NewPostV1PublicApiContactsRequestWithBody(server string, params *PostV1PublicApiContactsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/public-api/contacts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewPutV1PublicApiContactByExternalIdRequest calls the generic PutV1PublicApiContactByExternalId builder with application/json body
+func NewPutV1PublicApiContactByExternalIdRequest(server string, params *PutV1PublicApiContactByExternalIdParams, body PutV1PublicApiContactByExternalIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutV1PublicApiContactByExternalIdRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPutV1PublicApiContactByExternalIdRequestWithBody constructs an http.Request for the PutV1PublicApiContactByExternalId method, with any body, and a specified content type
+func NewPutV1PublicApiContactByExternalIdRequestWithBody(server string, params *PutV1PublicApiContactByExternalIdParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/public-api/contacts/by-external-id")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
 	}
 
 	return req, nil
@@ -2731,7 +3133,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetV1PublicApiCompaniesWithResponse Public API: get companies
 	//
-	// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+	// API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -2794,12 +3196,48 @@ type ClientWithResponsesInterface interface {
 
 	// GetV1PublicApiContactsWithResponse Public API: get contacts
 	//
-	// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+	// API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/public-api/contacts (the `GetV1PublicApiContacts` operationId).
 	GetV1PublicApiContactsWithResponse(ctx context.Context, params *GetV1PublicApiContactsParams, reqEditors ...RequestEditorFn) (*GetV1PublicApiContactsResponse, error)
+
+	// PostV1PublicApiContactsWithBodyWithResponse Public API: create a contact (CF-195)
+	//
+	// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+	PostV1PublicApiContactsWithBodyWithResponse(ctx context.Context, params *PostV1PublicApiContactsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1PublicApiContactsResponse, error)
+
+	// PostV1PublicApiContactsWithResponse Public API: create a contact (CF-195)
+	//
+	// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+	PostV1PublicApiContactsWithResponse(ctx context.Context, params *PostV1PublicApiContactsParams, body PostV1PublicApiContactsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1PublicApiContactsResponse, error)
+
+	// PutV1PublicApiContactByExternalIdWithBodyWithResponse Public API: create or update a contact by your user id (CF-195)
+	//
+	// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+	PutV1PublicApiContactByExternalIdWithBodyWithResponse(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutV1PublicApiContactByExternalIdResponse, error)
+
+	// PutV1PublicApiContactByExternalIdWithResponse Public API: create or update a contact by your user id (CF-195)
+	//
+	// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+	PutV1PublicApiContactByExternalIdWithResponse(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, body PutV1PublicApiContactByExternalIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutV1PublicApiContactByExternalIdResponse, error)
 
 	// UpdateIntegrationContactWithBodyWithResponse Update contact
 	//
@@ -3365,6 +3803,151 @@ func (r GetV1PublicApiContactsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetV1PublicApiContactsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostV1PublicApiContactsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *EnvelopeContact
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostV1PublicApiContactsResponse) GetJSON201() *EnvelopeContact {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostV1PublicApiContactsResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostV1PublicApiContactsResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PostV1PublicApiContactsResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostV1PublicApiContactsResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostV1PublicApiContactsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostV1PublicApiContactsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostV1PublicApiContactsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostV1PublicApiContactsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutV1PublicApiContactByExternalIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *EnvelopeContact
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *EnvelopeContact
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthenticated
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Forbidden
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON200() *EnvelopeContact {
+	return r.JSON200
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON201() *EnvelopeContact {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON401() *Unauthenticated {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON403() *Forbidden {
+	return r.JSON403
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PutV1PublicApiContactByExternalIdResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PutV1PublicApiContactByExternalIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutV1PublicApiContactByExternalIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutV1PublicApiContactByExternalIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutV1PublicApiContactByExternalIdResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4335,7 +4918,7 @@ func (r PutV1PublicApiWebhooksUuidResponse) ContentType() string {
 
 // GetV1PublicApiCompaniesWithResponse Public API: get companies
 //
-// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+// API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -4440,7 +5023,7 @@ func (c *ClientWithResponses) PutV1PublicApiCompanyUsageWithResponse(ctx context
 
 // GetV1PublicApiContactsWithResponse Public API: get contacts
 //
-// API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+// API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -4451,6 +5034,66 @@ func (c *ClientWithResponses) GetV1PublicApiContactsWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseGetV1PublicApiContactsResponse(rsp)
+}
+
+// PostV1PublicApiContactsWithBodyWithResponse Public API: create a contact (CF-195)
+//
+// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+func (c *ClientWithResponses) PostV1PublicApiContactsWithBodyWithResponse(ctx context.Context, params *PostV1PublicApiContactsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV1PublicApiContactsResponse, error) {
+	rsp, err := c.PostV1PublicApiContactsWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1PublicApiContactsResponse(rsp)
+}
+
+// PostV1PublicApiContactsWithResponse Public API: create a contact (CF-195)
+//
+// Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/public-api/contacts (the `PostV1PublicApiContacts` operationId).
+func (c *ClientWithResponses) PostV1PublicApiContactsWithResponse(ctx context.Context, params *PostV1PublicApiContactsParams, body PostV1PublicApiContactsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV1PublicApiContactsResponse, error) {
+	rsp, err := c.PostV1PublicApiContacts(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV1PublicApiContactsResponse(rsp)
+}
+
+// PutV1PublicApiContactByExternalIdWithBodyWithResponse Public API: create or update a contact by your user id (CF-195)
+//
+// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+func (c *ClientWithResponses) PutV1PublicApiContactByExternalIdWithBodyWithResponse(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutV1PublicApiContactByExternalIdResponse, error) {
+	rsp, err := c.PutV1PublicApiContactByExternalIdWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutV1PublicApiContactByExternalIdResponse(rsp)
+}
+
+// PutV1PublicApiContactByExternalIdWithResponse Public API: create or update a contact by your user id (CF-195)
+//
+// Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/public-api/contacts/by-external-id (the `PutV1PublicApiContactByExternalId` operationId).
+func (c *ClientWithResponses) PutV1PublicApiContactByExternalIdWithResponse(ctx context.Context, params *PutV1PublicApiContactByExternalIdParams, body PutV1PublicApiContactByExternalIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutV1PublicApiContactByExternalIdResponse, error) {
+	rsp, err := c.PutV1PublicApiContactByExternalId(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutV1PublicApiContactByExternalIdResponse(rsp)
 }
 
 // UpdateIntegrationContactWithBodyWithResponse Update contact
@@ -5067,6 +5710,121 @@ func ParseGetV1PublicApiContactsResponse(rsp *http.Response) (*GetV1PublicApiCon
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostV1PublicApiContactsResponse parses an HTTP response from a PostV1PublicApiContactsWithResponse call
+func ParsePostV1PublicApiContactsResponse(rsp *http.Response) (*PostV1PublicApiContactsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostV1PublicApiContactsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest EnvelopeContact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutV1PublicApiContactByExternalIdResponse parses an HTTP response from a PutV1PublicApiContactByExternalIdWithResponse call
+func ParsePutV1PublicApiContactByExternalIdResponse(rsp *http.Response) (*PutV1PublicApiContactByExternalIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutV1PublicApiContactByExternalIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EnvelopeContact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest EnvelopeContact
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthenticated
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

@@ -395,5 +395,10 @@
   "cobrowse.masked_note": "Ziyaretçiye nereye bakacağını göstermek için sayfaya tıklayın. Metin ve form alanları maskelidir; onun yerine yazamaz veya sayfa değiştiremezsiniz.",
   "cobrowse.audit_note": "İstek, ziyaretçinin onayı, yönlendirmeli tıklamalar ve oturumun bitişi denetim kaydına yazılır.",
   "cobrowse.audit_meta": "Onay metni {{version}} · kabul {{accepted}}",
-  "cobrowse.audit_link": "Denetim kaydını aç"
+  "cobrowse.audit_link": "Denetim kaydını aç",
+  "screen.label": "Müşterinin yazdığı ekran",
+  "screen.title": "Ekran bağlamı",
+  "screen.page": "Sayfa",
+  "screen.events": "Olaylar",
+  "filters.identity": "Kimlik"
 }

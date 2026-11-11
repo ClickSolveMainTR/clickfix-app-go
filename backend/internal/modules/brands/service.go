@@ -13,7 +13,6 @@ import (
 	attachmentmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/attachments/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/supportops"
-	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/google/uuid"
@@ -23,20 +22,19 @@ import (
 const FeatureBrands = "brands"
 
 type Input struct {
-	Name             string               `json:"name"`
-	LogoAttachmentID *uuid.UUID           `json:"logo_attachment_id"`
-	PrimaryColor     string               `json:"primary_color"`
-	SecondaryColor   string               `json:"secondary_color"`
-	SupportEmail     string               `json:"support_email"`
-	SenderName       string               `json:"sender_name"`
-	ReplyTo          string               `json:"reply_to"`
-	HelpSubdomain    string               `json:"help_subdomain"`
-	HelpPath         string               `json:"help_path"`
-	WidgetDefaults   map[string]any       `json:"widget_defaults"`
-	Signature        string               `json:"signature"`
-	BusinessHours    widget.BusinessHours `json:"business_hours"`
-	SLAPolicyID      *uuid.UUID           `json:"sla_policy_id"`
-	AIPersona        string               `json:"ai_persona"`
+	Name             string         `json:"name"`
+	LogoAttachmentID *uuid.UUID     `json:"logo_attachment_id"`
+	PrimaryColor     string         `json:"primary_color"`
+	SecondaryColor   string         `json:"secondary_color"`
+	SupportEmail     string         `json:"support_email"`
+	SenderName       string         `json:"sender_name"`
+	ReplyTo          string         `json:"reply_to"`
+	HelpSubdomain    string         `json:"help_subdomain"`
+	HelpPath         string         `json:"help_path"`
+	WidgetDefaults   map[string]any `json:"widget_defaults"`
+	Signature        string         `json:"signature"`
+	SLAPolicyID      *uuid.UUID     `json:"sla_policy_id"`
+	AIPersona        string         `json:"ai_persona"`
 }
 type Brand struct {
 	UUID uuid.UUID `json:"uuid"`
@@ -86,28 +84,6 @@ func (in *Input) validate() error {
 	if in.WidgetDefaults == nil {
 		in.WidgetDefaults = map[string]any{}
 	}
-	if in.BusinessHours.Timezone == "" {
-		in.BusinessHours.Timezone = widget.DefaultTimezone
-	}
-	if in.BusinessHours.Days == nil {
-		in.BusinessHours.Days = map[string][]widget.Period{}
-	}
-	if in.BusinessHours.Enabled {
-		if _, err := time.LoadLocation(in.BusinessHours.Timezone); err != nil {
-			return supportops.ErrInvalid
-		}
-		clock := regexp.MustCompile(`^(?:[01][0-9]|2[0-3]):[0-5][0-9]$`)
-		for day, periods := range in.BusinessHours.Days {
-			if !strings.Contains("|mon|tue|wed|thu|fri|sat|sun|", "|"+day+"|") {
-				return supportops.ErrInvalid
-			}
-			for _, p := range periods {
-				if !clock.MatchString(p.Start) || !clock.MatchString(p.End) || p.Start >= p.End {
-					return supportops.ErrInvalid
-				}
-			}
-		}
-	}
 	return nil
 }
 func Optional(v *uuid.UUID) pgtype.UUID {
@@ -126,9 +102,6 @@ func UUIDPtr(v pgtype.UUID) *uuid.UUID {
 func (s *Service) model(ctx context.Context, b db.Brand) (Brand, error) {
 	out := Brand{UUID: b.Uuid, CreatedAt: b.CreatedAt.Time, UpdatedAt: b.UpdatedAt.Time, Input: Input{Name: b.Name, LogoAttachmentID: UUIDPtr(b.LogoAttachmentID), PrimaryColor: b.PrimaryColor, SecondaryColor: b.SecondaryColor, SupportEmail: b.SupportEmail, SenderName: b.SenderName, ReplyTo: b.ReplyTo, HelpSubdomain: b.HelpSubdomain, HelpPath: b.HelpPath, Signature: b.Signature, SLAPolicyID: UUIDPtr(b.SlaPolicyID), AIPersona: b.AiPersona}}
 	if err := json.Unmarshal(b.WidgetDefaults, &out.WidgetDefaults); err != nil {
-		return out, err
-	}
-	if err := json.Unmarshal(b.BusinessHours, &out.BusinessHours); err != nil {
 		return out, err
 	}
 	if out.LogoAttachmentID != nil && s.Files != nil {
@@ -185,7 +158,6 @@ func (s *Service) Save(ctx context.Context, org int64, id uuid.UUID, in Input) (
 	if marshalErr != nil {
 		return Brand{}, supportops.ErrInvalid
 	}
-	hours, _ := json.Marshal(in.BusinessHours)
 	var b db.Brand
 	err := s.Repo.Within(ctx, func(r *repository.Repository) error {
 		if _, err := r.Q.BillingLockOrganizationID(ctx, org); err != nil {
@@ -206,9 +178,9 @@ func (s *Service) Save(ctx context.Context, org int64, id uuid.UUID, in Input) (
 			if _, e = s.Entitlements.CheckLimit(ctx, org, FeatureBrands, used, 1); e != nil {
 				return e
 			}
-			b, err = r.Q.CreateBrand(ctx, db.CreateBrandParams{OrganizationID: org, Name: in.Name, LogoAttachmentID: Optional(in.LogoAttachmentID), PrimaryColor: in.PrimaryColor, SecondaryColor: in.SecondaryColor, SupportEmail: in.SupportEmail, SenderName: in.SenderName, ReplyTo: in.ReplyTo, HelpSubdomain: in.HelpSubdomain, HelpPath: in.HelpPath, WidgetDefaults: wd, Signature: in.Signature, BusinessHours: hours, SlaPolicyID: Optional(in.SLAPolicyID), AiPersona: in.AIPersona})
+			b, err = r.Q.CreateBrand(ctx, db.CreateBrandParams{OrganizationID: org, Name: in.Name, LogoAttachmentID: Optional(in.LogoAttachmentID), PrimaryColor: in.PrimaryColor, SecondaryColor: in.SecondaryColor, SupportEmail: in.SupportEmail, SenderName: in.SenderName, ReplyTo: in.ReplyTo, HelpSubdomain: in.HelpSubdomain, HelpPath: in.HelpPath, WidgetDefaults: wd, Signature: in.Signature, SlaPolicyID: Optional(in.SLAPolicyID), AiPersona: in.AIPersona})
 		} else {
-			b, err = r.Q.UpdateBrand(ctx, db.UpdateBrandParams{OrganizationID: org, Uuid: id, Name: in.Name, LogoAttachmentID: Optional(in.LogoAttachmentID), PrimaryColor: in.PrimaryColor, SecondaryColor: in.SecondaryColor, SupportEmail: in.SupportEmail, SenderName: in.SenderName, ReplyTo: in.ReplyTo, HelpSubdomain: in.HelpSubdomain, HelpPath: in.HelpPath, WidgetDefaults: wd, Signature: in.Signature, BusinessHours: hours, SlaPolicyID: Optional(in.SLAPolicyID), AiPersona: in.AIPersona})
+			b, err = r.Q.UpdateBrand(ctx, db.UpdateBrandParams{OrganizationID: org, Uuid: id, Name: in.Name, LogoAttachmentID: Optional(in.LogoAttachmentID), PrimaryColor: in.PrimaryColor, SecondaryColor: in.SecondaryColor, SupportEmail: in.SupportEmail, SenderName: in.SenderName, ReplyTo: in.ReplyTo, HelpSubdomain: in.HelpSubdomain, HelpPath: in.HelpPath, WidgetDefaults: wd, Signature: in.Signature, SlaPolicyID: Optional(in.SLAPolicyID), AiPersona: in.AIPersona})
 		}
 		if err != nil {
 			return err

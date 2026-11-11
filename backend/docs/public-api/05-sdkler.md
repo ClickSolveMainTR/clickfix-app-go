@@ -1,6 +1,6 @@
 # SDK'lar ve örnek kod
 
-Go ve Node.js için sunucu SDK'ları vardır; henüz paket olarak yayımlanmadılar. Tüm diller için kullanım örnekleri [SDK'lar ve örnek kod](https://getclickfix.com/docs/sdks) sayfasındadır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar. Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). Her uç noktanın sağ panelinde curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
+Go ve Node.js için sunucu SDK'ları vardır: `@getclickfix/node` (npm, Node 22+), `@getclickfix/react-widget` (npm, React 18+) ve `github.com/ClickSolveMainTR/clickfix-sdks/go` (Go modülü, `go/vX.Y.Z` etiketleri). Tüm diller için kullanım örnekleri [SDK'lar ve örnek kod](https://getclickfix.com/docs/sdks) sayfasında, baştan sona kurulum sırası ve her adımda doğrulanmış örnekler [Entegrasyon kılavuzu](https://getclickfix.com/docs/integration-guide) sayfasındadır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar. Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). Her uç noktanın sağ panelinde curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
 
 **curl**
 
@@ -15,7 +15,7 @@ curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UU
 **JavaScript / TypeScript (Node.js 22+)**
 
 ```ts
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: "https://api.getclickfix.com",

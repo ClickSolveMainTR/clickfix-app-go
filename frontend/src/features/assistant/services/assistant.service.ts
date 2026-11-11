@@ -41,6 +41,15 @@ export const assistantService = {
     signal: AbortSignal,
     emit: (name: string, data: unknown) => void,
   ) {
+    // The id travels to the API (X-Request-ID) and into its
+    // assistant_stream_failed log line, so a failure seen in the browser
+    // console can be matched with the server log (CF-207, #150).
+    // randomUUID is missing in insecure contexts (plain http on a LAN):
+    // then no id is sent and the server's own id is used.
+    const requestId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : undefined;
     const response = await fetch(
       `/api/v1/tenant/assistant/threads/${encodeURIComponent(thread)}/messages/stream?locale=${encodeURIComponent(locale)}`,
       {
@@ -51,25 +60,41 @@ export const assistantService = {
           Accept: "text/event-stream",
           "Content-Type": "application/json",
           "X-Organization": slug,
+          ...(requestId ? { "X-Request-ID": requestId } : {}),
         },
         body: JSON.stringify({ content, context }),
       },
     );
     if (!response.ok || !response.body) {
       const payload = await response.json().catch(() => null);
+      const code = payload?.error?.code ?? "ASSISTANT_AI_UNAVAILABLE";
+      console.error("assistant stream request failed", {
+        status: response.status,
+        code,
+        requestId,
+      });
       throw new ApiError({
         status: response.status,
-        code: payload?.error?.code ?? "ASSISTANT_AI_UNAVAILABLE",
+        code,
         message: "Assistant request failed",
+        ...(requestId ? { requestId } : {}),
       });
     }
     await readSSE(response.body, (name, data) => {
-      if (name === "error")
+      if (name === "error") {
+        const { code, request_id } = data as {
+          code: string;
+          request_id?: string;
+        };
+        const id = request_id || requestId;
+        console.error("assistant stream failed", { code, requestId: id });
         throw new ApiError({
           status: 503,
-          code: (data as { code: string }).code,
+          code,
           message: "Assistant stream failed",
+          ...(id ? { requestId: id } : {}),
         });
+      }
       emit(name, data);
     });
   },

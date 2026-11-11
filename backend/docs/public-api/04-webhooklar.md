@@ -43,6 +43,8 @@ Listeye zamanla yeni olaylar eklenir; tanımadığınız olay türlerini yok say
 
 `data` içeriği olaya göre değişir ve yalnızca kimlikleri ve özet alanları taşır. Ayrıntı gerekiyorsa kaydı API ile okuyun.
 
+Konuşma olayları kişinin ve şirketin dış kimliğini de taşır (`contact_external_id`, `company_external_id`); ayrıntı için **Dış kimlik ve doğrulanmış müşteri** bölümüne bakın.
+
 ## İmza doğrulama
 
 ```text

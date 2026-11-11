@@ -1,9 +1,9 @@
-// React (Next.js App Router) example with @clickfix/react-widget.
+// React (Next.js App Router) example with @getclickfix/react-widget.
 // The hooks load https://<app>/widget.js once, boot it and keep typed state.
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useClickFix, useClickFixEvent } from "@clickfix/react-widget";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
 
 type User = { id: string; name: string; email: string; plan: string; userHash: string };
 

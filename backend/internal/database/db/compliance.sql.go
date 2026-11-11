@@ -320,7 +320,7 @@ func (q *Queries) ComplianceConsents(ctx context.Context, arg ComplianceConsents
 }
 
 const complianceContact = `-- name: ComplianceContact :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type ComplianceContactParams struct {
@@ -351,6 +351,9 @@ func (q *Queries) ComplianceContact(ctx context.Context, arg ComplianceContactPa
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
@@ -523,7 +526,7 @@ func (q *Queries) ComplianceConversations(ctx context.Context, arg ComplianceCon
 
 const complianceEraseContact = `-- name: ComplianceEraseContact :exec
 UPDATE contacts SET name='Silinmiş kişi',email=NULL,phone=NULL,locale=NULL,timezone=NULL,notes='',custom_fields='{}',
-job_title='',company_id=NULL,last_seen_at=NULL,blocked=true,deleted_at=now(),erased_at=now()
+job_title='',company_id=NULL,last_seen_at=NULL,external_id=NULL,verified_at=NULL,blocked=true,deleted_at=now(),erased_at=now()
 WHERE organization_id=$1 AND id=$2
 `
 
@@ -1216,7 +1219,7 @@ func (q *Queries) ComplianceScrubTools(ctx context.Context, arg ComplianceScrubT
 }
 
 const complianceSubjectByID = `-- name: ComplianceSubjectByID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at FROM contacts WHERE organization_id=$1 AND id=$2 FOR UPDATE
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts WHERE organization_id=$1 AND id=$2 FOR UPDATE
 `
 
 type ComplianceSubjectByIDParams struct {
@@ -1247,6 +1250,9 @@ func (q *Queries) ComplianceSubjectByID(ctx context.Context, arg ComplianceSubje
 		&i.DeletedAt,
 		&i.JobTitle,
 		&i.ErasedAt,
+		&i.ExternalID,
+		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }

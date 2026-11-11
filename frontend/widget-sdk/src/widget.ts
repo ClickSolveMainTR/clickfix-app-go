@@ -24,8 +24,18 @@
  * Bundled with esbuild (widget-sdk/build.mjs) into public/widget.js; no
  * runtime dependencies. `data-preview` turns the script into the editor's
  * live preview (no network; settings arrive by postMessage).
+ * `data-bridge` (or `boot({ bridge })`) turns on the webview bridge for
+ * native apps (CF-199, docs/webview-bridge.md).
  */
 import { Widget } from "./runtime/widget";
+import {
+  acceptsMessageEvent,
+  createBridge,
+  detectTransport,
+  FORWARDED_EVENTS,
+  type Bridge,
+  type BridgeCommand,
+} from "./shared/bridge";
 import type { PreviewState } from "./runtime/preview";
 import type { Handler, IdentifyInput, InitOptions } from "./runtime/types";
 
@@ -51,6 +61,9 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
   const APP_ORIGIN = scriptURL.origin;
   const autoWidgetId = scriptEl?.dataset.widget ?? "";
   const previewMode = scriptEl?.dataset.preview === "true";
+  const autoBridge = scriptEl?.dataset.bridge === "true";
+  let bridge: Bridge | null = null;
+  let unbindBridge: (() => void) | null = null;
 
   let instance: Widget | null = null;
   const early: [string, unknown[]][] = [];
@@ -76,10 +89,95 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
     for (const [event, handler, once] of earlyHandlers.splice(0))
       if (once) instance.once(event, handler);
       else instance.on(event, handler);
+    if (!preview && (opts.bridge || autoBridge)) attachBridge(instance, opts);
     const replay = early.splice(0);
     void instance.start().then(() => {
       for (const [cmd, args] of replay) dispatch(cmd, args);
     });
+  }
+
+  /**
+   * Webview bridge (CF-199): the native host (or an allowed parent frame)
+   * drives the widget with `window.ClickFixBridge.receive(json)` or
+   * postMessage, and receives every SDK event, external links and command
+   * results through the detected transport. Contract: docs/webview-bridge.md.
+   */
+  function attachBridge(w: Widget, opts: InitOptions) {
+    const origin =
+      typeof opts.bridge === "object" ? opts.bridge.origin : undefined;
+    const transport = detectTransport(window, origin);
+    const send = transport ? transport.send : () => undefined;
+    const run = (c: BridgeCommand): unknown => {
+      switch (c.type) {
+        case "clickfix:identify":
+          return w.identify(c.user);
+        case "clickfix:track":
+          return w.track(c.name, c.properties);
+        case "clickfix:open":
+          return w.open(
+            c.conversation ? { conversation: c.conversation } : c.view,
+          );
+        case "clickfix:close":
+          return w.close();
+        case "clickfix:update":
+          return w.update(c.update);
+        case "clickfix:consent":
+          return w.consent(c.granted);
+        case "clickfix:reset":
+          return w.reset();
+        case "clickfix:get-state":
+          return w.state();
+        case "clickfix:session":
+          return w.adoptSession(c.token);
+      }
+    };
+    bridge = createBridge({ send, run });
+    const b = bridge;
+    w.linkHandler = transport ? (url) => b.link(url) : null;
+    const handlers: [string, Handler][] = [];
+    for (const event of FORWARDED_EVENTS) {
+      const handler: Handler = (payload) => {
+        if (event === "ready")
+          b.ready(
+            payload as {
+              protocol_version: number;
+              sdk_version: string;
+              widget_id: string;
+              visitor_id: string;
+            },
+          );
+        b.forward(event, payload);
+        // The host may continue the session natively (CF-201).
+        if (event === "ready" || event === "identify" || event === "reset")
+          b.session({ token: w.api.token, visitor_id: w.state().visitor_id });
+      };
+      w.on(event, handler);
+      handlers.push([event, handler]);
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (!acceptsMessageEvent(e, window, origin)) return;
+      const data = e.data as { type?: unknown } | string | null;
+      const typed =
+        typeof data === "string"
+          ? data.startsWith("{")
+          : typeof data?.type === "string" && data.type.startsWith("clickfix:");
+      if (typed) void b.receive(data);
+    };
+    window.addEventListener("message", onMessage);
+    (win as unknown as Record<string, unknown>).ClickFixBridge = {
+      version: b.version,
+      transport: transport?.name ?? null,
+      receive: (raw: unknown) => b.receive(raw),
+    };
+    unbindBridge = () => {
+      window.removeEventListener("message", onMessage);
+      for (const [event, handler] of handlers) w.off(event, handler);
+      w.linkHandler = null;
+      delete (win as unknown as Record<string, unknown>).ClickFixBridge;
+      bridge = null;
+      unbindBridge = null;
+    };
+    w.log("bridge attached", transport?.name ?? "no host transport");
   }
 
   function dispatch(command: string, args: unknown[]): unknown {
@@ -174,6 +272,7 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
       case "reset":
         return w.reset();
       case "shutdown":
+        unbindBridge?.();
         w.destroy();
         instance = null;
         return undefined;
@@ -222,7 +321,7 @@ type GlobalFn = ((...args: unknown[]) => unknown) & {
   const api = ((command: string, ...args: unknown[]) =>
     dispatch(command, args)) as GlobalFn;
   api.__clickfix = true;
-  api.version = "2.0.0";
+  api.version = "2.1.0";
   for (const name of COMMANDS)
     api[name] = (...args: unknown[]) => dispatch(name, args);
   win.ClickFix = api;

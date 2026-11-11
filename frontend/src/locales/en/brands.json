@@ -70,5 +70,6 @@
   "article.hint": "Assigns the article to the selected brand's help center.",
   "article.assign": "Assign to brand",
   "filter.title": "Brand",
-  "filter.all": "All brands"
+  "filter.all": "All brands",
+  "widget.hours_source": "Working hours are not per brand: the widget state, AI and SLA use the same organization schedule (SLA > Working hours)."
 }

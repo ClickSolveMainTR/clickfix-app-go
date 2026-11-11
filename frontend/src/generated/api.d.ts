@@ -3937,11 +3937,12 @@ export interface paths {
         /**
          * Update the organization profile
          * @description `tenant.settings.write`. Any subset of `name`, `timezone`, `locale`,
-         *     `currency`, `country_code`, `company`, `business_hours`, `branding`;
-         *     objects are replaced whole. Slug, status and access window are
-         *     platform-managed. Invalid fields answer `422 VALIDATION_ERROR` with
-         *     `details[].field` paths such as `company.tax_number` or
-         *     `business_hours.days.2.end`.
+         *     `currency`, `country_code`, `company`, `branding`; objects are
+         *     replaced whole. Working hours are the SLA schedule
+         *     (`/v1/tenant/sla/business-hours`, CF-198). Slug, status and access
+         *     window are platform-managed. Invalid fields answer
+         *     `422 VALIDATION_ERROR` with `details[].field` paths such as
+         *     `company.tax_number`.
          */
         patch: operations["patchTenantOrganizationProfile"];
         trace?: never;
@@ -4119,12 +4120,15 @@ export interface paths {
         };
         /**
          * Set-up checklist of the organization
-         * @description Steps in order: `organization`, `channel`, `team`, `widget`,
-         *     `first_conversation`. Channels, members, invitations and
-         *     conversations tick their steps automatically; `manual` steps can
-         *     also be confirmed by hand. Organizations not opened through
-         *     self-serve have no checklist (`active=false`, empty `steps`).
-         *     Requires `tenant.settings.read`.
+         * @description Steps in the set-up order (CF-198): `customer` (identity key,
+         *     external identity, package, company profile), `system` (connected
+         *     customer system), `ai` (AI on, a published procedure), `knowledge`
+         *     (articles), `automation` (an SLA policy and an automation rule or
+         *     workflow). Every step lists its `conditions`; a step is `done` when
+         *     all of them hold, and the product observes them itself. A skipped
+         *     step keeps `skipped=true` and stays as a warning. Organizations not
+         *     opened through self-serve have no checklist (`active=false`, empty
+         *     `steps`). Requires `tenant.settings.read`.
          */
         get: operations["getTenantOnboarding"];
         put?: never;
@@ -4135,7 +4139,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tenant/onboarding/steps/{step}": {
+    "/v1/tenant/onboarding/steps/{step}/skip": {
         parameters: {
             query?: never;
             header?: never;
@@ -4145,13 +4149,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Confirm a manual set-up step
-         * @description Ticks a manual step (`widget`, `team`). Idempotent. Unknown or
-         *     automatic steps answer `400 ONBOARDING_UNKNOWN_STEP`; a finished or
-         *     missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
+         * Skip a set-up step
+         * @description Marks a step as skipped: it stays as a warning in the checklist and
+         *     in the assistant's "what did you leave out" until its conditions
+         *     hold. Idempotent. Unknown steps answer `400 ONBOARDING_UNKNOWN_STEP`;
+         *     a finished or missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
          *     `tenant.settings.read` and `tenant.settings.write`.
          */
-        post: operations["completeTenantOnboardingStep"];
+        post: operations["skipTenantOnboardingStep"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5992,7 +5997,8 @@ export interface paths {
          * @description Requires `tenant.conversations.read`. Newest activity first by default.
          *     `assignee` is `me`, `unassigned` or an agent uuid; list filters take
          *     comma-separated values. `q` matches subject, last message, contact
-         *     name / e-mail / phone, or the conversation number. When search is
+         *     name / e-mail / phone, the contact's external id (exact, CF-195), or
+         *     the conversation number. When search is
          *     enabled `q` also matches message texts and internal notes through
          *     the organization's search index (CF-45); such rows carry
          *     `search_match` with the matched text. The other filters still apply.
@@ -6354,6 +6360,38 @@ export interface paths {
          * @description Requires `tenant.conversations.reply`. Sent to every participant (CF-98).
          */
         post: operations["replyTenantSideConversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/auto-replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Automatic customer replies
+         * @description `tenant.settings.read`. The acknowledgement a new conversation gets inside
+         *     working hours ("we got it, estimated reply time ..."), the out-of-hours
+         *     message and the AI-to-human handoff notice (CF-198). Each text has this
+         *     one source; the hours they follow are the SLA schedule
+         *     (`/v1/tenant/sla/business-hours`). Organizations that never saved their
+         *     own texts get the defaults.
+         */
+        get: operations["getTenantAutoReplies"];
+        /**
+         * Replace the automatic customer replies
+         * @description `tenant.settings.write`. Replaces every text; an empty text falls back to
+         *     the default. The acknowledgement may contain `{eta}`, replaced with the
+         *     estimated reply time from the matching SLA policy's first-response
+         *     target (removed when no policy applies).
+         */
+        put: operations["putTenantAutoReplies"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9004,7 +9042,19 @@ export interface paths {
     "/v1/widget/{public_id}/replay-policy": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -9021,7 +9071,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -9038,7 +9100,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/consent": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -9055,7 +9129,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/chunks": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -9072,7 +9158,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/live-token": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -9396,10 +9494,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/widget/{public_id}/attributes": {
+    "/v1/tenant/widgets/{uuid}/app-keys": {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mobile app keys of the widget
+         * @description The native apps (iOS bundle id, Android application id) that may use
+         *     the widget without a page origin (CF-201). Keys are never returned:
+         *     only `key_prefix` identifies one. Active keys first. Requires
+         *     `tenant.channels.read`.
+         */
+        get: operations["listTenantWidgetAppKeys"];
+        put?: never;
+        /**
+         * Create a mobile app key
+         * @description Mints a key for one app. The response is the only time the key is
+         *     shown; only its sha256 is stored. A widget may have at most 20
+         *     active keys. Requires `tenant.channels.manage`.
+         */
+        post: operations["createTenantWidgetAppKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/widgets/{uuid}/app-keys/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a mobile app key
+         * @description The key stops working at once; the row stays listed with
+         *     `revoked_at`. Revoking twice is 404. Requires `tenant.channels.manage`.
+         */
+        delete: operations["revokeTenantWidgetAppKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/widget/{public_id}/attributes": {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9414,10 +9574,16 @@ export interface paths {
         head?: never;
         /**
          * Store mapped visitor attributes
-         * @description `ClickFix('setAttributes', ...)`. Only keys of the widget's attribute
-         *     mapping are stored; keys not marked anonymous need an identified
-         *     visitor. Without a contact yet the result is `pending` and the SDK
-         *     sends the attributes with the first message.
+         * @description `ClickFix('setAttributes', ...)`. A key is stored when it is the key of
+         *     a contact custom field (CF-196: defining the field is the only step;
+         *     the field's `widget_access` decides whether anonymous visitors may
+         *     write it, default identified visitors only) or an entry of the
+         *     widget's attribute mapping (an alias; entries not marked anonymous
+         *     need an identified visitor). List fields accept the option id or its
+         *     label and store the id. A key no field defines is listed in `unknown`
+         *     (and `ignored`), recorded as a "tanımsız alan" warning and kept on the
+         *     contact until a field is defined. Without a contact yet the result is
+         *     `pending` and the SDK sends the attributes with the first message.
          */
         patch: operations["widgetSetAttributes"];
         trace?: never;
@@ -9425,7 +9591,19 @@ export interface paths {
     "/v1/widget/{public_id}/bootstrap": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9451,7 +9629,19 @@ export interface paths {
     "/v1/widget/{public_id}/identify": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9481,7 +9671,19 @@ export interface paths {
     "/v1/widget/{public_id}/profile": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9504,7 +9706,19 @@ export interface paths {
     "/v1/widget/{public_id}/realtime-token": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9524,7 +9738,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9548,7 +9774,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/messages": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9573,7 +9811,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/read": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9594,7 +9844,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/typing": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -9638,7 +9900,19 @@ export interface paths {
     "/v1/widget/{public_id}/conversations/{conversation}/rating": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -10158,7 +10432,19 @@ export interface paths {
     "/v1/widget/{public_id}/booking": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -10184,7 +10470,19 @@ export interface paths {
     "/v1/widget/{public_id}/help/search": {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -10227,6 +10525,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/custom-fields/unknown-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Undefined keys the widget sent ("tanımsız alan geldi")
+         * @description CF-196. Keys a widget sent that no contact field defines. They are not
+         *     dropped silently: each key is listed here (newest first, at most 100)
+         *     until a field with that key is created (`from_unknown_key`) or the
+         *     warning is dismissed. `channel_uuid` narrows the list to one widget for
+         *     the channel setup check. Requires `tenant.custom_fields.read`.
+         */
+        get: operations["getTenantCustomFieldUnknownKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/custom-fields/unknown-keys/{uuid}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss an undefined-key warning
+         * @description Hides the warning until the key is received again. Requires `tenant.custom_fields.manage`.
+         */
+        post: operations["postTenantCustomFieldUnknownKeyDismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/custom-fields/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Custom field values of one contact or company (agent view)
+         * @description CF-196 read model for the contact/company card and the conversation
+         *     panel. Every live field with `visibility.agent` on, in display order,
+         *     with its stored `value` (option id for list fields; null when unset)
+         *     and `display` text (option label, "Evet"/"Hayır", "12.50 TRY").
+         *     Sensitive fields come back with `masked: true`, `value: null` and a
+         *     masked `display`. `unknown` lists the undefined keys this contact
+         *     received (contacts only), each with a `suggested_key` for the one-click
+         *     definition. Requires `tenant.custom_fields.read` and `tenant.contacts.read`.
+         */
+        get: operations["getTenantCustomFieldValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/custom-fields": {
         parameters: {
             query?: never;
@@ -10244,6 +10613,11 @@ export interface paths {
         /**
          * Create a custom field
          * @description Requires `tenant.custom_fields.manage`. Key and type are permanent.
+         *     The field is live at once (CF-196: no mapping or publish step): the
+         *     widget SDK may send it by key (`widget_access`), and with
+         *     `from_unknown_key` the matching undefined-key warning closes and the
+         *     values contacts already sent under that key are applied. Every create
+         *     and update is written to the audit log (before → after).
          *     Errors: `400 VALIDATION_ERROR` (details per definition field),
          *     `409 CUSTOM_FIELD_KEY_TAKEN`, `409 CUSTOM_FIELD_LIMIT_REACHED`.
          */
@@ -10540,6 +10914,32 @@ export interface paths {
          * @description Requires `tenant.contacts.write`. Without `company`, a business e-mail domain picks the matching company.
          */
         post: operations["createTenantContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/by-external-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update a contact by its external id
+         * @description CF-195. Requires `tenant.contacts.write`. `external_id` is required: the
+         *     customer's own user id, the same value the widget sends as `user_id`.
+         *     The contact with that id is updated (200), else a new one is created
+         *     (201). Calling it twice with the same id edits one contact. It never
+         *     matches by e-mail or phone, so a visitor who only typed an address is
+         *     not taken over. The contact stays unverified until the user signs in
+         *     through widget identify.
+         */
+        put: operations["upsertTenantContactByExternalId"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11327,6 +11727,36 @@ export interface paths {
          */
         get: operations["knowledgeVersions"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/knowledge/articles/{uuid}/audience": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Who the widget offers an article to
+         * @description CF-196 catalog conditions by option id. Requires tenant.settings.read.
+         */
+        get: operations["knowledgeArticleAudience"];
+        /**
+         * Set who the widget offers an article to
+         * @description Replaces the audience; it applies at once. Each condition names a live
+         *     list field of the contact, company or conversation; options may be sent
+         *     as ids or labels and are stored as ids. An article with an audience is
+         *     only offered to widget visitors whose contact matches. Requires
+         *     tenant.settings.write.
+         */
+        put: operations["knowledgeSetArticleAudience"];
         post?: never;
         delete?: never;
         options?: never;
@@ -13466,10 +13896,34 @@ export interface paths {
         };
         /**
          * Public API: get contacts
-         * @description API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+         * @description API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195).
          */
         get: operations["getV1PublicApiContacts"];
         put?: never;
+        /**
+         * Public API: create a contact (CF-195)
+         * @description Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system.
+         */
+        post: operations["postV1PublicApiContacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public-api/contacts/by-external-id": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Public API: create or update a contact by your user id (CF-195)
+         * @description Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer).
+         */
+        put: operations["putV1PublicApiContactByExternalId"];
         post?: never;
         delete?: never;
         options?: never;
@@ -13486,7 +13940,7 @@ export interface paths {
         };
         /**
          * Public API: get companies
-         * @description API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.
+         * @description API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids).
          */
         get: operations["getV1PublicApiCompanies"];
         put?: never;
@@ -13971,7 +14425,7 @@ export interface paths {
         put?: never;
         /**
          * Create a canned response
-         * @description Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}.
+         * @description Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}, {{contact.<key>}}, {{company.<key>}} (CF-196: list fields render their option label; sensitive and agent-hidden fields render empty).
          */
         post: operations["createTenantCannedResponse"];
         delete?: never;
@@ -16251,6 +16705,217 @@ export interface paths {
         patch: operations["updatePlatformProductFeedback"];
         trace?: never;
     };
+    "/v1/tenant/integrations/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connected system overview
+         * @description The "Sistemini bağla" screen (CF-197): connection (never the secret), concepts (custom object
+         *     types) with their sources, actions, playbooks and the latest 20 calls (masked paths, no bodies).
+         *     Requires `tenant.integrations.read`.
+         */
+        get: operations["getTenantConnectedSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the connection
+         * @description Base URL (public https) and authentication. The secret is encrypted and write-only;
+         *     `keep_secret` keeps the stored one.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemConnection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/sources/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set where a concept is read from
+         * @description `path_template` is relative to the base URL and must hold `{external_id}` or `{company_external_id}`.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemSource"];
+        post?: never;
+        /**
+         * Remove a concept's source
+         * @description Removes where the concept is read from.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/sources/{uuid}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a concept's endpoint
+         * @description The "Dene" button: calls the organization's endpoint for one external id and returns the real
+         *     answer with pickable paths. Call failures (SSRF_BLOCKED, TIMEOUT, RATE_LIMITED, HTTP_ERROR, ...) are a
+         *     200 with `ok: false`.
+         *     Requires `tenant.integrations.manage`.
+         */
+        post: operations["postTenantConnectedSystemSourceTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/actions/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update an action
+         * @description An action of the organization's system: endpoint, params, approval and who may use it.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemAction"];
+        post?: never;
+        /**
+         * Delete an action
+         * @description Deletes the action.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemAction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/actions/{key}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run an action
+         * @description The action's `allowed_for` must hold `agent` (or `workflow` for workflow runs). An action that
+         *     requires approval runs only with `approved: true`. `dry_run` never calls out. Errors: `403`,
+         *     `409 APPROVAL_REQUIRED`, `409 ACTION_DISABLED`, `409 SYSTEM_NOT_CONNECTED`.
+         *     Requires `tenant.integrations.use`.
+         */
+        post: operations["postTenantConnectedSystemActionRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/playbooks/{intent}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or update an AI playbook
+         * @description Plain-language instructions; the intent is offered to the AI triage as a candidate.
+         *     Requires `tenant.integrations.manage`.
+         */
+        put: operations["putTenantConnectedSystemPlaybook"];
+        post?: never;
+        /**
+         * Delete an AI playbook
+         * @description Deletes the playbook.
+         *     Requires `tenant.integrations.manage`.
+         */
+        delete: operations["deleteTenantConnectedSystemPlaybook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/concepts/{key}/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a concept for a customer
+         * @description By `contact_uuid` or `external_id`. A missing source or external id is `status: skipped` with the reason.
+         *     Requires `tenant.integrations.use`.
+         */
+        get: operations["getTenantConnectedSystemLookup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/integrations/system/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try as this customer
+         * @description "Bu müşteri olarak dene": what ClickFix accepts or rejects (and why) from the identity, attributes,
+         *     company, page and events, the latest widget identity rejections, and the context the AI would see.
+         *     Requires `tenant.integrations.manage`.
+         */
+        post: operations["postTenantConnectedSystemPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export interface webhooks {
     apiChannelReply: {
@@ -16475,9 +17140,11 @@ export interface components {
             /** Format: date-time */
             checked_at: string;
         };
+        /** @description Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site. */
         IntegrationCreateConversation: {
             /** Format: uuid */
-            contact_uuid: string;
+            contact_uuid?: string;
+            contact_external_id?: string;
             /** Format: uuid */
             inbox_uuid: string;
             subject: string;
@@ -16870,30 +17537,18 @@ export interface components {
             /** Format: int64 */
             companies: number;
         };
+        /**
+         * @description The pre-chat form is one of the organization's request forms (CF-198,
+         *     `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+         *     active form offered on the widget channel. The bootstrap serves the
+         *     chosen form as `request_form`. The widget keeps only the switch, the
+         *     choice and the consent box; the fields live on the form.
+         */
         WidgetPreChat: {
             enabled: boolean;
-            /** @enum {string} */
-            name: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            email: "required" | "optional" | "hidden";
-            /** @enum {string} */
-            phone: "required" | "optional" | "hidden";
-            fields: components["schemas"]["WidgetPreChatField"][];
+            /** @description Request form uuid or "" (first active widget form) */
+            form_uuid: string;
             consent: components["schemas"]["WidgetConsent"];
-        };
-        WidgetBusinessHours: {
-            enabled: boolean;
-            /** @example Europe/Istanbul */
-            timezone: string;
-            /** @description Keys sun..sat; each a list of opening spans. */
-            days: {
-                [key: string]: {
-                    /** @example 09:00 */
-                    start: string;
-                    /** @example 18:00 */
-                    end: string;
-                }[];
-            };
         };
         /** @description The visitor-safe part of WidgetSettings (no allowlist, member ids, attribute targets or handoff keywords). */
         WidgetPublicSettings: {
@@ -16908,7 +17563,6 @@ export interface components {
             greeting_text: string;
             show_team: boolean;
             prechat: components["schemas"]["WidgetPreChat"];
-            business_hours: components["schemas"]["WidgetBusinessHours"];
             offline_message: string;
             require_identity: boolean;
             file_upload: boolean;
@@ -16947,16 +17601,6 @@ export interface components {
         WidgetLocalized: {
             tr?: string;
             en?: string;
-        };
-        WidgetPreChatField: {
-            key: string;
-            label: components["schemas"]["WidgetLocalized"];
-            /** @enum {string} */
-            type: "text" | "textarea" | "email" | "phone" | "number" | "select" | "checkbox";
-            required: boolean;
-            options: string[];
-            /** @description Attribute mapping key the answer is stored under ("" = none) */
-            attribute: string;
         };
         WidgetConsent: {
             enabled: boolean;
@@ -17124,7 +17768,6 @@ export interface components {
             show_team: boolean;
             team_member_uuids: string[];
             prechat: components["schemas"]["WidgetPreChat"];
-            business_hours: components["schemas"]["WidgetBusinessHours"];
             offline_message: string;
             allowed_domains: string[];
             require_identity: boolean;
@@ -17256,6 +17899,58 @@ export interface components {
             /** Format: date-time */
             rejected_at: string;
         };
+        /** @description A mobile app that may use the widget (CF-201). Never carries the key. */
+        WidgetAppKey: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            platform: "ios" | "android";
+            /** @description iOS bundle id or Android application id */
+            package_name: string;
+            label: string;
+            /** @description The first characters of the key (`cf_app_…`), to tell keys apart */
+            key_prefix: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Updated at most every five minutes
+             */
+            last_used_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
+        };
+        WidgetAppKeyCreate: {
+            /** @enum {string} */
+            platform: "ios" | "android";
+            /** @description Dot-separated labels, e.g. com.example.shop */
+            package_name: string;
+            label?: string;
+        };
+        WidgetAppKeyCreated: components["schemas"]["WidgetAppKey"] & {
+            /** @description The app key; shown only in this response */
+            key: string;
+        };
+        EnvelopeWidgetAppKeyList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["WidgetAppKey"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeWidgetAppKey: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["WidgetAppKey"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeWidgetAppKeyCreated: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["WidgetAppKeyCreated"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         WidgetReplyEstimate: {
             /** @enum {string} */
             value: "minutes" | "hour" | "hours" | "day" | "";
@@ -17287,6 +17982,8 @@ export interface components {
         WidgetAttributesResult: {
             applied: string[];
             ignored: string[];
+            /** @description Keys no field defines (CF-196); recorded as warnings, also in `ignored`. */
+            unknown: string[];
             /** @description No contact yet; send them with the first message */
             pending: boolean;
         };
@@ -17358,6 +18055,8 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             verified: boolean;
+            /** @description The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint */
+            company_verified: boolean;
             contact: null | {
                 name: string;
                 email: string | null;
@@ -17511,13 +18210,15 @@ export interface components {
             request_form?: components["schemas"]["PublicRequestForm"] | null;
         };
         WidgetIdentifyInput: {
+            /** @description The user's id in your system (the contact's external id); no line breaks */
             user_id: string;
-            /** @description hex(HMAC-SHA256(identity_secret, user_id)) */
+            /** @description Computed on your server with the widget's identity secret. Without a company id: hex(HMAC-SHA256(identity_secret, user_id)). With company.id (CF-206): hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id)), so the user cannot claim another company. A user-only hash sent together with company.id still verifies the user, but the company id is then a claim: it binds no company and is not stored (name and domain stay hints). */
             user_hash: string;
             name?: string;
             email?: string;
             phone?: string;
             company?: {
+                /** @description The company's id in your system (companies.external_id); binds the contact to the company only when user_hash covers it */
                 id?: string;
                 name?: string;
                 domain?: string;
@@ -17535,19 +18236,16 @@ export interface components {
              * @description Makes retries idempotent
              */
             client_id?: string;
-            /** @description Pre-chat name */
+            /** @description Visitor name (older SDKs; the pre-chat form's name field is preferred) */
             name?: string;
-            /** @description Pre-chat e-mail */
+            /** @description Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) */
             email?: string;
             page_url?: string;
             profile?: components["schemas"]["WidgetProfileInput"];
+            /** @description The pre-chat (request) form answers of a first message (CF-198) */
             form?: components["schemas"]["RequestFormSubmission"];
-            /** @description Pre-chat phone */
+            /** @description Visitor phone (older SDKs) */
             phone?: string;
-            /** @description Answers to the custom pre-chat questions (first message) */
-            prechat?: {
-                [key: string]: string | number | boolean;
-            };
             /** @description GDPR/KVKK checkbox of the pre-chat form */
             consent?: boolean;
             /**
@@ -17572,8 +18270,6 @@ export interface components {
         WidgetSendMultipart: {
             /** @description RequestFormSubmission as JSON */
             form?: string;
-            /** @description Pre-chat answers as JSON */
-            prechat?: string;
             /** @description Attributes as JSON */
             attributes?: string;
             /** @enum {string} */
@@ -18234,10 +18930,8 @@ export interface components {
             categories: string[];
             /** @enum {string} */
             locale: "tr" | "en";
-            timezone: string;
-            start_minute: number;
-            end_minute: number;
-            weekdays: number[];
+            /** @description Outside the organization's working hours (the SLA schedule, CF-198) the agent hands off instead of answering. */
+            business_hours_only: boolean;
             confidence_threshold: number;
             handoff_keywords: string[];
         };
@@ -19411,19 +20105,30 @@ export interface components {
             data: components["schemas"]["OnboardingOrganizationResult"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @description One "is this step done" check (CF-198). */
+        OnboardingCondition: {
+            /** @enum {string} */
+            key: "identity_key" | "external_identity" | "package" | "company" | "system" | "ai_enabled" | "procedure" | "articles" | "sla_policy" | "automation";
+            done: boolean;
+        };
         OnboardingStep: {
             /** @enum {string} */
-            key: "organization" | "channel" | "team" | "widget" | "first_conversation";
+            key: "customer" | "system" | "ai" | "knowledge" | "automation";
+            /** @description Every condition holds. */
             done: boolean;
-            /** @description Can be confirmed by hand. */
-            manual: boolean;
+            /** @description Skipped on purpose and not done; stays as a warning. */
+            skipped: boolean;
+            conditions: components["schemas"]["OnboardingCondition"][];
         };
         OnboardingState: {
             active: boolean;
             /** Format: date-time */
             finished_at: string | null;
             steps: components["schemas"]["OnboardingStep"][];
+            /** @description Done steps. */
             completed: number;
+            /** @description Skipped steps (warnings). */
+            skipped: number;
             total: number;
         };
         OnboardingLocalized: {
@@ -20277,20 +20982,6 @@ export interface components {
             email: string;
             website: string;
         };
-        OrganizationBusinessDay: {
-            /** @enum {string} */
-            day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
-            open: boolean;
-            /** @example 09:00 */
-            start: string;
-            /** @example 18:00 */
-            end: string;
-        };
-        OrganizationBusinessHours: {
-            enabled: boolean;
-            /** @description Always seven days, `mon` .. `sun` */
-            days: components["schemas"]["OrganizationBusinessDay"][];
-        };
         OrganizationBranding: {
             /**
              * @description `#RRGGBB` or `""` for the product default
@@ -20331,10 +21022,9 @@ export interface components {
              */
             country_code: string;
             company: components["schemas"]["OrganizationCompany"];
-            business_hours: components["schemas"]["OrganizationBusinessHours"];
             branding: components["schemas"]["OrganizationBranding"];
         };
-        /** @description Any subset; `company`, `business_hours` and `branding` are replaced whole */
+        /** @description Any subset; `company` and `branding` are replaced whole. Working hours live in the SLA schedule (`/v1/tenant/sla/business-hours`, CF-198). */
         OrganizationProfilePatchRequest: {
             name?: string;
             /** @example Europe/Istanbul */
@@ -20346,7 +21036,6 @@ export interface components {
             /** @example TR */
             country_code?: string;
             company?: components["schemas"]["OrganizationCompany"];
-            business_hours?: components["schemas"]["OrganizationBusinessHours"];
             branding?: components["schemas"]["OrganizationBranding"];
         };
         TenantRoleRef: {
@@ -21942,7 +22631,6 @@ export interface components {
                 [key: string]: unknown;
             };
             signature?: string;
-            business_hours?: components["schemas"]["WidgetBusinessHours"];
             /** Format: uuid */
             sla_policy_id?: string | null;
             ai_persona?: string;
@@ -21966,7 +22654,6 @@ export interface components {
                 [key: string]: unknown;
             };
             signature?: string;
-            business_hours?: components["schemas"]["WidgetBusinessHours"];
             /** Format: uuid */
             sla_policy_id?: string | null;
             ai_persona?: string;
@@ -22223,6 +22910,13 @@ export interface components {
         ChannelHealth: {
             /** @enum {string} */
             state: "ok" | "warning" | "error" | "paused" | "unknown";
+            /**
+             * @description Provider message or a fixed code: token_expiring, send_failures;
+             *     for widgets (CF-195) identity_secret_missing (no identity secret,
+             *     signed-in users stay anonymous) and identity_rejected:<code>
+             *     (identify calls were rejected in the last week; code is
+             *     WIDGET_IDENTITY_DISABLED or WIDGET_IDENTITY_INVALID).
+             */
             detail: string;
             /** Format: date-time */
             checked_at: string | null;
@@ -22459,6 +23153,18 @@ export interface components {
             name: string;
             email: string | null;
             phone: string | null;
+            /** @description CF-195: the customer's own user id. */
+            external_id: string | null;
+            identity_state: components["schemas"]["ContactIdentityState"];
+            /** Format: date-time */
+            verified_at: string | null;
+        };
+        /** @description CF-195: the conversation's company with its own external id (separate from the contact's). */
+        ConversationCompany: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            external_id: string | null;
         };
         /** @enum {string} */
         ConversationStatus: "open" | "pending" | "snoozed" | "resolved" | "closed";
@@ -22474,7 +23180,7 @@ export interface components {
             channel_type: string;
             inbox: components["schemas"]["InboxRef"] | null;
             contact: components["schemas"]["ConversationContact"];
-            company: components["schemas"]["InboxRef"] | null;
+            company: components["schemas"]["ConversationCompany"] | null;
             subject: string;
             status: components["schemas"]["ConversationStatus"];
             custom_status: components["schemas"]["InboxRef"] | null;
@@ -22556,6 +23262,8 @@ export interface components {
         ConversationDetail: components["schemas"]["Conversation"] & {
             tags: components["schemas"]["Tag"][];
             participants: components["schemas"]["ConversationParticipant"][];
+            /** @description Page and events the widget sent with the latest inbound message (CF-197) */
+            screen_context?: components["schemas"]["ScreenContext"] | null;
         };
         ConversationMergeRequest: {
             /**
@@ -23942,6 +24650,133 @@ export interface components {
          *     multiselect a list of option values; money `{amount_minor, currency}`.
          */
         CustomFieldValue: unknown;
+        /**
+         * @description Who reads the value (CF-196), one switch per surface. `sensitive` on
+         *     the definition overrides `ai` and `reports`.
+         */
+        CustomFieldVisibility: {
+            /** @description Agent screens (contact/company card, conversation panel) */
+            agent: boolean;
+            /** @description AI context and AI-written text such as the widget greeting */
+            ai: boolean;
+            /** @description Workflow and automation conditions */
+            workflow: boolean;
+            /** @description Exports and reports */
+            reports: boolean;
+        };
+        /**
+         * @description Whether the widget SDK may write the field by key: never, identified visitors (default) or anyone.
+         * @enum {string}
+         */
+        CustomFieldWidgetAccess: "none" | "verified" | "anonymous";
+        /**
+         * @description Catalog condition (CF-196): the entity's list field `key` holds one of
+         *     `options`. Options are option ids (`CustomFieldOption.value`); a label
+         *     sent by a client is resolved to its id on save, so renaming an option
+         *     label never breaks the condition. Used by SLA policies and article
+         *     audiences; workflow conditions use the same ids through
+         *     `contact.custom_fields.<key>` / `company.custom_fields.<key>`.
+         */
+        CustomFieldMatch: {
+            /** @enum {string} */
+            entity: "contact" | "company" | "conversation";
+            key: string;
+            options: string[];
+        };
+        CustomFieldUnknownKey: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            entity_type: "contact" | "company";
+            /** @description The key as received (e.g. `lisans_bitis` or `Lisans Bitiş`) */
+            key: string;
+            /** @description Valid field key derived from `key` (may be empty) */
+            suggested_key: string;
+            /** @enum {string} */
+            source: "widget" | "api";
+            /**
+             * @description Suggested field type
+             * @enum {string}
+             */
+            value_kind: "text" | "number" | "boolean" | "date";
+            /** Format: int64 */
+            hits: number;
+            /** Format: uuid */
+            channel_uuid: string | null;
+            channel_name: string | null;
+            /** Format: uuid */
+            last_contact_uuid: string | null;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+        };
+        CustomFieldEntityFieldValue: {
+            /** Format: uuid */
+            uuid: string;
+            key: string;
+            label: string;
+            type: components["schemas"]["CustomFieldType"];
+            options: components["schemas"]["CustomFieldOption"][];
+            visibility: components["schemas"]["CustomFieldVisibility"];
+            sensitive: boolean;
+            /** @description Stored value (see CustomFieldValue); null when unset or masked */
+            value: unknown;
+            /** @description Text to show; empty when unset */
+            display: string;
+            /** @description Sensitive value hidden from agent screens */
+            masked: boolean;
+        };
+        CustomFieldUnknownValue: {
+            key: string;
+            suggested_key: string;
+            /** @description The value as received */
+            value: unknown;
+            /** @description Sent by an identified visitor */
+            verified: boolean;
+            /** Format: date-time */
+            received_at: string;
+        };
+        CustomFieldEntityValues: {
+            /** @enum {string} */
+            entity_type: "contact" | "company";
+            /** Format: uuid */
+            entity_uuid: string;
+            fields: components["schemas"]["CustomFieldEntityFieldValue"][];
+            unknown: components["schemas"]["CustomFieldUnknownValue"][];
+        };
+        EnvelopeCustomFieldEntityValues: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CustomFieldEntityValues"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCustomFieldUnknownKeyList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["CustomFieldUnknownKey"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDismissed: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                dismissed: boolean;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @description Who the widget offers the article to (CF-196). Every condition must hold; no conditions: everyone. */
+        KnowledgeArticleAudience: {
+            conditions: components["schemas"]["CustomFieldMatch"][];
+        };
+        EnvelopeKnowledgeArticleAudience: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["KnowledgeArticleAudience"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         CustomFieldDefinition: {
             /** Format: uuid */
             uuid: string;
@@ -23959,6 +24794,10 @@ export interface components {
             condition: components["schemas"]["CustomFieldCondition"] | null;
             position: number;
             archived: boolean;
+            visibility: components["schemas"]["CustomFieldVisibility"];
+            /** @description Masked on agent screens; never sent to AI context, exports, reports or template text */
+            sensitive: boolean;
+            widget_access: components["schemas"]["CustomFieldWidgetAccess"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -23977,7 +24816,14 @@ export interface components {
             config?: components["schemas"]["CustomFieldConfig"];
             default?: components["schemas"]["CustomFieldValue"];
             condition?: components["schemas"]["CustomFieldCondition"] | null;
+            visibility?: components["schemas"]["CustomFieldVisibility"];
+            /** @default false */
+            sensitive: boolean;
+            widget_access?: components["schemas"]["CustomFieldWidgetAccess"];
+            /** @description Received key of the undefined-key warning this field answers */
+            from_unknown_key?: string;
         };
+        /** @description Option `value`s are permanent ids: renaming changes `label` only; a removed option must be archived instead. */
         CustomFieldUpdateRequest: {
             label?: string;
             description?: string;
@@ -23986,6 +24832,9 @@ export interface components {
             config?: components["schemas"]["CustomFieldConfig"];
             default?: components["schemas"]["CustomFieldValue"];
             condition?: components["schemas"]["CustomFieldCondition"] | null;
+            visibility?: components["schemas"]["CustomFieldVisibility"];
+            sensitive?: boolean;
+            widget_access?: components["schemas"]["CustomFieldWidgetAccess"];
         };
         CustomFieldReorderRequest: {
             entity_type: components["schemas"]["CustomFieldEntityType"];
@@ -24132,6 +24981,14 @@ export interface components {
             name: string;
             email: string | null;
             phone: string | null;
+            /** @description CF-195: the customer's own user id, unique in the organization. */
+            external_id: string | null;
+            identity_state: components["schemas"]["ContactIdentityState"];
+            /**
+             * Format: date-time
+             * @description Last widget identify that proved the id with user_hash.
+             */
+            verified_at: string | null;
             job_title: string;
             company: components["schemas"]["InboxRef"] | null;
             locale: string | null;
@@ -24166,7 +25023,17 @@ export interface components {
                 [key: string]: unknown;
             };
             blocked?: boolean;
+            /** @description CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it. */
+            external_id?: string;
         };
+        /**
+         * @description CF-195. verified: the contact proved the customer's user id with
+         *     user_hash (widget identify). anonymous: no name, e-mail or phone.
+         *     self_named: a name, e-mail or phone the contact or its channel gave,
+         *     not proved.
+         * @enum {string}
+         */
+        ContactIdentityState: "verified" | "anonymous" | "self_named";
         ContactMerge: {
             /** Format: uuid */
             from: string;
@@ -24193,6 +25060,11 @@ export interface components {
             name: string;
             domain: string | null;
             external_id: string | null;
+            /**
+             * Format: date-time
+             * @description Last time a signed-in user proved external_id with a company-signed user_hash (CF-206); null when the company was never proved
+             */
+            verified_at: string | null;
             tier: string;
             account_owner: components["schemas"]["InboxRef"] | null;
             notes: string;
@@ -24877,6 +25749,29 @@ export interface components {
         SLAWeek: {
             [key: string]: components["schemas"]["SLAWorkingDay"];
         };
+        /** @description One automatic customer reply (CF-198). */
+        AutoReply: {
+            enabled: boolean;
+            /** @description Text per locale (`tr`, `en`); the acknowledgement may contain `{eta}`. */
+            text: {
+                [key: string]: string;
+            };
+        };
+        /** @description The organization's automatic customer replies (CF-198). */
+        AutoReplySettings: {
+            /** @description Sent on the first message of a conversation inside working hours. */
+            ack: components["schemas"]["AutoReply"];
+            /** @description Sent on a message outside working hours (once per closed window). */
+            offline: components["schemas"]["AutoReply"];
+            /** @description Sent when the AI agent hands the conversation to a person (once per conversation). */
+            handoff: components["schemas"]["AutoReply"];
+        };
+        EnvelopeAutoReplySettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["AutoReplySettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         SLABusinessHours: {
             /** Format: uuid */
             uuid: string;
@@ -24957,6 +25852,8 @@ export interface components {
              * @description Customer MRR at least this amount, in minor units (CF-86).
              */
             min_company_mrr_minor?: number | null;
+            /** @description List custom fields of the contact, company or conversation by option id (CF-196). */
+            custom_fields?: components["schemas"]["CustomFieldMatch"][];
         };
         SLATarget: {
             /** @enum {string} */
@@ -25279,6 +26176,7 @@ export interface components {
         AutomationCondition: {
             all?: components["schemas"]["AutomationCondition"][];
             any?: components["schemas"]["AutomationCondition"][];
+            /** @description A conversation field, custom_fields.<key>, contact.custom_fields.<key> or company.custom_fields.<key> (CF-196). List fields compare by option id; fields hidden from workflows are absent. */
             field?: string;
             /** @enum {string} */
             operator?: "eq" | "neq" | "contains" | "not_contains" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "exists" | "not_exists";
@@ -25442,7 +26340,7 @@ export interface components {
         };
         WorkflowAction: {
             /** @enum {string} */
-            type: "assign_user" | "add_tag" | "remove_tag" | "set_priority" | "set_status" | "send_canned_reply" | "send_template" | "add_note" | "notify" | "call_webhook" | "run_ai_procedure" | "create_engineering_issue" | "route";
+            type: "assign_user" | "add_tag" | "remove_tag" | "set_priority" | "set_status" | "send_canned_reply" | "send_template" | "add_note" | "notify" | "call_webhook" | "run_system_action" | "run_ai_procedure" | "create_engineering_issue" | "route";
             value?: string;
             content?: string;
             /** Format: uuid */
@@ -27115,6 +28013,8 @@ export interface components {
         AssistantMessage: {
             /** @description Generation stopped or connection lost; content is a saved partial reply. */
             interrupted?: boolean;
+            /** @description Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped. */
+            error_code?: string;
             /** Format: uuid */
             uuid: string;
             /** @enum {string} */
@@ -27147,10 +28047,12 @@ export interface components {
             reply: components["schemas"]["AssistantMessage"];
             usage: components["schemas"]["AssistantStreamUsage"];
         };
-        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
+        /** @description Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user. */
         AssistantStreamError: {
             /** @enum {string} */
             code: "VALIDATION_ERROR" | "ASSISTANT_NOT_FOUND" | "ASSISTANT_DISABLED" | "ASSISTANT_DAILY_LIMIT" | "ASSISTANT_MESSAGE_REJECTED" | "ASSISTANT_AI_UNAVAILABLE" | "ASSISTANT_ACTION_FAILED" | "ASSISTANT_INTERNAL";
+            /** @description Correlation id of the request (the client's X-Request-ID when it sent one). */
+            request_id?: string;
         };
         AssistantSendInput: {
             content: string;
@@ -27286,6 +28188,333 @@ export interface components {
             data: components["schemas"]["AssistantUsage"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        SystemConnection: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            base_url: string;
+            /** @enum {string} */
+            auth_type: "none" | "bearer" | "header" | "basic";
+            auth_header: string;
+            has_secret: boolean;
+            timeout_ms: number;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        SystemConnectionInput: {
+            name?: string;
+            /** @description Public https base URL */
+            base_url: string;
+            /** @enum {string} */
+            auth_type?: "none" | "bearer" | "header" | "basic";
+            /** @description Header name when auth_type is header */
+            auth_header?: string;
+            /** @description Token, header value or user:password */
+            secret?: string;
+            keep_secret?: boolean;
+            timeout_ms?: number;
+        };
+        SystemField: {
+            path: string;
+            label: string;
+        };
+        SystemSource: {
+            /** Format: uuid */
+            uuid: string;
+            path_template: string;
+            /** @enum {string} */
+            identity_key: "external_id" | "company_external_id";
+            items_path: string;
+            fields: components["schemas"]["SystemField"][];
+            enabled: boolean;
+        };
+        SystemSourceInput: {
+            path_template: string;
+            /** @enum {string} */
+            identity_key?: "external_id" | "company_external_id";
+            items_path?: string;
+            fields?: components["schemas"]["SystemField"][];
+            enabled?: boolean;
+        };
+        SystemConcept: {
+            /** Format: uuid */
+            object_type_uuid: string;
+            key: string;
+            label: string;
+            plural_label: string;
+            icon: string;
+            source: components["schemas"]["SystemSource"] | null;
+        };
+        SystemParam: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "number" | "boolean";
+            required: boolean;
+        };
+        /** @enum {string} */
+        SystemChannel: "ai" | "agent" | "workflow";
+        SystemAction: {
+            /** Format: uuid */
+            uuid: string;
+            key: string;
+            title: string;
+            description: string;
+            concept_key: string;
+            /** @enum {string} */
+            method: "POST" | "PUT" | "PATCH" | "DELETE";
+            path_template: string;
+            params: components["schemas"]["SystemParam"][];
+            requires_approval: boolean;
+            allowed_for: components["schemas"]["SystemChannel"][];
+            enabled: boolean;
+        };
+        SystemActionInput: {
+            title: string;
+            description?: string;
+            concept_key?: string;
+            /** @enum {string} */
+            method?: "POST" | "PUT" | "PATCH" | "DELETE";
+            path_template: string;
+            params?: components["schemas"]["SystemParam"][];
+            requires_approval?: boolean;
+            allowed_for?: components["schemas"]["SystemChannel"][];
+            enabled?: boolean;
+        };
+        SystemPlaybook: {
+            /** Format: uuid */
+            uuid: string;
+            intent: string;
+            title: string;
+            instructions: string;
+            concept_keys: string[];
+            action_keys: string[];
+            /** Format: uuid */
+            procedure_uuid: string | null;
+            enabled: boolean;
+        };
+        SystemPlaybookInput: {
+            title: string;
+            instructions: string;
+            concept_keys?: string[];
+            action_keys?: string[];
+            /** Format: uuid */
+            procedure_uuid?: string | null;
+            enabled?: boolean;
+        };
+        SystemCall: {
+            /** @enum {string} */
+            kind: "source" | "action" | "test";
+            target: string;
+            /** @enum {string} */
+            channel: "ai" | "agent" | "workflow" | "test";
+            method: string;
+            masked_path: string;
+            status_code: number;
+            ok: boolean;
+            error_code: string;
+            duration_ms: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SystemOverview: {
+            connection: components["schemas"]["SystemConnection"] | null;
+            concepts: components["schemas"]["SystemConcept"][];
+            actions: components["schemas"]["SystemAction"][];
+            playbooks: components["schemas"]["SystemPlaybook"][];
+            calls: components["schemas"]["SystemCall"][];
+        };
+        SystemTestInput: {
+            external_id?: string;
+            company_external_id?: string;
+            /** @description Unsaved edit to try */
+            path_template?: string;
+            /** @description Unsaved edit to try */
+            items_path?: string;
+        };
+        SystemPathOption: {
+            path: string;
+            /** @enum {string} */
+            type: "string" | "number" | "boolean" | "null" | "object" | "array";
+            sample: unknown;
+        };
+        SystemTestResult: {
+            ok: boolean;
+            status_code: number;
+            error_code: string;
+            message: string;
+            duration_ms: number;
+            /** @description Method and URL with secrets masked */
+            request: string;
+            /** @description The JSON answer */
+            body: unknown;
+            truncated: boolean;
+            paths: components["schemas"]["SystemPathOption"][];
+            items: {
+                [key: string]: unknown;
+            }[];
+        };
+        SystemIdentity: {
+            /** Format: uuid */
+            contact_uuid: string | null;
+            contact_name: string;
+            external_id: string;
+            /** Format: uuid */
+            company_uuid: string | null;
+            company_name: string;
+            company_external_id: string;
+        };
+        SystemLookup: {
+            concept: string;
+            label: string;
+            identity: components["schemas"]["SystemIdentity"];
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** @enum {string} */
+            status: "ok" | "skipped" | "error";
+            reason: string;
+        };
+        SystemRunInput: {
+            /** Format: uuid */
+            contact_uuid?: string | null;
+            external_id?: string;
+            /** Format: uuid */
+            conversation_uuid?: string | null;
+            params?: {
+                [key: string]: unknown;
+            };
+            dry_run?: boolean;
+            approved?: boolean;
+        };
+        SystemRunResult: {
+            action: string;
+            dry_run: boolean;
+            ok: boolean;
+            status_code: number;
+            error_code: string;
+            request: string;
+            body: unknown;
+            summary: string;
+        };
+        ScreenEvent: {
+            name: string;
+            properties?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            at?: string;
+        };
+        /** @description Page and tracked events the web widget sent with the latest inbound message (CF-197) */
+        ScreenContext: {
+            /** @description Without query string or fragment */
+            page_url: string;
+            page_path: string;
+            last_event: string;
+            events: components["schemas"]["ScreenEvent"][];
+            /** Format: date-time */
+            at?: string;
+        };
+        SystemPreviewInput: {
+            /** Format: uuid */
+            contact_uuid?: string | null;
+            external_id?: string;
+            company_external_id?: string;
+            company_name?: string;
+            attributes?: {
+                [key: string]: unknown;
+            };
+            page_url?: string;
+            events?: components["schemas"]["ScreenEvent"][];
+            intent?: string;
+        };
+        SystemCheck: {
+            key: string;
+            /** @enum {string} */
+            status: "accepted" | "rejected" | "skipped";
+            reason: string;
+        };
+        SystemIntent: {
+            intent: string;
+            title: string;
+        };
+        SystemWidgetRejection: {
+            /** Format: uuid */
+            channel_uuid: string;
+            channel_name: string;
+            /** @enum {string} */
+            code: "WIDGET_IDENTITY_DISABLED" | "WIDGET_IDENTITY_INVALID";
+            /** Format: date-time */
+            rejected_at: string;
+        };
+        SystemPreview: {
+            identity: components["schemas"]["SystemIdentity"];
+            checks: components["schemas"]["SystemCheck"][];
+            attributes: {
+                [key: string]: unknown;
+            };
+            screen: components["schemas"]["ScreenContext"] | null;
+            intents: components["schemas"]["SystemIntent"][];
+            intent: string;
+            lookups: components["schemas"]["SystemLookup"][];
+            /** @description The block the AI reply model sees for this customer */
+            ai_context: string;
+            widget_rejections: components["schemas"]["SystemWidgetRejection"][];
+        };
+        EnvelopeSystemOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemConnection: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemConnection"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemSource: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemSource"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemTestResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemTestResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemAction: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemAction"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemRunResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemRunResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemPlaybook: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemPlaybook"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemLookup: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemLookup"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeSystemPreview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["SystemPreview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
     };
     responses: {
         /** @description Validation or malformed request */
@@ -27382,7 +28611,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`) */
+        /** @description `VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`) */
         ValidationError: {
             headers: {
                 [name: string]: unknown;
@@ -27398,6 +28627,17 @@ export interface components {
         HelpArticleSlug: string;
         /** @description Public widget id (the widget's channel instance uuid) */
         WidgetPublicID: string;
+        /**
+         * @description Mobile app key (CF-201): a native app sends it with
+         *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+         *     origin allowlist is then not consulted. Unknown, revoked or
+         *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+         *     that arrives together with an `Origin` or `Referer` (a page never
+         *     holds an app key; the headers are not CORS-allowed).
+         */
+        WidgetAppKey: string;
+        /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+        WidgetAppPackage: string;
         WidgetConversation: string;
         /** @description One of `email`, `expires_at`, `created_at`; prefix `-` for descending. Default `-created_at`. */
         InvitationSort: string;
@@ -35376,7 +36616,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    completeTenantOnboardingStep: {
+    skipTenantOnboardingStep: {
         parameters: {
             query?: never;
             header: {
@@ -35387,7 +36627,7 @@ export interface operations {
                 "X-Organization": components["parameters"]["XOrganization"];
             };
             path: {
-                step: "widget" | "team";
+                step: "customer" | "system" | "ai" | "knowledge" | "automation";
             };
             cookie?: never;
         };
@@ -39815,6 +41055,8 @@ export interface operations {
                 tag?: string;
                 contact?: string;
                 company?: string;
+                /** @description CF-195: the contact's identity state. */
+                identity?: components["schemas"]["ContactIdentityState"];
                 mentioned?: "1" | "true";
                 unread?: "1" | "true";
                 sla_breached?: "1" | "true" | "0" | "false";
@@ -40644,6 +41886,70 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantAutoReplies: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAutoReplySettings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantAutoReplies: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoReplySettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeAutoReplySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
             422: components["responses"]["ValidationError"];
             500: components["responses"]["InternalError"];
         };
@@ -47053,7 +48359,19 @@ export interface operations {
     GetreplayprivacypolicyCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
             };
@@ -47114,7 +48432,19 @@ export interface operations {
     StartconsentedreplayCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -47183,7 +48513,19 @@ export interface operations {
     ChangevisitorsessionconsentCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -47253,7 +48595,19 @@ export interface operations {
     UploadmaskedcompressedDOMeventsCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -47329,7 +48683,19 @@ export interface operations {
     VisitorlivestreamtokenCF126: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 public_id: string;
                 conversation: string;
@@ -48161,10 +49527,125 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listTenantWidgetAppKeys: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description App keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeWidgetAppKeyList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createTenantWidgetAppKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WidgetAppKeyCreate"];
+            };
+        };
+        responses: {
+            /** @description The app key, shown once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeWidgetAppKeyCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeTenantWidgetAppKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                /** @description App key uuid */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revoked key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeWidgetAppKey"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     widgetSetAttributes: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48195,7 +49676,19 @@ export interface operations {
     widgetBootstrap: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48226,7 +49719,19 @@ export interface operations {
     widgetIdentify: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48258,7 +49763,19 @@ export interface operations {
     widgetUpdateProfile: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48288,7 +49805,19 @@ export interface operations {
     widgetRealtimeToken: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48320,7 +49849,19 @@ export interface operations {
     widgetListConversations: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48345,7 +49886,19 @@ export interface operations {
     widgetCreateConversation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48390,7 +49943,19 @@ export interface operations {
                 /** @description Only messages before this message (history) */
                 before?: string;
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48417,7 +49982,19 @@ export interface operations {
     widgetSendMessage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48459,7 +50036,19 @@ export interface operations {
     widgetMarkRead: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48492,7 +50081,19 @@ export interface operations {
     widgetTyping: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -48592,7 +50193,19 @@ export interface operations {
     widgetRateConversation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -49727,7 +51340,19 @@ export interface operations {
     widgetBookingLink: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -49764,7 +51389,19 @@ export interface operations {
                 q?: string;
                 locale?: "tr" | "en";
             };
-            header?: never;
+            header?: {
+                /**
+                 * @description Mobile app key (CF-201): a native app sends it with
+                 *     `X-ClickFix-App-Package` instead of a page origin; the widget's
+                 *     origin allowlist is then not consulted. Unknown, revoked or
+                 *     mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+                 *     that arrives together with an `Origin` or `Referer` (a page never
+                 *     holds an app key; the headers are not CORS-allowed).
+                 */
+                "X-ClickFix-App-Key"?: components["parameters"]["WidgetAppKey"];
+                /** @description The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's. */
+                "X-ClickFix-App-Package"?: components["parameters"]["WidgetAppPackage"];
+            };
             path: {
                 /** @description Public widget id (the widget's channel instance uuid) */
                 public_id: components["parameters"]["WidgetPublicID"];
@@ -49814,6 +51451,105 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomFieldUnknownKeys: {
+        parameters: {
+            query?: {
+                channel_uuid?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open warnings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomFieldUnknownKeyList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantCustomFieldUnknownKeyDismiss: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDismissed"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCustomFieldValues: {
+        parameters: {
+            query: {
+                entity_type: "contact" | "company";
+                entity_uuid: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCustomFieldEntityValues"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -50494,6 +52230,10 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 company?: string;
+                /** @description CF-195: the customer's own user id, exact match. `q` also matches external ids. */
+                external_id?: string;
+                /** @description CF-195: verified (proved with user_hash), anonymous or self_named. */
+                identity?: components["schemas"]["ContactIdentityState"];
                 sort?: "created_at" | "-created_at" | "name" | "-name" | "last_seen_at" | "-last_seen_at";
             };
             header: {
@@ -50554,6 +52294,50 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    upsertTenantContactByExternalId: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"] & Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -51132,6 +52916,8 @@ export interface operations {
         parameters: {
             query?: {
                 q?: string;
+                /** @description CF-195: the company's own id in the customer's system, exact match. */
+                external_id?: string;
                 limit?: number;
                 offset?: number;
             };
@@ -52305,6 +54091,75 @@ export interface operations {
                 };
                 content?: never;
             };
+            500: components["responses"]["InternalError"];
+        };
+    };
+    knowledgeArticleAudience: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audience */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeKnowledgeArticleAudience"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    knowledgeSetArticleAudience: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeArticleAudience"];
+            };
+        };
+        responses: {
+            /** @description Saved audience */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeKnowledgeArticleAudience"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -58157,6 +60012,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: exact external id. */
+                external_id?: string;
             };
             header: {
                 "X-Organization": string;
@@ -58185,6 +60042,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: exact external id. */
+                external_id?: string;
             };
             header: {
                 "X-Organization": string;
@@ -58404,8 +60263,10 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                /** @description Case-insensitive match on the contact name. */
+                /** @description Case-insensitive match on the contact name or e-mail. */
                 q?: string;
+                /** @description CF-195: the customer's own user id, exact match. */
+                external_id?: string;
             };
             header?: never;
             path?: never;
@@ -58427,11 +60288,82 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    postV1PublicApiContacts: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    putV1PublicApiContactByExternalId: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactInput"] & Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContact"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getV1PublicApiCompanies: {
         parameters: {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-195: the company's id in your system, exact match. */
+                external_id?: string;
             };
             header?: never;
             path?: never;
@@ -65284,6 +67216,435 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConnectedSystem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemConnectionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemSourceInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemSource"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemSource: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemSourceTest: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Custom object type (concept) UUID */
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemTestInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemActionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemAction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemAction: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemActionRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemRunInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemRunResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantConnectedSystemPlaybook: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                intent: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemPlaybookInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemPlaybook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConnectedSystemPlaybook: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                intent: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantConnectedSystemLookup: {
+        parameters: {
+            query?: {
+                contact_uuid?: string;
+                external_id?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemLookup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantConnectedSystemPreview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeSystemPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };

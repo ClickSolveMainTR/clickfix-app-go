@@ -31,6 +31,7 @@ import (
 	convusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
 	formsengine "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/engine"
 	formsmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
@@ -41,6 +42,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/realtime"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -110,6 +112,7 @@ type Service struct {
 	appOrigin    string
 	forms        FormSource
 	fields       FieldSource
+	hours        businesshours.Source
 	log          *slog.Logger
 	now          func() time.Time
 }
@@ -128,17 +131,32 @@ type Deps struct {
 	AppOrigin string
 	// Forms offers the widget's request form (CF-52); optional.
 	Forms FormSource
+	// Hours is the organization's working-hours source (the SLA schedule,
+	// CF-198); nil means always open.
+	Hours businesshours.Source
 	Log   *slog.Logger
 }
 
 // FormChannel is the request form channel of the web widget.
 const FormChannel = "widget"
 
-// FormSource is the request form use case (CF-52).
+// FormSource is the request form use case (CF-52). The widget's pre-chat
+// form is one of these forms (CF-198): preferred is the form the widget
+// settings pick (uuid.Nil = the first active widget form).
 type FormSource interface {
-	ForChannel(ctx context.Context, orgID int64, channel string) (*formsmodel.PublicForm, error)
-	Check(ctx context.Context, orgID int64, channel string, sub *formsmodel.Submission, optional ...string) (*formsengine.Submission, uuid.UUID, error)
+	Offered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID) (*formsmodel.PublicForm, error)
+	CheckOffered(ctx context.Context, orgID int64, channel string, preferred uuid.UUID, sub *formsmodel.Submission, optional ...string) (*formsengine.Submission, uuid.UUID, error)
 	Apply(ctx context.Context, orgID, conversationID int64, formUUID uuid.UUID, sub formsengine.Submission) error
+}
+
+// preChatForm is the request form the widget settings pick (uuid.Nil = the
+// first active widget form).
+func preChatForm(set widget.Settings) uuid.UUID {
+	id, err := uuid.Parse(set.PreChat.FormUUID)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 // New builds the service.
@@ -150,22 +168,57 @@ func New(d Deps) *Service {
 	return &Service{
 		q: d.Queries, store: d.Store, instances: d.Instances, pipeline: d.Pipeline, files: d.Files,
 		signer: d.Signer, pub: d.Publisher, issuer: d.Issuer, appOrigin: strings.TrimRight(d.AppOrigin, "/"),
-		forms: d.Forms, log: log, now: func() time.Time { return time.Now().UTC() },
+		forms: d.Forms, hours: d.Hours, log: log, now: func() time.Time { return time.Now().UTC() },
 	}
+}
+
+// hoursState is the organization's working-hours state at now (CF-198). An
+// error or a missing source means open: hours never take the widget down.
+func (s *Service) hoursState(ctx context.Context, org int64, now time.Time) businesshours.State {
+	if s.hours == nil {
+		return businesshours.State{Open: true}
+	}
+	st, err := s.hours.HoursState(ctx, org, now)
+	if err != nil {
+		s.log.Warn("widget_hours_state_failed", "organization_id", org, "error", err)
+		return businesshours.State{Open: true}
+	}
+	return st
 }
 
 // WithClock replaces the clock (tests).
 func (s *Service) WithClock(now func() time.Time) *Service { s.now = now; return s }
 
+// WithForms sets the request form source (tests).
+func (s *Service) WithForms(f FormSource) *Service { s.forms = f; return s }
+
+// WithHours sets the working-hours source (CF-198).
+func (s *Service) WithHours(h businesshours.Source) *Service { s.hours = h; return s }
+
 // Widget is an opened widget instance for one request.
 type Widget struct {
 	Instance channels.Instance
 	Settings widget.Settings
+	// App is set when the request came from a native app with an app key
+	// (CF-201) instead of a page origin.
+	App *AppIdentity
 }
 
 // Open loads a live widget by public id and checks the page origin against
 // its allowlist.
 func (s *Service) Open(ctx context.Context, publicID uuid.UUID, origin string) (Widget, error) {
+	w, err := s.load(ctx, publicID)
+	if err != nil {
+		return Widget{}, err
+	}
+	if !s.originAllowed(w.Settings, origin) {
+		return Widget{}, ErrOriginNotAllowed
+	}
+	return w, nil
+}
+
+// load resolves a live widget and its (brand-merged, normalized) settings.
+func (s *Service) load(ctx context.Context, publicID uuid.UUID) (Widget, error) {
 	inst, _, err := s.instances.ForWebhook(ctx, channels.TypeWidget, publicID)
 	if err != nil {
 		return Widget{}, ErrNotFound
@@ -183,21 +236,12 @@ func (s *Service) Open(ctx context.Context, publicID uuid.UUID, origin string) (
 			return Widget{}, err
 		}
 		defaults["color"] = b.PrimaryColor
-		var hours any
-		if err := json.Unmarshal(b.BusinessHours, &hours); err != nil {
-			return Widget{}, err
-		}
-		defaults["business_hours"] = hours
 		for k, v := range inst.Settings {
 			defaults[k] = v
 		}
 		inst.Settings = defaults
 	}
-	w := Widget{Instance: inst, Settings: widget.Normalize(inst.Settings)}
-	if !s.originAllowed(w.Settings, origin) {
-		return Widget{}, ErrOriginNotAllowed
-	}
-	return w, nil
+	return Widget{Instance: inst, Settings: widget.Normalize(inst.Settings)}, nil
 }
 
 func (s *Service) originAllowed(set widget.Settings, origin string) bool {
@@ -238,7 +282,6 @@ type PublicSettings struct {
 	GreetingText    string                  `json:"greeting_text"`
 	ShowTeam        bool                    `json:"show_team"`
 	PreChat         widget.PreChat          `json:"prechat"`
-	BusinessHours   widget.BusinessHours    `json:"business_hours"`
 	OfflineMessage  string                  `json:"offline_message"`
 	RequireIdentity bool                    `json:"require_identity"`
 	FileUpload      bool                    `json:"file_upload"`
@@ -291,7 +334,7 @@ func Public(set widget.Settings) PublicSettings {
 	return PublicSettings{
 		SchemaVersion: set.SchemaVersion, Color: set.Color, Position: set.Position, Locale: set.Locale,
 		GreetingTitle: set.GreetingTitle, GreetingText: set.GreetingText, ShowTeam: set.ShowTeam, PreChat: set.PreChat,
-		BusinessHours: set.BusinessHours, OfflineMessage: set.OfflineMessage, RequireIdentity: set.RequireIdentity,
+		OfflineMessage: set.OfflineMessage, RequireIdentity: set.RequireIdentity,
 		FileUpload: set.FileUpload, CSAT: set.CSAT, Appearance: set.Appearance, Texts: set.Texts, ReplyTime: set.ReplyTime,
 		Home: set.Home, QuickReplies: set.QuickReplies, CSATOptions: set.CSATOptions, Offline: set.Offline,
 		AwayMode: set.AwayMode, Channels: set.Channels, AI: PublicAI{Enabled: set.AI.Enabled, HumanButton: set.AI.HumanButton},
@@ -302,11 +345,14 @@ func Public(set widget.Settings) PublicSettings {
 
 // Visitor is the visitor session of a bootstrap or identify.
 type Visitor struct {
-	ID        string          `json:"id"`
-	Token     string          `json:"token"`
-	ExpiresAt time.Time       `json:"expires_at"`
-	Verified  bool            `json:"verified"`
-	Contact   *VisitorContact `json:"contact"`
+	ID        string    `json:"id"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Verified  bool      `json:"verified"`
+	// CompanyVerified is true when the visitor's contact proved its company
+	// with a signed company id (CF-206) and still belongs to it.
+	CompanyVerified bool            `json:"company_verified"`
+	Contact         *VisitorContact `json:"contact"`
 }
 
 // VisitorContact is what the visitor told us about themselves.
@@ -371,8 +417,9 @@ func (s *Service) Bootstrap(ctx context.Context, w Widget, token string, in Boot
 	out.Widget.ID, out.Widget.Name = w.Instance.UUID, w.Instance.Name
 	out.Widget.BrandID = w.Instance.BrandID
 	out.Widget.Settings = Public(set)
-	out.Widget.Online = set.Online(now)
-	out.Widget.Reply = set.EstimateReply(now, s.medianFirstResponse(ctx, w))
+	hours := s.hoursState(ctx, w.Instance.OrganizationID, now)
+	out.Widget.Online = set.Online(hours.Open)
+	out.Widget.Reply = set.EstimateReply(hours, s.medianFirstResponse(ctx, w))
 	s.touchInstall(ctx, w, in)
 	out.Widget.Team = []TeamMember{}
 	if set.ShowTeam {
@@ -382,8 +429,9 @@ func (s *Service) Bootstrap(ctx context.Context, w Widget, token string, in Boot
 		}
 		out.Widget.Team = team
 	}
-	if s.forms != nil {
-		form, err := s.forms.ForChannel(ctx, w.Instance.OrganizationID, FormChannel)
+	// The pre-chat form is a request form (CF-198); off means no form.
+	if s.forms != nil && set.PreChat.Enabled {
+		form, err := s.forms.Offered(ctx, w.Instance.OrganizationID, FormChannel, preChatForm(set))
 		if err != nil {
 			return Bootstrap{}, err
 		}
@@ -483,6 +531,10 @@ func (s *Service) visitor(ctx context.Context, w Widget, claims widget.Claims) (
 	}
 	if ok {
 		v.Contact = &VisitorContact{Name: contact.Name, Email: textPtr(contact.Email), Phone: textPtr(contact.Phone)}
+		// The proof is the contact's own (a signed identify of this user),
+		// never the company's: a contact attached to a verified company
+		// by a domain or name hint is not reported as proved.
+		v.CompanyVerified = contact.CompanyID.Valid && contact.CompanyVerifiedAt.Valid
 	}
 	return v, nil
 }
@@ -518,7 +570,9 @@ func (s *Service) maxFileBytes(ctx context.Context, orgID int64) int64 {
 // ---------------------------------------------------------------------------
 // Identity
 
-// Company is the B2B company an identified user belongs to.
+// Company is the B2B company an identified user belongs to. ID is the
+// company's id in the customer's system (companies.external_id); it binds
+// the contact to the company only when user_hash covers it (CF-206).
 type Company struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -535,20 +589,45 @@ type IdentifyInput struct {
 	Company  *Company `json:"company"`
 }
 
+// companyID is the external company id of an identify call, as it is
+// signed and stored (trimmed, at most 200 characters, like user_id).
+func (in IdentifyInput) companyID() string {
+	if in.Company == nil {
+		return ""
+	}
+	return clip(strings.TrimSpace(in.Company.ID), 200)
+}
+
 // Identify verifies user_hash with the widget's identity secret, links the
 // visitor to the user's contact (moving the anonymous conversations over,
 // without creating a second contact) and returns a token for the user.
+//
+// user_hash signs either user_id alone (the original formula) or user_id
+// and company.id together (CF-206: HMAC over user_id + "\n" + company_id).
+// With a company id in the call the signed formula is tried first; when it
+// matches, the contact is bound to that company by the proved id. When only
+// the user-only formula matches, the user is verified but the company id
+// is a claim, not proof: it binds no external id and is not stored, so the
+// company's name and domain are only hints (as a call without an id). A
+// hash that matches neither is rejected, including one that signs another
+// company id.
 func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, in IdentifyInput) (Visitor, error) {
 	in.UserID = strings.TrimSpace(in.UserID)
 	if in.UserID == "" || len(in.UserID) > 200 {
 		return Visitor{}, fmt.Errorf("%w: user_id must be 1-200 characters", ErrInvalid)
+	}
+	companyID := in.companyID()
+	if strings.ContainsAny(in.UserID+companyID, "\n\r") {
+		// The newline separates the two ids inside the signed bytes.
+		return Visitor{}, fmt.Errorf("%w: user_id and company.id must not contain line breaks", ErrInvalid)
 	}
 	secret := w.Instance.Credentials[widget.IdentitySecretField]
 	if secret == "" {
 		s.noteIdentityRejection(ctx, w, RejectionIdentityDisabled)
 		return Visitor{}, ErrIdentityDisabled
 	}
-	if !widget.VerifyUserHash(secret, in.UserID, in.UserHash) {
+	companySigned := companyID != "" && widget.VerifyUserCompanyHash(secret, in.UserID, companyID, in.UserHash)
+	if !companySigned && !widget.VerifyUserHash(secret, in.UserID, in.UserHash) {
 		s.noteIdentityRejection(ctx, w, RejectionIdentityInvalid)
 		return Visitor{}, ErrIdentityInvalid
 	}
@@ -557,12 +636,29 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 	next.User = in.UserID
 	org, inst := w.Instance.OrganizationID, w.Instance.ID
 	err := s.store.InTx(ctx, func(ctx context.Context, tx *convrepository.Tx) error {
+		// CF-195: a contact the customer created through the contacts API
+		// with this user id is the user's contact; bind the widget
+		// identity to it before resolving, so no second contact appears.
+		matchEmail, err := s.bindExternalContact(ctx, tx, org, inst, in.UserID, next.ExternalID(), in.Name, email)
+		if err != nil {
+			return err
+		}
+		matchPhone := phone
+		if !matchEmail {
+			// The address belongs to another user's contact: never land on it.
+			email, matchPhone = "", ""
+		}
 		rc, err := tx.ResolveContact(ctx, convrepository.IdentityInput{
 			OrganizationID: org, ChannelType: channels.TypeWidget, InstanceID: inst,
-			ExternalID: next.ExternalID(), DisplayName: clip(strings.TrimSpace(in.Name), 255), Email: email, Phone: phone,
+			ExternalID: next.ExternalID(), DisplayName: clip(strings.TrimSpace(in.Name), 255), Email: email, Phone: matchPhone,
 			Meta: []byte(`{"verified":true}`), SeenAt: s.now(),
 		})
 		if err != nil {
+			return err
+		}
+		// The user id is the contact's external id from now on, and the
+		// contact is verified (the badge in the panel).
+		if err := s.markVerified(ctx, tx, org, rc.Contact.ID, in.UserID); err != nil {
 			return err
 		}
 		if in.Name = strings.TrimSpace(in.Name); in.Name != "" {
@@ -573,7 +669,12 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 			}
 		}
 		if in.Company != nil {
-			if err := s.linkCompany(ctx, tx, org, rc.Contact.ID, *in.Company); err != nil {
+			company := *in.Company
+			if !companySigned {
+				// An unsigned company id never binds: name and domain stay hints.
+				company.ID = ""
+			}
+			if err := s.linkCompany(ctx, tx, org, rc.Contact.ID, company, companySigned); err != nil {
 				return err
 			}
 		}
@@ -608,6 +709,68 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 	return s.visitor(ctx, w, next)
 }
 
+// markVerified stores the proved user id on the contact (CF-195). It runs
+// in a savepoint: when a concurrent call gave the id to another contact
+// first (unique violation), the contact simply stays unverified instead of
+// failing the identify call.
+func (s *Service) markVerified(ctx context.Context, tx *convrepository.Tx, org, contactID int64, userID string) error {
+	sp, err := tx.Raw.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = db.New(sp).MarkContactVerified(ctx, db.MarkContactVerifiedParams{
+		VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, ExternalID: userID,
+		OrganizationID: org, ID: contactID,
+	})
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return sp.Rollback(ctx)
+	}
+	if err != nil {
+		_ = sp.Rollback(ctx)
+		return err
+	}
+	return sp.Commit(ctx)
+}
+
+// bindExternalContact attaches the widget identity of a verified user to
+// the live contact that already has the user id as its external id, when
+// the identity does not exist yet (CF-195). It reports whether resolving
+// may still match a contact by the user's e-mail: not when that contact
+// carries another user's external id.
+func (s *Service) bindExternalContact(ctx context.Context, tx *convrepository.Tx, org, inst int64, userID, identityID, name, email string) (bool, error) {
+	instance := pgtype.Int8{Int64: inst, Valid: true}
+	_, err := tx.Q.FindContactIdentity(ctx, db.FindContactIdentityParams{
+		OrganizationID: org, ChannelType: channels.TypeWidget, ChannelInstanceID: instance, ExternalID: identityID,
+	})
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return true, err
+	}
+	c, err := tx.Q.GetContactByExternalID(ctx, db.GetContactByExternalIDParams{OrganizationID: org, ExternalID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		if email == "" {
+			return true, nil
+		}
+		other, err := tx.Q.FindContactByEmail(ctx, db.FindContactByEmailParams{OrganizationID: org, Email: email})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		return !other.ExternalID.Valid || other.ExternalID.String == userID, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	_, err = tx.Q.UpsertContactIdentity(ctx, db.UpsertContactIdentityParams{
+		OrganizationID: org, ContactID: c.ID, ChannelType: channels.TypeWidget, ChannelInstanceID: instance,
+		ExternalID: identityID, DisplayName: clip(strings.TrimSpace(name), 255), Meta: []byte(`{"verified":true}`),
+		LastSeenAt: pgtype.Timestamptz{Time: s.now(), Valid: true},
+	})
+	return true, err
+}
+
 // Error codes of a rejected identify call, as the visitor API returns them
 // and as the editor reads them back (CF-176).
 const (
@@ -628,7 +791,13 @@ func (s *Service) noteIdentityRejection(ctx context.Context, w Widget, code stri
 	}
 }
 
-func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, contactID int64, c Company) error {
+// linkCompany attaches the contact to the company of an identify call: by
+// external id first, then by domain, else a new company. With signed set
+// (CF-206: user_hash covered c.ID) the id is proof: a company matched by
+// domain takes the id when it has none, the company is marked verified and
+// the contact moves to it even when it had another company. Unsigned, only
+// a contact without a company is attached (and c.ID is already empty).
+func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, contactID int64, c Company, signed bool) error {
 	name := clip(strings.TrimSpace(c.Name), 255)
 	extID := clip(strings.TrimSpace(c.ID), 200)
 	domain := strings.ToLower(clip(strings.TrimSpace(c.Domain), 255))
@@ -642,6 +811,16 @@ func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, c
 	}
 	if errors.Is(err, pgx.ErrNoRows) && domain != "" {
 		company, err = tx.Q.GetCompanyByDomain(ctx, db.GetCompanyByDomainParams{OrganizationID: org, Domain: domain})
+		switch {
+		case err != nil || !signed || extID == "":
+		case company.ExternalID.Valid && company.ExternalID.String != extID:
+			// The domain is unsigned: it must not bind the user to a company
+			// that proved (or was given) another id. The proved id gets its
+			// own company, without the other company's domain.
+			company, err, domain = db.Company{}, pgx.ErrNoRows, ""
+		default:
+			err = tx.Q.SetCompanyExternalIDIfEmpty(ctx, db.SetCompanyExternalIDIfEmptyParams{ExternalID: extID, OrganizationID: org, ID: company.ID})
+		}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		if name == "" {
@@ -654,7 +833,18 @@ func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, c
 	if err != nil {
 		return err
 	}
-	return tx.Q.SetContactCompanyIfEmpty(ctx, db.SetContactCompanyIfEmptyParams{CompanyID: pgtype.Int8{Int64: company.ID, Valid: true}, OrganizationID: org, ID: contactID})
+	companyID := pgtype.Int8{Int64: company.ID, Valid: true}
+	if !signed || extID == "" {
+		return tx.Q.SetContactCompanyIfEmpty(ctx, db.SetContactCompanyIfEmptyParams{CompanyID: companyID, OrganizationID: org, ID: contactID})
+	}
+	if err := tx.Q.MarkCompanyVerified(ctx, db.MarkCompanyVerifiedParams{
+		VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, OrganizationID: org, ID: company.ID,
+	}); err != nil {
+		return err
+	}
+	return tx.Q.SetContactCompany(ctx, db.SetContactCompanyParams{
+		CompanyID: companyID, VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, OrganizationID: org, ID: contactID,
+	})
 }
 
 // ProfileInput updates what the visitor told us.
@@ -802,8 +992,6 @@ type SendInput struct {
 	// Events are the visitor's recent ClickFix('track', ...) events, kept on
 	// the message for the agent (newest last, at most MaxTrackedEvents).
 	Events []TrackedEvent
-	// PreChat answers the custom pre-chat questions of a first message.
-	PreChat map[string]any
 	// Consent is the GDPR/KVKK checkbox of the pre-chat form.
 	Consent *bool
 	// Intent: "" (chat), "human" (talk to a person), "callback" or "video".
@@ -860,21 +1048,19 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 	if !slices.Contains(intents, in.Intent) {
 		return Sent{}, fmt.Errorf("%w: unknown intent", ErrInvalid)
 	}
-	var prechat map[string]any
 	if in.ConversationUUID == nil {
-		var err error
-		if prechat, err = checkPreChat(w.Settings, in); err != nil {
+		if err := checkPreChat(w.Settings, in); err != nil {
 			return Sent{}, err
 		}
 	}
 	org, inst := w.Instance.OrganizationID, w.Instance
-	// A new conversation answers the widget's request form first (CF-52);
-	// the composer text is its message.
+	// A new conversation answers the widget's pre-chat form first (CF-52,
+	// CF-198: a request form); the composer text is its message.
 	var form *formsengine.Submission
 	var formUUID uuid.UUID
-	if in.ConversationUUID == nil && s.forms != nil {
+	if in.ConversationUUID == nil && s.forms != nil && w.Settings.PreChat.Enabled {
 		var err error
-		if form, formUUID, err = s.forms.Check(ctx, org, FormChannel, in.Form, "message"); err != nil {
+		if form, formUUID, err = s.forms.CheckOffered(ctx, org, FormChannel, preChatForm(w.Settings), in.Form, "message"); err != nil {
 			return Sent{}, err
 		}
 		if form != nil {
@@ -883,6 +1069,9 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 			}
 			if in.Profile.Email == "" {
 				in.Profile.Email = form.Email
+			}
+			if in.Profile.Phone == "" {
+				in.Profile.Phone = form.Phone
 			}
 		}
 	}
@@ -918,9 +1107,6 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 	}
 	if in.PageURL != "" {
 		msg.Attributes["page_url"] = clip(in.PageURL, 500)
-	}
-	if len(prechat) > 0 {
-		msg.Attributes["prechat"] = prechat
 	}
 	if in.Consent != nil && *in.Consent {
 		msg.Attributes["consent"] = map[string]any{"given": true, "at": s.now()}
@@ -977,22 +1163,11 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 			}
 		}
 	}
-	// Pre-chat answers mapped by the admin count as allowed for anonymous
-	// visitors; SDK attributes follow each mapping's anonymous flag.
-	answers := map[string]any{}
-	for _, f := range w.Settings.PreChat.Fields {
-		if v, ok := prechat[f.Key]; ok && f.Attribute != "" {
-			answers[f.Attribute] = v
-		}
-	}
-	for _, batch := range []struct {
-		attrs   map[string]any
-		trusted bool
-	}{{answers, true}, {in.Attributes, false}} {
-		if len(batch.attrs) == 0 {
-			continue
-		}
-		if _, err := s.applyAttributes(ctx, w, claims, batch.attrs, batch.trusted); err != nil {
+	// SDK attributes follow each mapping's anonymous flag (the pre-chat
+	// form's answers went onto the conversation and contact through the
+	// forms module above).
+	if len(in.Attributes) > 0 {
+		if _, err := s.applyAttributes(ctx, w, claims, in.Attributes, false); err != nil {
 			s.log.Warn("widget_attributes_failed", "instance", inst.UUID, "error", err)
 		}
 	}

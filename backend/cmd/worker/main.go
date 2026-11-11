@@ -27,6 +27,7 @@ import (
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
 	attachmentsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/attachments/repository"
 	attachmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/attachments/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	billingmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	billingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/usecase"
@@ -37,9 +38,12 @@ import (
 	contactsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/contacts/usecase"
 	convrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	healthusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customerhealth/usecase"
+	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
+	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
+	systemsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	logsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/logs/usecase"
 	mobileextmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mobileext"
 	notifmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications"
@@ -74,6 +78,7 @@ import (
 	ioadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ioengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/mail"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/outbox"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ratelimit"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/searchengine"
 	searchadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/searchengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/storage"
@@ -165,7 +170,8 @@ func main() {
 	statusSvc := statususecase.New(statusrepo.New(pool, queries), nil, notifSvc, cfg.Encryption.Key, cfg.Auth.FrontendURL)
 	surveysSvc := surveysusecase.New(surveysrepo.New(pool, queries), nil, cfg.Encryption.Key, cfg.Auth.FrontendURL)
 	analyticsSvc := analyticsusecase.New(analyticsrepo.New(pool, queries))
-	slaSvc := slausecase.New(pool, queries, outbox.NewStore(pool, queries), log).WithResyncer(queueClient)
+	slaSvc := slausecase.New(pool, queries, outbox.NewStore(pool, queries), log).WithResyncer(queueClient).
+		WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries)))
 	// Routing (CF-53) assigns through the inbox core built below.
 	routingAssign := &inbox.RoutingAssigner{}
 	routingSvc := routingusecase.New(pool, queries, routingAssign, log)
@@ -174,6 +180,10 @@ func main() {
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: aiBilling}, aiCore.AI, nil)
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
+	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
+	agentSvc.Hours = slaSvc
+	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
+	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(pool, queries), Resolver: orguc.New(orgrepo.NewPostgres(pool, queries), nil), Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
 	consumerReg, err := eventconsumers.New(eventconsumers.Deps{
@@ -182,6 +192,7 @@ func main() {
 		Notifications:       notifSvc,
 		NotificationsLookup: notifmodule.DBLookup{Q: queries},
 		SLA:                 slaSvc,
+		AutoReply:           autoReplySvc,
 		Knowledge:           aiCore.RAG,
 		Agents:              agentSvc,
 		Analytics:           analyticsSvc,
@@ -208,8 +219,8 @@ func main() {
 		ioadapters.NewActivity(queries),
 		&workforce.TimesheetAdapter{Service: &workforce.Service{Repo: billingrepo.New(pool, queries)}},
 		// CF-84: tenant contact / company imports run here too.
-		contactsio.NewContacts(workerContacts, queries),
-		contactsio.NewCompanies(workerContacts, queries),
+		contactsio.NewContacts(workerContacts, queries).WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries))),
+		contactsio.NewCompanies(workerContacts, queries).WithFields(customfieldsusecase.New(customfieldsrepository.New(pool, queries))),
 	)
 	exportSvc := exportusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
 	importSvc := importusecase.New(queries, store, ioReg, nil, notifSvc, activityRec, log)
@@ -266,6 +277,8 @@ func main() {
 		Realtime: publisher, Secret: cfg.Encryption.Key, BaseURL: cfg.Auth.FrontendURL, Log: log,
 	})
 	routingAssign.Conversations = inboxCore.Conversations
+	inboxCore.Conversations.WithHours(slaSvc)
+	autoReplySvc.WithPoster(inboxCore.Conversations)
 	surveysSvc.WithSender(inboxCore.Conversations)
 	statusSvc.WithSender(inboxCore.Conversations)
 
@@ -276,6 +289,12 @@ func main() {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
 	}
 	agentSvc.Tools = &agentusecase.ToolService{Repo: agentSvc.Repo, Core: aiCore.AI, Conversations: inboxCore.Conversations, Box: agentBox}
+	// Connected system (CF-197): playbooks, concept data and AI actions.
+	var systemsLimiter systemsusecase.Limiter
+	if inboxRedis != nil {
+		systemsLimiter = ratelimit.New(inboxRedis, cfg.App.Env)
+	}
+	agentSvc.Systems = systemsusecase.New(queries, agentBox, systemsLimiter)
 	complianceSvc := &complianceuc.Service{Search: searchClient, Repo: compliancerepo.New(pool, queries), Store: store, Jobs: queueClient, Activity: activityRec}
 	accountRepo := authrepo.NewPostgres(pool, queries)
 	accountRepo.SetDeletionSearch(searchClient)

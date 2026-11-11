@@ -30,6 +30,7 @@ guides:
   - 03-istekler-ve-hatalar.md
   - 04-webhooklar.md
   - 05-sdkler.md
+  - 06-dis-kimlik.md
 
 securitySchemes:
   integrationKey:
@@ -44,7 +45,7 @@ tags:
   - name: Konuşmalar
     description: Konuşma oluşturma, okuma, güncelleme; mesaj ve iç not ekleme.
   - name: Kişiler
-    description: Son müşterilerinizin kişi kayıtları.
+    description: Son müşterilerinizin kişi kayıtları; kendi kullanıcı numaranızla (dış kimlik) senkron tutulabilir.
   - name: Şirketler
     description: Şirket listesi ve müşteri sağlığı için gelir, kullanım ve ürün olayı sinyalleri.
   - name: Webhook'lar
@@ -58,7 +59,7 @@ operations:
   createIntegrationConversation:
     tag: Konuşmalar
     summary: Konuşma oluştur
-    description: "Kapsam: `conversations:write`. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
+    description: "Kapsam: `conversations:write`. Kişiyi `contact_uuid` ya da kendi kullanıcı numaranızla `contact_external_id` olarak verin. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Web widget kanalında kişi siteye girip `identify` ile oturum açtığında konuşmayı görür. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
   getV1PublicApiConversations:
     tag: Konuşmalar
     summary: Konuşmaları listele
@@ -82,7 +83,15 @@ operations:
   getV1PublicApiContacts:
     tag: Kişiler
     summary: Kişileri listele
-    description: "Kapsam: `contacts:read`. `q` ile kişi adında arama yapılabilir (büyük/küçük harf duyarsız)."
+    description: "Kapsam: `contacts:read`. `q` ile kişi adında veya e-postasında arama yapılabilir (büyük/küçük harf duyarsız). `external_id` kendi kullanıcı numaranızla tam eşleşir. Kayıtlar `external_id`, `verified_at` ve şirketin `company_external_id` alanını taşır."
+  postV1PublicApiContacts:
+    tag: Kişiler
+    summary: Kişi oluştur
+    description: "Kapsam: `contacts:write`. Kendi sisteminizdeki kullanıcıları senkron tutmak için `PUT /contacts/by-external-id` tercih edin. `Idempotency-Key` zorunludur."
+  putV1PublicApiContactByExternalId:
+    tag: Kişiler
+    summary: Kişiyi dış kimlikle oluştur veya güncelle
+    description: "Kapsam: `contacts:write`. `external_id` zorunludur ve sizin kullanıcı numaranızdır (widget `identify` içindeki `user_id`). Bu kimlikte kişi varsa güncellenir (`200`), yoksa oluşturulur (`201`); e-posta veya telefonla eşleşme yapılmaz. Başka kişideki bir kimlik `409 EXTERNAL_ID_EXISTS` döner. `Idempotency-Key` zorunludur."
   updateIntegrationContact:
     tag: Kişiler
     summary: Kişiyi güncelle
@@ -90,7 +99,7 @@ operations:
   getV1PublicApiCompanies:
     tag: Şirketler
     summary: Şirketleri listele
-    description: "Kapsam: `companies:read`."
+    description: "Kapsam: `companies:read`. `external_id` firmanın sizin sisteminizdeki numarasıyla tam eşleşir; kişi dış kimliklerinden ayrıdır."
   putV1PublicApiCompanyRevenue:
     tag: Şirketler
     summary: Şirket gelirini gönder

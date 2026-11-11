@@ -32,6 +32,7 @@ import (
 const (
 	CodeWidgetNotFound        = "WIDGET_NOT_FOUND"
 	CodeOriginNotAllowed      = "WIDGET_ORIGIN_NOT_ALLOWED"
+	CodeAppKeyInvalid         = "WIDGET_APP_KEY_INVALID"
 	CodeVisitorToken          = "WIDGET_VISITOR_TOKEN_INVALID"
 	CodeIdentityDisabled      = usecase.RejectionIdentityDisabled
 	CodeIdentityInvalid       = usecase.RejectionIdentityInvalid
@@ -112,6 +113,16 @@ func (h *Handler) Preflight(w http.ResponseWriter, _ *http.Request) {
 // app's BFF (which never forwards the browser Origin header to the API).
 const OriginHeader = "X-Widget-Origin"
 
+// Mobile app identity headers (CF-201): a native app sends its app key and
+// package name instead of a page origin. The BFF relays both unchanged. They
+// are deliberately not in Access-Control-Allow-Headers: a browser page has an
+// origin and must pass the allowlist, so a leaked key cannot be used from a
+// site (open rejects a key that arrives with a page origin).
+const (
+	AppKeyHeader     = "X-ClickFix-App-Key"
+	AppPackageHeader = "X-ClickFix-App-Package"
+)
+
 // pageOrigin is the origin of the page the widget runs on: the relayed
 // origin, the Origin header, else the Referer's origin (same-origin GETs
 // omit Origin). Non-browser callers can claim any origin; the allowlist
@@ -164,7 +175,10 @@ func (h *Handler) allow(w http.ResponseWriter, r *http.Request, action, subject 
 	return true
 }
 
-// open resolves the widget of the path and checks the page origin.
+// open resolves the widget of the path and checks the page origin, or the
+// app key and package name when the request carries them (CF-201). The
+// per-widget request limit applies before either check, so a wrong key
+// costs the same as a wrong origin.
 func (h *Handler) open(w http.ResponseWriter, r *http.Request) (usecase.Widget, bool) {
 	id, err := uuid.Parse(r.PathValue("public_id"))
 	if err != nil {
@@ -174,7 +188,17 @@ func (h *Handler) open(w http.ResponseWriter, r *http.Request) (usecase.Widget, 
 	if !h.allow(w, r, "request", id.String()+":"+clientIP(r), defaultRequestsPerMinute) {
 		return usecase.Widget{}, false
 	}
-	wd, err := h.svc.Open(r.Context(), id, pageOrigin(r))
+	var wd usecase.Widget
+	if key := r.Header.Get(AppKeyHeader); key != "" {
+		if pageOrigin(r) != "" {
+			// A page (any Origin/Referer, relayed or not) never holds an app key.
+			h.fail(w, r, usecase.ErrAppKeyInvalid)
+			return usecase.Widget{}, false
+		}
+		wd, err = h.svc.OpenApp(r.Context(), id, key, r.Header.Get(AppPackageHeader))
+	} else {
+		wd, err = h.svc.Open(r.Context(), id, pageOrigin(r))
+	}
 	if err != nil {
 		h.fail(w, r, err)
 		return usecase.Widget{}, false
@@ -240,11 +264,19 @@ func (h *Handler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.UserAgent, in.Origin = r.UserAgent(), pageOrigin(r)
+	if wd.App != nil {
+		// The install checker lists the app in place of a page origin.
+		in.Origin = wd.App.InstallOrigin()
+	}
 	if h.country != nil {
 		in.Country = h.country(r)
 	}
 	out, err := h.svc.Bootstrap(r.Context(), wd, bearer(r), in)
 	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	if err := h.svc.PersonalizeGreeting(r.Context(), wd, &out); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -311,8 +343,7 @@ type sendBody struct {
 	Profile  *usecase.ProfileInput  `json:"profile"`
 	// Form is the request form (CF-52) submitted with a first message.
 	Form *formsmodel.Submission `json:"form"`
-	// CF-150: custom pre-chat answers, consent, intent and SDK attributes.
-	PreChat    map[string]any `json:"prechat"`
+	// CF-150: consent, intent and SDK attributes.
 	Consent    *bool          `json:"consent"`
 	Intent     string         `json:"intent"`
 	Attributes map[string]any `json:"attributes"`
@@ -336,12 +367,10 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 			given := v == "true"
 			in.Consent = &given
 		}
-		for key, dst := range map[string]*map[string]any{"prechat": &in.PreChat, "attributes": &in.Attributes} {
-			if v := r.FormValue(key); v != "" {
-				if err := json.Unmarshal([]byte(v), dst); err != nil {
-					response.BadRequest(w, r, response.CodeValidationError, key+" must be a JSON object")
-					return in, false
-				}
+		if v := r.FormValue("attributes"); v != "" {
+			if err := json.Unmarshal([]byte(v), &in.Attributes); err != nil {
+				response.BadRequest(w, r, response.CodeValidationError, "attributes must be a JSON object")
+				return in, false
 			}
 		}
 		if v := r.FormValue("form"); v != "" {
@@ -385,7 +414,7 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 	}
 	in.Text, in.PageURL, in.Events = body.Text, body.PageURL, body.Events
 	in.Profile = usecase.ProfileInput{Name: body.Name, Email: body.Email, Phone: body.Phone}
-	in.PreChat, in.Consent, in.Intent, in.Attributes = body.PreChat, body.Consent, body.Intent, body.Attributes
+	in.Consent, in.Intent, in.Attributes = body.Consent, body.Intent, body.Attributes
 	if body.Profile != nil {
 		in.Profile = *body.Profile
 	}
@@ -588,6 +617,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		response.Error(w, r, http.StatusNotFound, CodeWidgetNotFound, "Not found")
 	case errors.Is(err, usecase.ErrOriginNotAllowed):
 		response.Error(w, r, http.StatusForbidden, CodeOriginNotAllowed, "This site may not use the widget")
+	case errors.Is(err, usecase.ErrAppKeyInvalid):
+		response.Error(w, r, http.StatusForbidden, CodeAppKeyInvalid, "This app may not use the widget")
 	case errors.Is(err, usecase.ErrUnauthorized):
 		response.Error(w, r, http.StatusUnauthorized, CodeVisitorToken, "Visitor token is missing or invalid")
 	case errors.Is(err, usecase.ErrIdentityDisabled):
@@ -704,7 +735,19 @@ func (h *Handler) HelpSearch(w http.ResponseWriter, r *http.Request) {
 		base := h.helpOrigin + "/help/" + url.PathEscape(slug) + "/brands/" + wd.Instance.BrandID.String()
 		out.Available = true
 		out.HelpCenterURL = &base
+		ids := make([]uuid.UUID, 0, len(rows))
 		for _, a := range rows {
+			ids = append(ids, a.Uuid)
+		}
+		hidden, err := h.svc.HiddenArticles(r.Context(), wd, bearer(r), ids)
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		for _, a := range rows {
+			if hidden[a.Uuid] {
+				continue
+			}
 			out.Items = append(out.Items, HelpArticle{Title: a.Title, Excerpt: a.Excerpt, URL: base + "/article/" + url.PathEscape(a.Slug) + "?lang=" + a.Locale})
 		}
 		response.JSON(w, r, http.StatusOK, out)
@@ -751,7 +794,19 @@ func (h *Handler) HelpSearch(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	ids := make([]uuid.UUID, 0, len(items))
 	for _, a := range items {
+		ids = append(ids, a.UUID)
+	}
+	hidden, err := h.svc.HiddenArticles(r.Context(), wd, bearer(r), ids)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	for _, a := range items {
+		if hidden[a.UUID] {
+			continue
+		}
 		link := base + "/article/" + url.PathEscape(a.Slug)
 		if a.Locale != "tr" {
 			link += "?lang=" + a.Locale

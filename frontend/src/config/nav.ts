@@ -714,6 +714,13 @@ export const cmsNav = defineNav({
           ],
         },
         {
+          id: "settings-connect",
+          titleKey: "layout.nav_tenant_settings_connect",
+          href: routes.cms.settings.integrationsConnect,
+          icon: Workflow,
+          permission: permissions.tenant.integrations.read,
+        },
+        {
           id: "settings-mcp",
           titleKey: "layout.nav_tenant_settings_mcp",
           href: routes.cms.settings.mcp,

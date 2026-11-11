@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 )
 
 // PageContext is what is known of the page and visitor when the widget
@@ -192,9 +194,10 @@ type ReplyEstimate struct {
 
 // EstimateReply picks the reply time line: hidden, the manual value, or
 // (auto) the bucket of the recent median first response; nil median falls
-// back to "minutes" while online and "day" otherwise.
-func (s Settings) EstimateReply(now time.Time, median *time.Duration) ReplyEstimate {
-	out := ReplyEstimate{NextOpenAt: s.BusinessHours.NextOpening(now)}
+// back to "minutes" while online and "day" otherwise. hours is the
+// organization's working-hours state (CF-198).
+func (s Settings) EstimateReply(hours businesshours.State, median *time.Duration) ReplyEstimate {
+	out := ReplyEstimate{NextOpenAt: hours.NextOpenAt}
 	switch s.ReplyTime.Mode {
 	case "hidden":
 		return out
@@ -203,7 +206,7 @@ func (s Settings) EstimateReply(now time.Time, median *time.Duration) ReplyEstim
 		return out
 	}
 	switch {
-	case median == nil && s.Online(now):
+	case median == nil && s.Online(hours.Open):
 		out.Value = "minutes"
 	case median == nil:
 		out.Value = "day"

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var fields = []string{"uuid", "number", "status", "priority", "subject", "channel_type", "source", "inbox.uuid", "contact.uuid", "contact.name", "contact.email", "contact.phone", "company.uuid", "company.name", "assignee.uuid", "team_id", "tag_uuids", "unread_count", "message_count", "last_message_direction", "hours_since_created", "hours_since_updated", "hours_since_inbound", "hours_waiting", "sla_breached", "clock.hour", "clock.weekday"}
+var fields = []string{"uuid", "number", "status", "priority", "subject", "channel_type", "source", "inbox.uuid", "contact.uuid", "contact.name", "contact.email", "contact.phone", "company.uuid", "company.name", "assignee.uuid", "team_id", "tag_uuids", "unread_count", "message_count", "last_message_direction", "hours_since_created", "hours_since_updated", "hours_since_inbound", "hours_waiting", "sla_breached", "clock.hour", "clock.weekday", "screen.page_url", "screen.page_path", "screen.last_event", "screen.event_names"}
 var operators = []string{"eq", "neq", "contains", "not_contains", "in", "not_in", "gt", "gte", "lt", "lte", "exists", "not_exists"}
 
 func validateCondition(c model.Condition, depth int, n *int) error {
@@ -41,7 +41,7 @@ func validateCondition(c model.Condition, depth int, n *int) error {
 		}
 		return nil
 	}
-	if !slices.Contains(fields, c.Field) && (!strings.HasPrefix(c.Field, "custom_fields.") || len(c.Field) > 180 || strings.TrimPrefix(c.Field, "custom_fields.") == "") {
+	if !slices.Contains(fields, c.Field) && !isCustomFieldPath(c.Field) {
 		return fmt.Errorf("unknown condition field: %s", c.Field)
 	}
 	if !slices.Contains(operators, c.Operator) {
@@ -59,6 +59,25 @@ func validateCondition(c model.Condition, depth int, n *int) error {
 	}
 	return nil
 }
+
+// customFieldPrefixes are the custom field paths a condition may test: the
+// conversation's own fields and, since CF-196, the contact's and company's.
+// List fields compare by option id, the catalog key shared with SLA
+// policies and article audiences.
+var customFieldPrefixes = []string{"custom_fields.", "contact.custom_fields.", "company.custom_fields."}
+
+func isCustomFieldPath(field string) bool {
+	if len(field) > 180 {
+		return false
+	}
+	for _, p := range customFieldPrefixes {
+		if key, ok := strings.CutPrefix(field, p); ok && key != "" && !strings.Contains(key, ".") {
+			return true
+		}
+	}
+	return false
+}
+
 func lookup(data map[string]any, path string) (any, bool) {
 	var cur any = data
 	for _, part := range strings.Split(path, ".") {
@@ -169,7 +188,8 @@ func decodeRule(conditions, actions []byte) (model.Condition, []model.Action, er
 }
 
 // ConditionFields lists the conversation fields a condition may test
-// (custom_fields.<key> is accepted too).
+// (custom_fields.<key>, contact.custom_fields.<key> and
+// company.custom_fields.<key> are accepted too).
 func ConditionFields() []string { return slices.Clone(fields) }
 
 // ConditionOperators lists the condition operators.

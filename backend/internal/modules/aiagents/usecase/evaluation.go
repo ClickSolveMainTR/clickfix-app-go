@@ -124,7 +124,13 @@ func (s *Service) Simulate(ctx context.Context, org, actor int64, in SimulationI
 	if in.At != nil {
 		at = *in.At
 	}
-	if !cfg.Active(at, channel) || (len(cfg.Categories) > 0 && !slices.Contains(cfg.Categories, in.Category)) {
+	open := true
+	if s.Hours != nil {
+		if st, err := s.Hours.HoursState(ctx, org, at); err == nil {
+			open = st.Open
+		}
+	}
+	if !cfg.Active(channel, open) || (len(cfg.Categories) > 0 && !slices.Contains(cfg.Categories, in.Category)) {
 		out.Outcome = "handoff"
 		out.Reply.Handoff = true
 		out.Reply.Summary = "Channel, business hours or category policy requires human review"

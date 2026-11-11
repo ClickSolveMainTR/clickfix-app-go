@@ -1,9 +1,15 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  useCatalogListFields,
+  type CustomFieldDefinition,
+} from "@/features/custom-fields";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 
@@ -24,6 +30,34 @@ import {
 import { FieldSelect } from "./field-select";
 
 const CUSTOM = "__custom__";
+
+/** Condition path of a catalog entity's custom field. */
+function catalogPath(entity: string, key: string) {
+  return entity === "conversation"
+    ? `custom_fields.${key}`
+    : `${entity}.custom_fields.${key}`;
+}
+
+/**
+ * Workflow-visible list fields of the catalog (CF-196) keyed by condition
+ * path, so a leaf picks option ids instead of typing free text.
+ */
+function useCatalogConditionFields() {
+  const catalog = useCatalogListFields();
+  return useMemo(() => {
+    const out = new Map<
+      string,
+      { entity: string; definition: CustomFieldDefinition }
+    >();
+    for (const entity of ["contact", "company", "conversation"] as const) {
+      for (const d of catalog[entity]) {
+        if (d.visibility?.workflow === false) continue;
+        out.set(catalogPath(entity, d.key), { entity, definition: d });
+      }
+    }
+    return out;
+  }, [catalog]);
+}
 const MAX_UI_DEPTH = 3;
 
 /**
@@ -204,9 +238,12 @@ function LeafEditor({
   disabled?: boolean;
 }) {
   const { t } = useLocale();
+  const catalog = useCatalogConditionFields();
   const field = value.field ?? "";
   const op = value.operator ?? "eq";
-  const isCustom = !(CONDITION_FIELDS as readonly string[]).includes(field);
+  const listField = catalog.get(field);
+  const isCustom =
+    !(CONDITION_FIELDS as readonly string[]).includes(field) && !listField;
   const enumOptions =
     field === "status"
       ? STATUSES.concat().map((s) => ({
@@ -249,6 +286,10 @@ function LeafEditor({
               value: f,
               label: t(`workflows.fields.${slug(f)}`),
             })),
+            ...[...catalog.entries()].map(([path, c]) => ({
+              value: path,
+              label: `${t(`workflows.fields.catalog_${c.entity}`)} · ${c.definition.label}`,
+            })),
             { value: CUSTOM, label: t("workflows.fields.custom") },
           ]}
         />
@@ -272,7 +313,7 @@ function LeafEditor({
           maxLength={180}
           className="h-8 font-mono text-xs"
           aria-label={t("workflows.fields.custom_key")}
-          placeholder="custom_fields.plan"
+          placeholder="contact.custom_fields.paket"
           onChange={(e) => onChange({ ...value, field: e.target.value.trim() })}
         />
       )}
@@ -302,6 +343,37 @@ function LeafEditor({
               { value: "false", label: t("workflows.condition.no") },
             ]}
           />
+        ) : listField && (op === "eq" || op === "neq") ? (
+          <FieldSelect
+            value={toInputValue(value.value)}
+            disabled={disabled}
+            ariaLabel={t("workflows.condition.value")}
+            className="h-8"
+            onChange={(id) => onChange({ field, operator: op, value: id })}
+            options={listField.definition.options.map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))}
+          />
+        ) : listField && LIST_OPERATORS.has(op) ? (
+          <ToggleGroup
+            type="multiple"
+            variant="outline"
+            size="sm"
+            spacing={1}
+            className="flex-wrap"
+            disabled={disabled}
+            value={Array.isArray(value.value) ? value.value.map(String) : []}
+            onValueChange={(ids) =>
+              onChange({ field, operator: op, value: ids })
+            }
+          >
+            {listField.definition.options.map((o) => (
+              <ToggleGroupItem key={o.value} value={o.value}>
+                {o.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         ) : enumOptions && (op === "eq" || op === "neq") ? (
           <FieldSelect
             value={toInputValue(value.value)}

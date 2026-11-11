@@ -1,7 +1,14 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Copy, KeyRound, Play, RefreshCw, TriangleAlert } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Copy,
+  KeyRound,
+  Play,
+  RefreshCw,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useState } from "react";
 
 import { BrandLogo, isBrandSlug } from "@/components/brand-logos";
@@ -10,8 +17,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { UnknownFieldsAlert } from "@/features/custom-fields";
 import {
   Group,
   LocalizedRow,
@@ -34,8 +49,13 @@ import {
   REPLAY_LIMITS,
   snippet,
 } from "@/features/widget/lib/settings";
-import { widgetConfigService } from "@/features/widget/services/widget.service";
+import {
+  widgetConfigService,
+  type WidgetAppKeyCreated,
+} from "@/features/widget/services/widget.service";
+import { isApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useDialogs } from "@/providers/dialog-provider";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
@@ -198,6 +218,12 @@ export function SecuritySection({
         description={t("widget.fields.identity_secret_hint")}
       >
         <IdentityWarning widgetId={widgetId} hasSecret={Boolean(secretHint)} />
+        <p
+          className="text-muted-foreground text-xs"
+          data-testid="identity-company-hint"
+        >
+          {t("widget.fields.identity_company_hint")}
+        </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label>{t("widget.fields.identity_secret")}</Label>
           <Button
@@ -281,6 +307,266 @@ export function SecuritySection({
             </TabsContent>
           ))}
         </Tabs>
+      </Group>
+    </div>
+  );
+}
+
+/**
+ * Mobile app keys (CF-201): the native apps (iOS bundle id, Android
+ * application id) allowed to use this widget without a page origin. A key
+ * is shown once when created, listed by its prefix afterwards and can be
+ * revoked. Creating and revoking need tenant.channels.manage; the list is
+ * part of the widget (not the draft), so it needs no publish.
+ */
+export function MobileAppsSection({
+  widgetId,
+  canManage,
+}: {
+  widgetId: string;
+  canManage: boolean;
+}) {
+  const { t, locale } = useLocale();
+  const { confirmDelete } = useDialogs();
+  const queryClient = useQueryClient();
+  const queryKey = ["widget-app-keys", widgetId];
+  const keys = useQuery({
+    queryKey,
+    queryFn: () => widgetConfigService.appKeys(widgetId),
+  });
+  const [platform, setPlatform] = useState<"ios" | "android">("android");
+  const [packageName, setPackageName] = useState("");
+  const [label, setLabel] = useState("");
+  const [created, setCreated] = useState<WidgetAppKeyCreated | null>(null);
+  const onError = (error: unknown) =>
+    appToast.error(
+      isApiError(error) ? error.message : t("widget.toast.failed"),
+    );
+  const create = useMutation({
+    mutationFn: () =>
+      widgetConfigService.createAppKey(widgetId, {
+        platform,
+        package_name: packageName.trim(),
+        label: label.trim(),
+      }),
+    onSuccess: async (key) => {
+      setCreated(key);
+      setPackageName("");
+      setLabel("");
+      await queryClient.invalidateQueries({ queryKey });
+      appToast.success(t("widget.toast.app_key_created"));
+    },
+    onError,
+  });
+  const revoke = useMutation({
+    mutationFn: (key: string) =>
+      widgetConfigService.revokeAppKey(widgetId, key),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey });
+      appToast.success(t("widget.toast.app_key_revoked"));
+    },
+    onError,
+  });
+  const items = keys.data ?? [];
+  const active = items.filter((k) => !k.revoked_at).length;
+  const valid = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(packageName.trim());
+  const headers = [
+    "X-ClickFix-App-Key: cf_app_…",
+    `X-ClickFix-App-Package: ${packageName.trim() || "com.example.app"}`,
+  ].join("\n");
+  return (
+    <div className="space-y-4">
+      <Group
+        title={t("widget.g.mobile_apps")}
+        description={t("widget.g.mobile_apps_hint")}
+      >
+        {created ? (
+          <Alert data-testid="app-key-created">
+            <KeyRound />
+            <AlertTitle>{t("widget.app_keys.created_title")}</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={created.key}
+                  className="font-mono text-xs"
+                  aria-label={t("widget.app_keys.created_title")}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label={t("widget.actions.copy")}
+                  onClick={() =>
+                    copyText(created.key, t("widget.toast.copied"))
+                  }
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-amber-600">
+                {t("widget.app_keys.created_once")}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCreated(null)}
+              >
+                {t("widget.app_keys.done")}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {canManage ? (
+          <form
+            className="grid gap-3 sm:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (valid && !create.isPending) create.mutate();
+            }}
+          >
+            <div className="space-y-1">
+              <Label htmlFor="app-key-platform">
+                {t("widget.app_keys.platform")}
+              </Label>
+              <Select
+                value={platform}
+                onValueChange={(v) => setPlatform(v as "ios" | "android")}
+              >
+                <SelectTrigger id="app-key-platform" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["android", "ios"] as const).map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {t(`widget.app_keys.platform.${p}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="app-key-package">
+                {t("widget.app_keys.package_name")}
+              </Label>
+              <Input
+                id="app-key-package"
+                value={packageName}
+                placeholder="com.example.app"
+                className="font-mono text-xs"
+                maxLength={200}
+                onChange={(e) => setPackageName(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                {t("widget.app_keys.package_name_hint")}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="app-key-label">
+                {t("widget.app_keys.label")}
+              </Label>
+              <Input
+                id="app-key-label"
+                value={label}
+                maxLength={100}
+                onChange={(e) => setLabel(e.target.value)}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!valid || create.isPending || active >= 20}
+              >
+                <KeyRound className="size-4" />
+                {t("widget.app_keys.create")}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+        {active >= 20 ? (
+          <p className="text-xs text-amber-600">{t("widget.app_keys.limit")}</p>
+        ) : null}
+        {keys.isLoading ? (
+          <p className="text-muted-foreground text-xs">{t("common.loading")}</p>
+        ) : items.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            {t("widget.app_keys.empty")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border" data-testid="app-keys">
+            {items.map((k) => (
+              <li
+                key={k.uuid}
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm",
+                  k.revoked_at && "text-muted-foreground",
+                )}
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {t(`widget.app_keys.platform.${k.platform}`)}
+                    </Badge>
+                    <span className="font-mono text-xs">{k.package_name}</span>
+                    {k.label ? (
+                      <span className="text-xs">{k.label}</span>
+                    ) : null}
+                    <Badge variant={k.revoked_at ? "secondary" : "default"}>
+                      {k.revoked_at
+                        ? t("widget.app_keys.revoked")
+                        : t("widget.app_keys.active")}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground font-mono text-xs">
+                    {k.key_prefix}…
+                    <span className="ms-2 font-sans">
+                      {k.last_used_at
+                        ? t("widget.app_keys.last_used", {
+                            at: new Date(k.last_used_at).toLocaleString(
+                              locale === "tr" ? "tr-TR" : "en-US",
+                            ),
+                          })
+                        : t("widget.app_keys.never_used")}
+                    </span>
+                  </p>
+                </div>
+                {canManage && !k.revoked_at ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={revoke.isPending}
+                    onClick={async () => {
+                      if (
+                        await confirmDelete({
+                          title: t("widget.app_keys.revoke"),
+                          description: t("widget.app_keys.revoke_confirm"),
+                        })
+                      )
+                        revoke.mutate(k.uuid);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                    {t("widget.app_keys.revoke")}
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-xs">
+            {t("widget.app_keys.headers")}
+          </p>
+          <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs">
+            {headers}
+          </pre>
+          <p className="text-muted-foreground text-xs">
+            {t("widget.app_keys.core_hint")}
+          </p>
+        </div>
       </Group>
     </div>
   );
@@ -469,6 +755,7 @@ export function InstallSection({
         title={t("widget.install.check")}
         description={t("widget.install.check_hint")}
       >
+        <UnknownFieldsAlert channelUuid={widgetId} />
         <div className="flex items-center justify-between gap-2">
           <Label>{t("widget.install.seen_on")}</Label>
           <Button

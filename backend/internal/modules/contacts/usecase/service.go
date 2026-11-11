@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/outbox"
@@ -27,7 +28,14 @@ var (
 	ErrNotFound     = errors.New("contacts: not found")
 	ErrInvalid      = errors.New("contacts: invalid request")
 	ErrDomainExists = errors.New("contacts: another company has this domain")
+	// ErrExternalIDExists: another contact (or company) of the organization
+	// already uses this external id (CF-195).
+	ErrExternalIDExists = errors.New("contacts: external id is already used")
 )
+
+// MaxExternalIDLen bounds the customer's own ids (the widget accepts the
+// same length for user_id and company.id).
+const MaxExternalIDLen = 200
 
 // Ref names a related record.
 type Ref struct {
@@ -49,10 +57,17 @@ type Identity struct {
 
 // Contact is the API shape of a contact.
 type Contact struct {
-	UUID              uuid.UUID  `json:"uuid"`
-	Name              string     `json:"name"`
-	Email             *string    `json:"email"`
-	Phone             *string    `json:"phone"`
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Email *string   `json:"email"`
+	Phone *string   `json:"phone"`
+	// ExternalID is the customer's own user id (CF-195): unique in the
+	// organization, the same value as widget identify user_id.
+	ExternalID *string `json:"external_id"`
+	// IdentityState: verified (user_hash proved the id), anonymous or
+	// self_named; VerifiedAt is the last successful identify.
+	IdentityState     string     `json:"identity_state"`
+	VerifiedAt        *time.Time `json:"verified_at"`
 	JobTitle          string     `json:"job_title"`
 	Company           *Ref       `json:"company"`
 	Locale            *string    `json:"locale"`
@@ -70,16 +85,19 @@ type Contact struct {
 
 // Company is the API shape of a company.
 type Company struct {
-	UUID              uuid.UUID `json:"uuid"`
-	Name              string    `json:"name"`
-	Domain            *string   `json:"domain"`
-	ExternalID        *string   `json:"external_id"`
-	Tier              string    `json:"tier"`
-	AccountOwner      *Ref      `json:"account_owner"`
-	Notes             string    `json:"notes"`
-	CustomFields      any       `json:"custom_fields"`
-	ContactCount      int64     `json:"contact_count"`
-	OpenConversations int64     `json:"open_conversations"`
+	UUID       uuid.UUID `json:"uuid"`
+	Name       string    `json:"name"`
+	Domain     *string   `json:"domain"`
+	ExternalID *string   `json:"external_id"`
+	// VerifiedAt is the last time a user proved ExternalID with a
+	// company-signed user_hash (CF-206); nil when never proved.
+	VerifiedAt        *time.Time `json:"verified_at"`
+	Tier              string     `json:"tier"`
+	AccountOwner      *Ref       `json:"account_owner"`
+	Notes             string     `json:"notes"`
+	CustomFields      any        `json:"custom_fields"`
+	ContactCount      int64      `json:"contact_count"`
+	OpenConversations int64      `json:"open_conversations"`
 	// Revenue is the customer's revenue data (CF-86); nil when never set.
 	Revenue *Revenue `json:"revenue"`
 	// Health is the customer health score (CF-87); nil until computed.
@@ -104,13 +122,17 @@ func New(store *repository.Store) *Service {
 
 // ContactFilter narrows the contact list.
 type ContactFilter struct {
-	Q        string
-	Company  *uuid.UUID
-	Sort     string
-	Desc     bool
-	Limit    int32
-	Offset   int32
-	Detailed bool
+	Q string
+	// ExternalID matches the customer's own user id exactly (CF-195).
+	ExternalID string
+	// IdentityState: verified, anonymous or self_named; "" for any.
+	IdentityState string
+	Company       *uuid.UUID
+	Sort          string
+	Desc          bool
+	Limit         int32
+	Offset        int32
+	Detailed      bool
 }
 
 // ListContacts returns one page of contacts.
@@ -126,6 +148,13 @@ func (s *Service) ListContacts(ctx context.Context, orgID int64, f ContactFilter
 	if q := strings.TrimSpace(f.Q); q != "" {
 		p.Q = pgtype.Text{String: q, Valid: true}
 	}
+	p.ExternalID = text(f.ExternalID)
+	if st := strings.TrimSpace(f.IdentityState); st != "" {
+		if !model.ValidIdentityState(st) {
+			return nil, 0, fmt.Errorf("%w: unknown identity state", ErrInvalid)
+		}
+		p.IdentityState = pgtype.Text{String: st, Valid: true}
+	}
 	if f.Company != nil {
 		co, err := s.q.GetCompanyByUUID(ctx, db.GetCompanyByUUIDParams{OrganizationID: orgID, Uuid: *f.Company})
 		if err != nil {
@@ -137,7 +166,7 @@ func (s *Service) ListContacts(ctx context.Context, orgID int64, f ContactFilter
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := s.q.CountContacts(ctx, db.CountContactsParams{OrganizationID: orgID, CompanyID: p.CompanyID, Q: p.Q})
+	total, err := s.q.CountContacts(ctx, db.CountContactsParams{OrganizationID: orgID, CompanyID: p.CompanyID, Q: p.Q, ExternalID: p.ExternalID, IdentityState: p.IdentityState})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -147,6 +176,7 @@ func (s *Service) ListContacts(ctx context.Context, orgID int64, f ContactFilter
 			ID: r.ID, Uuid: r.Uuid, OrganizationID: r.OrganizationID, CompanyID: r.CompanyID, Name: r.Name, Email: r.Email,
 			Phone: r.Phone, Locale: r.Locale, Timezone: r.Timezone, Notes: r.Notes, CustomFields: r.CustomFields,
 			Blocked: r.Blocked, LastSeenAt: r.LastSeenAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, JobTitle: r.JobTitle,
+			ExternalID: r.ExternalID, VerifiedAt: r.VerifiedAt,
 		})
 		if r.CompanyUuid.Valid {
 			c.Company = &Ref{UUID: uuid.UUID(r.CompanyUuid.Bytes), Name: r.CompanyName.String}
@@ -219,6 +249,8 @@ type ContactInput struct {
 	Notes        *string
 	CustomFields map[string]any
 	Blocked      *bool
+	// ExternalID sets the customer's own user id; "" clears it.
+	ExternalID *string
 }
 
 // CreateContact creates a contact; without a company the e-mail domain
@@ -241,14 +273,16 @@ func (s *Service) CreateContact(ctx context.Context, orgID int64, in ContactInpu
 	var created db.Contact
 	err := s.store.InTx(ctx, func(ctx context.Context, tx *repository.Tx) error {
 		var err error
-		created, err = tx.Q.InsertContact(ctx, db.InsertContactParams{OrganizationID: orgID, CompanyID: row.CompanyID, Name: row.Name, Email: row.Email, Phone: row.Phone, Locale: row.Locale, Timezone: row.Timezone, Notes: row.Notes, CustomFields: row.CustomFields, JobTitle: row.JobTitle})
+		created, err = tx.Q.InsertContact(ctx, db.InsertContactParams{OrganizationID: orgID, CompanyID: row.CompanyID, Name: row.Name, Email: row.Email, Phone: row.Phone, Locale: row.Locale, Timezone: row.Timezone, Notes: row.Notes, CustomFields: row.CustomFields, JobTitle: row.JobTitle, ExternalID: row.ExternalID})
 		if err != nil {
 			return err
 		}
-		return outbox.EnqueueQueries(ctx, tx.Q, events.New(events.ContactCreated).WithOrganization(orgID).WithEntity("contact", &created.ID, &created.Uuid).WithPayload(map[string]any{"contact_uuid": created.Uuid}).WithIdempotencyKey(created.Uuid.String()))
+		return outbox.EnqueueQueries(ctx, tx.Q, events.New(events.ContactCreated).WithOrganization(orgID).WithEntity("contact", &created.ID, &created.Uuid).WithPayload(map[string]any{
+			"contact_uuid": created.Uuid, "contact_external_id": textPtr(created.ExternalID),
+		}).WithIdempotencyKey(created.Uuid.String()))
 	})
 	if err != nil {
-		return Contact{}, err
+		return Contact{}, uniqueContact(err)
 	}
 	return s.detail(ctx, created)
 }
@@ -265,12 +299,41 @@ func (s *Service) UpdateContact(ctx context.Context, orgID int64, id uuid.UUID, 
 	updated, err := s.q.UpdateContact(ctx, db.UpdateContactParams{
 		CompanyID: row.CompanyID, Name: row.Name, Email: row.Email, Phone: row.Phone, Locale: row.Locale,
 		Timezone: row.Timezone, Notes: row.Notes, CustomFields: row.CustomFields, Blocked: row.Blocked,
-		JobTitle: row.JobTitle, OrganizationID: orgID, ID: row.ID,
+		JobTitle: row.JobTitle, ExternalID: row.ExternalID, OrganizationID: orgID, ID: row.ID,
 	})
 	if err != nil {
-		return Contact{}, notFound(err)
+		return Contact{}, notFound(uniqueContact(err))
 	}
 	return s.detail(ctx, updated)
+}
+
+// UpsertContact creates the contact with in.ExternalID or updates the one
+// that already has it (CF-195): calling it twice with the same external id
+// edits one contact. It never matches by e-mail or phone, so an anonymous
+// contact that typed the same address is not taken over.
+func (s *Service) UpsertContact(ctx context.Context, orgID int64, in ContactInput) (Contact, bool, error) {
+	if in.ExternalID == nil || strings.TrimSpace(*in.ExternalID) == "" {
+		return Contact{}, false, fmt.Errorf("%w: external_id is required", ErrInvalid)
+	}
+	ext := strings.TrimSpace(*in.ExternalID)
+	in.ExternalID = &ext
+	for attempt := 0; attempt < 2; attempt++ {
+		row, err := s.q.GetContactByExternalID(ctx, db.GetContactByExternalIDParams{OrganizationID: orgID, ExternalID: ext})
+		switch {
+		case err == nil:
+			c, err := s.UpdateContact(ctx, orgID, row.Uuid, in)
+			return c, false, err
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Contact{}, false, err
+		}
+		c, err := s.CreateContact(ctx, orgID, in)
+		if errors.Is(err, ErrExternalIDExists) && attempt == 0 {
+			// A concurrent call created it first: update that one.
+			continue
+		}
+		return c, err == nil, err
+	}
+	return Contact{}, false, ErrExternalIDExists
 }
 
 func (s *Service) apply(ctx context.Context, orgID int64, row *db.Contact, in ContactInput) error {
@@ -317,6 +380,13 @@ func (s *Service) apply(ctx context.Context, orgID int64, row *db.Contact, in Co
 	}
 	if in.Blocked != nil {
 		row.Blocked = *in.Blocked
+	}
+	if in.ExternalID != nil {
+		ext, err := cleanExternalID(*in.ExternalID)
+		if err != nil {
+			return err
+		}
+		row.ExternalID = text(ext)
 	}
 	if in.CustomFields != nil {
 		raw, err := json.Marshal(in.CustomFields)
@@ -396,15 +466,22 @@ func (s *Service) Merge(ctx context.Context, orgID int64, into, from uuid.UUID) 
 
 // ListCompanies returns one page of companies.
 func (s *Service) ListCompanies(ctx context.Context, orgID int64, q string, limit, offset int32) ([]Company, int64, error) {
+	return s.ListCompaniesByExternalID(ctx, orgID, q, "", limit, offset)
+}
+
+// ListCompaniesByExternalID is ListCompanies that also matches the
+// company's external id exactly when ext is set (CF-195).
+func (s *Service) ListCompaniesByExternalID(ctx context.Context, orgID int64, q, ext string, limit, offset int32) ([]Company, int64, error) {
 	var qt pgtype.Text
 	if q = strings.TrimSpace(q); q != "" {
 		qt = pgtype.Text{String: q, Valid: true}
 	}
-	rows, err := s.q.ListCompanies(ctx, db.ListCompaniesParams{OrganizationID: orgID, Q: qt, RowLimit: limit, RowOffset: offset})
+	et := text(ext)
+	rows, err := s.q.ListCompanies(ctx, db.ListCompaniesParams{OrganizationID: orgID, Q: qt, ExternalID: et, RowLimit: limit, RowOffset: offset})
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := s.q.CountCompanies(ctx, db.CountCompaniesParams{OrganizationID: orgID, Q: qt})
+	total, err := s.q.CountCompanies(ctx, db.CountCompaniesParams{OrganizationID: orgID, Q: qt, ExternalID: et})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -413,7 +490,7 @@ func (s *Service) ListCompanies(ctx context.Context, orgID int64, q string, limi
 	for _, r := range rows {
 		ids = append(ids, r.ID)
 		c := companyOf(db.Company{
-			ID: r.ID, Uuid: r.Uuid, Name: r.Name, Domain: r.Domain, ExternalID: r.ExternalID, Notes: r.Notes,
+			ID: r.ID, Uuid: r.Uuid, Name: r.Name, Domain: r.Domain, ExternalID: r.ExternalID, VerifiedAt: r.VerifiedAt, Notes: r.Notes,
 			CustomFields: r.CustomFields, Tier: r.Tier, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		})
 		if r.OwnerUuid.Valid {
@@ -534,7 +611,11 @@ func (s *Service) applyCompany(ctx context.Context, orgID int64, row *db.Company
 		row.Domain = text(d)
 	}
 	if in.ExternalID != nil {
-		row.ExternalID = text(*in.ExternalID)
+		ext, err := cleanExternalID(*in.ExternalID)
+		if err != nil {
+			return err
+		}
+		row.ExternalID = text(ext)
 	}
 	if in.Tier != nil {
 		t := strings.TrimSpace(*in.Tier)
@@ -585,17 +666,32 @@ func (s *Service) DeleteCompany(ctx context.Context, orgID int64, id uuid.UUID) 
 // ---------------------------------------------------------------------------
 
 func contactOf(r db.Contact) Contact {
-	return Contact{
+	c := Contact{
 		UUID: r.Uuid, Name: r.Name, Email: textPtr(r.Email), Phone: textPtr(r.Phone), JobTitle: r.JobTitle,
+		ExternalID: textPtr(r.ExternalID), VerifiedAt: timePtr(r.VerifiedAt),
 		Locale: textPtr(r.Locale), Timezone: textPtr(r.Timezone), Notes: r.Notes, CustomFields: decode(r.CustomFields),
 		Blocked: r.Blocked, ChannelTypes: []string{}, LastSeenAt: timePtr(r.LastSeenAt),
 		CreatedAt: r.CreatedAt.Time.UTC(), UpdatedAt: r.UpdatedAt.Time.UTC(),
 	}
+	c.IdentityState = model.IdentityState(c.VerifiedAt, c.Name, c.Email, c.Phone)
+	return c
+}
+
+// cleanExternalID trims an external id; "" clears it.
+func cleanExternalID(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	if len(v) > MaxExternalIDLen {
+		return "", fmt.Errorf("%w: external_id must be at most %d characters", ErrInvalid, MaxExternalIDLen)
+	}
+	if strings.ContainsAny(v, "\x00\r\n") {
+		return "", fmt.Errorf("%w: external_id is invalid", ErrInvalid)
+	}
+	return v, nil
 }
 
 func companyOf(r db.Company) Company {
 	return Company{
-		UUID: r.Uuid, Name: r.Name, Domain: textPtr(r.Domain), ExternalID: textPtr(r.ExternalID), Tier: r.Tier,
+		UUID: r.Uuid, Name: r.Name, Domain: textPtr(r.Domain), ExternalID: textPtr(r.ExternalID), VerifiedAt: timePtr(r.VerifiedAt), Tier: r.Tier,
 		Notes: r.Notes, CustomFields: decode(r.CustomFields), CreatedAt: r.CreatedAt.Time.UTC(), UpdatedAt: r.UpdatedAt.Time.UTC(),
 	}
 }
@@ -610,7 +706,18 @@ func notFound(err error) error {
 func uniqueDomain(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if pgErr.ConstraintName == "uq_companies_org_external_id" {
+			return ErrExternalIDExists
+		}
 		return ErrDomainExists
+	}
+	return err
+}
+
+func uniqueContact(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_contacts_org_external_id" {
+		return ErrExternalIDExists
 	}
 	return err
 }

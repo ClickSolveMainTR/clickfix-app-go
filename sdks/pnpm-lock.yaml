@@ -27,13 +27,24 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
+  examples/node:
+    dependencies:
+      '@getclickfix/node':
+        specifier: workspace:*
+        version: link:../../node
+
   node: {}
 
   react-widget:
     dependencies:
+      '@getclickfix/visitor-core':
+        specifier: workspace:^
+        version: link:../visitor-core
       react:
         specifier: '>=18'
         version: 19.2.0
+
+  visitor-core: {}
 
 packages:
 

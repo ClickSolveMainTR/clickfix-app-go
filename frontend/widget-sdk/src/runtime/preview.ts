@@ -182,6 +182,7 @@ export class FakeApi implements Transport {
         token: "preview",
         expires_at: new Date(Date.now() + 3600000).toISOString(),
         verified: false,
+        company_verified: false,
         contact: null,
       },
       realtime: { enabled: false },

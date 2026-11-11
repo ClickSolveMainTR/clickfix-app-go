@@ -122,7 +122,38 @@ type Definition struct {
 	Default   any        `json:"default,omitempty"`
 	Condition *Condition `json:"condition,omitempty"`
 	Archived  bool       `json:"archived,omitempty"`
+	// Visibility says which surfaces may read the value (CF-196).
+	Visibility Visibility `json:"visibility"`
+	// Sensitive values are masked on agent screens and never reach AI
+	// context, exports, reports or template text.
+	Sensitive bool `json:"sensitive,omitempty"`
+	// WidgetAccess decides whether the widget SDK may write the field by its
+	// key without an attribute mapping: none, verified (identified visitors)
+	// or anonymous (anyone).
+	WidgetAccess string `json:"widget_access,omitempty"`
 }
+
+// Visibility lists the surfaces that read a field. Each is a separate
+// switch; Sensitive overrides AI and Reports.
+type Visibility struct {
+	Agent    bool `json:"agent"`
+	AI       bool `json:"ai"`
+	Workflow bool `json:"workflow"`
+	Reports  bool `json:"reports"`
+}
+
+// DefaultVisibility is what a new field gets when the request omits it.
+var DefaultVisibility = Visibility{Agent: true, AI: true, Workflow: true, Reports: true}
+
+// Widget write access levels.
+const (
+	WidgetAccessNone      = "none"
+	WidgetAccessVerified  = "verified"
+	WidgetAccessAnonymous = "anonymous"
+)
+
+// WidgetAccessLevels lists the accepted WidgetAccess values.
+var WidgetAccessLevels = []string{WidgetAccessNone, WidgetAccessVerified, WidgetAccessAnonymous}
 
 // IsValidType reports whether t is a supported type.
 func IsValidType(t FieldType) bool {
@@ -194,6 +225,9 @@ func ValidateDefinition(d Definition, others []Definition) []FieldError {
 	}
 	if c.MaxSelected < 0 {
 		add("config.max_selected", CodeInvalid, "max_selected must be positive")
+	}
+	if d.WidgetAccess != "" && !slices.Contains(WidgetAccessLevels, d.WidgetAccess) {
+		add("widget_access", CodeInvalid, "widget_access must be none, verified or anonymous")
 	}
 	if d.Condition != nil {
 		errs = append(errs, validateCondition(d, others)...)

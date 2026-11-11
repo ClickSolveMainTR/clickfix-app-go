@@ -90,6 +90,10 @@
   "holidays.closed": "Kapalı",
   "holidays.half_day": "Yarım gün",
   "holidays.delete": "Tatili sil",
+  "holidays.columns.date": "Tarih",
+  "holidays.columns.name": "Ad",
+  "holidays.columns.hours": "Saatler",
+  "holidays.confirm_delete": "\"{{name}}\" tatili silinsin mi?",
   "channel.widget": "Web widget",
   "channel.email": "E-posta",
   "channel.whatsapp": "WhatsApp",
@@ -108,9 +112,15 @@
   "contracts.assign": "Ata",
   "contracts.empty": "Sözleşmeli SLA atanmış şirket yok.",
   "contracts.remove": "Sözleşmeyi kaldır",
+  "contracts.columns.company": "Şirket",
+  "contracts.columns.policy": "Politika",
+  "contracts.filter": "Şirket adında ara",
+  "contracts.confirm_remove": "\"{{name}}\" sözleşmesi kaldırılsın mı?",
+  "contracts.confirm_remove_hint": "Şirketin konuşmalarına artık koşullara uyan politika uygulanır.",
   "fields.company_plans": "Gelir planı",
   "fields.company_plans_placeholder": "Pro, Enterprise",
   "fields.min_company_mrr": "Min. MRR",
   "fields.min_company_mrr_hint": "Şirketin MRR'ı en az bu tutar olmalı",
-  "policy.min_mrr": "MRR ≥ {{amount}}"
+  "policy.min_mrr": "MRR ≥ {{amount}}",
+  "fields.custom_fields": "Özel alan (katalogdan)"
 }

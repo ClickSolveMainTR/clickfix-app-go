@@ -48,7 +48,9 @@ jobs:
   #   backend/**                  -> backend, contracts
   #   backend/migrations/**       -> backend, contracts, infra
   #   mobile/**                   -> mobile
-  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile
+  #   sdks/php/**, sdks/examples/** -> backend, contracts, php (sdks/php/** also laravel)
+  #   sdks/laravel/**             -> backend, contracts, laravel
+  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile, php
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
   #   Makefile, scripts/, other   -> backend, frontend, contracts
@@ -59,9 +61,23 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       contracts: ${{ steps.filter.outputs.contracts }}
       mobile: ${{ steps.filter.outputs.mobile }}
+      php: ${{ steps.filter.outputs.php }}
       infra: ${{ steps.filter.outputs.infra }}
+      laravel: ${{ steps.filter.outputs.laravel }}
+      flutter: ${{ steps.filter.outputs.flutter }}
       full: ${{ steps.filter.outputs.full }}
     steps:
+      # Self-hosted only: a container job that ran as root (php) can leave
+      # root-owned files in a runner's workspace, and every later checkout on
+      # that runner then fails with EACCES. Hand the workspaces of all runners
+      # on this machine back to the runner user before the first checkout.
+      - name: Repair workspace ownership (self-hosted)
+        if: ${{ runner.environment != 'github-hosted' }}
+        run: |
+          command -v docker >/dev/null || { echo "no docker; skipped"; exit 0; }
+          root=$(dirname "$(dirname "$(dirname "$RUNNER_WORKSPACE")")")
+          repo=$(basename "$RUNNER_WORKSPACE")
+          docker run --rm -v "$root:/r" alpine:3 sh -c "for d in /r/*/_work/$repo; do [ -d \"\$d\" ] && chown -R $(id -u):$(id -g) \"\$d\"; done; true"
       - uses: actions/checkout@v7
         with:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
@@ -73,7 +89,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; infra=false; full=false
+          mobile=false; php=false; infra=false; laravel=false; flutter=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -94,24 +110,28 @@ jobs:
               .github/workflows/ci.yml) full=true ;;
               .github/*) ;;
               backend/docs/openapi.yaml)
-                backend=true; frontend=true; contracts=true; mobile=true ;;
+                backend=true; frontend=true; contracts=true; mobile=true; php=true ;;
               *.md|docs/*) ;;
               backend/Dockerfile|frontend/Dockerfile|compose.prod.yml|deploy/*|.dockerignore|*/.dockerignore)
                 infra=true ;;
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
+              sdks/php/*) backend=true; contracts=true; php=true; laravel=true ;;
+              sdks/examples/*) backend=true; contracts=true; php=true ;;
+              sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
+              sdks/flutter/*) flutter=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; infra=true
+            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; laravel=true; flutter=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "infra=$infra"; echo "full=$full"
+            echo "php=$php"; echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -325,6 +345,233 @@ jobs:
       - name: Go SDK tests
         working-directory: sdks/go
         run: go test -p 2 ./...
+      # Integration guide samples (CF-199): the code embedded in the guide
+      # pages is this code, type-checked, compiled and run against the stub API.
+      - name: Guide examples are embedded and run
+        working-directory: sdks
+        run: |
+          pnpm examples:check
+          pnpm examples
+      # What `sdk-publish` would ship from main: publish dry run, no token
+      # needed. pnpm (not npm) so `workspace:` dependencies are rewritten to
+      # real versions (react-widget depends on visitor-core, CF-201).
+      - name: npm publish dry run
+        working-directory: sdks
+        run: |
+          for p in node visitor-core react-widget; do
+            (cd "$p" && pnpm publish --dry-run --no-git-checks --access public)
+          done
+          echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
+
+  # Laravel package (CF-205): the Testbench suite on every supported Laravel x PHP
+  # pair. clickfix/laravel depends on clickfix/sdk through a Composer path
+  # repository (../php), so the checkout is enough; nothing is fetched from
+  # Packagist for the SDK itself.
+  laravel:
+    needs: [changes]
+    if: needs.changes.outputs.laravel == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    name: laravel ${{ matrix.laravel }} php ${{ matrix.php }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { laravel: "10.*", testbench: "8.*", php: "8.1" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.2" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.2" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.4" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.2" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.3" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.4" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.3" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.4" }
+    # Runs inside the official PHP image so the matrix does not depend on the self-hosted
+    # machine's PHP or package manager (shivammathur/setup-php hung there in its apt/sudo step).
+    container:
+      image: php:${{ matrix.php }}-cli
+    env:
+      COMPOSER_NO_INTERACTION: "1"
+      COMPOSER_ALLOW_SUPERUSER: "1"
+    steps:
+      # Repair up front too: a root-owned leftover from an earlier container job on this
+      # runner slot would otherwise make actions/checkout fail with EACCES (same pattern as
+      # the php job of CF-204).
+      - name: Workspace ownership (before checkout)
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE" 2>/dev/null || true
+      - uses: actions/checkout@v7
+      - name: Install git, unzip and Composer
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends git unzip ca-certificates >/dev/null
+          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+          php -v | head -1; composer --version
+      - name: Validate composer.json
+        working-directory: sdks/laravel
+        run: composer validate --strict --no-check-lock
+      - name: Install Laravel ${{ matrix.laravel }} with Testbench ${{ matrix.testbench }}
+        working-directory: sdks/laravel
+        run: |
+          # Composer >= 2.11 refuses to install releases with security advisories by default;
+          # Laravel 10 (EOL) and 11 have some, and the matrix must still prove the package on them.
+          # Which framework version an application runs is the application's choice, not this job's.
+          flag=""; composer update --help | grep -q -- --no-security-blocking && flag=--no-security-blocking
+          composer update --prefer-dist --no-progress $flag \
+            --with="laravel/framework:${{ matrix.laravel }}" \
+            --with="orchestra/testbench:${{ matrix.testbench }}"
+          for p in laravel/framework orchestra/testbench phpunit/phpunit clickfix/sdk; do
+            composer show "$p" | grep -E '^(name|versions)'
+          done
+      - name: Tests
+        working-directory: sdks/laravel
+        run: vendor/bin/phpunit --no-coverage
+      # The container runs as root on the runner's bind-mounted workspace. Hand every file back
+      # to the runner user (owner of the workspace's parent directory), otherwise the next job on
+      # this runner slot fails in actions/checkout with EACCES while cleaning the workspace.
+      - name: Return workspace ownership to the runner user
+        if: always()
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE"
+
+  # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
+  # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
+  # then the guide's PHP examples against the stub API (the sdks job also runs
+  # them when the runner has php; here they are required). The version is the
+  # newest `## X.Y.Z` heading of sdks/php/CHANGELOG.md and Client::USER_AGENT;
+  # the sdks-mirror job pushes sdks/php to ClickSolveMainTR/clickfix-php and
+  # tags vX.Y.Z there, which Packagist (clickfix/sdk) watches.
+  # Runs in the official php:<version>-cli image: the self-hosted runners have
+  # no PHP and setup-php's apt/sudo install hangs there, while the container
+  # already has the interpreter; Composer comes from the signed installer.
+  php:
+    needs: [changes]
+    if: needs.changes.outputs.php == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+    container:
+      image: php:${{ matrix.php }}-cli
+    env:
+      COMPOSER_ALLOW_SUPERUSER: '1'
+      COMPOSER_NO_INTERACTION: '1'
+    steps:
+      # The container runs as root on a workspace the runner user owns: hand
+      # back anything root left behind (vendor/, caches, node tool cache) at
+      # the end, and repair it up front, or the next checkout on this runner
+      # fails with EACCES.
+      - name: Workspace ownership (before checkout)
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          echo "workspace owner $owner"
+          chown -R "$owner" "$GITHUB_WORKSPACE" 2>/dev/null || true
+      - name: Tools (git, unzip, jq, Composer)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git unzip jq ca-certificates curl >/dev/null
+          expected=$(curl -fsS https://composer.github.io/installer.sig)
+          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+          actual=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');")
+          [ "$expected" = "$actual" ] || { echo "::error::Composer installer checksum mismatch"; exit 1; }
+          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+          rm /tmp/composer-setup.php
+          php --version | head -1; composer --version
+      - uses: actions/checkout@v7
+      - name: Package metadata (composer validate, name, license, version)
+        working-directory: sdks/php
+        run: |
+          composer validate --strict --no-check-lock
+          [ "$(jq -r .name composer.json)" = "clickfix/sdk" ] || { echo "::error::composer.json name must be clickfix/sdk"; exit 1; }
+          [ "$(jq -r .license composer.json)" = "MIT" ] && [ -s LICENSE ] || { echo "::error::MIT license missing"; exit 1; }
+          version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' CHANGELOG.md | head -1)
+          [ -n "$version" ] || { echo "::error::CHANGELOG.md has no '## X.Y.Z - date' entry"; exit 1; }
+          grep -q "'clickfix-php-sdk/$version'" src/Client.php || { echo "::error::Client::USER_AGENT must carry version $version"; exit 1; }
+          echo "clickfix/sdk $version -> clickfix-php tag v$version"
+      # GitHub dist downloads count against the API rate limit; the job token lifts it.
+      - name: Install
+        working-directory: sdks/php
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer install --no-progress --prefer-dist
+      - name: Code style (php-cs-fixer)
+        working-directory: sdks/php
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
+        run: composer cs
+      - name: Static analysis (PHPStan level 8)
+        working-directory: sdks/php
+        run: composer stan
+      - name: Unit tests (PHPUnit)
+        working-directory: sdks/php
+        run: composer test
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Guide PHP examples against the stub API
+        working-directory: sdks
+        env:
+          CLICKFIX_EXAMPLES_PHP: required
+        run: |
+          node examples/run.mjs --check --only=php
+          node examples/run.mjs --only=php
+      - name: Workspace ownership (after)
+        if: always()
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          rm -rf sdks/php/vendor sdks/php/composer.lock sdks/php/.phpunit.cache sdks/php/.php-cs-fixer.cache sdks/examples/php/vendor
+          chown -R "$owner" "$GITHUB_WORKSPACE" || true
+          [ -d "$RUNNER_TOOL_CACHE" ] && chown -R "$owner" "$RUNNER_TOOL_CACHE" || true
+
+  # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
+  # formatter, unit + widget tests, the example app compiled to a Flutter
+  # bundle (no Android SDK / Xcode needed) and the pub.dev publish dry run.
+  # The toolchain is installed by subosito/flutter-action (the self-hosted
+  # runners have no Flutter); the version is pinned to what the package was
+  # developed with. The dry run needs a LICENSE file in the package root:
+  # while it is missing the step warns and skips instead of failing.
+  flutter:
+    needs: [changes]
+    if: needs.changes.outputs.flutter == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    env:
+      FLUTTER_PKG: sdks/flutter/clickfix_webview
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Dependencies
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: flutter pub get
+      - name: Analyze and format
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: |
+          dart analyze --fatal-infos
+          dart format --output=none --set-exit-if-changed .
+      - name: Tests
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: flutter test
+      - name: Example app compiles
+        working-directory: ${{ env.FLUTTER_PKG }}/example
+        run: |
+          flutter pub get
+          dart analyze --fatal-infos
+          dart format --output=none --set-exit-if-changed .
+          flutter build bundle
+      # What `sdk-publish` would ship from main; no credentials needed.
+      - name: pub.dev publish dry run
+        working-directory: ${{ env.FLUTTER_PKG }}
+        run: |
+          if [ ! -f LICENSE ]; then
+            echo "::warning::$FLUTTER_PKG/LICENSE is missing: pub.dev dry run skipped (pub refuses packages without a license)"
+            echo "pub.dev dry run skipped: $FLUTTER_PKG/LICENSE is missing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          dart pub publish --dry-run
+          echo "clickfix_webview $(sed -n 's/^version: *//p' pubspec.yaml) -> pub.dev" >> "$GITHUB_STEP_SUMMARY"
 
   # Lint, format, types, unit tests and the production build.
   frontend:
@@ -473,7 +720,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, laravel, flutter]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
@@ -631,9 +878,123 @@ jobs:
             echo "pushed $image:main ($short)" >> "$GITHUB_STEP_SUMMARY"
           done
 
+  # SDK release (CF-199): a green main run publishes @getclickfix/node,
+  # @getclickfix/visitor-core (CF-201) and @getclickfix/react-widget to npm when
+  # the version in package.json is not on the registry yet. Needs the
+  # NPM_TOKEN repository secret (an npm automation token of the account that
+  # owns the scopes); without it the job skips with a summary note and never
+  # fails main. Versions and changelogs live in sdks/<package>/CHANGELOG.md.
+  #
+  # The same job publishes the Flutter package clickfix_webview to pub.dev
+  # (CF-203) when its pubspec version is not on pub.dev yet. Needs the
+  # PUB_CREDENTIALS repository secret: the content of the pub-credentials.json
+  # file of the pub.dev publisher account (created by `dart pub token add
+  # https://pub.dev` / a first `dart pub publish` on that machine). Without
+  # it the Flutter steps skip with a summary note. The credentials file is
+  # written to a job-private config directory and removed afterwards.
+  sdk-publish:
+    needs: [ci]
+    if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      # The token is exposed to the publish step only, never to pnpm install
+      # or the tests (dependency install scripts must not see it).
+      - name: Versions to publish
+        id: todo
+        env:
+          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "NPM_TOKEN secret is not set: npm publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          list=""
+          for p in node visitor-core react-widget; do
+            name=$(jq -r .name "sdks/$p/package.json"); version=$(jq -r .version "sdks/$p/package.json")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY"
+            else
+              list="$list $p"
+            fi
+          done
+          echo "packages=${list# }" >> "$GITHUB_OUTPUT"
+          [ -n "$list" ] && echo "run=true" >> "$GITHUB_OUTPUT" || { echo "run=false" >> "$GITHUB_OUTPUT"; echo "no new SDK version" >> "$GITHUB_STEP_SUMMARY"; }
+      - uses: pnpm/action-setup@v6
+        if: steps.todo.outputs.run == 'true'
+        with:
+          version: 11.22.0
+          standalone: true
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: actions/setup-node@v7
+        if: steps.todo.outputs.run == 'true'
+        with:
+          node-version-file: frontend/.nvmrc
+          registry-url: https://registry.npmjs.org
+      - name: Build
+        if: steps.todo.outputs.run == 'true'
+        working-directory: sdks
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+      - name: Publish
+        if: steps.todo.outputs.run == 'true'
+        working-directory: sdks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for p in ${{ steps.todo.outputs.packages }}; do
+            (cd "$p" && pnpm publish --no-git-checks --access public)
+            echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Flutter version to publish
+        id: pub
+        env:
+          HAS_PUB: ${{ secrets.PUB_CREDENTIALS != '' }}
+          PKG: sdks/flutter/clickfix_webview
+        run: |
+          if [ "$HAS_PUB" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "PUB_CREDENTIALS secret is not set: pub.dev publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          if [ ! -f "$PKG/LICENSE" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "$PKG/LICENSE is missing: pub.dev publish skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          name=$(sed -n 's/^name: *//p' "$PKG/pubspec.yaml"); version=$(sed -n 's/^version: *//p' "$PKG/pubspec.yaml")
+          if curl -fsS "https://pub.dev/api/packages/$name" | jq -e --arg v "$version" 'any(.versions[].version; . == $v)' >/dev/null; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "$name $version is already on pub.dev" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "package=$name" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: subosito/flutter-action@v2
+        if: steps.pub.outputs.run == 'true'
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+      - name: Publish to pub.dev
+        if: steps.pub.outputs.run == 'true'
+        working-directory: sdks/flutter/clickfix_webview
+        env:
+          PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
+          XDG_CONFIG_HOME: ${{ runner.temp }}/pub-config
+        run: |
+          mkdir -p "$XDG_CONFIG_HOME/dart"
+          printf '%s' "$PUB_CREDENTIALS" > "$XDG_CONFIG_HOME/dart/pub-credentials.json"
+          trap 'rm -rf "$XDG_CONFIG_HOME"' EXIT
+          flutter pub get
+          flutter test
+          dart pub publish --force
+          echo "published ${{ steps.pub.outputs.package }} ${{ steps.pub.outputs.version }} to pub.dev" >> "$GITHUB_STEP_SUMMARY"
+
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls
-  # the :main images, so the tag waits until they are pushed.
+  # the :main images, so the tag waits until they are pushed. The same job
+  # tags the Go SDK module (go/vX.Y.Z from sdks/go/VERSION) when that
+  # version has no tag yet; nobody tags by hand (CF-199).
   release-tag:
     needs: [ci, publish-images]
     if: ${{ !failure() && needs.ci.result == 'success' && needs.publish-images.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -657,3 +1018,68 @@ jobs:
           git tag "$next" "$GITHUB_SHA"
           git push origin "$next"
           echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"
+
+  # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
+  # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
+  # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
+  # visitor-core/vX.Y.Z, go/vX.Y.Z (Go module path
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Packagist
+  # needs composer.json at the repository root, so sdks/php and sdks/laravel are
+  # also pushed to their own mirrors (clickfix-php, clickfix-laravel) and tagged
+  # vX.Y.Z there (version = newest "## X.Y.Z" heading of the package CHANGELOG).
+  # Needs the SDKS_MIRROR_TOKEN repository secret: a fine-grained token with
+  # Contents read/write on the three mirror repositories only. Without it the
+  # job skips with a note and never fails main. One mirror commit per release;
+  # history is not rewritten and tags are never moved.
+  sdks-mirror:
+    needs: [release-tag]
+    if: ${{ !failure() && needs.release-tag.result == 'success' }}
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Mirror sdks/ to the public SDK repositories
+        env:
+          SDKS_MIRROR_TOKEN: ${{ secrets.SDKS_MIRROR_TOKEN }}
+        run: |
+          if [ -z "$SDKS_MIRROR_TOKEN" ]; then
+            echo "SDKS_MIRROR_TOKEN secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
+          printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"
+          export GIT_CONFIG_GLOBAL="$work/gitconfig"   # job-private: the runner's own git config stays untouched
+          git config --global credential.helper "store --file=$work/cred"
+          release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
+          changelog_version() { sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' "$1/CHANGELOG.md" | head -1; }
+          # mirror <source dir> <repository> : one commit per release, then tags via tag()
+          mirror() {
+            src=$1; repo=$2; dir="$work/$repo"
+            git clone --quiet --branch main "https://github.com/ClickSolveMainTR/$repo.git" "$dir" 2>/dev/null \
+              || { git init --quiet -b main "$dir"; git -C "$dir" remote add origin "https://github.com/ClickSolveMainTR/$repo.git"; }
+            rsync -a --delete --exclude .git "$src/" "$dir/"
+            [ -f "$dir/LICENSE" ] || cp sdks/LICENSE "$dir/LICENSE"
+            git -C "$dir" config user.name "clickfix-ci"; git -C "$dir" config user.email "ci@getclickfix.com"
+            git -C "$dir" add -A
+            if git -C "$dir" diff --cached --quiet; then echo "$repo unchanged"; else
+              git -C "$dir" commit --quiet -m "clickfix-app-go ${release:-$GITHUB_SHA}"
+              git -C "$dir" push --quiet origin HEAD:main
+              echo "mirrored $src to $repo at ${release:-$GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          tag() { # tag <repository> <tag>
+            dir="$work/$1"
+            if git -C "$dir" ls-remote --tags origin "refs/tags/$2" | grep -q .; then echo "$1 $2 exists"; return; fi
+            git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
+          }
+          mirror sdks clickfix-sdks
+          for p in node react-widget visitor-core; do
+            [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
+          done
+          [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
+          [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          for p in php laravel; do
+            if [ -f "sdks/$p/composer.json" ]; then
+              mirror "sdks/$p" "clickfix-$p"
+              v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+            fi
+          done
+          true

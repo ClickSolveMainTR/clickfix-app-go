@@ -1,7 +1,5 @@
 {
   "all": "All",
-  "next": "Next",
-  "prev": "Previous",
   "ask_about": "Can you tell me more about “{{title}}”?",
   "tour.next": "Next",
   "tour.back": "Back",
@@ -90,5 +88,11 @@
   "platform_feedback.status.reviewed": "Reviewed",
   "platform_feedback.status.closed": "Closed",
   "platform_feedback.empty": "No feedback.",
+  "platform_feedback.columns.kind": "Kind",
+  "platform_feedback.columns.message": "Message",
+  "platform_feedback.columns.organization": "Organization",
+  "platform_feedback.columns.source": "Source",
+  "platform_feedback.columns.created": "Date",
+  "platform_feedback.columns.status": "Status",
   "platform_feedback.attachments": "{{count}} screenshot(s)"
 }

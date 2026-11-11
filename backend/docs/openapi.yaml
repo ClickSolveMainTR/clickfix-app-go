@@ -7085,11 +7085,12 @@ paths:
       summary: Update the organization profile
       description: |
         `tenant.settings.write`. Any subset of `name`, `timezone`, `locale`,
-        `currency`, `country_code`, `company`, `business_hours`, `branding`;
-        objects are replaced whole. Slug, status and access window are
-        platform-managed. Invalid fields answer `422 VALIDATION_ERROR` with
-        `details[].field` paths such as `company.tax_number` or
-        `business_hours.days.2.end`.
+        `currency`, `country_code`, `company`, `branding`; objects are
+        replaced whole. Working hours are the SLA schedule
+        (`/v1/tenant/sla/business-hours`, CF-198). Slug, status and access
+        window are platform-managed. Invalid fields answer
+        `422 VALIDATION_ERROR` with `details[].field` paths such as
+        `company.tax_number`.
       security:
         - bearerAuth: []
       parameters:
@@ -7402,12 +7403,15 @@ paths:
       operationId: getTenantOnboarding
       summary: Set-up checklist of the organization
       description: |
-        Steps in order: `organization`, `channel`, `team`, `widget`,
-        `first_conversation`. Channels, members, invitations and
-        conversations tick their steps automatically; `manual` steps can
-        also be confirmed by hand. Organizations not opened through
-        self-serve have no checklist (`active=false`, empty `steps`).
-        Requires `tenant.settings.read`.
+        Steps in the set-up order (CF-198): `customer` (identity key,
+        external identity, package, company profile), `system` (connected
+        customer system), `ai` (AI on, a published procedure), `knowledge`
+        (articles), `automation` (an SLA policy and an automation rule or
+        workflow). Every step lists its `conditions`; a step is `done` when
+        all of them hold, and the product observes them itself. A skipped
+        step keeps `skipped=true` and stays as a warning. Organizations not
+        opened through self-serve have no checklist (`active=false`, empty
+        `steps`). Requires `tenant.settings.read`.
       security:
         - bearerAuth: []
       parameters:
@@ -7428,15 +7432,16 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /v1/tenant/onboarding/steps/{step}:
+  /v1/tenant/onboarding/steps/{step}/skip:
     post:
       tags: [Tenant]
-      operationId: completeTenantOnboardingStep
-      summary: Confirm a manual set-up step
+      operationId: skipTenantOnboardingStep
+      summary: Skip a set-up step
       description: |
-        Ticks a manual step (`widget`, `team`). Idempotent. Unknown or
-        automatic steps answer `400 ONBOARDING_UNKNOWN_STEP`; a finished or
-        missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
+        Marks a step as skipped: it stays as a warning in the checklist and
+        in the assistant's "what did you leave out" until its conditions
+        hold. Idempotent. Unknown steps answer `400 ONBOARDING_UNKNOWN_STEP`;
+        a finished or missing checklist `409 ONBOARDING_NOT_ACTIVE`. Requires
         `tenant.settings.read` and `tenant.settings.write`.
       security:
         - bearerAuth: []
@@ -7447,7 +7452,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [widget, team]
+            enum: [customer, system, ai, knowledge, automation]
       responses:
         "200":
           description: Updated checklist
@@ -12348,7 +12353,8 @@ paths:
         Requires `tenant.conversations.read`. Newest activity first by default.
         `assignee` is `me`, `unassigned` or an agent uuid; list filters take
         comma-separated values. `q` matches subject, last message, contact
-        name / e-mail / phone, or the conversation number. When search is
+        name / e-mail / phone, the contact's external id (exact, CF-195), or
+        the conversation number. When search is
         enabled `q` also matches message texts and internal notes through
         the organization's search index (CF-45); such rows carry
         `search_match` with the matched text. The other filters still apply.
@@ -12369,6 +12375,7 @@ paths:
         - { name: tag, in: query, schema: { type: string }, description: Tag uuids }
         - { name: contact, in: query, schema: { type: string, format: uuid } }
         - { name: company, in: query, schema: { type: string, format: uuid } }
+        - { name: identity, in: query, description: "CF-195: the contact's identity state.", schema: { $ref: "#/components/schemas/ContactIdentityState" } }
         - { name: mentioned, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: unread, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: sla_breached, in: query, schema: { type: string, enum: ["1", "true", "0", "false"] } }
@@ -12946,6 +12953,60 @@ paths:
         "422": { $ref: "#/components/responses/ValidationError" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/auto-replies:
+    get:
+      tags: [Tenant]
+      operationId: getTenantAutoReplies
+      summary: Automatic customer replies
+      description: |
+        `tenant.settings.read`. The acknowledgement a new conversation gets inside
+        working hours ("we got it, estimated reply time ..."), the out-of-hours
+        message and the AI-to-human handoff notice (CF-198). Each text has this
+        one source; the hours they follow are the SLA schedule
+        (`/v1/tenant/sla/business-hours`). Organizations that never saved their
+        own texts get the defaults.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeAutoReplySettings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantAutoReplies
+      summary: Replace the automatic customer replies
+      description: |
+        `tenant.settings.write`. Replaces every text; an empty text falls back to
+        the default. The acknowledgement may contain `{eta}`, replaced with the
+        estimated reply time from the matching SLA policy's first-response
+        target (removed when no policy applies).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutoReplySettings" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeAutoReplySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/sla/business-hours:
     get:
       tags: [Tenant]
@@ -24154,6 +24215,9 @@ paths:
   # open (no credentials); the page origin is checked against the widget's
   # allowlist and every route except bootstrap needs the visitor token.
   /v1/widget/{public_id}/replay-policy:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       operationId: GetreplayprivacypolicyCF126
       summary: Get replay privacy policy
@@ -24197,6 +24261,9 @@ paths:
         '429':
           description: Rate or plan quota exceeded
   /v1/widget/{public_id}/conversations/{conversation}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: StartconsentedreplayCF126
       summary: Start consented replay
@@ -24254,6 +24321,9 @@ paths:
                   type: boolean
                   const: true
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/consent:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: ChangevisitorsessionconsentCF126
       summary: Change visitor session consent
@@ -24319,6 +24389,9 @@ paths:
                   - stop
                   - revoke
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/chunks:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: UploadmaskedcompressedDOMeventsCF126
       summary: Upload masked compressed DOM events
@@ -24388,6 +24461,9 @@ paths:
                   description: Base64 gzip of rrweb event array; max 512 KiB compressed, 2 MiB expanded; sequential
                     for replay, ephemeral for co-browse
   /v1/widget/{public_id}/conversations/{conversation}/sessions/{session}/live-token:
+    parameters:
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       operationId: VisitorlivestreamtokenCF126
       summary: Visitor live stream token
@@ -25031,18 +25107,105 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /v1/tenant/widgets/{uuid}/app-keys:
+    get:
+      tags: [Tenant]
+      operationId: listTenantWidgetAppKeys
+      summary: Mobile app keys of the widget
+      description: |
+        The native apps (iOS bundle id, Android application id) that may use
+        the widget without a page origin (CF-201). Keys are never returned:
+        only `key_prefix` identifies one. Active keys first. Requires
+        `tenant.channels.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: App keys
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKeyList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: createTenantWidgetAppKey
+      summary: Create a mobile app key
+      description: |
+        Mints a key for one app. The response is the only time the key is
+        shown; only its sha256 is stored. A widget may have at most 20
+        active keys. Requires `tenant.channels.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WidgetAppKeyCreate" }
+      responses:
+        "201":
+          description: The app key, shown once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKeyCreated" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/tenant/widgets/{uuid}/app-keys/{key}:
+    delete:
+      tags: [Tenant]
+      operationId: revokeTenantWidgetAppKey
+      summary: Revoke a mobile app key
+      description: |
+        The key stops working at once; the row stays listed with
+        `revoked_at`. Revoking twice is 404. Requires `tenant.channels.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: key
+          in: path
+          required: true
+          description: App key uuid
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The revoked key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeWidgetAppKey" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /v1/widget/{public_id}/attributes:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     patch:
       tags: [Widget]
       operationId: widgetSetAttributes
       summary: Store mapped visitor attributes
       description: |
-        `ClickFix('setAttributes', ...)`. Only keys of the widget's attribute
-        mapping are stored; keys not marked anonymous need an identified
-        visitor. Without a contact yet the result is `pending` and the SDK
-        sends the attributes with the first message.
+        `ClickFix('setAttributes', ...)`. A key is stored when it is the key of
+        a contact custom field (CF-196: defining the field is the only step;
+        the field's `widget_access` decides whether anonymous visitors may
+        write it, default identified visitors only) or an entry of the
+        widget's attribute mapping (an alias; entries not marked anonymous
+        need an identified visitor). List fields accept the option id or its
+        label and store the id. A key no field defines is listed in `unknown`
+        (and `ignored`), recorded as a "tanımsız alan" warning and kept on the
+        contact until a field is defined. Without a contact yet the result is
+        `pending` and the SDK sends the attributes with the first message.
       security: [{ widgetVisitor: [] }]
       requestBody:
         required: true
@@ -25062,6 +25225,8 @@ paths:
   /v1/widget/{public_id}/bootstrap:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetBootstrap
@@ -25090,6 +25255,8 @@ paths:
   /v1/widget/{public_id}/identify:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetIdentify
@@ -25123,6 +25290,8 @@ paths:
   /v1/widget/{public_id}/profile:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     patch:
       tags: [Widget]
       operationId: widgetUpdateProfile
@@ -25146,6 +25315,8 @@ paths:
   /v1/widget/{public_id}/realtime-token:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     post:
       tags: [Widget]
       operationId: widgetRealtimeToken
@@ -25163,6 +25334,8 @@ paths:
   /v1/widget/{public_id}/conversations:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetListConversations
@@ -25204,6 +25377,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/messages:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     get:
       tags: [Widget]
@@ -25257,6 +25432,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/read:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25284,6 +25461,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/typing:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25413,6 +25592,8 @@ paths:
   /v1/widget/{public_id}/conversations/{conversation}/rating:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
       - $ref: "#/components/parameters/WidgetConversation"
     post:
       tags: [Widget]
@@ -25470,6 +25651,8 @@ paths:
   /v1/widget/{public_id}/booking:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetBookingLink
@@ -25492,6 +25675,8 @@ paths:
   /v1/widget/{public_id}/help/search:
     parameters:
       - $ref: "#/components/parameters/WidgetPublicID"
+      - $ref: "#/components/parameters/WidgetAppKey"
+      - $ref: "#/components/parameters/WidgetAppPackage"
     get:
       tags: [Widget]
       operationId: widgetHelpSearch
@@ -25541,6 +25726,92 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/custom-fields/unknown-keys:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomFieldUnknownKeys
+      summary: Undefined keys the widget sent ("tanımsız alan geldi")
+      description: |
+        CF-196. Keys a widget sent that no contact field defines. They are not
+        dropped silently: each key is listed here (newest first, at most 100)
+        until a field with that key is created (`from_unknown_key`) or the
+        warning is dismissed. `channel_uuid` narrows the list to one widget for
+        the channel setup check. Requires `tenant.custom_fields.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: channel_uuid
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Open warnings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeCustomFieldUnknownKeyList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/custom-fields/unknown-keys/{uuid}/dismiss:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCustomFieldUnknownKeyDismiss
+      summary: Dismiss an undefined-key warning
+      description: Hides the warning until the key is received again. Requires `tenant.custom_fields.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDismissed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/custom-fields/values:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCustomFieldValues
+      summary: Custom field values of one contact or company (agent view)
+      description: |
+        CF-196 read model for the contact/company card and the conversation
+        panel. Every live field with `visibility.agent` on, in display order,
+        with its stored `value` (option id for list fields; null when unset)
+        and `display` text (option label, "Evet"/"Hayır", "12.50 TRY").
+        Sensitive fields come back with `masked: true`, `value: null` and a
+        masked `display`. `unknown` lists the undefined keys this contact
+        received (contacts only), each with a `suggested_key` for the one-click
+        definition. Requires `tenant.custom_fields.read` and `tenant.contacts.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: entity_type
+          in: query
+          required: true
+          schema: { type: string, enum: [contact, company] }
+        - name: entity_uuid
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Values
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeCustomFieldEntityValues" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/custom-fields:
     get:
       tags: [Tenant]
@@ -25580,6 +25851,11 @@ paths:
       summary: Create a custom field
       description: |
         Requires `tenant.custom_fields.manage`. Key and type are permanent.
+        The field is live at once (CF-196: no mapping or publish step): the
+        widget SDK may send it by key (`widget_access`), and with
+        `from_unknown_key` the matching undefined-key warning closes and the
+        values contacts already sent under that key are applied. Every create
+        and update is written to the audit log (before → after).
         Errors: `400 VALIDATION_ERROR` (details per definition field),
         `409 CUSTOM_FIELD_KEY_TAKEN`, `409 CUSTOM_FIELD_LIMIT_REACHED`.
       security:
@@ -26040,6 +26316,8 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
         - { name: company, in: query, schema: { type: string, format: uuid } }
+        - { name: external_id, in: query, description: "CF-195: the customer's own user id, exact match. `q` also matches external ids.", schema: { type: string, maxLength: 200 } }
+        - { name: identity, in: query, description: "CF-195: verified (proved with user_hash), anonymous or self_named.", schema: { $ref: "#/components/schemas/ContactIdentityState" } }
         - { name: sort, in: query, schema: { type: string, enum: [created_at, -created_at, name, -name, last_seen_at, -last_seen_at] } }
       responses:
         "200":
@@ -26074,6 +26352,49 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/contacts/by-external-id:
+    put:
+      tags: [Tenant]
+      operationId: upsertTenantContactByExternalId
+      summary: Create or update a contact by its external id
+      description: |
+        CF-195. Requires `tenant.contacts.write`. `external_id` is required: the
+        customer's own user id, the same value the widget sends as `user_id`.
+        The contact with that id is updated (200), else a new one is created
+        (201). Calling it twice with the same id edits one contact. It never
+        matches by e-mail or phone, so a visitor who only typed an address is
+        not taken over. The contact stays unverified until the user signs in
+        through widget identify.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - type: object
+                  required: [external_id]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/contacts/{uuid}:
@@ -26536,6 +26857,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/XOrganization"
         - { name: q, in: query, schema: { type: string } }
+        - { name: external_id, in: query, description: "CF-195: the company's own id in the customer's system, exact match.", schema: { type: string, maxLength: 200 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
       responses:
@@ -27629,6 +27951,61 @@ paths:
       }
     }
   }
+  "/v1/tenant/knowledge/articles/{uuid}/audience":
+    parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Knowledge]
+      operationId: knowledgeArticleAudience
+      summary: Who the widget offers an article to
+      description: CF-196 catalog conditions by option id. Requires tenant.settings.read.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Audience
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeKnowledgeArticleAudience" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Knowledge]
+      operationId: knowledgeSetArticleAudience
+      summary: Set who the widget offers an article to
+      description: |
+        Replaces the audience; it applies at once. Each condition names a live
+        list field of the contact, company or conversation; options may be sent
+        as ids or labels and are stored as ids. An article with an audience is
+        only offered to widget visitors whose contact matches. Requires
+        tenant.settings.write.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KnowledgeArticleAudience" }
+      responses:
+        "200":
+          description: Saved audience
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeKnowledgeArticleAudience" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
   "/v1/tenant/knowledge/articles/{uuid}/publish": {
     "post": {
       "tags": [
@@ -36336,6 +36713,7 @@ paths:
             "default": 0
           }
         },
+        {"name": "external_id", "in": "query", "description": "CF-195: exact external id.", "schema": {"type": "string", "maxLength": 200}},
         {
           "name": "X-Organization",
           "in": "header",
@@ -36400,6 +36778,7 @@ paths:
             "default": 0
           }
         },
+        {"name": "external_id", "in": "query", "description": "CF-195: exact external id.", "schema": {"type": "string", "maxLength": 200}},
         {
           "name": "X-Organization",
           "in": "header",
@@ -36711,130 +37090,117 @@ paths:
       }
     }
   }
-  "/v1/public-api/contacts": {
-    "get": {
-      "tags": [
-        "Developer platform"
-      ],
-      "operationId": "getV1PublicApiContacts",
-      "x-public": true,
-      "summary": "Public API: get contacts",
-      "security": [
-        {
-          "integrationKey": []
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IntegrationEnvelope"
-              }
-            }
-          }
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthenticated"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        }
-      },
-      "description": "API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.",
-      "parameters": [
-        {
-          "name": "limit",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 20
-          }
-        },
-        {
-          "name": "offset",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0
-          }
-        },
-        {
-          "name": "q",
-          "in": "query",
-          "description": "Case-insensitive match on the contact name.",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ]
-    }
-  }
-  "/v1/public-api/companies": {
-    "get": {
-      "tags": [
-        "Developer platform"
-      ],
-      "operationId": "getV1PublicApiCompanies",
-      "x-public": true,
-      "summary": "Public API: get companies",
-      "security": [
-        {
-          "integrationKey": []
-        }
-      ],
-      "responses": {
-        "200": {
-          "description": "Success",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IntegrationEnvelope"
-              }
-            }
-          }
-        },
-        "400": {
-          "$ref": "#/components/responses/BadRequest"
-        },
-        "401": {
-          "$ref": "#/components/responses/Unauthenticated"
-        },
-        "403": {
-          "$ref": "#/components/responses/Forbidden"
-        }
-      },
-      "description": "API key scope and creator current RBAC both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API; writes require Idempotency-Key. A reused key with a different body returns 409.",
-      "parameters": [
-        {
-          "name": "limit",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
-            "default": 20
-          }
-        },
-        {
-          "name": "offset",
-          "in": "query",
-          "schema": {
-            "type": "integer",
-            "minimum": 0,
-            "default": 0
-          }
-        }
-      ]
-    }
-  }
+  /v1/public-api/contacts:
+    get:
+      tags: ["Developer platform"]
+      operationId: getV1PublicApiContacts
+      x-public: true
+      summary: "Public API: get contacts"
+      description: "API key scope (`contacts:read`) and the key creator's current permissions both apply. Per-key requests/minute limit. Same response envelope and pagination as tenant API. Items carry `external_id`, `verified_at` and the company's `company_external_id` (CF-195)."
+      security:
+        - integrationKey: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: q, in: query, description: "Case-insensitive match on the contact name or e-mail.", schema: { type: string } }
+        - { name: external_id, in: query, description: "CF-195: the customer's own user id, exact match.", schema: { type: string, maxLength: 200 } }
+    post:
+      tags: ["Developer platform"]
+      operationId: postV1PublicApiContacts
+      x-public: true
+      summary: "Public API: create a contact (CF-195)"
+      description: "Same body and response as `POST /v1/tenant/contacts`. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header. Prefer `PUT /v1/public-api/contacts/by-external-id` to sync users from your system."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/public-api/contacts/by-external-id:
+    put:
+      tags: ["Developer platform"]
+      operationId: putV1PublicApiContactByExternalId
+      x-public: true
+      summary: "Public API: create or update a contact by your user id (CF-195)"
+      description: "Same body and response as `PUT /v1/tenant/contacts/by-external-id`: 201 when created, 200 when the contact with `external_id` existed; the same id twice edits one contact. Needs the `contacts:write` key scope, the key creator's `tenant.contacts.write` permission and an `Idempotency-Key` header (use a new key per change; a reused key replays the stored answer)."
+      security:
+        - integrationKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/ContactInput"
+                - type: object
+                  required: [external_id]
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContact" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /v1/public-api/companies:
+    get:
+      tags: ["Developer platform"]
+      operationId: getV1PublicApiCompanies
+      x-public: true
+      summary: "Public API: get companies"
+      description: "API key scope (`companies:read`) and the key creator's current permissions both apply. Items carry `domain` and `external_id`, the company's own id (CF-195, separate from contact ids)."
+      security:
+        - integrationKey: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationEnvelope" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: external_id, in: query, description: "CF-195: the company's id in your system, exact match.", schema: { type: string, maxLength: 200 } }
   /v1/public-api/company-usage:
     put:
       tags: ["Developer platform"]
@@ -38202,7 +38568,7 @@ paths:
       tags: [Tenant]
       operationId: createTenantCannedResponse
       summary: Create a canned response
-      description: "Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}."
+      description: "Requires `tenant.macros.read` for personal scope, `tenant.macros.write` for organization scope. Variables: {{contact.name}}, {{contact.first_name}}, {{contact.email}}, {{contact.phone}}, {{company.name}}, {{agent.name}}, {{agent.first_name}}, {{conversation.number}}, {{contact.custom.<key>}}, {{contact.<key>}}, {{company.<key>}} (CF-196: list fields render their option label; sensitive and agent-hidden fields render empty)."
       security:
         - bearerAuth: []
       parameters:
@@ -41265,6 +41631,337 @@ paths:
         '404': *id007
 
 
+  /v1/tenant/integrations/system:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConnectedSystem
+      summary: Connected system overview
+      description: |
+        The "Sistemini bağla" screen (CF-197): connection (never the secret), concepts (custom object
+        types) with their sources, actions, playbooks and the latest 20 calls (masked paths, no bodies).
+        Requires `tenant.integrations.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemOverview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/connection:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemConnection
+      summary: Save the connection
+      description: |
+        Base URL (public https) and authentication. The secret is encrypted and write-only;
+        `keep_secret` keeps the stored one.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemConnectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemConnection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/sources/{uuid}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemSource
+      summary: Set where a concept is read from
+      description: |
+        `path_template` is relative to the base URL and must hold `{external_id}` or `{company_external_id}`.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemSourceInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemSource
+      summary: Remove a concept's source
+      description: |
+        Removes where the concept is read from.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/sources/{uuid}/test:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemSourceTest
+      summary: Try a concept's endpoint
+      description: |
+        The "Dene" button: calls the organization's endpoint for one external id and returns the real
+        answer with pickable paths. Call failures (SSRF_BLOCKED, TIMEOUT, RATE_LIMITED, HTTP_ERROR, ...) are a
+        200 with `ok: false`.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid }, description: Custom object type (concept) UUID }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemTestInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemTestResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/actions/{key}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemAction
+      summary: Create or update an action
+      description: |
+        An action of the organization's system: endpoint, params, approval and who may use it.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemActionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemAction" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemAction
+      summary: Delete an action
+      description: |
+        Deletes the action.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/actions/{key}/run:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemActionRun
+      summary: Run an action
+      description: |
+        The action's `allowed_for` must hold `agent` (or `workflow` for workflow runs). An action that
+        requires approval runs only with `approved: true`. `dry_run` never calls out. Errors: `403`,
+        `409 APPROVAL_REQUIRED`, `409 ACTION_DISABLED`, `409 SYSTEM_NOT_CONNECTED`.
+        Requires `tenant.integrations.use`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemRunInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemRunResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/playbooks/{intent}:
+    put:
+      tags: [Tenant]
+      operationId: putTenantConnectedSystemPlaybook
+      summary: Create or update an AI playbook
+      description: |
+        Plain-language instructions; the intent is offered to the AI triage as a candidate.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: intent, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemPlaybookInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemPlaybook" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConnectedSystemPlaybook
+      summary: Delete an AI playbook
+      description: |
+        Deletes the playbook.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: intent, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/concepts/{key}/lookup:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConnectedSystemLookup
+      summary: Read a concept for a customer
+      description: |
+        By `contact_uuid` or `external_id`. A missing source or external id is `status: skipped` with the reason.
+        Requires `tenant.integrations.use`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - { name: key, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,63}$" } }
+        - { name: contact_uuid, in: query, schema: { type: string, format: uuid } }
+        - { name: external_id, in: query, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemLookup" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/integrations/system/preview:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConnectedSystemPreview
+      summary: Try as this customer
+      description: |
+        "Bu müşteri olarak dene": what ClickFix accepts or rejects (and why) from the identity, attributes,
+        company, page and events, the latest widget identity rejections, and the context the AI would see.
+        Requires `tenant.integrations.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemPreviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeSystemPreview" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/InternalError" }
 webhooks:
   apiChannelReply:
     post:
@@ -41315,7 +42012,7 @@ components:
     widgetVisitor:
       type: http
       scheme: bearer
-      description: Visitor token from `POST /v1/widget/{public_id}/bootstrap` (HMAC signed, bound to one widget and visitor).
+      description: Visitor token from `POST /v1/widget/{public_id}/bootstrap` (HMAC signed, bound to one widget and visitor). Every widget route also needs a page origin on the widget's allowlist, or a mobile app key (`X-ClickFix-App-Key` + `X-ClickFix-App-Package`, CF-201); the token itself is not bound to either, so a session started in a native app continues in the app's webview.
     integrationKey: {"type": "http", "scheme": "bearer", "bearerFormat": "cf_sk_\u2026", "description": "Organization API key; created through /v1/tenant/api-keys."}
     mcpOAuth: {"type": "oauth2", "flows": {"authorizationCode": {"authorizationUrl": "/oauth/authorize", "tokenUrl": "/oauth/token", "scopes": {"mcp:read": "Read organization support data", "mcp:write": "Mutate organization support data"}}}}
 
@@ -41337,6 +42034,24 @@ components:
       required: true
       description: Public widget id (the widget's channel instance uuid)
       schema: { type: string, format: uuid }
+    WidgetAppKey:
+      name: X-ClickFix-App-Key
+      in: header
+      required: false
+      description: |
+        Mobile app key (CF-201): a native app sends it with
+        `X-ClickFix-App-Package` instead of a page origin; the widget's
+        origin allowlist is then not consulted. Unknown, revoked or
+        mismatched keys answer 403 `WIDGET_APP_KEY_INVALID`, as does a key
+        that arrives together with an `Origin` or `Referer` (a page never
+        holds an app key; the headers are not CORS-allowed).
+      schema: { type: string, maxLength: 200 }
+    WidgetAppPackage:
+      name: X-ClickFix-App-Package
+      in: header
+      required: false
+      description: The app's bundle id (iOS) or application id (Android), compared case-insensitively with the key's.
+      schema: { type: string, maxLength: 200 }
     WidgetConversation:
       name: conversation
       in: path
@@ -41484,7 +42199,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
     ValidationError:
-      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`, `business_hours.days.2.end`)"
+      description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:
@@ -41509,7 +42224,7 @@ components:
     UptimeMonitor: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "url": {"type": "string"}, "interval_seconds": {"type": "integer"}, "expected_status": {"type": "integer"}, "keyword": {"type": "string"}, "component_uuid": {"type": "string", "format": "uuid"}, "policy_uuid": {"type": ["string", "null"], "format": "uuid"}, "enabled": {"type": "boolean"}, "next_check_at": {"type": "string", "format": "date-time"}, "last_checked_at": {"type": ["string", "null"], "format": "date-time"}, "last_up": {"type": ["boolean", "null"]}, "last_status": {"type": "integer"}}, "required": ["uuid", "name", "url", "interval_seconds", "expected_status", "keyword", "component_uuid", "policy_uuid", "enabled", "next_check_at", "last_checked_at", "last_up", "last_status"], "additionalProperties": false}
     OncallAlert: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "policy_uuid": {"type": "string", "format": "uuid"}, "incident_uuid": {"type": ["string", "null"], "format": "uuid"}, "conversation_uuid": {"type": ["string", "null"], "format": "uuid"}, "next_step": {"type": "integer"}, "next_notify_at": {"type": "string", "format": "date-time"}, "acknowledged_at": {"type": ["string", "null"], "format": "date-time"}, "resolved_at": {"type": ["string", "null"], "format": "date-time"}, "created_at": {"type": "string", "format": "date-time"}}, "required": ["uuid", "policy_uuid", "incident_uuid", "conversation_uuid", "next_step", "next_notify_at", "acknowledged_at", "resolved_at", "created_at"], "additionalProperties": false}
     UptimeResult: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "up": {"type": "boolean"}, "status_code": {"type": "integer"}, "latency_ms": {"type": "integer"}, "checked_at": {"type": "string", "format": "date-time"}}, "required": ["uuid", "up", "status_code", "latency_ms", "checked_at"], "additionalProperties": false}
-    IntegrationCreateConversation: {"type": "object", "properties": {"contact_uuid": {"type": "string", "format": "uuid"}, "inbox_uuid": {"type": "string", "format": "uuid"}, "subject": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["contact_uuid", "inbox_uuid", "subject"], "additionalProperties": false}
+    IntegrationCreateConversation: {"type": "object", "description": "Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.", "properties": {"contact_uuid": {"type": "string", "format": "uuid"}, "contact_external_id": {"type": "string", "maxLength": 200}, "inbox_uuid": {"type": "string", "format": "uuid"}, "subject": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["inbox_uuid", "subject"], "additionalProperties": false}
     IntegrationSubscription: {"type": "object", "properties": {"name": {"type": "string"}, "url": {"type": "string", "format": "uri"}, "events": {"type": "array", "items": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "minItems": 1}, "enabled": {"type": "boolean"}}, "required": ["name", "url", "events", "enabled"], "additionalProperties": false}
     IntegrationTrigger: {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "event": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "entity_uuid": {"type": ["string", "null"], "format": "uuid"}, "occurred_at": {"type": "string", "format": "date-time"}}, "required": ["id", "event", "entity_uuid", "occurred_at"], "additionalProperties": false}
     IntegrationTriggerPage: {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/IntegrationTrigger"}}, "next_cursor": {"type": "string"}, "has_more": {"type": "boolean"}, "retention_days": {"type": "integer"}}, "required": ["items", "next_cursor", "has_more", "retention_days"], "additionalProperties": false}
@@ -42341,35 +43056,21 @@ components:
     # CF-55 web widget.
     WidgetPreChat:
       type: object
-      required: [enabled, name, email, phone, fields, consent]
+      description: |
+        The pre-chat form is one of the organization's request forms (CF-198,
+        `/v1/tenant/request-forms`): `form_uuid` picks it, "" means the first
+        active form offered on the widget channel. The bootstrap serves the
+        chosen form as `request_form`. The widget keeps only the switch, the
+        choice and the consent box; the fields live on the form.
+      required: [enabled, form_uuid, consent]
       properties:
         enabled: { type: boolean }
-        name: { type: string, enum: [required, optional, hidden] }
-        email: { type: string, enum: [required, optional, hidden] }
-        phone: { type: string, enum: [required, optional, hidden] }
-        fields: { type: array, items: { $ref: "#/components/schemas/WidgetPreChatField" } }
+        form_uuid: { type: string, description: "Request form uuid or \"\" (first active widget form)" }
         consent: { $ref: "#/components/schemas/WidgetConsent" }
-    WidgetBusinessHours:
-      type: object
-      required: [enabled, timezone, days]
-      properties:
-        enabled: { type: boolean }
-        timezone: { type: string, examples: [Europe/Istanbul] }
-        days:
-          type: object
-          description: Keys sun..sat; each a list of opening spans.
-          additionalProperties:
-            type: array
-            items:
-              type: object
-              required: [start, end]
-              properties:
-                start: { type: string, examples: ["09:00"] }
-                end: { type: string, examples: ["18:00"] }
     WidgetPublicSettings:
       type: object
       description: The visitor-safe part of WidgetSettings (no allowlist, member ids, attribute targets or handoff keywords).
-      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, prechat, business_hours, offline_message, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, mobile, attribute_keys]
+      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, prechat, offline_message, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, mobile, attribute_keys]
       properties:
         schema_version: { type: integer }
         color: { type: string, examples: ["#4f46e5"] }
@@ -42379,7 +43080,6 @@ components:
         greeting_text: { type: string }
         show_team: { type: boolean }
         prechat: { $ref: "#/components/schemas/WidgetPreChat" }
-        business_hours: { $ref: "#/components/schemas/WidgetBusinessHours" }
         offline_message: { type: string }
         require_identity: { type: boolean }
         file_upload: { type: boolean }
@@ -42431,16 +43131,6 @@ components:
       properties:
         tr: { type: string }
         en: { type: string }
-    WidgetPreChatField:
-      type: object
-      required: [key, label, type, required, options, attribute]
-      properties:
-        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
-        label: { $ref: "#/components/schemas/WidgetLocalized" }
-        type: { type: string, enum: [text, textarea, email, phone, number, select, checkbox] }
-        required: { type: boolean }
-        options: { type: array, items: { type: string } }
-        attribute: { type: string, description: "Attribute mapping key the answer is stored under (\"\" = none)" }
     WidgetConsent:
       type: object
       required: [enabled, required, text, url]
@@ -42607,7 +43297,7 @@ components:
       description: |
         Complete (normalized) widget settings, schema version 2. Version 1 keys
         stay at the top level; stored v1 JSON reads as v2 with defaults.
-      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, team_member_uuids, prechat, business_hours, offline_message, allowed_domains, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, rate_limit, mobile, attribute_mapping]
+      required: [schema_version, color, position, locale, greeting_title, greeting_text, show_team, team_member_uuids, prechat, offline_message, allowed_domains, require_identity, file_upload, csat, appearance, texts, reply_time, home, quick_replies, csat_options, offline, away_mode, channels, ai, attachments, features, triggers, targeting, privacy, rate_limit, mobile, attribute_mapping]
       properties:
         schema_version: { type: integer, enum: [2] }
         color: { type: string }
@@ -42618,7 +43308,6 @@ components:
         show_team: { type: boolean }
         team_member_uuids: { type: array, items: { type: string } }
         prechat: { $ref: "#/components/schemas/WidgetPreChat" }
-        business_hours: { $ref: "#/components/schemas/WidgetBusinessHours" }
         offline_message: { type: string }
         allowed_domains: { type: array, items: { type: string } }
         require_identity: { type: boolean }
@@ -42760,6 +43449,58 @@ components:
           enum: [WIDGET_IDENTITY_DISABLED, WIDGET_IDENTITY_INVALID]
           description: "`WIDGET_IDENTITY_DISABLED`: the widget has no identity secret. `WIDGET_IDENTITY_INVALID`: `user_hash` did not match `user_id`."
         rejected_at: { type: string, format: date-time }
+    WidgetAppKey:
+      type: object
+      description: A mobile app that may use the widget (CF-201). Never carries the key.
+      required: [uuid, platform, package_name, label, key_prefix, created_at, last_used_at, revoked_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        platform: { type: string, enum: [ios, android] }
+        package_name: { type: string, description: iOS bundle id or Android application id }
+        label: { type: string }
+        key_prefix: { type: string, description: "The first characters of the key (`cf_app_…`), to tell keys apart" }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time, description: Updated at most every five minutes }
+        revoked_at: { type: [string, "null"], format: date-time }
+    WidgetAppKeyCreate:
+      type: object
+      required: [platform, package_name]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        package_name: { type: string, minLength: 3, maxLength: 200, description: "Dot-separated labels, e.g. com.example.shop" }
+        label: { type: string, maxLength: 100 }
+    WidgetAppKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/WidgetAppKey"
+        - type: object
+          required: [key]
+          properties:
+            key: { type: string, description: The app key; shown only in this response }
+    EnvelopeWidgetAppKeyList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/WidgetAppKey" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeWidgetAppKey:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/WidgetAppKey" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeWidgetAppKeyCreated:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/WidgetAppKeyCreated" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     WidgetReplyEstimate:
       type: object
       required: [value, next_open_at]
@@ -42795,10 +43536,11 @@ components:
           additionalProperties: { type: [string, number, boolean] }
     WidgetAttributesResult:
       type: object
-      required: [applied, ignored, pending]
+      required: [applied, ignored, unknown, pending]
       properties:
         applied: { type: array, items: { type: string } }
         ignored: { type: array, items: { type: string } }
+        unknown: { type: array, items: { type: string }, description: "Keys no field defines (CF-196); recorded as warnings, also in `ignored`." }
         pending: { type: boolean, description: No contact yet; send them with the first message }
     EnvelopeWidgetConfig:
       type: object
@@ -42881,12 +43623,13 @@ components:
         avatar_url: { type: [string, "null"] }
     WidgetVisitor:
       type: object
-      required: [id, token, expires_at, verified, contact]
+      required: [id, token, expires_at, verified, company_verified, contact]
       properties:
         id: { type: string, description: Anonymous visitor id }
         token: { type: string, description: "Visitor token, sent as a bearer Authorization header" }
         expires_at: { type: string, format: date-time }
         verified: { type: boolean }
+        company_verified: { type: boolean, description: "The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint" }
         contact:
           oneOf:
             - type: "null"
@@ -42962,15 +43705,23 @@ components:
       type: object
       required: [user_id, user_hash]
       properties:
-        user_id: { type: string, maxLength: 200 }
-        user_hash: { type: string, description: "hex(HMAC-SHA256(identity_secret, user_id))" }
+        user_id: { type: string, maxLength: 200, description: "The user's id in your system (the contact's external id); no line breaks" }
+        user_hash:
+          type: string
+          description: >-
+            Computed on your server with the widget's identity secret. Without a company id:
+            hex(HMAC-SHA256(identity_secret, user_id)). With company.id (CF-206):
+            hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id)), so the user cannot claim
+            another company. A user-only hash sent together with company.id still verifies the user,
+            but the company id is then a claim: it binds no company and is not stored (name and domain
+            stay hints).
         name: { type: string }
         email: { type: string }
         phone: { type: string }
         company:
           type: object
           properties:
-            id: { type: string }
+            id: { type: string, maxLength: 200, description: "The company's id in your system (companies.external_id); binds the contact to the company only when user_hash covers it" }
             name: { type: string }
             domain: { type: string }
     WidgetProfileInput:
@@ -42984,13 +43735,12 @@ components:
       properties:
         text: { type: string, maxLength: 10000 }
         client_id: { type: string, format: uuid, description: Makes retries idempotent }
-        name: { type: string, description: Pre-chat name }
-        email: { type: string, description: Pre-chat e-mail }
+        name: { type: string, description: Visitor name (older SDKs; the pre-chat form's name field is preferred) }
+        email: { type: string, description: Visitor e-mail (older SDKs; the pre-chat form's e-mail field is preferred) }
         page_url: { type: string }
         profile: { $ref: "#/components/schemas/WidgetProfileInput" }
-        form: { $ref: "#/components/schemas/RequestFormSubmission" }
-        phone: { type: string, description: Pre-chat phone }
-        prechat: { type: object, additionalProperties: { type: [string, number, boolean] }, description: Answers to the custom pre-chat questions (first message) }
+        form: { $ref: "#/components/schemas/RequestFormSubmission", description: The pre-chat (request) form answers of a first message (CF-198) }
+        phone: { type: string, description: Visitor phone (older SDKs) }
         consent: { type: boolean, description: GDPR/KVKK checkbox of the pre-chat form }
         intent: { type: string, enum: ["", human, callback, video], description: "human asks for a person (the AI agent hands off)" }
         attributes: { type: object, additionalProperties: true, description: SDK attributes set before the contact existed }
@@ -43008,7 +43758,6 @@ components:
       type: object
       properties:
         form: { type: string, description: RequestFormSubmission as JSON }
-        prechat: { type: string, description: Pre-chat answers as JSON }
         attributes: { type: string, description: Attributes as JSON }
         consent: { type: string, enum: ["true", "false"] }
         intent: { type: string }
@@ -45172,27 +45921,9 @@ components:
             "en"
           ]
         },
-        "timezone": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "start_minute": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1439
-        },
-        "end_minute": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1440
-        },
-        "weekdays": {
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 6
-          }
+        "business_hours_only": {
+          "type": "boolean",
+          "description": "Outside the organization's working hours (the SLA schedule, CF-198) the agent hands off instead of answering."
         },
         "confidence_threshold": {
           "type": "number",
@@ -45214,10 +45945,7 @@ components:
         "channels",
         "categories",
         "locale",
-        "timezone",
-        "start_minute",
-        "end_minute",
-        "weekdays",
+        "business_hours_only",
         "confidence_threshold",
         "handoff_keywords"
       ]
@@ -48720,28 +49448,40 @@ components:
         data: { $ref: "#/components/schemas/OnboardingOrganizationResult" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
-    OnboardingStep:
+    OnboardingCondition:
       type: object
-      required: [key, done, manual]
+      description: One "is this step done" check (CF-198).
+      required: [key, done]
       properties:
         key:
           type: string
-          enum: [organization, channel, team, widget, first_conversation]
+          enum: [identity_key, external_identity, package, company, system, ai_enabled, procedure, articles, sla_policy, automation]
         done: { type: boolean }
-        manual:
-          type: boolean
-          description: Can be confirmed by hand.
+
+    OnboardingStep:
+      type: object
+      required: [key, done, skipped, conditions]
+      properties:
+        key:
+          type: string
+          enum: [customer, system, ai, knowledge, automation]
+        done: { type: boolean, description: Every condition holds. }
+        skipped: { type: boolean, description: Skipped on purpose and not done; stays as a warning. }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/OnboardingCondition" }
 
     OnboardingState:
       type: object
-      required: [active, finished_at, steps, completed, total]
+      required: [active, finished_at, steps, completed, skipped, total]
       properties:
         active: { type: boolean }
         finished_at: { type: [string, "null"], format: date-time }
         steps:
           type: array
           items: { $ref: "#/components/schemas/OnboardingStep" }
-        completed: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0, description: Done steps. }
+        skipped: { type: integer, minimum: 0, description: Skipped steps (warnings). }
         total: { type: integer, minimum: 0 }
 
     OnboardingLocalized:
@@ -49880,27 +50620,6 @@ components:
         email: { type: string, maxLength: 255 }
         website: { type: string, maxLength: 255 }
 
-    OrganizationBusinessDay:
-      type: object
-      required: [day, open, start, end]
-      properties:
-        day: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
-        open: { type: boolean }
-        start: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "09:00" }
-        end: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "18:00" }
-
-    OrganizationBusinessHours:
-      type: object
-      required: [enabled, days]
-      properties:
-        enabled: { type: boolean }
-        days:
-          type: array
-          description: Always seven days, `mon` .. `sun`
-          minItems: 7
-          maxItems: 7
-          items: { $ref: "#/components/schemas/OrganizationBusinessDay" }
-
     OrganizationBranding:
       type: object
       required: [primary_color]
@@ -49912,7 +50631,7 @@ components:
 
     OrganizationProfile:
       type: object
-      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at, timezone, locale, currency, country_code, company, business_hours, branding]
+      required: [uuid, slug, name, logo_url, status, access_starts_at, access_ends_at, updated_at, timezone, locale, currency, country_code, company, branding]
       properties:
         uuid: { type: string, format: uuid }
         slug: { type: string }
@@ -49927,12 +50646,11 @@ components:
         currency: { type: string, example: TRY, description: ISO 4217 code }
         country_code: { type: string, example: TR, description: ISO 3166-1 alpha-2 code }
         company: { $ref: "#/components/schemas/OrganizationCompany" }
-        business_hours: { $ref: "#/components/schemas/OrganizationBusinessHours" }
         branding: { $ref: "#/components/schemas/OrganizationBranding" }
 
     OrganizationProfilePatchRequest:
       type: object
-      description: Any subset; `company`, `business_hours` and `branding` are replaced whole
+      description: Any subset; `company` and `branding` are replaced whole. Working hours live in the SLA schedule (`/v1/tenant/sla/business-hours`, CF-198).
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 255 }
@@ -49941,7 +50659,6 @@ components:
         currency: { type: string, example: TRY }
         country_code: { type: string, example: TR }
         company: { $ref: "#/components/schemas/OrganizationCompany" }
-        business_hours: { $ref: "#/components/schemas/OrganizationBusinessHours" }
         branding: { $ref: "#/components/schemas/OrganizationBranding" }
 
     TenantRoleRef:
@@ -52039,8 +52756,6 @@ components:
         signature:
           type: string
           maxLength: 10000
-        business_hours:
-          $ref: '#/components/schemas/WidgetBusinessHours'
         sla_policy_id:
           type:
           - string
@@ -52090,8 +52805,6 @@ components:
         signature:
           type: string
           maxLength: 10000
-        business_hours:
-          $ref: '#/components/schemas/WidgetBusinessHours'
         sla_policy_id:
           type:
           - string
@@ -52528,7 +53241,14 @@ components:
       required: [state, detail, checked_at, token_expires_at, last_webhook_at, sent_24h, failed_24h, error_rate, reconnect]
       properties:
         state: { type: string, enum: [ok, warning, error, paused, unknown] }
-        detail: { type: string }
+        detail:
+          type: string
+          description: |
+            Provider message or a fixed code: token_expiring, send_failures;
+            for widgets (CF-195) identity_secret_missing (no identity secret,
+            signed-in users stay anonymous) and identity_rejected:<code>
+            (identify calls were rejected in the last week; code is
+            WIDGET_IDENTITY_DISABLED or WIDGET_IDENTITY_INVALID).
         checked_at: { type: [string, "null"], format: date-time }
         token_expires_at: { type: [string, "null"], format: date-time }
         last_webhook_at: { type: [string, "null"], format: date-time }
@@ -52814,12 +53534,24 @@ components:
 
     ConversationContact:
       type: object
-      required: [uuid, name, email, phone]
+      required: [uuid, name, email, phone, external_id, identity_state, verified_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
+        external_id: { type: [string, "null"], description: "CF-195: the customer's own user id." }
+        identity_state: { $ref: "#/components/schemas/ContactIdentityState" }
+        verified_at: { type: [string, "null"], format: date-time }
+
+    ConversationCompany:
+      type: object
+      description: "CF-195: the conversation's company with its own external id (separate from the contact's)."
+      required: [uuid, name, external_id]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        external_id: { type: [string, "null"] }
 
     ConversationStatus:
       type: string
@@ -52839,7 +53571,7 @@ components:
         channel_type: { type: string }
         inbox: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         contact: { $ref: "#/components/schemas/ConversationContact" }
-        company: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
+        company: { oneOf: [{ $ref: "#/components/schemas/ConversationCompany" }, { type: "null" }] }
         subject: { type: string }
         status: { $ref: "#/components/schemas/ConversationStatus" }
         custom_status: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
@@ -52911,6 +53643,9 @@ components:
           properties:
             tags: { type: array, items: { $ref: "#/components/schemas/Tag" } }
             participants: { type: array, items: { $ref: "#/components/schemas/ConversationParticipant" } }
+            screen_context:
+              description: Page and events the widget sent with the latest inbound message (CF-197)
+              oneOf: [{ $ref: "#/components/schemas/ScreenContext" }, { type: "null" }]
 
     ConversationMergeRequest:
       type: object
@@ -55093,9 +55828,139 @@ components:
         and user (user uuid) are strings; number is a number; boolean a boolean;
         multiselect a list of option values; money `{amount_minor, currency}`.
 
+    CustomFieldVisibility:
+      type: object
+      description: |
+        Who reads the value (CF-196), one switch per surface. `sensitive` on
+        the definition overrides `ai` and `reports`.
+      required: [agent, ai, workflow, reports]
+      properties:
+        agent: { type: boolean, description: "Agent screens (contact/company card, conversation panel)" }
+        ai: { type: boolean, description: "AI context and AI-written text such as the widget greeting" }
+        workflow: { type: boolean, description: Workflow and automation conditions }
+        reports: { type: boolean, description: Exports and reports }
+
+    CustomFieldWidgetAccess:
+      type: string
+      enum: [none, verified, anonymous]
+      description: "Whether the widget SDK may write the field by key: never, identified visitors (default) or anyone."
+
+    CustomFieldMatch:
+      type: object
+      description: |
+        Catalog condition (CF-196): the entity's list field `key` holds one of
+        `options`. Options are option ids (`CustomFieldOption.value`); a label
+        sent by a client is resolved to its id on save, so renaming an option
+        label never breaks the condition. Used by SLA policies and article
+        audiences; workflow conditions use the same ids through
+        `contact.custom_fields.<key>` / `company.custom_fields.<key>`.
+      required: [entity, key, options]
+      properties:
+        entity: { type: string, enum: [contact, company, conversation] }
+        key: { type: string }
+        options: { type: array, minItems: 1, items: { type: string } }
+
+    CustomFieldUnknownKey:
+      type: object
+      required: [uuid, entity_type, key, suggested_key, source, value_kind, hits, channel_uuid, channel_name, last_contact_uuid, first_seen_at, last_seen_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        entity_type: { type: string, enum: [contact, company] }
+        key: { type: string, description: The key as received (e.g. `lisans_bitis` or `Lisans Bitiş`) }
+        suggested_key: { type: string, description: "Valid field key derived from `key` (may be empty)" }
+        source: { type: string, enum: [widget, api] }
+        value_kind: { type: string, enum: [text, number, boolean, date], description: Suggested field type }
+        hits: { type: integer, format: int64 }
+        channel_uuid: { type: [string, "null"], format: uuid }
+        channel_name: { type: [string, "null"] }
+        last_contact_uuid: { type: [string, "null"], format: uuid }
+        first_seen_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+
+    CustomFieldEntityFieldValue:
+      type: object
+      required: [uuid, key, label, type, options, visibility, sensitive, value, display, masked]
+      properties:
+        uuid: { type: string, format: uuid }
+        key: { type: string }
+        label: { type: string }
+        type: { $ref: "#/components/schemas/CustomFieldType" }
+        options: { type: array, items: { $ref: "#/components/schemas/CustomFieldOption" } }
+        visibility: { $ref: "#/components/schemas/CustomFieldVisibility" }
+        sensitive: { type: boolean }
+        value: { description: "Stored value (see CustomFieldValue); null when unset or masked" }
+        display: { type: string, description: Text to show; empty when unset }
+        masked: { type: boolean, description: Sensitive value hidden from agent screens }
+
+    CustomFieldUnknownValue:
+      type: object
+      required: [key, suggested_key, value, verified, received_at]
+      properties:
+        key: { type: string }
+        suggested_key: { type: string }
+        value: { description: The value as received }
+        verified: { type: boolean, description: Sent by an identified visitor }
+        received_at: { type: string, format: date-time }
+
+    CustomFieldEntityValues:
+      type: object
+      required: [entity_type, entity_uuid, fields, unknown]
+      properties:
+        entity_type: { type: string, enum: [contact, company] }
+        entity_uuid: { type: string, format: uuid }
+        fields: { type: array, items: { $ref: "#/components/schemas/CustomFieldEntityFieldValue" } }
+        unknown: { type: array, items: { $ref: "#/components/schemas/CustomFieldUnknownValue" } }
+
+    EnvelopeCustomFieldEntityValues:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CustomFieldEntityValues" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCustomFieldUnknownKeyList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/CustomFieldUnknownKey" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDismissed:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [dismissed]
+          properties:
+            dismissed: { type: boolean }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    KnowledgeArticleAudience:
+      type: object
+      description: "Who the widget offers the article to (CF-196). Every condition must hold; no conditions: everyone."
+      required: [conditions]
+      properties:
+        conditions: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/CustomFieldMatch" } }
+
+    EnvelopeKnowledgeArticleAudience:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/KnowledgeArticleAudience" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     CustomFieldDefinition:
       type: object
-      required: [uuid, entity_type, object_type_uuid, key, label, description, type, required, options, config, default, condition, position, archived, created_at, updated_at]
+      required: [uuid, entity_type, object_type_uuid, key, label, description, type, required, options, config, default, condition, position, archived, visibility, sensitive, widget_access, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         entity_type: { $ref: "#/components/schemas/CustomFieldEntityType" }
@@ -55116,6 +55981,9 @@ components:
             - type: "null"
         position: { type: integer }
         archived: { type: boolean }
+        visibility: { $ref: "#/components/schemas/CustomFieldVisibility" }
+        sensitive: { type: boolean, description: "Masked on agent screens; never sent to AI context, exports, reports or template text" }
+        widget_access: { $ref: "#/components/schemas/CustomFieldWidgetAccess" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -55139,9 +56007,14 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CustomFieldCondition"
             - type: "null"
+        visibility: { $ref: "#/components/schemas/CustomFieldVisibility" }
+        sensitive: { type: boolean, default: false }
+        widget_access: { $ref: "#/components/schemas/CustomFieldWidgetAccess" }
+        from_unknown_key: { type: string, description: "Received key of the undefined-key warning this field answers" }
 
     CustomFieldUpdateRequest:
       type: object
+      description: "Option `value`s are permanent ids: renaming changes `label` only; a removed option must be archived instead."
       properties:
         label: { type: string, maxLength: 100 }
         description: { type: string }
@@ -55155,6 +56028,9 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CustomFieldCondition"
             - type: "null"
+        visibility: { $ref: "#/components/schemas/CustomFieldVisibility" }
+        sensitive: { type: boolean }
+        widget_access: { $ref: "#/components/schemas/CustomFieldWidgetAccess" }
 
     CustomFieldReorderRequest:
       type: object
@@ -55346,12 +56222,15 @@ components:
 
     Contact:
       type: object
-      required: [uuid, name, email, phone, job_title, company, locale, timezone, notes, custom_fields, blocked, channel_types, conversation_count, last_seen_at, created_at, updated_at]
+      required: [uuid, name, email, phone, external_id, identity_state, verified_at, job_title, company, locale, timezone, notes, custom_fields, blocked, channel_types, conversation_count, last_seen_at, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         email: { type: [string, "null"] }
         phone: { type: [string, "null"] }
+        external_id: { type: [string, "null"], description: "CF-195: the customer's own user id, unique in the organization." }
+        identity_state: { $ref: "#/components/schemas/ContactIdentityState" }
+        verified_at: { type: [string, "null"], format: date-time, description: "Last widget identify that proved the id with user_hash." }
         job_title: { type: string }
         company: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         locale: { type: [string, "null"] }
@@ -55380,6 +56259,16 @@ components:
         notes: { type: string }
         custom_fields: { type: object, additionalProperties: true }
         blocked: { type: boolean }
+        external_id: { type: string, maxLength: 200, description: "CF-195: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it." }
+
+    ContactIdentityState:
+      type: string
+      enum: [verified, anonymous, self_named]
+      description: |
+        CF-195. verified: the contact proved the customer's user id with
+        user_hash (widget identify). anonymous: no name, e-mail or phone.
+        self_named: a name, e-mail or phone the contact or its channel gave,
+        not proved.
 
     ContactMerge:
       type: object
@@ -55408,12 +56297,13 @@ components:
 
     Company:
       type: object
-      required: [uuid, name, domain, external_id, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
+      required: [uuid, name, domain, external_id, verified_at, tier, account_owner, notes, custom_fields, contact_count, open_conversations, created_at, updated_at]
       properties:
         uuid: { type: string, format: uuid }
         name: { type: string }
         domain: { type: [string, "null"] }
         external_id: { type: [string, "null"] }
+        verified_at: { type: [string, "null"], format: date-time, description: "Last time a signed-in user proved external_id with a company-signed user_hash (CF-206); null when the company was never proved" }
         tier: { type: string }
         account_owner: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         notes: { type: string }
@@ -56126,6 +57016,38 @@ components:
       description: Keys sun, mon, tue, wed, thu, fri, sat; a missing day is closed.
       additionalProperties: { $ref: "#/components/schemas/SLAWorkingDay" }
 
+    AutoReply:
+      type: object
+      description: One automatic customer reply (CF-198).
+      required: [enabled, text]
+      properties:
+        enabled: { type: boolean }
+        text:
+          type: object
+          description: Text per locale (`tr`, `en`); the acknowledgement may contain `{eta}`.
+          additionalProperties: { type: string, maxLength: 1000 }
+    AutoReplySettings:
+      type: object
+      description: The organization's automatic customer replies (CF-198).
+      required: [ack, offline, handoff]
+      properties:
+        ack:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent on the first message of a conversation inside working hours.
+        offline:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent on a message outside working hours (once per closed window).
+        handoff:
+          allOf: [{ $ref: "#/components/schemas/AutoReply" }]
+          description: Sent when the AI agent hands the conversation to a person (once per conversation).
+    EnvelopeAutoReplySettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/AutoReplySettings" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     SLABusinessHours:
       type: object
       required: [uuid, name, timezone, working_hours, use_public_holidays, holiday_country, team_id, is_default, created_at, updated_at]
@@ -56199,6 +57121,7 @@ components:
         company_tiers: { type: array, items: { type: string, maxLength: 64 }, description: Company tier (case-insensitive). }
         company_plans: { type: array, items: { type: string, maxLength: 120 }, description: "Customer revenue plan (CF-86, case-insensitive)." }
         min_company_mrr_minor: { type: [integer, "null"], format: int64, minimum: 0, description: "Customer MRR at least this amount, in minor units (CF-86)." }
+        custom_fields: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/CustomFieldMatch" }, description: "List custom fields of the contact, company or conversation by option id (CF-196)." }
 
     SLATarget:
       type: object
@@ -56642,7 +57565,8 @@ components:
           }
         },
         "field": {
-          "type": "string"
+          "type": "string",
+          "description": "A conversation field, custom_fields.<key>, contact.custom_fields.<key> or company.custom_fields.<key> (CF-196). List fields compare by option id; fields hidden from workflows are absent."
         },
         "operator": {
           "type": "string",
@@ -57257,6 +58181,7 @@ components:
             "add_note",
             "notify",
             "call_webhook",
+            "run_system_action",
             "run_ai_procedure",
             "create_engineering_issue",
             "route"
@@ -59418,6 +60343,9 @@ components:
         interrupted:
           type: boolean
           description: Generation stopped or connection lost; content is a saved partial reply.
+        error_code:
+          type: string
+          description: Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped.
         uuid: *id004
         role:
           type: string
@@ -59450,7 +60378,7 @@ components:
     AssistantStreamDelta: {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}
     AssistantStreamUsage: {"type": "object", "required": ["input_tokens", "output_tokens", "provider", "model"], "properties": {"input_tokens": {"type": "integer"}, "output_tokens": {"type": "integer"}, "provider": {"type": "string"}, "model": {"type": "string"}}}
     AssistantStreamDone: {"type": "object", "required": ["reply", "usage"], "properties": {"reply": {"$ref": "#/components/schemas/AssistantMessage"}, "usage": {"$ref": "#/components/schemas/AssistantStreamUsage"}}}
-    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}}}
+    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}, "request_id": {"type": "string", "description": "Correlation id of the request (the client's X-Request-ID when it sent one)."}}}
     AssistantSendInput:
       type: object
       additionalProperties: false
@@ -59769,3 +60697,349 @@ components:
           $ref: '#/components/schemas/AssistantUsage'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
+
+    SystemConnection:
+      type: object
+      required: [uuid, name, base_url, auth_type, auth_header, has_secret, timeout_ms]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        base_url: { type: string }
+        auth_type: { type: string, enum: [none, bearer, header, basic] }
+        auth_header: { type: string }
+        has_secret: { type: boolean }
+        timeout_ms: { type: integer }
+        updated_at: { type: string, format: date-time }
+    SystemConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [base_url]
+      properties:
+        name: { type: string, maxLength: 120 }
+        base_url: { type: string, maxLength: 500, description: Public https base URL }
+        auth_type: { type: string, enum: [none, bearer, header, basic] }
+        auth_header: { type: string, maxLength: 64, description: Header name when auth_type is header }
+        secret: { type: string, maxLength: 4000, writeOnly: true, description: "Token, header value or user:password" }
+        keep_secret: { type: boolean }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 15000 }
+    SystemField:
+      type: object
+      additionalProperties: false
+      required: [path, label]
+      properties:
+        path: { type: string, maxLength: 520 }
+        label: { type: string, maxLength: 80 }
+    SystemSource:
+      type: object
+      required: [uuid, path_template, identity_key, items_path, fields, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        path_template: { type: string }
+        identity_key: { type: string, enum: [external_id, company_external_id] }
+        items_path: { type: string }
+        fields: { type: array, items: { $ref: "#/components/schemas/SystemField" } }
+        enabled: { type: boolean }
+    SystemSourceInput:
+      type: object
+      additionalProperties: false
+      required: [path_template]
+      properties:
+        path_template: { type: string, maxLength: 500 }
+        identity_key: { type: string, enum: [external_id, company_external_id] }
+        items_path: { type: string, maxLength: 200 }
+        fields: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/SystemField" } }
+        enabled: { type: boolean }
+    SystemConcept:
+      type: object
+      required: [object_type_uuid, key, label, plural_label, icon, source]
+      properties:
+        object_type_uuid: { type: string, format: uuid }
+        key: { type: string }
+        label: { type: string }
+        plural_label: { type: string }
+        icon: { type: string }
+        source: { oneOf: [{ $ref: "#/components/schemas/SystemSource" }, { type: "null" }] }
+    SystemParam:
+      type: object
+      additionalProperties: false
+      required: [key, label, type, required]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        label: { type: string, maxLength: 80 }
+        type: { type: string, enum: [string, number, boolean] }
+        required: { type: boolean }
+    SystemChannel:
+      type: string
+      enum: [ai, agent, workflow]
+    SystemAction:
+      type: object
+      required: [uuid, key, title, description, concept_key, method, path_template, params, requires_approval, allowed_for, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        concept_key: { type: string }
+        method: { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path_template: { type: string }
+        params: { type: array, items: { $ref: "#/components/schemas/SystemParam" } }
+        requires_approval: { type: boolean }
+        allowed_for: { type: array, items: { $ref: "#/components/schemas/SystemChannel" } }
+        enabled: { type: boolean }
+    SystemActionInput:
+      type: object
+      additionalProperties: false
+      required: [title, path_template]
+      properties:
+        title: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        concept_key: { type: string }
+        method: { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path_template: { type: string, maxLength: 500 }
+        params: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/SystemParam" } }
+        requires_approval: { type: boolean }
+        allowed_for: { type: array, items: { $ref: "#/components/schemas/SystemChannel" } }
+        enabled: { type: boolean }
+    SystemPlaybook:
+      type: object
+      required: [uuid, intent, title, instructions, concept_keys, action_keys, procedure_uuid, enabled]
+      properties:
+        uuid: { type: string, format: uuid }
+        intent: { type: string }
+        title: { type: string }
+        instructions: { type: string }
+        concept_keys: { type: array, items: { type: string } }
+        action_keys: { type: array, items: { type: string } }
+        procedure_uuid: { type: [string, "null"], format: uuid }
+        enabled: { type: boolean }
+    SystemPlaybookInput:
+      type: object
+      additionalProperties: false
+      required: [title, instructions]
+      properties:
+        title: { type: string, maxLength: 200 }
+        instructions: { type: string, maxLength: 3000 }
+        concept_keys: { type: array, maxItems: 10, items: { type: string } }
+        action_keys: { type: array, maxItems: 10, items: { type: string } }
+        procedure_uuid: { type: [string, "null"], format: uuid }
+        enabled: { type: boolean }
+    SystemCall:
+      type: object
+      required: [kind, target, channel, method, masked_path, status_code, ok, error_code, duration_ms, created_at]
+      properties:
+        kind: { type: string, enum: [source, action, test] }
+        target: { type: string }
+        channel: { type: string, enum: [ai, agent, workflow, test] }
+        method: { type: string }
+        masked_path: { type: string }
+        status_code: { type: integer }
+        ok: { type: boolean }
+        error_code: { type: string }
+        duration_ms: { type: integer }
+        created_at: { type: string, format: date-time }
+    SystemOverview:
+      type: object
+      required: [connection, concepts, actions, playbooks, calls]
+      properties:
+        connection: { oneOf: [{ $ref: "#/components/schemas/SystemConnection" }, { type: "null" }] }
+        concepts: { type: array, items: { $ref: "#/components/schemas/SystemConcept" } }
+        actions: { type: array, items: { $ref: "#/components/schemas/SystemAction" } }
+        playbooks: { type: array, items: { $ref: "#/components/schemas/SystemPlaybook" } }
+        calls: { type: array, items: { $ref: "#/components/schemas/SystemCall" } }
+    SystemTestInput:
+      type: object
+      additionalProperties: false
+      properties:
+        external_id: { type: string, maxLength: 255 }
+        company_external_id: { type: string, maxLength: 255 }
+        path_template: { type: string, maxLength: 500, description: Unsaved edit to try }
+        items_path: { type: string, maxLength: 200, description: Unsaved edit to try }
+    SystemPathOption:
+      type: object
+      required: [path, type, sample]
+      properties:
+        path: { type: string }
+        type: { type: string, enum: [string, number, boolean, "null", object, array] }
+        sample: {}
+    SystemTestResult:
+      type: object
+      required: [ok, status_code, error_code, message, duration_ms, request, body, truncated, paths, items]
+      properties:
+        ok: { type: boolean }
+        status_code: { type: integer }
+        error_code: { type: string }
+        message: { type: string }
+        duration_ms: { type: integer }
+        request: { type: string, description: Method and URL with secrets masked }
+        body: { description: The JSON answer }
+        truncated: { type: boolean }
+        paths: { type: array, items: { $ref: "#/components/schemas/SystemPathOption" } }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+    SystemIdentity:
+      type: object
+      required: [contact_uuid, contact_name, external_id, company_uuid, company_name, company_external_id]
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        contact_name: { type: string }
+        external_id: { type: string }
+        company_uuid: { type: [string, "null"], format: uuid }
+        company_name: { type: string }
+        company_external_id: { type: string }
+    SystemLookup:
+      type: object
+      required: [concept, label, identity, items, status, reason]
+      properties:
+        concept: { type: string }
+        label: { type: string }
+        identity: { $ref: "#/components/schemas/SystemIdentity" }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        status: { type: string, enum: [ok, skipped, error] }
+        reason: { type: string }
+    SystemRunInput:
+      type: object
+      additionalProperties: false
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        external_id: { type: string, maxLength: 255 }
+        conversation_uuid: { type: [string, "null"], format: uuid }
+        params: { type: object, additionalProperties: true }
+        dry_run: { type: boolean }
+        approved: { type: boolean }
+    SystemRunResult:
+      type: object
+      required: [action, dry_run, ok, status_code, error_code, request, body, summary]
+      properties:
+        action: { type: string }
+        dry_run: { type: boolean }
+        ok: { type: boolean }
+        status_code: { type: integer }
+        error_code: { type: string }
+        request: { type: string }
+        body: {}
+        summary: { type: string }
+    ScreenEvent:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100 }
+        properties: { type: object, additionalProperties: true }
+        at: { type: string, format: date-time }
+    ScreenContext:
+      type: object
+      description: Page and tracked events the web widget sent with the latest inbound message (CF-197)
+      required: [page_url, page_path, last_event, events]
+      properties:
+        page_url: { type: string, description: Without query string or fragment }
+        page_path: { type: string }
+        last_event: { type: string }
+        events: { type: array, items: { $ref: "#/components/schemas/ScreenEvent" } }
+        at: { type: string, format: date-time }
+    SystemPreviewInput:
+      type: object
+      additionalProperties: false
+      properties:
+        contact_uuid: { type: [string, "null"], format: uuid }
+        external_id: { type: string, maxLength: 255 }
+        company_external_id: { type: string, maxLength: 255 }
+        company_name: { type: string, maxLength: 200 }
+        attributes: { type: object, additionalProperties: true }
+        page_url: { type: string, maxLength: 2000 }
+        events: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ScreenEvent" } }
+        intent: { type: string, maxLength: 64 }
+    SystemCheck:
+      type: object
+      required: [key, status, reason]
+      properties:
+        key: { type: string }
+        status: { type: string, enum: [accepted, rejected, skipped] }
+        reason: { type: string }
+    SystemIntent:
+      type: object
+      required: [intent, title]
+      properties:
+        intent: { type: string }
+        title: { type: string }
+    SystemWidgetRejection:
+      type: object
+      required: [channel_uuid, channel_name, code, rejected_at]
+      properties:
+        channel_uuid: { type: string, format: uuid }
+        channel_name: { type: string }
+        code: { type: string, enum: [WIDGET_IDENTITY_DISABLED, WIDGET_IDENTITY_INVALID] }
+        rejected_at: { type: string, format: date-time }
+    SystemPreview:
+      type: object
+      required: [identity, checks, attributes, screen, intents, intent, lookups, ai_context, widget_rejections]
+      properties:
+        identity: { $ref: "#/components/schemas/SystemIdentity" }
+        checks: { type: array, items: { $ref: "#/components/schemas/SystemCheck" } }
+        attributes: { type: object, additionalProperties: true }
+        screen: { oneOf: [{ $ref: "#/components/schemas/ScreenContext" }, { type: "null" }] }
+        intents: { type: array, items: { $ref: "#/components/schemas/SystemIntent" } }
+        intent: { type: string }
+        lookups: { type: array, items: { $ref: "#/components/schemas/SystemLookup" } }
+        ai_context: { type: string, description: The block the AI reply model sees for this customer }
+        widget_rejections: { type: array, items: { $ref: "#/components/schemas/SystemWidgetRejection" } }
+    EnvelopeSystemOverview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemConnection:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemConnection" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemSource:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemSource" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemTestResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemTestResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemAction:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemAction" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemRunResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemRunResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemPlaybook:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemPlaybook" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemLookup:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemLookup" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeSystemPreview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/SystemPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }

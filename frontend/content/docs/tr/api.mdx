@@ -145,12 +145,12 @@ Gövde alanları ve yanıt şemaları [API başvurusunda](/docs/api) yer alır.
 
 ## SDK'lar [#sdks]
 
-ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için başlıksız bir widget istemcisi vardır. SDK'lar henüz paket olarak yayımlanmadı; her dil için kullanım örnekleri ve aynı çağrıların SDK'sız hâli [SDK'lar ve örnek kod](/docs/sdks) sayfasındadır. Yapılandırmada temel adres olarak `https://api.getclickfix.com` kullanın (sonuna `/v1` eklemeyin).
+ClickFix'in Go ve Node.js için sunucu SDK'ları ile React için başlıksız bir widget istemcisi vardır: `@getclickfix/node` 0.1.0, `@getclickfix/react-widget` 0.1.0 (npm) ve `github.com/ClickSolveMainTR/clickfix-sdks/go` v0.1.0. Her dil için kullanım örnekleri ve aynı çağrıların SDK'sız hâli [SDK'lar ve örnek kod](/docs/sdks) sayfasında, baştan sona kurulum [Entegrasyon kılavuzu](/docs/integration-guide) sayfasındadır. Yapılandırmada temel adres olarak `https://api.getclickfix.com` kullanın (sonuna `/v1` eklemeyin).
 
 SDK'lar kimlik doğrulama, sınırlı tekrar deneme, sayfalama ve webhook imza doğrulaması sağlar. Örneğin Node.js:
 
 ```ts
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: "https://api.getclickfix.com",

@@ -157,5 +157,17 @@
   "mode.undock": "Çekmeceye al",
   "mode.page": "Tam sayfada aç",
   "close": "Kapat",
-  "page.description": "Sorularınızı yanıtlar, kurulumu sizinle yapar; geçmiş sohbetleriniz solda."
+  "page.description": "Sorularınızı yanıtlar, kurulumu sizinle yapar; geçmiş sohbetleriniz solda.",
+  "queued": "Sırada {{count}} mesaj; yanıt bitince gönderilecek",
+  "queued_drop": "Vazgeç",
+  "failed_turn": "Yanıt oluşturulamadı.",
+  "fields_help.route": "Uygulama içi yol, ör. /settings/sla",
+  "fields_help.target": "Vurgulanacak alanın anahtarı",
+  "fields_help.schedule_minutes": "Yalnız zamanlanmış tetikleyicide kullanılır",
+  "fields_help.channel_uuid": "Kanal listesindeki kanal",
+  "fields_help.name": "Temsilcilerin gördüğü gelen kutusu adı",
+  "fields_help.webhook_url": "ClickFix'in temsilci yanıtlarını göndereceği, sisteminizdeki HTTPS adresi",
+  "fields_help.days": "Gün gün açılış ve kapanış saatleri; yazılmayan günler kapalıdır",
+  "fields_help.timezone": "IANA saat dilimi, varsayılan Europe/Istanbul",
+  "fields_help.holiday_country": "Resmî tatillerin ülke kodu (ISO 3166, varsayılan TR)"
 }

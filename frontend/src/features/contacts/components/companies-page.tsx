@@ -25,6 +25,7 @@ import { formatMinor } from "@/features/billing/lib/money";
 import { useLocale } from "@/providers/locale-provider";
 
 import { CompanyHealthBadge } from "./company-health-badge";
+import { CompanyVerifiedBadge } from "./company-verified-badge";
 import { CompanyHealthCard } from "./company-health-card";
 import { CompanyRevenueCard } from "./company-revenue-card";
 import { ContactsIOToolbar } from "./contacts-io-toolbar";
@@ -78,6 +79,20 @@ export function CompaniesPage() {
           cell: ({ row }) =>
             row.original.health?.score != null ? (
               <CompanyHealthBadge health={row.original.health} />
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            ),
+        }),
+        createColumn<Company>({
+          id: "external_id",
+          accessorFn: (row) => row.external_id ?? "",
+          labelKey: "contacts.companies.fields.external_id",
+          enableSorting: false,
+          cell: ({ row }) =>
+            row.original.external_id ? (
+              <span className="font-mono text-xs">
+                {row.original.external_id}
+              </span>
             ) : (
               <span className="text-muted-foreground">—</span>
             ),
@@ -239,6 +254,7 @@ function CompanyCard({ company: c }: { company: Company }) {
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <CompanyVerifiedBadge verifiedAt={c.verified_at} compact />
           <CompanyHealthBadge health={c.health} />
           {c.tier && <CompanyTier tier={c.tier} />}
         </div>
@@ -288,6 +304,7 @@ export function CompanyDialog({
     name: company?.name ?? "",
     domain: company?.domain ?? "",
     tier: company?.tier ?? "",
+    external_id: company?.external_id ?? "",
     notes: company?.notes ?? "",
   });
   const [owner, setOwner] = useState<string | null>(
@@ -315,7 +332,7 @@ export function CompanyDialog({
             else m.create.mutate(body, done);
           }}
         >
-          {(["name", "domain", "tier"] as const).map((k) => (
+          {(["name", "domain", "external_id", "tier"] as const).map((k) => (
             <div key={k} className="grid gap-1.5">
               <Label htmlFor={`co-${k}`}>
                 {t(`contacts.companies.fields.${k}`)}
@@ -330,7 +347,8 @@ export function CompanyDialog({
             </div>
           ))}
           <p className="text-muted-foreground -mt-1 text-xs">
-            {t("contacts.companies.domain_hint")}
+            {t("contacts.companies.domain_hint")}{" "}
+            {t("contacts.companies.external_id_hint")}
           </p>
           <div className="grid gap-1.5">
             <Label>{t("contacts.companies.fields.account_owner")}</Label>

@@ -1,15 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ClipboardList, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { ErrorState } from "@/components/common/error-state";
-import { Loading } from "@/components/common/loading";
+import { EntityTable } from "@/components/entity";
 import { PageHeader } from "@/components/layout/page-header";
+import { createColumn } from "@/components/tables";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Permission } from "@/config/permissions";
 import { useActiveOrganization } from "@/features/organizations";
 import { isApiError } from "@/lib/api";
@@ -21,7 +21,7 @@ import {
   type RequestForm,
   type RequestFormInput,
 } from "../services/request-forms.service";
-import { FormDialog } from "./form-dialog";
+import { CHANNELS, FormDialog } from "./form-dialog";
 import { useDialogs } from "@/providers/dialog-provider";
 
 /**
@@ -69,6 +69,121 @@ export function RequestFormsPage() {
     onError,
   });
 
+  const columns = useMemo(
+    () =>
+      [
+        createColumn<RequestForm>({
+          accessorKey: "name",
+          labelKey: "request_forms.columns.name",
+          enableHiding: false,
+          gridPrimary: true,
+          cell: ({ row }) => (
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{row.original.name}</span>
+                {!row.original.is_active && (
+                  <Badge variant="secondary">
+                    {t("request_forms.inactive")}
+                  </Badge>
+                )}
+              </div>
+              {row.original.description && (
+                <p className="text-muted-foreground text-sm whitespace-normal">
+                  {row.original.description}
+                </p>
+              )}
+            </div>
+          ),
+        }),
+        createColumn<RequestForm>({
+          id: "channels",
+          accessorFn: (f) => f.channels.join(" "),
+          labelKey: "request_forms.columns.channels",
+          enableSorting: false,
+          searchable: false,
+          filterVariant: "faceted",
+          filterOptions: CHANNELS.map((c) => ({
+            value: c,
+            labelKey: `request_forms.channel.${c}`,
+            label: t(`request_forms.channel.${c}`),
+          })),
+          // A form serves several channels: match any of the picked ones.
+          filterFn: (row, _id, value: string[] | undefined) =>
+            !value?.length ||
+            row.original.channels.some((c) => value.includes(c)),
+          cell: ({ row }) => (
+            <div className="flex flex-wrap gap-1">
+              {row.original.channels.map((c) => (
+                <Badge key={c} variant="outline">
+                  {t(`request_forms.channel.${c}`)}
+                </Badge>
+              ))}
+            </div>
+          ),
+        }),
+        createColumn<RequestForm>({
+          id: "fields",
+          accessorFn: (f) => f.fields.length,
+          labelKey: "request_forms.columns.fields",
+          searchable: false,
+          meta: {
+            headerClassName: "text-right",
+            cellClassName: "text-right tabular-nums",
+          },
+          cell: ({ row }) => (
+            <span className="text-muted-foreground text-xs">
+              {t("request_forms.field_count", {
+                count: row.original.fields.length,
+              })}
+            </span>
+          ),
+        }),
+        ...(canWrite
+          ? [
+              createColumn<RequestForm>({
+                id: "actions",
+                labelKey: "common.actions",
+                enableHiding: false,
+                enableSorting: false,
+                meta: {
+                  headerClassName: "text-right",
+                  cellClassName: "text-right",
+                },
+                cell: ({ row }) => (
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("request_forms.edit")}
+                      onClick={() => setEditing(row.original)}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      disabled={remove.isPending}
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("request_forms.delete")}
+                      onClick={async () => {
+                        if (
+                          await confirmDelete({
+                            title: t("request_forms.confirm_delete"),
+                          })
+                        )
+                          remove.mutate(row.original.uuid);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                ),
+              }),
+            ]
+          : []),
+      ] as ColumnDef<RequestForm, unknown>[],
+    [canWrite, confirmDelete, remove, t],
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -89,80 +204,28 @@ export function RequestFormsPage() {
           {t("request_forms.forbidden")}
         </p>
       )}
-      {forms.isLoading && <Loading label={t("common.loading")} />}
-      {forms.isError && (
-        <ErrorState
-          title={t("request_forms.error.title")}
-          description={t("request_forms.error.description")}
+      {(!org || canRead) && (
+        <EntityTable
+          columns={columns}
+          data={forms.data ?? []}
+          getRowId={(f) => f.uuid}
+          isLoading={forms.isLoading || !org}
+          isError={forms.isError}
+          errorTitle={t("request_forms.error.title")}
+          errorDescription={t("request_forms.error.description")}
           onRetry={() => void forms.refetch()}
+          emptyTitle={t("request_forms.empty")}
+          emptyDescription=""
+          // Every form comes in one response: search, the channel filter,
+          // sort and pages in the browser.
+          manual={{ filtering: false, sorting: false, pagination: false }}
+          initialState={{ pagination: { pageIndex: 0, pageSize: 20 } }}
+          features={{
+            rowSelection: false,
+            viewMode: false,
+          }}
         />
       )}
-      {forms.data?.length === 0 && (
-        <Card>
-          <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            {t("request_forms.empty")}
-          </CardContent>
-        </Card>
-      )}
-      <div className="space-y-3">
-        {(forms.data ?? []).map((f) => (
-          <Card key={f.uuid}>
-            <CardContent className="flex items-start gap-3 py-4">
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{f.name}</span>
-                  {!f.is_active && (
-                    <Badge variant="secondary">
-                      {t("request_forms.inactive")}
-                    </Badge>
-                  )}
-                  {f.channels.map((c) => (
-                    <Badge key={c} variant="outline">
-                      {t(`request_forms.channel.${c}`)}
-                    </Badge>
-                  ))}
-                </div>
-                {f.description && (
-                  <p className="text-muted-foreground text-sm">
-                    {f.description}
-                  </p>
-                )}
-                <p className="text-muted-foreground text-xs">
-                  {t("request_forms.field_count", { count: f.fields.length })}
-                </p>
-              </div>
-              {canWrite && (
-                <div className="flex gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("request_forms.edit")}
-                    onClick={() => setEditing(f)}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    disabled={remove.isPending}
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("request_forms.delete")}
-                    onClick={async () => {
-                      if (
-                        await confirmDelete({
-                          title: t("request_forms.confirm_delete"),
-                        })
-                      )
-                        remove.mutate(f.uuid);
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
       {editing && (
         <FormDialog
           open

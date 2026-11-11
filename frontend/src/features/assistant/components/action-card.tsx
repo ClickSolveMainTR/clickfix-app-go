@@ -502,7 +502,7 @@ export function ActionCard(
                   )}
                   {f.help && f.type !== "secret" ? (
                     <p className="text-muted-foreground text-[11px]">
-                      {f.help}
+                      {tOr(t, `assistant.fields_help.${f.key}`, f.help)}
                     </p>
                   ) : null}
                 </div>

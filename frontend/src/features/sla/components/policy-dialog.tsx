@@ -23,6 +23,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  CatalogMatchEditor,
+  type CustomFieldMatch,
+} from "@/features/custom-fields";
 import { getActiveOrganizationSlug } from "@/features/organizations";
 import { apiClient, unwrap } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -116,6 +120,9 @@ export function PolicyDialog({
   const [plans, setPlans] = useState(
     (policy?.conditions.company_plans ?? []).join(", "),
   );
+  const [fieldMatches, setFieldMatches] = useState<CustomFieldMatch[]>(
+    policy?.conditions.custom_fields ?? [],
+  );
   const [minMrr, setMinMrr] = useState(
     policy?.conditions.min_company_mrr_minor != null
       ? String(policy.conditions.min_company_mrr_minor / 100)
@@ -185,6 +192,7 @@ export function PolicyDialog({
           minMrr.trim() === "" || !Number.isFinite(Number(minMrr))
             ? null
             : Math.max(0, Math.round(Number(minMrr) * 100)),
+        custom_fields: fieldMatches.filter((m) => m.key && m.options.length),
       },
       targets: targets.filter(
         (x) =>
@@ -377,6 +385,15 @@ export function PolicyDialog({
               <span className="text-muted-foreground text-xs">
                 {t("sla.fields.min_company_mrr_hint")}
               </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-muted-foreground text-xs">
+                {t("sla.fields.custom_fields")}
+              </span>
+              <CatalogMatchEditor
+                value={fieldMatches}
+                onChange={setFieldMatches}
+              />
             </div>
           </fieldset>
 

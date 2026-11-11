@@ -1,9 +1,15 @@
-# @clickfix/node (unpublished)
+# @getclickfix/node
 
-Node 22+, ESM, no runtime dependencies. Build with `cd sdks && pnpm build`.
+Node 22+, ESM, no runtime dependencies.
+
+```sh
+npm install @getclickfix/node
+```
+
+Full walkthrough (identity, external ids, custom fields, events, API channel, webhooks): https://getclickfix.com/docs/integration-guide. Changes: [CHANGELOG.md](./CHANGELOG.md). Develop with `cd sdks && pnpm build`.
 
 ```ts
-import { createClient, paginate, verifyWebhook, identityHash } from '@clickfix/node';
+import { createClient, paginate, verifyWebhook, identityHash } from '@getclickfix/node';
 const client = createClient({
   baseURL: 'https://support.example.com',
   apiKey: process.env.CLICKFIX_API_KEY!,
@@ -39,9 +45,14 @@ use the generated trigger cursor API for incremental synchronization.
 ```ts
 const valid = verifyWebhook(secret, headers.timestamp, headers.signature, rawBody);
 const userHash = identityHash(identitySecret, authenticatedUser.id);
+// User that belongs to a company: sign both ids, send company: { id } in identify
+const companyUserHash = identityHash(identitySecret, authenticatedUser.id, authenticatedUser.companyId);
 ```
 
 Webhook verification uses HMAC-SHA256 over exact `timestamp.body` bytes and a
 five-minute past/future tolerance. Verify before JSON parsing; persist/deduplicate
 `ClickFix-Webhook-Id` before acting. Identity secrets stay on your server; send only
-`userHash` to the widget. Regenerate with `make sdks`, verify with `make sdks-check`.
+`userHash` to the widget. With a company id the hash is
+`hex(HMAC-SHA256(secret, userId + "\n" + companyId))` (CF-206): the widget then binds the
+user to that company and nobody can claim another one; a hash over the user id alone keeps
+working but leaves `company.id` unlinked. Regenerate with `make sdks`, verify with `make sdks-check`.
