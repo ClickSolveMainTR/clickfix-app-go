@@ -43629,7 +43629,7 @@ components:
         token: { type: string, description: "Visitor token, sent as a bearer Authorization header" }
         expires_at: { type: string, format: date-time }
         verified: { type: boolean }
-        company_verified: { type: boolean, description: "The visitor's contact belongs to a company whose id was proved by a signed company id (CF-206)" }
+        company_verified: { type: boolean, description: "The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint" }
         contact:
           oneOf:
             - type: "null"

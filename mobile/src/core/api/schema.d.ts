@@ -18055,7 +18055,7 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             verified: boolean;
-            /** @description The visitor's contact belongs to a company whose id was proved by a signed company id (CF-206) */
+            /** @description The visitor's contact proved its company with a company-signed user_hash and still belongs to it (CF-206); false when the company came only as a hint */
             company_verified: boolean;
             contact: null | {
                 name: string;

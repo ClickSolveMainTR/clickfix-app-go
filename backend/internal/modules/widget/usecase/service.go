@@ -349,8 +349,8 @@ type Visitor struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Verified  bool      `json:"verified"`
-	// CompanyVerified is true when the visitor's contact belongs to a
-	// company whose id a user proved with a signed company id (CF-206).
+	// CompanyVerified is true when the visitor's contact proved its company
+	// with a signed company id (CF-206) and still belongs to it.
 	CompanyVerified bool            `json:"company_verified"`
 	Contact         *VisitorContact `json:"contact"`
 }
@@ -531,13 +531,10 @@ func (s *Service) visitor(ctx context.Context, w Widget, claims widget.Claims) (
 	}
 	if ok {
 		v.Contact = &VisitorContact{Name: contact.Name, Email: textPtr(contact.Email), Phone: textPtr(contact.Phone)}
-		if contact.CompanyID.Valid {
-			company, err := s.q.GetWidgetCompanyByID(ctx, db.GetWidgetCompanyByIDParams{OrganizationID: w.Instance.OrganizationID, ID: contact.CompanyID.Int64})
-			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-				return Visitor{}, err
-			}
-			v.CompanyVerified = err == nil && company.VerifiedAt.Valid
-		}
+		// The proof is the contact's own (a signed identify of this user),
+		// never the company's: a contact attached to a verified company
+		// by a domain or name hint is not reported as proved.
+		v.CompanyVerified = contact.CompanyID.Valid && contact.CompanyVerifiedAt.Valid
 	}
 	return v, nil
 }
@@ -845,7 +842,9 @@ func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, c
 	}); err != nil {
 		return err
 	}
-	return tx.Q.SetContactCompany(ctx, db.SetContactCompanyParams{CompanyID: companyID, OrganizationID: org, ID: contactID})
+	return tx.Q.SetContactCompany(ctx, db.SetContactCompanyParams{
+		CompanyID: companyID, VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, OrganizationID: org, ID: contactID,
+	})
 }
 
 // ProfileInput updates what the visitor told us.

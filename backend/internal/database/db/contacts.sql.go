@@ -175,7 +175,7 @@ func (q *Queries) FindCompanyByName(ctx context.Context, arg FindCompanyByNamePa
 }
 
 const findContactByEmail = `-- name: FindContactByEmail :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts
 WHERE organization_id = $1 AND lower(email) = lower($2::text) AND deleted_at IS NULL
 ORDER BY id
 LIMIT 1
@@ -211,12 +211,13 @@ func (q *Queries) FindContactByEmail(ctx context.Context, arg FindContactByEmail
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
 
 const findContactByPhone = `-- name: FindContactByPhone :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts
 WHERE organization_id = $1 AND phone = $2::text AND deleted_at IS NULL
 ORDER BY id
 LIMIT 1
@@ -252,12 +253,13 @@ func (q *Queries) FindContactByPhone(ctx context.Context, arg FindContactByPhone
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
 
 const findContactByPhoneLast10 = `-- name: FindContactByPhoneLast10 :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts WHERE organization_id=$1 AND deleted_at IS NULL
  AND length(regexp_replace($2::text,'[^0-9]','','g'))>=10
  AND right(regexp_replace(phone,'[^0-9]','','g'),10)=right(regexp_replace($2::text,'[^0-9]','','g'),10)
 ORDER BY id LIMIT 1
@@ -293,6 +295,7 @@ func (q *Queries) FindContactByPhoneLast10(ctx context.Context, arg FindContactB
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
@@ -466,7 +469,7 @@ func (q *Queries) GetCompanyForAIContext(ctx context.Context, arg GetCompanyForA
 }
 
 const getContactByExternalID = `-- name: GetContactByExternalID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts
 WHERE organization_id = $1 AND external_id = $2::text AND deleted_at IS NULL
 `
 
@@ -501,12 +504,13 @@ func (q *Queries) GetContactByExternalID(ctx context.Context, arg GetContactByEx
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
 
 const getContactByID = `-- name: GetContactByID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id = $1 AND id = $2
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts WHERE organization_id = $1 AND id = $2
 `
 
 type GetContactByIDParams struct {
@@ -539,12 +543,13 @@ func (q *Queries) GetContactByID(ctx context.Context, arg GetContactByIDParams) 
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
 
 const getContactByUUID = `-- name: GetContactByUUID :one
-SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at FROM contacts WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
 `
 
 type GetContactByUUIDParams struct {
@@ -577,6 +582,7 @@ func (q *Queries) GetContactByUUID(ctx context.Context, arg GetContactByUUIDPara
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
@@ -662,7 +668,7 @@ const insertContact = `-- name: InsertContact :one
 INSERT INTO contacts (organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, job_title, external_id)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11)
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at
 `
 
 type InsertContactParams struct {
@@ -716,6 +722,7 @@ func (q *Queries) InsertContact(ctx context.Context, arg InsertContactParams) (C
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
@@ -898,7 +905,7 @@ func (q *Queries) ListContactIdentities(ctx context.Context, arg ListContactIden
 }
 
 const listContacts = `-- name: ListContacts :many
-SELECT c.id, c.uuid, c.organization_id, c.company_id, c.name, c.email, c.phone, c.locale, c.timezone, c.notes, c.custom_fields, c.blocked, c.last_seen_at, c.merged_into_id, c.created_at, c.updated_at, c.deleted_at, c.job_title, c.erased_at, c.external_id, c.verified_at, co.uuid AS company_uuid, co.name AS company_name,
+SELECT c.id, c.uuid, c.organization_id, c.company_id, c.name, c.email, c.phone, c.locale, c.timezone, c.notes, c.custom_fields, c.blocked, c.last_seen_at, c.merged_into_id, c.created_at, c.updated_at, c.deleted_at, c.job_title, c.erased_at, c.external_id, c.verified_at, c.company_verified_at, co.uuid AS company_uuid, co.name AS company_name,
        (SELECT COUNT(*) FROM conversations v WHERE v.organization_id = c.organization_id AND v.contact_id = c.id AND v.deleted_at IS NULL)::bigint AS conversation_count,
        (SELECT array_agg(DISTINCT ci.channel_type) FROM contact_identities ci WHERE ci.organization_id = c.organization_id AND ci.contact_id = c.id)::text[] AS channel_types
 FROM contacts c
@@ -963,6 +970,7 @@ type ListContactsRow struct {
 	ErasedAt          pgtype.Timestamptz `json:"erased_at"`
 	ExternalID        pgtype.Text        `json:"external_id"`
 	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	CompanyVerifiedAt pgtype.Timestamptz `json:"company_verified_at"`
 	CompanyUuid       pgtype.UUID        `json:"company_uuid"`
 	CompanyName       pgtype.Text        `json:"company_name"`
 	ConversationCount int64              `json:"conversation_count"`
@@ -1010,6 +1018,7 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]L
 			&i.ErasedAt,
 			&i.ExternalID,
 			&i.VerifiedAt,
+			&i.CompanyVerifiedAt,
 			&i.CompanyUuid,
 			&i.CompanyName,
 			&i.ConversationCount,
@@ -1183,7 +1192,7 @@ func (q *Queries) SoftDeleteCompany(ctx context.Context, arg SoftDeleteCompanyPa
 const softDeleteContact = `-- name: SoftDeleteContact :one
 UPDATE contacts SET deleted_at = NOW()
 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at
 `
 
 type SoftDeleteContactParams struct {
@@ -1216,6 +1225,7 @@ func (q *Queries) SoftDeleteContact(ctx context.Context, arg SoftDeleteContactPa
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }
@@ -1224,6 +1234,7 @@ const updateCompany = `-- name: UpdateCompany :one
 UPDATE companies SET
     name = $1,
     domain = $2,
+    verified_at = CASE WHEN external_id IS DISTINCT FROM $3::text THEN NULL ELSE verified_at END,
     external_id = $3,
     notes = $4,
     custom_fields = $5,
@@ -1247,6 +1258,7 @@ type UpdateCompanyParams struct {
 	ID             int64       `json:"id"`
 }
 
+// CF-206: a changed external id was never proved; the badge goes with it.
 func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error) {
 	row := q.db.QueryRow(ctx, updateCompany,
 		arg.Name,
@@ -1283,6 +1295,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 
 const updateContact = `-- name: UpdateContact :one
 UPDATE contacts SET
+    company_verified_at = CASE WHEN company_id IS DISTINCT FROM $1::bigint THEN NULL ELSE company_verified_at END,
     company_id = $1,
     name = $2,
     email = $3,
@@ -1295,7 +1308,7 @@ UPDATE contacts SET
     job_title = $10,
     external_id = $11
 WHERE organization_id = $12 AND id = $13 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at
+RETURNING id, uuid, organization_id, company_id, name, email, phone, locale, timezone, notes, custom_fields, blocked, last_seen_at, merged_into_id, created_at, updated_at, deleted_at, job_title, erased_at, external_id, verified_at, company_verified_at
 `
 
 type UpdateContactParams struct {
@@ -1314,6 +1327,7 @@ type UpdateContactParams struct {
 	ID             int64       `json:"id"`
 }
 
+// CF-206: a company set by hand was not proved by the contact.
 func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error) {
 	row := q.db.QueryRow(ctx, updateContact,
 		arg.CompanyID,
@@ -1353,6 +1367,7 @@ func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (C
 		&i.ErasedAt,
 		&i.ExternalID,
 		&i.VerifiedAt,
+		&i.CompanyVerifiedAt,
 	)
 	return i, err
 }

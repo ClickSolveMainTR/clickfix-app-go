@@ -124,8 +124,14 @@ func TestIdentifyWrongCompanyRejected(t *testing.T) {
 		t.Fatal("rejected user must not get a contact with a company")
 	}
 	// Line breaks cannot be signed: the ids are separated by one.
-	if r := identify(e, map[string]any{"user_id": "u-12", "user_hash": widget.UserHash(identitySecret, "u-12"), "company": map[string]any{"id": "F-12\nF-13"}}); r.Code != http.StatusBadRequest {
-		t.Fatalf("newline in company id = %d", r.Code)
+	if r := identify(e, map[string]any{"user_id": "u-12", "user_hash": widget.UserHash(identitySecret, "u-12"), "company": map[string]any{"id": "F-12\nF-13"}}); r.Code != http.StatusBadRequest || str(r.Err, "code") == "" {
+		t.Fatalf("newline in company id = %d %v", r.Code, r.Err)
+	}
+	if r := identify(e, map[string]any{"user_id": "a\nb", "user_hash": widget.UserHash(identitySecret, "a\nb")}); r.Code != http.StatusBadRequest {
+		t.Fatalf("newline in user id = %d", r.Code)
+	}
+	if r := identify(e, map[string]any{"user_id": "u-12", "user_hash": widget.UserCompanyHash(identitySecret, "u-12", "F\n1"), "company": map[string]any{"id": "F\n1"}}); r.Code != http.StatusBadRequest {
+		t.Fatalf("newline in signed company id = %d", r.Code)
 	}
 }
 
@@ -197,5 +203,47 @@ func TestIdentifySignedCompanyDoesNotTakeOverAnotherCompanyByDomain(t *testing.T
 	}
 	if n := companyCount(t, e, "external_id = 'F-21' AND domain IS NULL"); n != 1 {
 		t.Fatal("the proved id must get its own company without the other company's domain")
+	}
+}
+
+// CF-206: company_verified is the contact's own proof. Another user that
+// lands on the verified company through a domain hint (old formula) is not
+// reported as proved, in identify or in its next bootstrap; and when an
+// agent moves a proved contact to another company the proof is dropped.
+func TestCompanyVerifiedIsPerContact(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	signed := identify(e, map[string]any{
+		"user_id": "u-30", "user_hash": widget.UserCompanyHash(identitySecret, "u-30", "F-30"),
+		"company": map[string]any{"id": "F-30", "domain": "acme.test"},
+	})
+	if signed.Code != http.StatusOK || signed.Data["company_verified"] != true {
+		t.Fatalf("signed identify = %d %v", signed.Code, signed.Err)
+	}
+	hint := identify(e, map[string]any{
+		"user_id": "u-31", "user_hash": widget.UserHash(identitySecret, "u-31"),
+		"company": map[string]any{"domain": "acme.test"},
+	})
+	if hint.Code != http.StatusOK || hint.Data["company_verified"] != false {
+		t.Fatalf("hint identify = %d %v %v", hint.Code, hint.Err, hint.Data["company_verified"])
+	}
+	if ext, _, ok := companyOf(t, e, "u-31"); !ok || ext != "F-30" {
+		t.Fatalf("the hint should still attach the contact to the company: %q ok=%v", ext, ok)
+	}
+	boot := e.call(http.MethodPost, "/bootstrap", str(hint.Data, "token"), siteOrigin, nil)
+	if v, _ := boot.Data["visitor"].(map[string]any); boot.Code != http.StatusOK || v["company_verified"] != false {
+		t.Fatalf("bootstrap of the hint-linked user = %d %v", boot.Code, boot.Data["visitor"])
+	}
+	// An agent moves the proved contact elsewhere: the proof is gone.
+	if _, err := e.pool.Exec(ctx, "INSERT INTO companies (organization_id, name) VALUES ($1, 'Diğer')", e.org); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `UPDATE contacts SET company_id = (SELECT id FROM companies WHERE organization_id = $1 AND name = 'Diğer'), company_verified_at = NULL
+		WHERE organization_id = $1 AND external_id = 'u-30'`, e.org); err != nil {
+		t.Fatal(err)
+	}
+	boot = e.call(http.MethodPost, "/bootstrap", str(signed.Data, "token"), siteOrigin, nil)
+	if v, _ := boot.Data["visitor"].(map[string]any); boot.Code != http.StatusOK || v["company_verified"] != false {
+		t.Fatalf("bootstrap after the move = %d %v", boot.Code, boot.Data["visitor"])
 	}
 }

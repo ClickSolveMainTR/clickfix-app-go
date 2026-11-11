@@ -103,4 +103,7 @@ func TestIdentityCompanyHash(t *testing.T) {
 	if IdentityCompanyHash(secret, "1", "12") == IdentityCompanyHash(secret, "11", "2") {
 		t.Fatal("the separator must keep the ids apart")
 	}
+	if IdentityCompanyHash(secret, "10\n01", "F-77") != "" || IdentityCompanyHash(secret, "1001", "F\r77") != "" {
+		t.Fatal("ids with line breaks must not be signed")
+	}
 }

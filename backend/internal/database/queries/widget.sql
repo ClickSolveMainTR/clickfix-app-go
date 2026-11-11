@@ -117,15 +117,21 @@ UPDATE companies SET external_id = sqlc.arg(external_id)::text, updated_at = NOW
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND external_id IS NULL AND deleted_at IS NULL;
 
 -- name: MarkCompanyVerified :exec
+-- Rewritten at most once an hour: every signed identify would otherwise
+-- write the company row.
 UPDATE companies SET verified_at = sqlc.arg(verified_at), updated_at = NOW()
-WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL;
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
+  AND (verified_at IS NULL OR verified_at < sqlc.arg(verified_at)::timestamptz - interval '1 hour');
 
 -- name: SetContactCompany :exec
 -- A proved company id moves the contact to that company even when it had
--- another one (the unsigned path only fills an empty company).
-UPDATE contacts SET company_id = sqlc.arg(company_id), updated_at = NOW()
+-- another one (the unsigned path only fills an empty company) and records
+-- the proof on the contact (company_verified_at, rewritten at most once an
+-- hour when nothing else changes).
+UPDATE contacts SET company_id = sqlc.arg(company_id), company_verified_at = sqlc.arg(verified_at), updated_at = NOW()
 WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id) AND deleted_at IS NULL
-  AND company_id IS DISTINCT FROM sqlc.arg(company_id);
+  AND (company_id IS DISTINCT FROM sqlc.arg(company_id)
+       OR company_verified_at IS NULL OR company_verified_at < sqlc.arg(verified_at)::timestamptz - interval '1 hour');
 
 -- CF-150: editor drafts, published versions and install detection.
 

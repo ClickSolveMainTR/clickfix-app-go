@@ -923,6 +923,7 @@ func (q *Queries) ListWidgetVersions(ctx context.Context, arg ListWidgetVersions
 const markCompanyVerified = `-- name: MarkCompanyVerified :exec
 UPDATE companies SET verified_at = $1, updated_at = NOW()
 WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
+  AND (verified_at IS NULL OR verified_at < $1::timestamptz - interval '1 hour')
 `
 
 type MarkCompanyVerifiedParams struct {
@@ -931,6 +932,8 @@ type MarkCompanyVerifiedParams struct {
 	ID             int64              `json:"id"`
 }
 
+// Rewritten at most once an hour: every signed identify would otherwise
+// write the company row.
 func (q *Queries) MarkCompanyVerified(ctx context.Context, arg MarkCompanyVerifiedParams) error {
 	_, err := q.db.Exec(ctx, markCompanyVerified, arg.VerifiedAt, arg.OrganizationID, arg.ID)
 	return err
@@ -1006,21 +1009,30 @@ func (q *Queries) SetCompanyExternalIDIfEmpty(ctx context.Context, arg SetCompan
 }
 
 const setContactCompany = `-- name: SetContactCompany :exec
-UPDATE contacts SET company_id = $1, updated_at = NOW()
-WHERE organization_id = $2 AND id = $3 AND deleted_at IS NULL
-  AND company_id IS DISTINCT FROM $1
+UPDATE contacts SET company_id = $1, company_verified_at = $2, updated_at = NOW()
+WHERE organization_id = $3 AND id = $4 AND deleted_at IS NULL
+  AND (company_id IS DISTINCT FROM $1
+       OR company_verified_at IS NULL OR company_verified_at < $2::timestamptz - interval '1 hour')
 `
 
 type SetContactCompanyParams struct {
-	CompanyID      pgtype.Int8 `json:"company_id"`
-	OrganizationID int64       `json:"organization_id"`
-	ID             int64       `json:"id"`
+	CompanyID      pgtype.Int8        `json:"company_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
 }
 
 // A proved company id moves the contact to that company even when it had
-// another one (the unsigned path only fills an empty company).
+// another one (the unsigned path only fills an empty company) and records
+// the proof on the contact (company_verified_at, rewritten at most once an
+// hour when nothing else changes).
 func (q *Queries) SetContactCompany(ctx context.Context, arg SetContactCompanyParams) error {
-	_, err := q.db.Exec(ctx, setContactCompany, arg.CompanyID, arg.OrganizationID, arg.ID)
+	_, err := q.db.Exec(ctx, setContactCompany,
+		arg.CompanyID,
+		arg.VerifiedAt,
+		arg.OrganizationID,
+		arg.ID,
+	)
 	return err
 }
 
