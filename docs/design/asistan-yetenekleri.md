@@ -269,3 +269,15 @@ Varsayılanlar uygulanır; değiştirmek isterseniz issue'ya yazın.
 4. **Araç sayısı üst sınırı.** Varsayılan 24; aşarsa sayfa dışı yetenekler düşer. Model maliyeti ölçülünce yeniden bakılır.
 5. **Widget yüzeyi.** Karar: izin listesi kodda sabit (§6); panelde widget başlatıcısı gizli, asistan tek giriş, birlikte göz atma kapalı.
 6. **Eski eylemler.** Varsayılan: bağdaştırıcıyla çalışmaya devam; CF-188/CF-189'da yeteneğe çevrilir.
+
+## Görünüm (CF-210)
+
+Asistan dört yüzeyde (çekmece, yan panel, tam sayfa, mobil çekmece) aynı bileşenleri kullanır: `frontend/src/features/assistant/components/`. Marka kimliği ve kart dili:
+
+- **Avatar ve başlık:** ClickFix işareti (`AppMark`, ink disk + sinyal imleci) `AssistantAvatar` ile başlıkta, her asistan baloncuğunun yanında, karşılama kartında ve sayfa başlığında.
+- **Baloncuklar:** kullanıcı sağda `primary` (açıkta mürekkep, koyuda sinyal yeşili), asistan solda nötr `card`; her baloncuğun altında saat ve 28 px sabit aksiyon çubuğu (kopyala, düzenle / yeniden oluştur). Markdown, kod ve tablo biçimleri `components/assistant-ui/markdown-text.tsx`; yanıt gelirken üç noktalı yazıyor göstergesi.
+- **Kartlar:** onay kartı (`Confirmation`), uygulanmış eylem (`Tool`), sayfa durumu (`PageStateCard`) ve belge şeridi tek dil: `bg-card rounded-xl border`, başlıkta tür simgesi, durum rozeti renkleri bekliyor = `warning`, tamamlandı = `success`, hata = `danger`, reddedildi = nötr.
+- **Kompozer:** ataç, belge bağlantısı, öneri çipleri, 4000 karakterin %80'inden sonra sayaç, gönder/durdur; kuyruk ve "Bugün N/limit" sayacı CF-207'deki gibi.
+- **Boş / yükleme / hata:** karşılama kartı + başlangıç önerileri, iskelet baloncuklar, kırmızı çerçeveli hata satırı; geçmiş listesinde başlık, göreli tarih, açık sohbette sinyal çizgisi.
+
+Ekran görüntüleri (açık/koyu, dört yüzey) CF-210 PR'ındadır; repoya ekran görüntüsü commit edilmez.
