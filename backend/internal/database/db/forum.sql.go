@@ -90,7 +90,7 @@ func (q *Queries) ForumCategory(ctx context.Context, arg ForumCategoryParams) (F
 }
 
 const forumConversationTopic = `-- name: ForumConversationTopic :one
-SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at FROM forum_posts WHERE organization_id=$1 AND conversation_id=$2 AND topic_id IS NULL
+SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason FROM forum_posts WHERE organization_id=$1 AND conversation_id=$2 AND topic_id IS NULL
 `
 
 type ForumConversationTopicParams struct {
@@ -117,6 +117,9 @@ func (q *Queries) ForumConversationTopic(ctx context.Context, arg ForumConversat
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
@@ -241,7 +244,7 @@ func (q *Queries) ForumCreateConversation(ctx context.Context, arg ForumCreateCo
 
 const forumCreatePost = `-- name: ForumCreatePost :one
 INSERT INTO forum_posts(organization_id,category_id,topic_id,contact_id,slug,title,body,flag_reason,conversation_id)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason
 `
 
 type ForumCreatePostParams struct {
@@ -285,6 +288,9 @@ func (q *Queries) ForumCreatePost(ctx context.Context, arg ForumCreatePostParams
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
@@ -320,7 +326,7 @@ func (q *Queries) ForumLinkConversation(ctx context.Context, arg ForumLinkConver
 }
 
 const forumModerate = `-- name: ForumModerate :one
-UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at
+UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason
 `
 
 type ForumModerateParams struct {
@@ -348,12 +354,15 @@ func (q *Queries) ForumModerate(ctx context.Context, arg ForumModerateParams) (F
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
 
 const forumModeration = `-- name: ForumModeration :many
-SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at FROM forum_posts WHERE organization_id=$1 AND status='pending' ORDER BY created_at,id LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason FROM forum_posts WHERE organization_id=$1 AND status='pending' ORDER BY created_at,id LIMIT $2 OFFSET $3
 `
 
 type ForumModerationParams struct {
@@ -387,6 +396,9 @@ func (q *Queries) ForumModeration(ctx context.Context, arg ForumModerationParams
 			&i.ConversationID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RemovedAt,
+			&i.RemovedByUserID,
+			&i.RemovedReason,
 		); err != nil {
 			return nil, err
 		}
@@ -483,7 +495,7 @@ func (q *Queries) ForumNotify(ctx context.Context, arg ForumNotifyParams) error 
 }
 
 const forumPost = `-- name: ForumPost :one
-SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at FROM forum_posts WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason FROM forum_posts WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type ForumPostParams struct {
@@ -510,6 +522,9 @@ func (q *Queries) ForumPost(ctx context.Context, arg ForumPostParams) (ForumPost
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
@@ -558,6 +573,80 @@ func (q *Queries) ForumReadNotification(ctx context.Context, arg ForumReadNotifi
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const forumRemoved = `-- name: ForumRemoved :many
+SELECT p.uuid,p.slug,p.title,p.body,p.topic_id,p.created_at,p.removed_at,p.removed_reason,
+ u.uuid AS removed_by_uuid,u.name AS removed_by_name,t.title AS topic_title,t.slug AS topic_slug
+FROM forum_posts p
+LEFT JOIN forum_posts t ON t.organization_id=p.organization_id AND t.id=p.topic_id
+LEFT JOIN users u ON u.id=p.removed_by_user_id
+WHERE p.organization_id=$1 AND p.status='removed' ORDER BY p.removed_at DESC,p.id DESC LIMIT $2 OFFSET $3
+`
+
+type ForumRemovedParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	Limit          int32 `json:"limit"`
+	Offset         int32 `json:"offset"`
+}
+
+type ForumRemovedRow struct {
+	Uuid          uuid.UUID          `json:"uuid"`
+	Slug          string             `json:"slug"`
+	Title         string             `json:"title"`
+	Body          string             `json:"body"`
+	TopicID       pgtype.Int8        `json:"topic_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+	RemovedReason string             `json:"removed_reason"`
+	RemovedByUuid pgtype.UUID        `json:"removed_by_uuid"`
+	RemovedByName pgtype.Text        `json:"removed_by_name"`
+	TopicTitle    pgtype.Text        `json:"topic_title"`
+	TopicSlug     pgtype.Text        `json:"topic_slug"`
+}
+
+func (q *Queries) ForumRemoved(ctx context.Context, arg ForumRemovedParams) ([]ForumRemovedRow, error) {
+	rows, err := q.db.Query(ctx, forumRemoved, arg.OrganizationID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ForumRemovedRow{}
+	for rows.Next() {
+		var i ForumRemovedRow
+		if err := rows.Scan(
+			&i.Uuid,
+			&i.Slug,
+			&i.Title,
+			&i.Body,
+			&i.TopicID,
+			&i.CreatedAt,
+			&i.RemovedAt,
+			&i.RemovedReason,
+			&i.RemovedByUuid,
+			&i.RemovedByName,
+			&i.TopicTitle,
+			&i.TopicSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const forumRemovedCount = `-- name: ForumRemovedCount :one
+SELECT count(*) FROM forum_posts WHERE organization_id=$1 AND status='removed'
+`
+
+func (q *Queries) ForumRemovedCount(ctx context.Context, organizationID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, forumRemovedCount, organizationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const forumReplies = `-- name: ForumReplies :many
@@ -629,6 +718,42 @@ func (q *Queries) ForumReplyCount(ctx context.Context, arg ForumReplyCountParams
 	return count, err
 }
 
+const forumRepublish = `-- name: ForumRepublish :one
+UPDATE forum_posts SET status='published',removed_at=NULL,removed_by_user_id=NULL,removed_reason=''
+WHERE organization_id=$1 AND uuid=$2 AND status='removed' RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason
+`
+
+type ForumRepublishParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+}
+
+func (q *Queries) ForumRepublish(ctx context.Context, arg ForumRepublishParams) (ForumPost, error) {
+	row := q.db.QueryRow(ctx, forumRepublish, arg.OrganizationID, arg.Uuid)
+	var i ForumPost
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.TopicID,
+		&i.ContactID,
+		&i.Slug,
+		&i.Title,
+		&i.Body,
+		&i.Status,
+		&i.FlagReason,
+		&i.AcceptedReplyID,
+		&i.ConversationID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
+	)
+	return i, err
+}
+
 const forumSitemap = `-- name: ForumSitemap :many
 SELECT slug,updated_at FROM forum_posts WHERE organization_id=$1 AND topic_id IS NULL AND status='published'
 ORDER BY updated_at DESC,id DESC LIMIT $2 OFFSET $3
@@ -681,7 +806,7 @@ func (q *Queries) ForumSubscribe(ctx context.Context, arg ForumSubscribeParams) 
 }
 
 const forumTopicByID = `-- name: ForumTopicByID :one
-SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at FROM forum_posts WHERE organization_id=$1 AND id=$2 AND topic_id IS NULL
+SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason FROM forum_posts WHERE organization_id=$1 AND id=$2 AND topic_id IS NULL
 `
 
 type ForumTopicByIDParams struct {
@@ -708,12 +833,15 @@ func (q *Queries) ForumTopicByID(ctx context.Context, arg ForumTopicByIDParams) 
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
 
 const forumTopicBySlug = `-- name: ForumTopicBySlug :one
-SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at FROM forum_posts WHERE organization_id=$1 AND slug=$2 AND topic_id IS NULL AND status='published'
+SELECT id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason FROM forum_posts WHERE organization_id=$1 AND slug=$2 AND topic_id IS NULL AND status='published'
 `
 
 type ForumTopicBySlugParams struct {
@@ -740,6 +868,9 @@ func (q *Queries) ForumTopicBySlug(ctx context.Context, arg ForumTopicBySlugPara
 		&i.ConversationID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
 	)
 	return i, err
 }
@@ -829,6 +960,49 @@ func (q *Queries) ForumTopics(ctx context.Context, arg ForumTopicsParams) ([]For
 		return nil, err
 	}
 	return items, nil
+}
+
+const forumUnpublish = `-- name: ForumUnpublish :one
+UPDATE forum_posts SET status='removed',removed_at=now(),removed_by_user_id=$3::bigint,removed_reason=$4
+WHERE organization_id=$1 AND uuid=$2 AND status='published' RETURNING id, uuid, organization_id, category_id, topic_id, contact_id, slug, title, body, status, flag_reason, accepted_reply_id, conversation_id, created_at, updated_at, removed_at, removed_by_user_id, removed_reason
+`
+
+type ForumUnpublishParams struct {
+	OrganizationID int64     `json:"organization_id"`
+	Uuid           uuid.UUID `json:"uuid"`
+	Actor          int64     `json:"actor"`
+	Reason         string    `json:"reason"`
+}
+
+func (q *Queries) ForumUnpublish(ctx context.Context, arg ForumUnpublishParams) (ForumPost, error) {
+	row := q.db.QueryRow(ctx, forumUnpublish,
+		arg.OrganizationID,
+		arg.Uuid,
+		arg.Actor,
+		arg.Reason,
+	)
+	var i ForumPost
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.TopicID,
+		&i.ContactID,
+		&i.Slug,
+		&i.Title,
+		&i.Body,
+		&i.Status,
+		&i.FlagReason,
+		&i.AcceptedReplyID,
+		&i.ConversationID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RemovedAt,
+		&i.RemovedByUserID,
+		&i.RemovedReason,
+	)
+	return i, err
 }
 
 const forumUnsubscribe = `-- name: ForumUnsubscribe :exec

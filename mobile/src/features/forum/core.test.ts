@@ -13,8 +13,11 @@ import {
   needsConfirm,
   outcomeStatus,
   readModerationItem,
+  removedLine,
   stillPending,
   type T,
+  visibilityCopy,
+  visibilityProblem,
 } from './core.ts';
 
 const t: T = (key, params) => (params ? `${key}(${Object.values(params).join(',')})` : key);
@@ -105,4 +108,33 @@ test('isLongBody marks text the queue row would cut', () => {
   assert.equal(isLongBody('kısa'), false);
   assert.equal(isLongBody('a'.repeat(321)), true);
   assert.equal(isLongBody(Array.from({ length: 9 }, () => 'satır').join('\n')), true);
+});
+
+test('taking down and republishing ask first, naming the kind of post', () => {
+  assert.deepEqual(visibilityCopy('unpublish', 'reply'), {
+    title: 'forum.unpublish_reply_title',
+    body: 'forum.unpublish_reply_body',
+    action: 'forum.unpublish',
+    destructive: true,
+  });
+  assert.equal(visibilityCopy('republish', 'topic').title, 'forum.republish_topic_title');
+  assert.equal(visibilityCopy('republish', 'topic').destructive, false);
+});
+
+test('a refused takedown or republish tells the moderator what happened', () => {
+  assert.equal(visibilityProblem(409, 'unpublish'), 'forum.unpublish_conflict');
+  assert.equal(visibilityProblem(409, 'republish'), 'forum.republish_conflict');
+  assert.equal(visibilityProblem(404, 'unpublish'), 'forum.already_handled');
+  assert.equal(visibilityProblem(500, 'republish'), null);
+});
+
+test('the removed line names who, when and the reason only when given', () => {
+  assert.equal(
+    removedLine(t, { removed_by_name: 'Ayşe', removed_reason: '' }, '5 Kas'),
+    'forum.removed_by(Ayşe,5 Kas)',
+  );
+  assert.equal(
+    removedLine(t, { removed_by_name: null, removed_reason: 'spam' }, '5 Kas'),
+    '5 Kas · forum.removed_reason(spam)',
+  );
 });

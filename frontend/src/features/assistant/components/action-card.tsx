@@ -11,9 +11,13 @@ import {
   Copy,
   FlaskConical,
   Loader2,
+  Pencil,
+  ShieldAlert,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 
@@ -38,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 
 import { focusHref, readValue, toText } from "../lib/card";
@@ -53,6 +58,12 @@ import {
 /** Fields edited in the card, sent with dry-run / confirm. */
 export type EditedParams = Record<string, unknown>;
 
+/** The glyph of a card: what kind of change the action is. */
+function kindIcon(action: AssistantAction): ReactNode {
+  if (action.risk === "destructive") return <Trash2 />;
+  return <Pencil />;
+}
+
 export function RouteLink({
   route,
   target,
@@ -64,7 +75,10 @@ export function RouteLink({
   const href = focusHref(route, target);
   if (!href) return null;
   return (
-    <Link href={href} className="text-primary mt-1 inline-block underline">
+    <Link
+      href={href}
+      className="text-signal-text focus-visible:ring-ring/50 mt-1 inline-block rounded-sm underline underline-offset-2 outline-none focus-visible:ring-2"
+    >
       {target
         ? t("assistant.action.open_and_show")
         : t("assistant.action.open_page")}
@@ -108,7 +122,7 @@ function Details({ items }: { items?: AssistantActionDetail[] | null }) {
           <p className="text-muted-foreground">{d.label}</p>
           {d.value ? <p className="break-all">{d.value}</p> : null}
           {d.code ? (
-            <div className="bg-muted mt-1 rounded-md">
+            <div className="bg-muted/60 mt-1 overflow-hidden rounded-lg border">
               <div className="flex justify-end border-b px-1">
                 <CopyButton value={d.code} />
               </div>
@@ -322,6 +336,7 @@ export function ActionCard(
       <Tool defaultOpen={hasOutput} className="my-2">
         <ToolHeader
           title={action.title}
+          icon={kindIcon(action)}
           state={toolState({ ...action, status: statusKey })}
           statusLabel={t(`assistant.action.status.${statusKey}`)}
         />
@@ -344,7 +359,7 @@ export function ActionCard(
               action.verification.status !== "skipped" ? (
                 <p className="flex items-center gap-1 text-xs">
                   {action.verification.status === "ok" ? (
-                    <CheckCircle2 className="size-3 text-emerald-600" />
+                    <CheckCircle2 className="text-success size-3" />
                   ) : (
                     <XCircle className="text-destructive size-3" />
                   )}
@@ -361,7 +376,7 @@ export function ActionCard(
               {secrets && Object.keys(secrets).length ? (
                 <div
                   role="status"
-                  className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs"
+                  className="border-warning/40 bg-warning/5 rounded-lg border p-2 text-xs"
                 >
                   <p className="font-medium">
                     {t("assistant.action.secret_once")}
@@ -408,8 +423,19 @@ export function ActionCard(
 
   return (
     <Confirmation state={state} destructive={destructive} className="my-2">
-      <ConfirmationTitle>
-        <p className="font-medium">{action.title}</p>
+      <ConfirmationTitle className="items-center">
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5",
+            destructive
+              ? "bg-destructive/10 text-destructive"
+              : "bg-warning/10 text-warning",
+          )}
+        >
+          {destructive ? <ShieldAlert /> : kindIcon(action)}
+        </span>
+        <p className="min-w-0 flex-1 font-medium">{action.title}</p>
         {getStatusBadge(
           deciding ? "input-streaming" : "approval-requested",
           deciding
@@ -422,8 +448,8 @@ export function ActionCard(
       ) : null}
       <ConfirmationRequest className="space-y-3">
         {destructive ? (
-          <p className="text-destructive flex items-center gap-1 text-xs">
-            <AlertTriangle className="size-3" />
+          <p className="bg-destructive/5 text-destructive border-destructive/20 flex items-start gap-1.5 rounded-lg border px-2 py-1.5 text-xs">
+            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
             {t("assistant.action.destructive")}
           </p>
         ) : null}
@@ -451,7 +477,7 @@ export function ActionCard(
                   ) : f.type === "enum" ? (
                     <select
                       id={id}
-                      className="border-input bg-background h-8 w-full rounded-md border px-2 text-sm"
+                      className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-[3px]"
                       value={String(values[f.key] ?? "")}
                       onChange={(e) =>
                         setValues((s) => ({ ...s, [f.key]: e.target.value }))
@@ -522,14 +548,20 @@ export function ActionCard(
         ) : null}
         {action.preview ? (
           <div
-            className={
-              "rounded-md border p-2 text-xs " +
-              (action.preview.ok
-                ? "border-emerald-500/30 bg-emerald-500/5"
-                : "border-destructive/30 bg-destructive/5")
-            }
+            role="status"
+            className={cn(
+              "rounded-lg border p-2 text-xs",
+              action.preview.ok
+                ? "border-success/30 bg-success/5"
+                : "border-destructive/30 bg-destructive/5",
+            )}
           >
-            <p className="font-medium">
+            <p className="flex items-center gap-1 font-medium">
+              {action.preview.ok ? (
+                <CheckCircle2 className="text-success size-3" />
+              ) : (
+                <XCircle className="text-destructive size-3" />
+              )}
               {action.preview.ok
                 ? t("assistant.action.preview_ok")
                 : t("assistant.action.preview_failed")}

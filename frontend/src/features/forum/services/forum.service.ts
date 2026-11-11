@@ -8,6 +8,7 @@ export type ForumTopic = components["schemas"]["ForumTopic"];
 export type ForumReply = components["schemas"]["ForumReply"];
 export type ForumConversion = components["schemas"]["ForumConversion"];
 export type ForumSubmitted = components["schemas"]["ForumSubmitted"];
+export type ForumRemovedPost = components["schemas"]["ForumRemovedPost"];
 
 /**
  * A pending post of the moderation queue. The OpenAPI item is an open
@@ -114,6 +115,37 @@ export const forumService = {
       await apiClient.PATCH("/v1/tenant/forum/posts/{uuid}", {
         params: { header: orgHeader(), path: { uuid } },
         body: { status },
+      }),
+    );
+  },
+
+  /** Topics and replies taken down (CF-182), newest takedown first. */
+  async removed(limit: number, offset: number) {
+    return unwrap<ForumPage<ForumRemovedPost>>(
+      await apiClient.GET("/v1/tenant/forum/removed", {
+        params: { header: orgHeader(), query: { limit, offset } },
+      }),
+    );
+  },
+
+  /**
+   * Takes a published post down (CF-182): it moves to `removed` and leaves
+   * every public read. 409 when the post is not published (any more).
+   */
+  async unpublish(uuid: string, reason = "") {
+    return unwrap(
+      await apiClient.POST("/v1/tenant/forum/posts/{uuid}/unpublish", {
+        params: { header: orgHeader(), path: { uuid } },
+        body: reason.trim() ? { reason: reason.trim() } : {},
+      }),
+    );
+  },
+
+  /** Publishes a removed post again. 409 when it is not removed. */
+  async republish(uuid: string) {
+    return unwrap(
+      await apiClient.POST("/v1/tenant/forum/posts/{uuid}/republish", {
+        params: { header: orgHeader(), path: { uuid } },
       }),
     );
   },

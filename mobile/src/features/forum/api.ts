@@ -17,6 +17,8 @@ import {
   outcomeStatus,
   readModerationItem,
   stillPending,
+  type VisibilityAction,
+  visibilityProblem,
 } from './core';
 
 /**
@@ -30,6 +32,7 @@ export type ForumCategory = components['schemas']['ForumCategory'];
 export type ForumTopicSummary = components['schemas']['ForumTopicSummary'];
 export type ForumTopic = components['schemas']['ForumTopic'];
 export type ForumReply = components['schemas']['ForumReply'];
+export type ForumRemovedPost = components['schemas']['ForumRemovedPost'];
 
 const PAGE = 20;
 /** Replies shown on a topic; the panel reads the same first 100. */
@@ -44,6 +47,7 @@ const FRESH = { cache: 'no-store' } as const;
 const keys = {
   all: (org: string) => orgKey(org, 'forum'),
   moderation: (org: string) => [...keys.all(org), 'moderation'] as const,
+  removed: (org: string) => [...keys.all(org), 'removed'] as const,
   categories: (org: string) => [...keys.all(org), 'categories'] as const,
   topics: (org: string, q: string, category: string) => [...keys.all(org), 'topics', q, category] as const,
   topic: (org: string, slug: string) => [...keys.all(org), 'topic', slug] as const,
@@ -76,6 +80,26 @@ export function useModerationQueue() {
       return { items, total: page.total, limit: page.limit, offset: page.offset + (page.items.length - items.length) };
     },
     getNextPageParam: nextOffset,
+  });
+}
+
+type RemovedPage = { items: ForumRemovedPost[]; total: number; limit: number; offset: number };
+
+/** Topics and replies taken down (CF-182), newest takedown first; these can be published again. */
+export function useRemovedPosts() {
+  const { org, canManage } = useForumScope();
+  return useInfiniteQuery({
+    queryKey: keys.removed(org),
+    enabled: !!org && canManage,
+    initialPageParam: 0,
+    staleTime: 15_000,
+    queryFn: ({ pageParam }): Promise<RemovedPage> =>
+      unwrap(
+        api.GET('/v1/tenant/forum/removed', {
+          params: { header: orgHeader(), query: { limit: PAGE, offset: pageParam } },
+        }),
+      ),
+    getNextPageParam: (last: RemovedPage) => nextOffset(last),
   });
 }
 
@@ -220,5 +244,28 @@ export function useForumActions() {
     },
     onSettled: () => qc.invalidateQueries({ queryKey: [...keys.all(org), 'topics'] }),
   });
-  return { moderate, assist, accept };
+  /**
+   * Taking a published post down and publishing it again (CF-182). The
+   * screens ask first. The API refuses with 409 when the post is no longer
+   * in the status the action needs; the forum is read again either way.
+   */
+  const visibility = useMutation({
+    mutationFn: ({ uuid, action }: { uuid: string; action: VisibilityAction }) =>
+      unwrap(
+        action === 'unpublish'
+          ? api.POST('/v1/tenant/forum/posts/{uuid}/unpublish', {
+              params: { header: orgHeader(), path: { uuid } },
+              body: {},
+            })
+          : api.POST('/v1/tenant/forum/posts/{uuid}/republish', { params: { header: orgHeader(), path: { uuid } } }),
+      ),
+    onSuccess: (_d, v) => toast.success(tr(`forum.done_${v.action}`)),
+    onError: (e, v) => {
+      const known = visibilityProblem(isApiError(e) ? e.status : null, v.action);
+      if (known) toast.error(tr(known));
+      else failed(e);
+    },
+    onSettled: refresh,
+  });
+  return { moderate, assist, accept, visibility };
 }

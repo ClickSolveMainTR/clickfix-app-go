@@ -169,5 +169,22 @@
   "fields_help.webhook_url": "ClickFix'in temsilci yanıtlarını göndereceği, sisteminizdeki HTTPS adresi",
   "fields_help.days": "Gün gün açılış ve kapanış saatleri; yazılmayan günler kapalıdır",
   "fields_help.timezone": "IANA saat dilimi, varsayılan Europe/Istanbul",
-  "fields_help.holiday_country": "Resmî tatillerin ülke kodu (ISO 3166, varsayılan TR)"
+  "fields_help.holiday_country": "Resmî tatillerin ülke kodu (ISO 3166, varsayılan TR)",
+  "typing": "Yazıyor…",
+  "you": "Siz",
+  "assistant_name": "ClickFix Asistan",
+  "composer.hint": "Enter gönderir, Shift+Enter yeni satır",
+  "composer.count": "{{count}}/{{max}}",
+  "composer.locked": "Mesaj gönderme kapalı",
+  "welcome.eyebrow": "Sayfa içi yardımcı",
+  "welcome.starters": "Bununla başlayın",
+  "history.active": "Açık sohbet",
+  "history.running": "Yanıt yazılıyor",
+  "history.empty_hint": "İlk sorunuzu yazın; sohbetleriniz burada listelenir.",
+  "history.title": "Geçmiş sohbetler",
+  "loading": "Sohbet yükleniyor…",
+  "suggestions.title": "Devam önerileri",
+  "tool_note": "Asistan notu",
+  "action.kind.proposed": "Onayınızı bekliyor",
+  "action.kind.destructive": "Geri alınamayan işlem"
 }

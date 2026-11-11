@@ -12,8 +12,10 @@ import (
 	"testing"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/middleware"
 	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	aiuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
+	billmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
 	billrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/handler"
@@ -21,6 +23,8 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/supportops"
 	widgetuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	widgettoken "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -332,6 +336,269 @@ func TestForumModerationDecidesAPendingPostOnce(t *testing.T) {
 		if w.Code != tc.code {
 			t.Fatalf("moderation over HTTP: got %d want %d: %s", w.Code, tc.code, w.Body.String())
 		}
+	}
+}
+
+// A published topic or reply can be taken down and published again
+// (CF-182): the post moves to `removed`, leaves every public read (topic
+// page, list, sitemap, accepted answer, notification inbox), is recorded
+// with who, when and why, and only a removed post can be republished.
+func TestForumUnpublishAndRepublish(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL required")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	q := db.New(pool)
+	suffix := uuid.NewString()
+	var org, other, actor, author, subscriber int64
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(pool.QueryRow(ctx, "INSERT INTO organizations(name,slug) VALUES('Forum takedown',$1) RETURNING id", suffix).Scan(&org))
+	must(pool.QueryRow(ctx, "INSERT INTO organizations(name,slug) VALUES('Other',$1) RETURNING id", suffix+"-other").Scan(&other))
+	must(pool.QueryRow(ctx, "INSERT INTO users(email,password_hash,name,surname,status) VALUES($1,'test','Forum','Agent','active') RETURNING id", suffix+"@example.test").Scan(&actor))
+	must(pool.QueryRow(ctx, "INSERT INTO contacts(organization_id,name) VALUES($1,'Author') RETURNING id", org).Scan(&author))
+	must(pool.QueryRow(ctx, "INSERT INTO contacts(organization_id,name) VALUES($1,'Subscriber') RETURNING id", org).Scan(&subscriber))
+	defer func() {
+		for _, stmt := range []string{
+			"DELETE FROM activity_events WHERE organization_id=$1",
+			"DELETE FROM outbox_events WHERE organization_id=$1",
+			"DELETE FROM forum_notifications WHERE organization_id=$1",
+			"DELETE FROM forum_subscriptions WHERE organization_id=$1",
+			"UPDATE forum_posts SET accepted_reply_id=NULL WHERE organization_id=$1",
+			"DELETE FROM forum_posts WHERE organization_id=$1",
+			"DELETE FROM forum_categories WHERE organization_id=$1",
+			"DELETE FROM contacts WHERE organization_id=$1",
+		} {
+			if _, err := pool.Exec(ctx, stmt, org); err != nil {
+				t.Errorf("cleanup %q: %v", stmt, err)
+			}
+		}
+		if _, err := pool.Exec(ctx, "DELETE FROM organizations WHERE id=ANY($1::bigint[])", []int64{org, other}); err != nil {
+			t.Errorf("cleanup organizations: %v", err)
+		}
+		if _, err := pool.Exec(ctx, "DELETE FROM users WHERE id=$1", actor); err != nil {
+			t.Errorf("cleanup user: %v", err)
+		}
+	}()
+	_, err = q.ForumCreateCategory(ctx, db.ForumCreateCategoryParams{OrganizationID: org, Slug: "general", Name: "General"})
+	must(err)
+	s := &usecase.Service{Repo: billrepo.New(pool, q)}
+	topic, err := s.Create(ctx, org, author, nil, model.PostInput{Category: "general", Title: "Takedown", Body: "Topic body"})
+	must(err)
+	topic, err = s.Moderate(ctx, org, actor, topic.Uuid, "published")
+	must(err)
+	must(q.ForumSubscribe(ctx, db.ForumSubscribeParams{OrganizationID: org, TopicID: topic.ID, ContactID: subscriber}))
+	reply, err := s.Create(ctx, org, author, &topic, model.PostInput{Body: "The accepted answer"})
+	must(err)
+	_, err = s.Moderate(ctx, org, actor, reply.Uuid, "published")
+	must(err)
+	must(s.Accept(ctx, org, actor, topic.Uuid, reply.Uuid))
+	rejected, err := s.Create(ctx, org, author, nil, model.PostInput{Category: "general", Title: "Rejected", Body: "Never published"})
+	must(err)
+	_, err = s.Moderate(ctx, org, actor, rejected.Uuid, "rejected")
+	must(err)
+	pending, err := s.Create(ctx, org, author, nil, model.PostInput{Category: "general", Title: "Pending", Body: "Still waiting"})
+	must(err)
+
+	mux := http.NewServeMux()
+	forum.RegisterRoutes(supportops.Router{Mux: mux}, &handler.Handler{Service: s})
+	read := func(path string) (int, string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w.Code, w.Body.String()
+	}
+	base := "/v1/public/help/" + suffix + "/forum"
+	public := func(visible bool, answered bool) {
+		t.Helper()
+		status, body := read(base + "/topics/" + topic.Slug)
+		if (status == 200) != visible {
+			t.Fatalf("topic page: got %d, visible=%v: %s", status, visible, body)
+		}
+		if visible && strings.Contains(body, "The accepted answer") != answered {
+			t.Fatalf("topic page shows the reply=%v, want %v: %s", !answered, answered, body)
+		}
+		if visible && strings.Contains(body, `"accepted_answer":null`) == answered {
+			t.Fatalf("topic page accepted_answer, want answered=%v: %s", answered, body)
+		}
+		_, list := read(base + "/topics")
+		if strings.Contains(list, topic.Slug) != visible {
+			t.Fatalf("topic list lists the topic=%v, want %v: %s", !visible, visible, list)
+		}
+		if visible && strings.Contains(list, `"accepted_reply_uuid":null`) == answered {
+			t.Fatalf("topic list accepted_reply_uuid, want answered=%v: %s", answered, list)
+		}
+		_, sitemap := read(base + "/sitemap")
+		if strings.Contains(sitemap, topic.Slug) != visible {
+			t.Fatalf("sitemap lists the topic=%v, want %v: %s", !visible, visible, sitemap)
+		}
+		inbox, err := q.ForumNotifications(ctx, db.ForumNotificationsParams{OrganizationID: org, ContactID: subscriber, Limit: 20})
+		must(err)
+		if (len(inbox) == 1) != (visible && answered) {
+			t.Fatalf("inbox has %d notifications, topic visible=%v reply visible=%v", len(inbox), visible, answered)
+		}
+	}
+	public(true, true)
+
+	// Cross-organization: the post does not exist there (404), nothing changes.
+	if _, err = s.Unpublish(ctx, other, actor, reply.Uuid, ""); !errors.Is(err, billmodel.ErrNotFound) {
+		t.Fatal("cross-org unpublish", err)
+	}
+	public(true, true)
+	// Only a published post can be taken down.
+	for _, id := range []uuid.UUID{rejected.Uuid, pending.Uuid} {
+		if _, err = s.Unpublish(ctx, org, actor, id, ""); !errors.Is(err, supportops.ErrConflict) {
+			t.Fatal("unpublished a post that is not published", err)
+		}
+	}
+	if _, err = s.Unpublish(ctx, org, actor, reply.Uuid, strings.Repeat("x", 501)); !errors.Is(err, supportops.ErrInvalid) {
+		t.Fatal("reason longer than 500 accepted", err)
+	}
+	// The limit counts characters like the column and OpenAPI, not bytes.
+	if _, err = s.Unpublish(ctx, org, actor, pending.Uuid, strings.Repeat("ğ", 500)); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("500 multi-byte characters refused as too long", err)
+	}
+	// Only a removed post can be republished; a rejected post stays rejected.
+	for _, id := range []uuid.UUID{rejected.Uuid, pending.Uuid, reply.Uuid} {
+		if _, err = s.Republish(ctx, org, actor, id); !errors.Is(err, supportops.ErrConflict) {
+			t.Fatal("republished a post that is not removed", err)
+		}
+	}
+
+	// The accepted reply is taken down: the topic stays, without an answer.
+	removed, err := s.Unpublish(ctx, org, actor, reply.Uuid, "  Wrong answer  ")
+	must(err)
+	if removed.Status != "removed" || !removed.RemovedAt.Valid || removed.RemovedByUserID.Int64 != actor || removed.RemovedReason != "Wrong answer" {
+		t.Fatalf("takedown not recorded on the row: %+v", removed)
+	}
+	public(true, false)
+	if _, err = s.Unpublish(ctx, org, actor, reply.Uuid, ""); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("removed post taken down twice", err)
+	}
+	var count int64
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE organization_id=$1 AND event_name='forum.moderated' AND payload->'data'->>'status'='removed' AND payload->'data'->>'reason'='Wrong answer' AND (payload->>'actor_user_id')::bigint=$2 AND payload->>'entity_uuid'=$3", org, actor, reply.Uuid.String()).Scan(&count))
+	if count != 1 {
+		t.Fatalf("takedown event: got %d rows, want 1", count)
+	}
+	// The topic itself is taken down: page, list, sitemap and inbox drop it.
+	_, err = s.Unpublish(ctx, org, actor, topic.Uuid, "")
+	must(err)
+	public(false, false)
+	rows, err := q.ForumRemoved(ctx, db.ForumRemovedParams{OrganizationID: org, Limit: 20})
+	must(err)
+	n, err := q.ForumRemovedCount(ctx, org)
+	must(err)
+	if n != 2 || len(rows) != 2 || rows[0].Uuid != topic.Uuid || rows[1].Uuid != reply.Uuid || rows[1].TopicTitle.String != "Takedown" || rows[1].RemovedByName.String != "Forum" || rows[0].RemovedReason != "" || rows[1].RemovedReason != "Wrong answer" {
+		t.Fatalf("removed list: n=%d rows=%+v", n, rows)
+	}
+	for _, r := range rows {
+		if !r.RemovedByUuid.Valid || !r.RemovedAt.Valid {
+			t.Fatalf("removed row misses who/when: %+v", r)
+		}
+	}
+	// A removed reply cannot come back while its topic is down (like the queue).
+	if _, err = s.Republish(ctx, org, actor, reply.Uuid); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("reply republished under a removed topic", err)
+	}
+	if _, err = s.Republish(ctx, other, actor, topic.Uuid); !errors.Is(err, billmodel.ErrNotFound) {
+		t.Fatal("cross-org republish", err)
+	}
+	back, err := s.Republish(ctx, org, actor, topic.Uuid)
+	must(err)
+	if back.Status != "published" || back.RemovedAt.Valid || back.RemovedByUserID.Valid || back.RemovedReason != "" {
+		t.Fatalf("republish left takedown fields: %+v", back)
+	}
+	public(true, false)
+	_, err = s.Republish(ctx, org, actor, reply.Uuid)
+	must(err)
+	// The accepted answer and the subscriber's notification come back as they were.
+	public(true, true)
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE organization_id=$1 AND event_name='forum.moderated' AND payload->'data'->>'previous_status'='removed'", org).Scan(&count))
+	if count != 2 {
+		t.Fatalf("republish events: got %d rows, want 2", count)
+	}
+
+	// Over HTTP, through the tenant router's handler with the real activity
+	// recorder: the permission gate answers 403, another organization 404, a
+	// post that is not published 409, and every call that went through is
+	// recorded as support_operations.updated for the actor and organization.
+	// The body is optional (absent, empty, chunked without content); a reason
+	// in it is stored.
+	rt := supportops.Router{Activity: activity.NewRecorder(q, nil)}
+	type body struct {
+		Reason string `json:"reason"`
+	}
+	api := http.NewServeMux()
+	api.Handle("POST /posts/{uuid}/unpublish", middleware.RequireTenantPermission("tenant.feedback.manage")(rt.Handler(func(r *http.Request) (any, error) {
+		in, err := supportops.ReadOptional[body](r)
+		if err != nil {
+			return nil, err
+		}
+		return s.Unpublish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r), in.Reason)
+	}, true)))
+	api.Handle("POST /posts/{uuid}/republish", middleware.RequireTenantPermission("tenant.feedback.manage")(rt.Handler(func(r *http.Request) (any, error) {
+		return s.Republish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r))
+	}, true)))
+	manage := []string{"tenant.feedback.manage"}
+	chunked := func(content string) *http.Request {
+		req := httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(content))
+		req.ContentLength = -1
+		req.TransferEncoding = []string{"chunked"}
+		return req
+	}
+	for _, tc := range []struct {
+		name  string
+		scope orgctx.Scope
+		req   *http.Request
+		code  int
+	}{
+		{"no permission", orgctx.Scope{ID: org, Permissions: []string{"tenant.feedback.read"}}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusForbidden},
+		{"other organization", orgctx.Scope{ID: other, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusNotFound},
+		{"unknown post", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+uuid.NewString()+"/unpublish", nil), http.StatusNotFound},
+		{"republish a published post", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusConflict},
+		{"unknown field in the body", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(`{"status":"removed"}`)), http.StatusBadRequest},
+		{"unpublish without a body", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusOK},
+		{"unpublish twice", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(`{}`)), http.StatusConflict},
+		{"republish without permission", orgctx.Scope{ID: org}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusForbidden},
+		{"republish", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
+		{"unpublish with an empty chunked body", orgctx.Scope{ID: org, Permissions: manage}, chunked(""), http.StatusOK},
+		{"republish again", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
+		{"unpublish with a chunked reason", orgctx.Scope{ID: org, Permissions: manage}, chunked(`{"reason":"chunked spam"}`), http.StatusOK},
+		{"republish once more", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
+	} {
+		w := httptest.NewRecorder()
+		req := tc.req.WithContext(authctx.WithPrincipal(orgctx.WithScope(ctx, tc.scope), authctx.Principal{UserInternal: actor}))
+		api.ServeHTTP(w, req)
+		if w.Code != tc.code {
+			t.Fatalf("%s: got %d want %d: %s", tc.name, w.Code, tc.code, w.Body.String())
+		}
+		if tc.name == "unpublish with a chunked reason" {
+			var reason string
+			must(pool.QueryRow(ctx, "SELECT removed_reason FROM forum_posts WHERE organization_id=$1 AND uuid=$2", org, topic.Uuid).Scan(&reason))
+			if reason != "chunked spam" {
+				t.Fatalf("reason from a chunked body not stored: %q", reason)
+			}
+		}
+	}
+	public(true, true)
+	// Six calls went through (the refused ones record nothing).
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM activity_events WHERE organization_id=$1 AND action='support_operations.updated' AND resource='support_operations' AND actor_user_id=$2", org, actor).Scan(&count))
+	if count != 6 {
+		t.Fatalf("support-operations audit rows: got %d, want 6", count)
+	}
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM activity_events WHERE organization_id=$1", other).Scan(&count))
+	if count != 0 {
+		t.Fatal("audit row written for the other organization")
 	}
 }
 func TestSpamFlagging(t *testing.T) {
