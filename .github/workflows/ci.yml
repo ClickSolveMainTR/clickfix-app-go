@@ -380,6 +380,11 @@ jobs:
       COMPOSER_NO_INTERACTION: "1"
       COMPOSER_ALLOW_SUPERUSER: "1"
     steps:
+      # Repair up front too: a root-owned leftover from an earlier container job on this
+      # runner slot would otherwise make actions/checkout fail with EACCES (same pattern as
+      # the php job of CF-204).
+      - name: Workspace ownership (before checkout)
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE" 2>/dev/null || true
       - uses: actions/checkout@v7
       - name: Install git, unzip and Composer
         run: |
