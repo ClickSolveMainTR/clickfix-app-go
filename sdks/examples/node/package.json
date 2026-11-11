@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Code samples of the integration guide; run by sdks/examples/run.mjs.",
   "dependencies": {
-    "@clickfix/node": "workspace:*"
+    "@getclickfix/node": "workspace:*"
   }
 }

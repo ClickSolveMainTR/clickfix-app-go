@@ -1,15 +1,15 @@
-# @clickfix/node
+# @getclickfix/node
 
 Node 22+, ESM, no runtime dependencies.
 
 ```sh
-npm install @clickfix/node
+npm install @getclickfix/node
 ```
 
 Full walkthrough (identity, external ids, custom fields, events, API channel, webhooks): https://getclickfix.com/docs/integration-guide. Changes: [CHANGELOG.md](./CHANGELOG.md). Develop with `cd sdks && pnpm build`.
 
 ```ts
-import { createClient, paginate, verifyWebhook, identityHash } from '@clickfix/node';
+import { createClient, paginate, verifyWebhook, identityHash } from '@getclickfix/node';
 const client = createClient({
   baseURL: 'https://support.example.com',
   apiKey: process.env.CLICKFIX_API_KEY!,

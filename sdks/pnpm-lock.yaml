@@ -29,7 +29,7 @@ importers:
 
   examples/node:
     dependencies:
-      '@clickfix/node':
+      '@getclickfix/node':
         specifier: workspace:*
         version: link:../../node
 

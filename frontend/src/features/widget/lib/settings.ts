@@ -532,7 +532,7 @@ export function snippet(
       ].join("\n");
     case "react":
       return [
-        'import { useClickFix } from "@clickfix/react-widget";',
+        'import { useClickFix } from "@getclickfix/react-widget";',
         "",
         `const options = { appOrigin: "${origin}", widgetId: "${widgetId}" };`,
         "",

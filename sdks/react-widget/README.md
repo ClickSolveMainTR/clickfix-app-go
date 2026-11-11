@@ -1,11 +1,11 @@
-# @clickfix/react-widget
+# @getclickfix/react-widget
 
 UI-free, typed, tree-shakable React 18+ hooks around the existing visitor API.
 The transport is [`@getclickfix/visitor-core`](../visitor-core/README.md) in browser
 mode (same-origin BFF); no other runtime dependency besides the React peer.
 
 ```sh
-npm install @clickfix/react-widget
+npm install @getclickfix/react-widget
 ```
 
 Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes: [CHANGELOG.md](./CHANGELOG.md). Develop from `sdks` with `pnpm build`.
@@ -13,7 +13,7 @@ Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes: [CHAN
 ```tsx
 'use client';
 import { useEffect, useState } from 'react';
-import { createWidgetClient, useWidget, useMessages, useTyping } from '@clickfix/react-widget';
+import { createWidgetClient, useWidget, useMessages, useTyping } from '@getclickfix/react-widget';
 
 export function Support() {
   const [client] = useState(() => createWidgetClient({
@@ -50,7 +50,7 @@ const help = await client.helpSearch('billing', 'en');
 ```
 
 `user_hash` is hex HMAC-SHA256(identity secret, user_id), produced on your server
-(e.g. `@clickfix/node.identityHash`); with `company: { id }` it is
+(e.g. `@getclickfix/node.identityHash`); with `company: { id }` it is
 hex HMAC-SHA256(identity secret, user_id + "\n" + company_id) (CF-206). Never ship the
 secret to the browser.
 Session tokens are renewed by bootstrap/identify. Calls accept AbortSignals.
@@ -77,7 +77,7 @@ script SDK with typed hooks. Types are the public `widget.d.ts` contract
 ```tsx
 'use client';
 import { useMemo } from 'react';
-import { useClickFix, useClickFixEvent } from '@clickfix/react-widget';
+import { useClickFix, useClickFixEvent } from '@getclickfix/react-widget';
 
 export function Support({ consent }: { consent: boolean }) {
   const options = useMemo(() => consent

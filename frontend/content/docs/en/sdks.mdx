@@ -8,8 +8,8 @@ order: 2
 ClickFix has server SDKs for Go, Node.js and PHP and a UI-free widget client for React. The SDKs handle authentication, bounded retries (including `Retry-After`), pagination and webhook signature verification.
 
 <Callout title="Packages">
-  `npm install @clickfix/node` (0.1.0, Node 22+), `npm install
-  @clickfix/react-widget` (0.1.0, React 18+), `composer require clickfix/sdk`
+  `npm install @getclickfix/node` (0.1.0, Node 22+), `npm install
+  @getclickfix/react-widget` (0.1.0, React 18+), `composer require clickfix/sdk`
   (0.1.0, PHP 8.1+) and `go get
   github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`. The end-to-end setup
   order with verified samples at every step: [Integration
@@ -26,7 +26,7 @@ Use `https://api.getclickfix.com` as the base URL (without `/v1`). Keep API keys
 For writes, pass a stable `Idempotency-Key` that identifies the operation (e.g. an order number) and send the same value when retrying.
 
 ```ts tab="Node.js"
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: "https://api.getclickfix.com",
@@ -60,7 +60,7 @@ The API stores completed write responses, including errors: retrying with the sa
 ## Pagination [#pagination]
 
 ```ts tab="Node.js"
-import { paginate } from "@clickfix/node";
+import { paginate } from "@getclickfix/node";
 
 for await (const contact of paginate(async (limit, offset) => {
   const envelope = await client.request(
@@ -97,7 +97,7 @@ Offset pagination is for snapshots; concurrent inserts can shift pages. Deduplic
 ## Webhook signature and identity hash [#webhook-signature]
 
 ```ts tab="Node.js"
-import { identityHash, verifyWebhook } from "@clickfix/node";
+import { identityHash, verifyWebhook } from "@getclickfix/node";
 
 const valid = verifyWebhook(
   secret,
@@ -127,7 +127,7 @@ Typed hooks to drive the ready-made messenger (bubble, home, help center) from y
 ```tsx tab="Ready-made widget"
 "use client";
 import { useMemo } from "react";
-import { useClickFix, useClickFixEvent } from "@clickfix/react-widget";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
 
 export function Support({ consent }: { consent: boolean }) {
   const options = useMemo(
@@ -155,7 +155,7 @@ export function Support({ consent }: { consent: boolean }) {
 ```tsx tab="Your own UI"
 "use client";
 import { useEffect, useState } from "react";
-import { createWidgetClient, useWidget } from "@clickfix/react-widget";
+import { createWidgetClient, useWidget } from "@getclickfix/react-widget";
 
 export function Support() {
   const [client] = useState(() =>

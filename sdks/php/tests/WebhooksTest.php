@@ -29,7 +29,7 @@ final class WebhooksTest extends TestCase
     }
 
     /**
-     * Fixed vectors produced by @clickfix/node (createHmac) and checked against the Go module; the
+     * Fixed vectors produced by @getclickfix/node (createHmac) and checked against the Go module; the
      * example runner (sdks/examples/run.mjs) repeats the comparison live for all three SDKs.
      */
     public function testCrossSdkVectors(): void

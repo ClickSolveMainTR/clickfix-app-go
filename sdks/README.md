@@ -1,9 +1,9 @@
 # ClickFix SDKs
 
 - `go`: generated server client plus authentication, bounded retries, pagination and webhook verification. Module `github.com/ClickSolveMainTR/clickfix-sdks/go`, tags `go/vX.Y.Z` (version in `go/VERSION`).
-- `node`: `@clickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
+- `node`: `@getclickfix/node`, typed, tree-shakable Node 22+ fetch client and server cryptographic helpers.
 - `visitor-core`: `@getclickfix/visitor-core`, the DOM-free visitor (widget) API client for React Native, Node and browsers: browser mode (same-origin BFF) or app mode (mobile app key headers), retries, session renewal, realtime abstraction and the webview bridge types (CF-201).
-- `react-widget`: `@clickfix/react-widget`, UI-free React 18+ hooks over `visitor-core` in browser mode.
+- `react-widget`: `@getclickfix/react-widget`, UI-free React 18+ hooks over `visitor-core` in browser mode.
 - `flutter/clickfix_webview`: `clickfix_webview` (pub.dev), Flutter webview widget + controller implementing the webview bridge contract v1 (`docs/webview-bridge.md`). Checked by the separate `flutter` CI job (`dart analyze`, `flutter test`, publish dry run); published by `sdk-publish` when the `PUB_CREDENTIALS` secret is set.
 - `examples`: the integration guide's samples (widget JS, Node, Go, PHP, curl) and the runner that verifies them (`examples/README.md`).
 

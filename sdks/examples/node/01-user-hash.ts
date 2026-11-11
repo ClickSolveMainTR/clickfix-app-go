@@ -1,5 +1,5 @@
 // Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
-import { identityHash } from "@clickfix/node";
+import { identityHash } from "@getclickfix/node";
 
 // Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
 const secret = process.env.CLICKFIX_IDENTITY_SECRET!;

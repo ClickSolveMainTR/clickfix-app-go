@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ClickFix;
 
 /**
- * Walks every item of an offset-paged list. Same rules as `paginate` in @clickfix/node and
+ * Walks every item of an offset-paged list. Same rules as `paginate` in @getclickfix/node and
  * `Iterate` in the Go module: pages of 100, advance by the items actually returned,
  * stop on an empty page or when offset reaches total.
  *

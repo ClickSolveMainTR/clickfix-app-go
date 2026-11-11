@@ -5,7 +5,7 @@ section: developers
 order: 0
 ---
 
-This is the single integration guide: in the order the **Setup** wizard in the panel follows, it covers everything you write to connect your own product to ClickFix. Every step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@clickfix/node`), **Go** (the `sdks/go` module), **PHP** (`clickfix/sdk`) and **curl**. The samples come from the repository's [`sdks/examples`](https://github.com/ClickSolveMainTR/clickfix-app-go/tree/main/sdks/examples) folder and are executed on every release; the code you see here is the code that passed.
+This is the single integration guide: in the order the **Setup** wizard in the panel follows, it covers everything you write to connect your own product to ClickFix. Every step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (the `sdks/go` module), **PHP** (`clickfix/sdk`) and **curl**. The samples come from the repository's [`sdks/examples`](https://github.com/ClickSolveMainTR/clickfix-app-go/tree/main/sdks/examples) folder and are executed on every release; the code you see here is the code that passed.
 
 ## Before you start [#before-you-start]
 
@@ -23,9 +23,9 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 | Package                                                                                | Version                                                                             | Install                                                                                   |
 | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                   |
+| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node)                       | 0.1.0                                                                               | `npm install @getclickfix/node` (Node 22+)                                                   |
 | [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)        |
-| [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                               | `npm install @clickfix/react-widget` (React 18+)                                          |
+| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget)       | 0.1.1                                                                               | `npm install @getclickfix/react-widget` (React 18+)                                          |
 | Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
 | [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)           |
 
@@ -92,7 +92,7 @@ ClickFix("on", "error", (e) => {
 
 ```ts tab="Node.js"
 // Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
-import { identityHash } from "@clickfix/node";
+import { identityHash } from "@getclickfix/node";
 
 // Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
 const secret = process.env.CLICKFIX_IDENTITY_SECRET!;
@@ -208,7 +208,7 @@ ClickFix("on", "identify", ({ verified, company_verified }) =>
 
 ```ts tab="Node.js"
 // Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!, // https://api.getclickfix.com
@@ -346,7 +346,7 @@ ClickFix("on", "attributes", ({ applied, ignored, pending }) => {
 ```ts tab="Node.js"
 // Adım 3: özel alanlar. Alanı panelde tanımlayın (Ayarlar > Özel alanlar);
 // anahtarı neyse custom_fields içinde o anahtarla gönderin.
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,
@@ -460,7 +460,7 @@ ClickFix("boot", {
 ```ts tab="Node.js"
 // Adım 4: şirket. Şirket widget identify (company.id) ile oluşur; API ile
 // bulunur ve müşteri sağlığı sinyalleri (kullanım, gelir, olay) gönderilir.
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,
@@ -593,7 +593,7 @@ ClickFix(
 ```ts tab="Node.js"
 // Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
 // şirket zaman çizelgesine API ile yazılır (events:write).
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,
@@ -857,7 +857,7 @@ Use the API channel to connect your own chat app or system as a **channel**; a w
 
 ```js tab="Widget"
 // Adım 6: web'de API kanalı gerekmez; widget zaten kanaldır. Kendi arayüzünüz
-// varsa @clickfix/react-widget'ın arayüzsüz istemcisini kullanın.
+// varsa @getclickfix/react-widget'ın arayüzsüz istemcisini kullanın.
 // @ts-check
 ClickFix("on", "message", (m) => {
   // Temsilci veya AI yanıtı: kendi bildirim sisteminize aktarabilirsiniz
@@ -1018,7 +1018,7 @@ ClickFix("on", "csat", ({ score }) => console.log("memnuniyet", score));
 ```ts tab="Node.js"
 // Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
 import { createServer } from "node:http";
-import { createClient, verifyWebhook } from "@clickfix/node";
+import { createClient, verifyWebhook } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,

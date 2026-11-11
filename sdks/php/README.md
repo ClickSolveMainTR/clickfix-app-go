@@ -36,7 +36,7 @@ $userHash = UserHash::make($identitySecret, $authenticatedUserId); // send only 
 $ok = Webhooks::verify($secret, $headers['ClickFix-Webhook-Timestamp'], $headers['ClickFix-Webhook-Signature'], $rawBody);
 ```
 
-Webhook verification is HMAC-SHA256 over the exact `timestamp.body` bytes with a five-minute window on both sides; verify before JSON decoding and deduplicate on `ClickFix-Webhook-Id` before acting. The identity hash and the webhook check produce the same bytes as `@clickfix/node` and the Go module.
+Webhook verification is HMAC-SHA256 over the exact `timestamp.body` bytes with a five-minute window on both sides; verify before JSON decoding and deduplicate on `ClickFix-Webhook-Id` before acting. The identity hash and the webhook check produce the same bytes as `@getclickfix/node` and the Go module.
 
 Source of truth is `sdks/php` in the ClickFix monorepo; the public [ClickSolveMainTR/clickfix-php](https://github.com/ClickSolveMainTR/clickfix-php) repository is a read-only mirror tagged `vX.Y.Z` for Packagist.
 

@@ -6,7 +6,7 @@ namespace ClickFix;
 
 /**
  * Outbound webhook delivery verification (ClickFix-Webhook-* headers).
- * Same rules as `verifyWebhook` in @clickfix/node: HMAC-SHA256 over "timestamp.body",
+ * Same rules as `verifyWebhook` in @getclickfix/node: HMAC-SHA256 over "timestamp.body",
  * signature `v1=<hex>`, timestamp within the tolerance window on both sides.
  */
 final class Webhooks
