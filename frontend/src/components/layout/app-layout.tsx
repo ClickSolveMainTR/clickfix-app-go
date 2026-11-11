@@ -59,7 +59,7 @@ export function AppLayout({
               <SearchTrigger />
             </div>
           </Header>
-          <div className="flex min-w-0 flex-1 flex-col gap-4 px-4 pt-2 pb-6 md:px-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 px-4 pt-2 pb-6 has-data-[layout=fixed]:min-h-0 has-data-[layout=fixed]:overflow-hidden md:px-6">
             <ImpersonationBanner />
             {variant === "cms" ? <SupportAccessBanner /> : null}
             {children}
