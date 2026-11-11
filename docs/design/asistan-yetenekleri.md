@@ -280,4 +280,4 @@ Asistan dört yüzeyde (çekmece, yan panel, tam sayfa, mobil çekmece) aynı bi
 - **Kompozer:** ataç, belge bağlantısı, öneri çipleri, 4000 karakterin %80'inden sonra sayaç, gönder/durdur; kuyruk ve "Bugün N/limit" sayacı CF-207'deki gibi.
 - **Boş / yükleme / hata:** karşılama kartı + başlangıç önerileri, iskelet baloncuklar, kırmızı çerçeveli hata satırı; geçmiş listesinde başlık, göreli tarih, açık sohbette sinyal çizgisi.
 
-Ekran görüntüleri (açık/koyu, dört yüzey): [asistan-screens](asistan-screens).
+Ekran görüntüleri (açık/koyu, dört yüzey) CF-210 PR'ındadır; repoya ekran görüntüsü commit edilmez.
