@@ -20,14 +20,36 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 
 ### Packages [#packages]
 
-| Package                                                                                | Version                                                                             | Install                                                                                   |
+<<<<<<< HEAD
+| Package | Version | Install |
 | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node)                       | 0.1.0                                                                               | `npm install @getclickfix/node` (Node 22+)                                                   |
-| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)        |
-| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget)       | 0.1.1                                                                               | `npm install @getclickfix/react-widget` (React 18+)                                          |
-| Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                              |
-| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)           |
+| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
+| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
+| Go module | `go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
+| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
+||||||| b8b5d3cd
+| Package | Version | Install |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
+| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
+| Go module | `go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
+| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
+=======
+| Package | Version | Install |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
+| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
+| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
+| Go module | `sdks/go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
+| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
+| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) | 0.1.0 | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); see [Laravel package](#laravel) |
+
+> > > > > > > origin/cf-toplu
 
 Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
 
@@ -1404,6 +1426,79 @@ class SupportActivity : AppCompatActivity() {
 - **Consent:** if your app collects consent, add `consent=1` to the URL or send `clickfix:consent`; nothing is stored without it.
 
 The Flutter package `clickfix_webview` (`sdks/flutter/clickfix_webview`; `ClickFixWebView` + `ClickFixController`, bridge contract v1, origin lock, deep links) will be published to pub.dev by the `sdk-publish` CI job with its first release; until then use it as a git dependency in `pubspec.yaml`: `clickfix_webview: { git: { url: https://github.com/ClickSolveMainTR/clickfix-app-go.git, path: sdks/flutter/clickfix_webview, ref: main } }`. The native Dart client (`clickfix_visitor`) and the other native SDKs are separate projects; when they ship they will use this same bridge contract.
+
+## Laravel package [#laravel]
+
+For Laravel 10, 11, 12 and 13 (PHP 8.1+) [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) packs the steps of this guide: a service provider and the `ClickFix` facade, `config/clickfix.php`, artisan commands, a signature-checking `POST /clickfix/webhook` route with one Laravel event per ClickFix event, and the `@clickfixWidget` Blade directive. Package discovery registers the provider. Source and changelog: [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel).
+
+### Install [#laravel-install]
+
+```sh
+composer require clickfix/laravel
+php artisan clickfix:install
+php artisan clickfix:check
+```
+
+`clickfix:install` publishes `config/clickfix.php`, adds the missing `CLICKFIX_*` keys to `.env` (generating the webhook secret), and prints the webhook URL to subscribe plus the next steps. Once the keys are filled in, `clickfix:check` tries the API key against the API and verifies the widget id, the identity secret, the webhook secret and that the route is `https`; anything missing exits with code 1.
+
+| `.env` key                 | Where                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `CLICKFIX_API_KEY`         | The API key from the [Before you start](#before-you-start) table                                         |
+| `CLICKFIX_WIDGET_ID`       | Web widget → Install                                                                                     |
+| `CLICKFIX_IDENTITY_SECRET` | Web widget → Security → Identity verification; stays on the server                                       |
+| `CLICKFIX_WEBHOOK_SECRET`  | The subscription's `data.secret`, or the value `clickfix:install` generated (use it in the subscription) |
+| `CLICKFIX_WEBHOOK_QUEUE`   | Empty: events fire inside the request; `true` or a queue name: from a queued job                         |
+
+### Artisan commands [#laravel-artisan]
+
+| Command                                                             | What it does                                                                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `clickfix:install [--force] [--no-env]`                             | Publish the config, add the `.env` keys, generate the webhook secret, print the webhook URL                                               |
+| `clickfix:check`                                                    | API key, widget id, identity secret, webhook secret and route; exit code 1 on failure                                                     |
+| `clickfix:user-hash {user} [--raw] [--json]`                        | `user_hash` for a user (model key), to debug `WIDGET_IDENTITY_INVALID`                                                                    |
+| `clickfix:webhook:secret [--write]`                                 | 64 hex character secret; `--write` stores it in `.env`                                                                                    |
+| `clickfix:sync:contacts [--id=*] [--since=] [--chunk=] [--dry-run]` | Create or update the model in `config('clickfix.contacts')` as contacts by external id (`PUT /contacts/by-external-id`, `contacts:write`) |
+
+`clickfix:sync:contacts` reads the model (`App\Models\User`), the field map (`name`, `email`, `phone`, `job_title`, `locale`, `timezone` → model attribute or dotted path) and the custom field map from the config. The external id is always the model's primary key, the same value `identify` sends as `user_id`, so the synced contact and the widget session are one person ([external id](#external-id)).
+
+### Widget and identity verification [#laravel-widget]
+
+```blade
+    @clickfixWidget
+</body>
+```
+
+The directive prints the queue snippet, the `ClickFix("boot", {...})` call and the `widget.js` tag. Without arguments it identifies the authenticated user (`user_id` is the model key, `user_hash` is computed on the server with the identity secret, `name` and `email` come from the model); with nobody logged in the widget opens anonymously. `@clickfixWidget($customer)` takes a specific model, `@clickfixWidget(null)` is always anonymous, `@clickfixWidget(auth()->user(), ['locale' => 'en'])` adds boot options. The fields in the identity come from `clickfix.widget.user`, or the model implements `ProvidesClickFixIdentity` (including `company` and `attributes`).
+
+For Inertia, Livewire or a SPA that boots the widget itself, build the identity on the server and share it with the page:
+
+```php
+use ClickFix\Laravel\Facades\ClickFix;
+
+ClickFix::userHash($user);  // hex HMAC-SHA256(identity secret, model key)
+ClickFix::identity($user);  // ['user_id' => '42', 'user_hash' => '…', 'name' => …, 'email' => …]
+```
+
+Call `ClickFix("identify", identity)` in the browser; the identity secret never leaves the server ([identity verification](#identity)).
+
+### Webhook [#laravel-webhook]
+
+The package registers `POST /clickfix/webhook` outside the `web` group (no session, no CSRF) behind the `clickfix.webhook` middleware. The middleware verifies `ClickFix-Webhook-Timestamp` and `ClickFix-Webhook-Signature` over the raw body (the rule in [Webhooks](#webhooks); 5 minute tolerance, constant-time comparison); a bad or stale signature is `401`, a missing secret `503`. A redelivery with the same `ClickFix-Webhook-Id` is recognised from the cache and acknowledged with `200` without firing the events twice.
+
+Every verified delivery raises `ClickFix\Laravel\Events\WebhookReceived`; a known event name also raises its own class: `ConversationCreated`, `ConversationResolved`, `MessageReceived`, `MessageSent`, `ContactCreated`, `ContactUpdated`, `CompanyUpdated`, `SlaBreached`, `CsatSubmitted` … (one class per event; an unknown name raises only `WebhookReceived`).
+
+```php
+use ClickFix\Laravel\Events\MessageReceived;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(MessageReceived::class, function (MessageReceived $event) {
+    $event->get('conversation_uuid');
+    $event->get('contact_external_id'); // your user id
+    $event->payload->occurredAt();      // Carbon
+});
+```
+
+With `CLICKFIX_WEBHOOK_QUEUE=true` (or a queue name) the events fire from the `ProcessWebhook` job instead of the request and the route answers `202`. To define the route yourself set `CLICKFIX_WEBHOOK_ROUTE=false` and attach the `clickfix.webhook` middleware to your own route. Creating the subscription: [Webhooks](#webhooks).
 
 ## Next steps [#next-steps]
 
