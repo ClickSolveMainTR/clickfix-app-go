@@ -23,7 +23,7 @@ import {
   type StringKey,
 } from "../shared/i18n";
 import { sanitizeCSS } from "../shared/css";
-import { identifyFailure } from "../shared/identify";
+import { identifyFailure, unsignedCompanyWarning } from "../shared/identify";
 import { plain } from "../shared/markdown";
 import {
   deviceOf,
@@ -611,7 +611,14 @@ export class Widget {
       throw err;
     }
     this.setVisitor(v);
-    this.emit("identify", { verified: v.verified });
+    if (body.company?.id && !v.company_verified)
+      // The id was not covered by user_hash (CF-206): the company was not
+      // bound by it. Fixed text, nothing of the request is printed.
+      console.warn("[ClickFix] " + unsignedCompanyWarning());
+    this.emit("identify", {
+      verified: v.verified,
+      company_verified: Boolean(v.company_verified),
+    });
     if (attributes) await this.setAttributes(attributes);
     this.realtime?.stop();
     this.startRealtime();
@@ -771,7 +778,10 @@ export class Widget {
     await this.bootstrap();
     this.startRealtime();
     await this.refresh();
-    this.emit("identify", { verified: Boolean(this.boot?.visitor.verified) });
+    this.emit("identify", {
+      verified: Boolean(this.boot?.visitor.verified),
+      company_verified: Boolean(this.boot?.visitor.company_verified),
+    });
     this.render();
   }
 

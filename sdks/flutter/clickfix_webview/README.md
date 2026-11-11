@@ -66,7 +66,7 @@ class _SupportScreenState extends State<SupportScreen> {
     body: ClickFixWebView(
       controller: controller,
       onReady: (_) async {
-        final s = await api.supportSession(); // { user_id, user_hash } from YOUR server
+        final s = await api.supportSession(); // { user_id, user_hash, company_id } from YOUR server; user_hash signs both ids
         try {
           await controller.identify(ClickFixIdentity(
             userId: s.userId,
@@ -126,8 +126,13 @@ Errors are `ClickFixBridgeError` with the contract's codes
   frames.
 - On Android file access, content access and mixed content are off.
 - `user_hash` is computed on your server; the identity secret never enters the
-  app. Send `reset()` on logout and account switch; pass `consent: true` only
-  after the app collected consent.
+  app. When the identity carries `ClickFixCompany(id: ...)`, sign the user id
+  and the company id together on the server:
+  `hex(HMAC-SHA256(secret, user_id + "\n" + company_id))` (Node
+  `identityHash(secret, userId, companyId)`, Go `IdentityCompanyHash`); a hash
+  over the user id alone still verifies the user but does not link the
+  company by its id. Send `reset()` on logout and account switch; pass
+  `consent: true` only after the app collected consent.
 
 ## Hosting the page yourself
 

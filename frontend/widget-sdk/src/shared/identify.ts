@@ -24,6 +24,17 @@ function safeCode(err: unknown): string {
   return err instanceof TypeError ? "NETWORK_ERROR" : "IDENTIFY_FAILED";
 }
 
+/**
+ * Warning when identify carried company.id but user_hash signed only
+ * user_id (CF-206): the user is verified, the company id was not bound.
+ */
+export function unsignedCompanyWarning(): string {
+  return (
+    "identify: company.id was sent but user_hash signs only user_id, so the company was not linked by its id " +
+    '(name and domain were used as hints). Sign both on your server: hex(HMAC-SHA256(identity_secret, user_id + "\\n" + company.id)).'
+  );
+}
+
 export function identifyFailure(err: unknown): IdentifyFailure {
   const code = safeCode(err);
   if (code === IDENTITY_DISABLED)
@@ -38,8 +49,9 @@ export function identifyFailure(err: unknown): IdentifyFailure {
     return {
       code,
       message:
-        `identify was rejected (401 ${code}): user_hash does not match user_id, ` +
-        "so the user stays anonymous. Compute hex(HMAC-SHA256(identity_secret, user_id)) on your server " +
+        `identify was rejected (401 ${code}): user_hash does not match user_id (and company.id when sent), ` +
+        "so the user stays anonymous. Compute hex(HMAC-SHA256(identity_secret, user_id)) on your server, " +
+        'or with the company hex(HMAC-SHA256(identity_secret, user_id + "\\n" + company.id)), ' +
         `with the widget's current secret (${PANEL}); if the secret was rotated, update it on your server too.`,
     };
   return {

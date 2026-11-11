@@ -2,6 +2,10 @@
 
 Sürümleme: Go modülü etiketleri `go/vX.Y.Z` biçimindedir ve sürüm `sdks/go/VERSION` dosyasındadır. `main`'e birleşen bir değişiklikte `VERSION` değiştiyse CI (`release-tag` işi) etiketi basar; elle etiket basılmaz. `v0.x` içinde küçük sürüm kırıcı değişiklik taşıyabilir; her kırıcı değişiklik burada **Kırıcı** başlığıyla yazılır.
 
+## v0.2.0 - 2026-11-10
+
+- `IdentityCompanyHash(secret, userID, companyID)`: widget `user_hash` değeri kullanıcı ve firma kimliğini birlikte imzalar (`hex(HMAC-SHA256(secret, userID + "\n" + companyID))`, CF-206); `identify` çağrısında `company: { id: companyID }` ile gönderilir. Boş `companyID` ile `IdentityHash` sonucunu verir; `IdentityHash` değişmedi.
+
 ## v0.1.0 - 2026-11-12
 
 İlk yayın (CF-199).

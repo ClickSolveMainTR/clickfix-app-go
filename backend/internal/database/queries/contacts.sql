@@ -37,9 +37,11 @@ WHERE organization_id = sqlc.arg(organization_id)
   AND (sqlc.narg(external_id)::text IS NULL OR external_id = sqlc.narg(external_id)::text);
 
 -- name: UpdateCompany :one
+-- CF-206: a changed external id was never proved; the badge goes with it.
 UPDATE companies SET
     name = sqlc.arg(name),
     domain = sqlc.narg(domain),
+    verified_at = CASE WHEN external_id IS DISTINCT FROM sqlc.narg(external_id)::text THEN NULL ELSE verified_at END,
     external_id = sqlc.narg(external_id),
     notes = sqlc.arg(notes),
     custom_fields = sqlc.arg(custom_fields),
@@ -160,7 +162,9 @@ WHERE c.organization_id = sqlc.arg(organization_id)
        OR (sqlc.narg(identity_state)::text = 'self_named' AND c.verified_at IS NULL AND (c.name <> '' OR c.email IS NOT NULL OR c.phone IS NOT NULL)));
 
 -- name: UpdateContact :one
+-- CF-206: a company set by hand was not proved by the contact.
 UPDATE contacts SET
+    company_verified_at = CASE WHEN company_id IS DISTINCT FROM sqlc.narg(company_id)::bigint THEN NULL ELSE company_verified_at END,
     company_id = sqlc.narg(company_id),
     name = sqlc.arg(name),
     email = sqlc.narg(email),

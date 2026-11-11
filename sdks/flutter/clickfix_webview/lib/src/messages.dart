@@ -149,7 +149,10 @@ class ClickFixCompany {
   /// Creates a company reference; every field is optional (≤255 chars).
   const ClickFixCompany({this.id, this.name, this.domain});
 
-  /// Company id in your system.
+  /// Company id in your system (the company's external id). It binds the
+  /// user to the company only when [ClickFixIdentity.userHash] signs it
+  /// together with the user id (bridge contract 1.2, CF-206); an unsigned
+  /// id is ignored and [name] / [domain] stay hints.
   final String? id;
 
   /// Company name.
@@ -168,8 +171,12 @@ class ClickFixCompany {
 
 /// Identity passed with `clickfix:identify`.
 ///
-/// `userHash` is HMAC-SHA256(identity secret, `userId`) computed on **your
-/// server**; the secret never enters the app.
+/// `userHash` is computed on **your server**; the secret never enters the
+/// app. Without a company it is `hex(HMAC-SHA256(identity secret, userId))`;
+/// with [company] carrying an id it is
+/// `hex(HMAC-SHA256(identity secret, userId + "\n" + company.id))`, so
+/// the user cannot claim another company (CF-206). Neither id may contain
+/// a line break.
 class ClickFixIdentity {
   /// Creates an identity. [userId] (1–200 chars) and [userHash] (1–128 chars)
   /// are required; the rest is optional and trimmed to the contract limits.
@@ -201,7 +208,8 @@ class ClickFixIdentity {
   /// Your user id (≤200 chars).
   final String userId;
 
-  /// Server-computed HMAC of [userId] (≤128 chars).
+  /// Server-computed HMAC of [userId], or of [userId] and the company id
+  /// together (≤128 chars).
   final String userHash;
 
   /// Display name (≤255 chars).

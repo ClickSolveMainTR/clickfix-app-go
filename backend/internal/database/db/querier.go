@@ -1102,6 +1102,8 @@ type Querier interface {
 	// instance, the package name and revoked_at (a revoked key must fail the
 	// same way as an unknown one).
 	GetWidgetAppKeyByHash(ctx context.Context, keyHash string) (WidgetAppKey, error)
+	// CF-206: a signed company id (user_hash covers user_id and company.id).
+	GetWidgetCompanyByID(ctx context.Context, arg GetWidgetCompanyByIDParams) (Company, error)
 	GetWidgetConversation(ctx context.Context, arg GetWidgetConversationParams) (Conversation, error)
 	// CF-150: editor drafts, published versions and install detection.
 	GetWidgetDraft(ctx context.Context, arg GetWidgetDraftParams) (WidgetDraft, error)
@@ -1556,6 +1558,9 @@ type Querier interface {
 	MarkBulkJobFailed(ctx context.Context, arg MarkBulkJobFailedParams) (BulkJob, error)
 	MarkBulkJobProcessing(ctx context.Context, id int64) (BulkJob, error)
 	MarkBulkJobRolledBack(ctx context.Context, arg MarkBulkJobRolledBackParams) (BulkJob, error)
+	// Rewritten at most once an hour: every signed identify would otherwise
+	// write the company row.
+	MarkCompanyVerified(ctx context.Context, arg MarkCompanyVerifiedParams) error
 	MarkContactMerged(ctx context.Context, arg MarkContactMergedParams) error
 	// CF-195: a user_hash check succeeded. The external id is taken only when
 	// the contact has none and no other live contact holds it, so a contact
@@ -1967,8 +1972,16 @@ type Querier interface {
 	// A failed check moves an active inbox to error (it shows "reconnect");
 	// a passing one clears error back to active.
 	SetChannelInstanceHealth(ctx context.Context, arg SetChannelInstanceHealthParams) (ChannelInstance, error)
+	// The company matched by domain takes the proved external id when it has
+	// none (the id was looked up first, so no other live company holds it).
+	SetCompanyExternalIDIfEmpty(ctx context.Context, arg SetCompanyExternalIDIfEmptyParams) error
 	SetCompanySLAPolicy(ctx context.Context, arg SetCompanySLAPolicyParams) (int64, error)
 	SetCompanyUsageScore(ctx context.Context, arg SetCompanyUsageScoreParams) (CompanyHealth, error)
+	// A proved company id moves the contact to that company even when it had
+	// another one (the unsigned path only fills an empty company) and records
+	// the proof on the contact (company_verified_at, rewritten at most once an
+	// hour when nothing else changes).
+	SetContactCompany(ctx context.Context, arg SetContactCompanyParams) error
 	SetContactCompanyIfEmpty(ctx context.Context, arg SetContactCompanyIfEmptyParams) error
 	SetContactCustomField(ctx context.Context, arg SetContactCustomFieldParams) error
 	SetContactFormData(ctx context.Context, arg SetContactFormDataParams) error
@@ -2086,7 +2099,9 @@ type Querier interface {
 	UpdateBusinessHours(ctx context.Context, arg UpdateBusinessHoursParams) (BusinessHour, error)
 	UpdateCannedResponse(ctx context.Context, arg UpdateCannedResponseParams) (CannedResponse, error)
 	UpdateChannelInstance(ctx context.Context, arg UpdateChannelInstanceParams) (ChannelInstance, error)
+	// CF-206: a changed external id was never proved; the badge goes with it.
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
+	// CF-206: a company set by hand was not proved by the contact.
 	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	// One write for status, priority, assignment, subject and SLA due dates; the
 	// usecase loads the row, applies the change and writes every column back.

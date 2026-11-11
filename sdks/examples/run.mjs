@@ -145,18 +145,24 @@ async function systemEndpoint(label, start, curl) {
   } catch (err) { failures.push(label); log('FAIL', label, err.message.slice(0, 800)); }
 }
 
-// user hash: every implementation (Node, Go, PHP, curl) must produce the same HMAC
+// user hash: every implementation (Node, Go, PHP, curl) must produce the same
+// HMAC for the user id alone, and (CF-206: HMAC over user_id + "\n" +
+// company_id) for the user id signed together with the company id. The PHP
+// helper gets the company formula in its own release (CF-204/205 follow-up),
+// so only the user-only vector is required of it until then.
 const expected = createHmac('sha256', env.CLICKFIX_IDENTITY_SECRET).update('1001').digest('hex');
+const expectedWithCompany = createHmac('sha256', env.CLICKFIX_IDENTITY_SECRET).update('1001\nF-77').digest('hex');
 const hashRuns = [];
-if (want('node')) hashRuns.push(['node/01-user-hash.ts', node('01-user-hash.ts')]);
-if (want('go')) hashRuns.push(['go user-hash', go('user-hash')]);
-if (want('curl')) hashRuns.push(['curl/01-user-hash.sh', sh('01-user-hash.sh')]);
-if (php) hashRuns.push(['php/01-user-hash.php', phpRun('01-user-hash.php')]);
-for (const [label, cmd] of hashRuns) {
+if (want('node')) hashRuns.push(['node/01-user-hash.ts', node('01-user-hash.ts'), true]);
+if (want('go')) hashRuns.push(['go user-hash', go('user-hash'), true]);
+if (want('curl')) hashRuns.push(['curl/01-user-hash.sh', sh('01-user-hash.sh'), true]);
+if (php) hashRuns.push(['php/01-user-hash.php', phpRun('01-user-hash.php'), false]);
+for (const [label, cmd, withCompany] of hashRuns) {
   try {
     const out = execFileSync(cmd[0], cmd[1], { cwd: cmd[2].cwd ?? dir, env, encoding: 'utf8', stdio: 'pipe', timeout: 120000 });
-    if (!out.includes(expected)) throw new Error(`hash mismatch: ${out.trim()}`);
-    log('ok', label, 'same HMAC');
+    if (!out.includes(expected)) throw new Error(`user hash mismatch: ${out.trim()}`);
+    if (withCompany && !out.includes(expectedWithCompany)) throw new Error(`user + company hash mismatch: ${out.trim()}`);
+    log('ok', label, withCompany ? 'same HMAC (user id; user id + company id)' : 'same HMAC (user id)');
   } catch (err) { failures.push(label); log('FAIL', label, String(err.stderr || err.message).slice(0, 800)); }
 }
 for (const step of ['02-external-id', '03-custom-fields', '04-company', '05-events', '06-api-channel']) {

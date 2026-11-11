@@ -95,6 +95,21 @@ Her komut iki biçimde çağrılır: `ClickFix("open", "help")` veya `ClickFix.o
 **Güvenlik** bölümünde üretilir ve bir kez gösterilir. Örnekler (Node, Go, PHP, Python) aynı bölümdedir.
 Doğrulanan kullanıcının anonim geçmişi aynı kişiye taşınır.
 
+**Firma kimliği imzada (CF-206).** `identify` çağrısı `company.id` (firmanın sizin sisteminizdeki kimliği)
+taşıyorsa imza iki kimliği birlikte kapsar:
+
+```text
+user_hash = hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))
+```
+
+Böylece doğrulanmış bir kullanıcı başka bir firmayı iddia edemez; kişi ↔ firma ilişkisi istemcinin
+iddiasıyla değil imzalı değerle kurulur ve firma panelde **Doğrulanmış** rozeti alır (`companies.verified_at`).
+Yalnız `user_id` ile imzalanan eski değer çalışmaya devam eder (geriye uyumlu): kullanıcı doğrulanır ama
+`company.id` bağlanmaz ve saklanmaz, `company.name` / `company.domain` yalnız ipucu olarak kullanılır; SDK bu
+durumda konsola sabit bir uyarı yazar ve `identify` olayı `company_verified: false` döner. Başka bir firma
+kimliğini imzalayan `user_hash` `401 WIDGET_IDENTITY_INVALID` ile reddedilir. Kimliklerde satır sonu olamaz.
+Yardımcılar: Node `identityHash(secret, userId, companyId?)`, Go `IdentityCompanyHash(secret, userID, companyID)`.
+
 ### Dış kimlik (CF-195)
 
 `user_id` kişinin **dış kimliği** (`external_id`) olur; `company.id` şirketin dış kimliğidir. İki alan

@@ -1538,6 +1538,7 @@ type Company struct {
 	Tier           string             `json:"tier"`
 	AccountOwnerID pgtype.Int8        `json:"account_owner_id"`
 	SlaPolicyID    pgtype.Int8        `json:"sla_policy_id"`
+	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
 }
 
 type CompanyEvent struct {
@@ -1631,27 +1632,28 @@ type CompanyRevenueHistory struct {
 }
 
 type Contact struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	CompanyID      pgtype.Int8        `json:"company_id"`
-	Name           string             `json:"name"`
-	Email          pgtype.Text        `json:"email"`
-	Phone          pgtype.Text        `json:"phone"`
-	Locale         pgtype.Text        `json:"locale"`
-	Timezone       pgtype.Text        `json:"timezone"`
-	Notes          string             `json:"notes"`
-	CustomFields   []byte             `json:"custom_fields"`
-	Blocked        bool               `json:"blocked"`
-	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
-	MergedIntoID   pgtype.Int8        `json:"merged_into_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
-	JobTitle       string             `json:"job_title"`
-	ErasedAt       pgtype.Timestamptz `json:"erased_at"`
-	ExternalID     pgtype.Text        `json:"external_id"`
-	VerifiedAt     pgtype.Timestamptz `json:"verified_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	CompanyID         pgtype.Int8        `json:"company_id"`
+	Name              string             `json:"name"`
+	Email             pgtype.Text        `json:"email"`
+	Phone             pgtype.Text        `json:"phone"`
+	Locale            pgtype.Text        `json:"locale"`
+	Timezone          pgtype.Text        `json:"timezone"`
+	Notes             string             `json:"notes"`
+	CustomFields      []byte             `json:"custom_fields"`
+	Blocked           bool               `json:"blocked"`
+	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
+	MergedIntoID      pgtype.Int8        `json:"merged_into_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+	JobTitle          string             `json:"job_title"`
+	ErasedAt          pgtype.Timestamptz `json:"erased_at"`
+	ExternalID        pgtype.Text        `json:"external_id"`
+	VerifiedAt        pgtype.Timestamptz `json:"verified_at"`
+	CompanyVerifiedAt pgtype.Timestamptz `json:"company_verified_at"`
 }
 
 type ContactConsent struct {

@@ -25,6 +25,7 @@ import { formatMinor } from "@/features/billing/lib/money";
 import { useLocale } from "@/providers/locale-provider";
 
 import { CompanyHealthBadge } from "./company-health-badge";
+import { CompanyVerifiedBadge } from "./company-verified-badge";
 import { CompanyHealthCard } from "./company-health-card";
 import { CompanyRevenueCard } from "./company-revenue-card";
 import { ContactsIOToolbar } from "./contacts-io-toolbar";
@@ -253,6 +254,7 @@ function CompanyCard({ company: c }: { company: Company }) {
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <CompanyVerifiedBadge verifiedAt={c.verified_at} compact />
           <CompanyHealthBadge health={c.health} />
           {c.tier && <CompanyTier tier={c.tier} />}
         </div>

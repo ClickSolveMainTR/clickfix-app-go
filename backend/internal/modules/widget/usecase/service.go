@@ -345,11 +345,14 @@ func Public(set widget.Settings) PublicSettings {
 
 // Visitor is the visitor session of a bootstrap or identify.
 type Visitor struct {
-	ID        string          `json:"id"`
-	Token     string          `json:"token"`
-	ExpiresAt time.Time       `json:"expires_at"`
-	Verified  bool            `json:"verified"`
-	Contact   *VisitorContact `json:"contact"`
+	ID        string    `json:"id"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Verified  bool      `json:"verified"`
+	// CompanyVerified is true when the visitor's contact proved its company
+	// with a signed company id (CF-206) and still belongs to it.
+	CompanyVerified bool            `json:"company_verified"`
+	Contact         *VisitorContact `json:"contact"`
 }
 
 // VisitorContact is what the visitor told us about themselves.
@@ -528,6 +531,10 @@ func (s *Service) visitor(ctx context.Context, w Widget, claims widget.Claims) (
 	}
 	if ok {
 		v.Contact = &VisitorContact{Name: contact.Name, Email: textPtr(contact.Email), Phone: textPtr(contact.Phone)}
+		// The proof is the contact's own (a signed identify of this user),
+		// never the company's: a contact attached to a verified company
+		// by a domain or name hint is not reported as proved.
+		v.CompanyVerified = contact.CompanyID.Valid && contact.CompanyVerifiedAt.Valid
 	}
 	return v, nil
 }
@@ -563,7 +570,9 @@ func (s *Service) maxFileBytes(ctx context.Context, orgID int64) int64 {
 // ---------------------------------------------------------------------------
 // Identity
 
-// Company is the B2B company an identified user belongs to.
+// Company is the B2B company an identified user belongs to. ID is the
+// company's id in the customer's system (companies.external_id); it binds
+// the contact to the company only when user_hash covers it (CF-206).
 type Company struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -580,20 +589,45 @@ type IdentifyInput struct {
 	Company  *Company `json:"company"`
 }
 
+// companyID is the external company id of an identify call, as it is
+// signed and stored (trimmed, at most 200 characters, like user_id).
+func (in IdentifyInput) companyID() string {
+	if in.Company == nil {
+		return ""
+	}
+	return clip(strings.TrimSpace(in.Company.ID), 200)
+}
+
 // Identify verifies user_hash with the widget's identity secret, links the
 // visitor to the user's contact (moving the anonymous conversations over,
 // without creating a second contact) and returns a token for the user.
+//
+// user_hash signs either user_id alone (the original formula) or user_id
+// and company.id together (CF-206: HMAC over user_id + "\n" + company_id).
+// With a company id in the call the signed formula is tried first; when it
+// matches, the contact is bound to that company by the proved id. When only
+// the user-only formula matches, the user is verified but the company id
+// is a claim, not proof: it binds no external id and is not stored, so the
+// company's name and domain are only hints (as a call without an id). A
+// hash that matches neither is rejected, including one that signs another
+// company id.
 func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, in IdentifyInput) (Visitor, error) {
 	in.UserID = strings.TrimSpace(in.UserID)
 	if in.UserID == "" || len(in.UserID) > 200 {
 		return Visitor{}, fmt.Errorf("%w: user_id must be 1-200 characters", ErrInvalid)
+	}
+	companyID := in.companyID()
+	if strings.ContainsAny(in.UserID+companyID, "\n\r") {
+		// The newline separates the two ids inside the signed bytes.
+		return Visitor{}, fmt.Errorf("%w: user_id and company.id must not contain line breaks", ErrInvalid)
 	}
 	secret := w.Instance.Credentials[widget.IdentitySecretField]
 	if secret == "" {
 		s.noteIdentityRejection(ctx, w, RejectionIdentityDisabled)
 		return Visitor{}, ErrIdentityDisabled
 	}
-	if !widget.VerifyUserHash(secret, in.UserID, in.UserHash) {
+	companySigned := companyID != "" && widget.VerifyUserCompanyHash(secret, in.UserID, companyID, in.UserHash)
+	if !companySigned && !widget.VerifyUserHash(secret, in.UserID, in.UserHash) {
 		s.noteIdentityRejection(ctx, w, RejectionIdentityInvalid)
 		return Visitor{}, ErrIdentityInvalid
 	}
@@ -635,7 +669,12 @@ func (s *Service) Identify(ctx context.Context, w Widget, claims widget.Claims, 
 			}
 		}
 		if in.Company != nil {
-			if err := s.linkCompany(ctx, tx, org, rc.Contact.ID, *in.Company); err != nil {
+			company := *in.Company
+			if !companySigned {
+				// An unsigned company id never binds: name and domain stay hints.
+				company.ID = ""
+			}
+			if err := s.linkCompany(ctx, tx, org, rc.Contact.ID, company, companySigned); err != nil {
 				return err
 			}
 		}
@@ -752,7 +791,13 @@ func (s *Service) noteIdentityRejection(ctx context.Context, w Widget, code stri
 	}
 }
 
-func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, contactID int64, c Company) error {
+// linkCompany attaches the contact to the company of an identify call: by
+// external id first, then by domain, else a new company. With signed set
+// (CF-206: user_hash covered c.ID) the id is proof: a company matched by
+// domain takes the id when it has none, the company is marked verified and
+// the contact moves to it even when it had another company. Unsigned, only
+// a contact without a company is attached (and c.ID is already empty).
+func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, contactID int64, c Company, signed bool) error {
 	name := clip(strings.TrimSpace(c.Name), 255)
 	extID := clip(strings.TrimSpace(c.ID), 200)
 	domain := strings.ToLower(clip(strings.TrimSpace(c.Domain), 255))
@@ -766,6 +811,16 @@ func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, c
 	}
 	if errors.Is(err, pgx.ErrNoRows) && domain != "" {
 		company, err = tx.Q.GetCompanyByDomain(ctx, db.GetCompanyByDomainParams{OrganizationID: org, Domain: domain})
+		switch {
+		case err != nil || !signed || extID == "":
+		case company.ExternalID.Valid && company.ExternalID.String != extID:
+			// The domain is unsigned: it must not bind the user to a company
+			// that proved (or was given) another id. The proved id gets its
+			// own company, without the other company's domain.
+			company, err, domain = db.Company{}, pgx.ErrNoRows, ""
+		default:
+			err = tx.Q.SetCompanyExternalIDIfEmpty(ctx, db.SetCompanyExternalIDIfEmptyParams{ExternalID: extID, OrganizationID: org, ID: company.ID})
+		}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		if name == "" {
@@ -778,7 +833,18 @@ func (s *Service) linkCompany(ctx context.Context, tx *convrepository.Tx, org, c
 	if err != nil {
 		return err
 	}
-	return tx.Q.SetContactCompanyIfEmpty(ctx, db.SetContactCompanyIfEmptyParams{CompanyID: pgtype.Int8{Int64: company.ID, Valid: true}, OrganizationID: org, ID: contactID})
+	companyID := pgtype.Int8{Int64: company.ID, Valid: true}
+	if !signed || extID == "" {
+		return tx.Q.SetContactCompanyIfEmpty(ctx, db.SetContactCompanyIfEmptyParams{CompanyID: companyID, OrganizationID: org, ID: contactID})
+	}
+	if err := tx.Q.MarkCompanyVerified(ctx, db.MarkCompanyVerifiedParams{
+		VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, OrganizationID: org, ID: company.ID,
+	}); err != nil {
+		return err
+	}
+	return tx.Q.SetContactCompany(ctx, db.SetContactCompanyParams{
+		CompanyID: companyID, VerifiedAt: pgtype.Timestamptz{Time: s.now(), Valid: true}, OrganizationID: org, ID: contactID,
+	})
 }
 
 // ProfileInput updates what the visitor told us.

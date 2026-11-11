@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import {createClient,verifyWebhook,paginate,APIError} from '../node/dist/index.js';
+import {createClient,verifyWebhook,paginate,APIError,identityHash} from '../node/dist/index.js';
 import {createWidgetClient} from '../react-widget/dist/index.js';
 const response=(data,status=200)=>new Response(JSON.stringify({success:status<400,data,error:{code:'DENIED'}}),{status,headers:{'Content-Type':'application/json'}});
 test('retries preserve idempotency key, body and auth; unsafe writes do not retry',async()=>{
@@ -47,4 +47,17 @@ test('react-widget ships the same script SDK contract as frontend/public/widget.
  const a=await readFile(new URL('../react-widget/src/clickfix.d.ts',import.meta.url),'utf8');
  const b=await readFile(new URL('../../frontend/public/widget.d.ts',import.meta.url),'utf8');
  assert.equal(a,b,'copy frontend/public/widget.d.ts to sdks/react-widget/src/clickfix.d.ts');
+});
+test('identityHash signs the user id alone or with the company id (CF-206)',()=>{
+ const secret='identity-secret-0123456789abcdef';
+ assert.equal(identityHash(secret,'1001'),createHmac('sha256',secret).update('1001').digest('hex'));
+ assert.equal(identityHash(secret,'1001',''),identityHash(secret,'1001'));
+ const withCompany=identityHash(secret,'1001','F-77');
+ assert.equal(withCompany,createHmac('sha256',secret).update('1001\nF-77').digest('hex'));
+ assert.notEqual(withCompany,identityHash(secret,'1001'));
+ assert.notEqual(withCompany,identityHash(secret,'1001F-77'));
+ assert.notEqual(identityHash(secret,'1','12'),identityHash(secret,'11','2'));
+ assert.throws(()=>identityHash(secret,'10\n01'));
+ assert.throws(()=>identityHash(secret,'1001','F\n77'));
+ assert.throws(()=>identityHash('','1001'));
 });
