@@ -929,13 +929,18 @@ jobs:
           fi
           list=""
           # Dependency order: a package is published after the ones it depends on.
+          # The registry is asked directly (npm may be missing or misconfigured on
+          # the runner before setup-node, and `npm view` failing read as "new"):
+          # 200 = already published, 404 = new; anything else stops the job
+          # instead of retrying a publish that npm refuses with 403.
           for p in node visitor-core react-widget react-native expo; do
             name=$(jq -r .name "sdks/$p/package.json"); version=$(jq -r .version "sdks/$p/package.json")
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY"
-            else
-              list="$list $p"
-            fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/$name/$version")
+            case "$code" in
+              200) echo "$name@$version is already on npm" >> "$GITHUB_STEP_SUMMARY" ;;
+              404) list="$list $p" ;;
+              *) echo "::error::registry check for $name@$version returned HTTP $code"; exit 1 ;;
+            esac
           done
           echo "packages=${list# }" >> "$GITHUB_OUTPUT"
           [ -n "$list" ] && echo "run=true" >> "$GITHUB_OUTPUT" || { echo "run=false" >> "$GITHUB_OUTPUT"; echo "no new SDK version" >> "$GITHUB_STEP_SUMMARY"; }
