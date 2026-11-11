@@ -30,6 +30,41 @@ type piiRule struct {
 	pattern *regexp.Regexp
 }
 
+// uuidPattern marks spans the PII rules must leave alone: a random UUID whose
+// groups happen to be digits looks like a card, phone or TCKN number to the
+// rules below, which broke tool params that carry resource ids (CF-183).
+var uuidPattern = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
+
+// replaceOutsideUUIDs applies fn to every match of pattern that does not overlap a UUID.
+func replaceOutsideUUIDs(text string, pattern *regexp.Regexp, fn func(string) string) string {
+	matches := pattern.FindAllStringIndex(text, -1)
+	if len(matches) == 0 {
+		return text
+	}
+	uuids := uuidPattern.FindAllStringIndex(text, -1)
+	overlaps := func(a, b int) bool {
+		for _, u := range uuids {
+			if a < u[1] && b > u[0] {
+				return true
+			}
+		}
+		return false
+	}
+	var out strings.Builder
+	last := 0
+	for _, m := range matches {
+		out.WriteString(text[last:m[0]])
+		if overlaps(m[0], m[1]) {
+			out.WriteString(text[m[0]:m[1]])
+		} else {
+			out.WriteString(fn(text[m[0]:m[1]]))
+		}
+		last = m[1]
+	}
+	out.WriteString(text[last:])
+	return out.String()
+}
+
 var piiRules = []piiRule{
 	{kind: "IBAN", pattern: regexp.MustCompile(`(?i)\bTR(?:\s*[0-9]){24}\b`)},
 	{kind: "EMAIL", pattern: regexp.MustCompile(`(?i)\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b`)},
@@ -56,7 +91,7 @@ func NewMasker() *Masker {
 
 func (m *Masker) Mask(text string) string {
 	for _, rule := range piiRules {
-		text = rule.pattern.ReplaceAllStringFunc(text, func(value string) string {
+		text = replaceOutsideUUIDs(text, rule.pattern, func(value string) string {
 			if old, ok := m.byValue[value]; ok {
 				return old
 			}
@@ -87,7 +122,8 @@ func (m *Masker) Render(text string, allowed bool) string {
 // Unlike a per-run Masker, it keeps no map of originals that could be restored.
 func RedactPII(text string) string {
 	for _, rule := range piiRules {
-		text = rule.pattern.ReplaceAllString(text, "[PII_"+rule.kind+"]")
+		kind := rule.kind
+		text = replaceOutsideUUIDs(text, rule.pattern, func(string) string { return "[PII_" + kind + "]" })
 	}
 	return text
 }
