@@ -400,6 +400,12 @@ jobs:
       - name: Tests
         working-directory: sdks/laravel
         run: vendor/bin/phpunit --no-coverage
+      # The container runs as root on the runner's bind-mounted workspace. Hand every file back
+      # to the runner user (owner of the workspace's parent directory), otherwise the next job on
+      # this runner slot fails in actions/checkout with EACCES while cleaning the workspace.
+      - name: Return workspace ownership to the runner user
+        if: always()
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE"
 
   # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
   # formatter, unit + widget tests, the example app compiled to a Flutter
