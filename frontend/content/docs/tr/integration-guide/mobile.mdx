@@ -1,0 +1,254 @@
+---
+title: "Mobil: webview ve Flutter"
+description: "Mobil uygulamada oturumu taşıyan güvenli webview: köprü sözleşmesi, oturum devri, yerel çekirdek ve uygulama anahtarı, derin bağlantı, güvenlik kuralları, clickfix_webview Flutter paketi."
+---
+
+Mobil uygulamalar için yol, ayrı bir yerel SDK değil, **oturumu taşıyan güvenli bir webview**'dir: uygulama `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` sayfasını bir webview'de açar; widget tam ekran açılır ve uygulamayla **köprü** üzerinden konuşur. Böylece Flutter, React Native, iOS, Android ve diğer her platform aynı yolla, aynı sözleşmeyle bağlanır. Köprü sözleşmesi (`bridge_version` 1: komutlar, mesajlar, hata kodları, güvenlik kuralları) bu sayfanın [Köprü sözleşmesi](#bridge-contract) bölümündedir; Flutter için hazır paket [`clickfix_webview`](#flutter), diğer platformlar için tam uygulamalar [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposundadır (`react-native-webview`, `flutter-webview`).
+
+### Oturum devri [#mobile-session]
+
+1. Uygulama, kendi sunucunuzdan `{ user_id, user_hash, company_id }` alır ([kimlik doğrulama](/docs/integration-guide/identity)); `user_hash` kullanıcı ve firma kimliğini birlikte imzalar, anahtar uygulamaya hiç inmez.
+2. Webview `widget-embed.html?widget=WIDGET_ID&locale=tr&theme=auto` adresini açar. Widget hazır olunca köprüden `{"type":"clickfix:ready", ...}` gelir.
+3. Uygulama `{"type":"clickfix:identify","id":"1","user":{"user_id":"1001","user_hash":"…","name":"…","company":{"id":"F-77"}}}` gönderir; `company.id` imzadaki firma kimliğidir (köprü sözleşmesi 1.2, `bridge_version` 1). Cevap `{"type":"clickfix:result","id":"1","ok":true}` olur. Reddedilirse `ok:false` ve `error.code` (`WIDGET_IDENTITY_INVALID` gibi) döner; kullanıcı anonim kalır.
+4. Çıkışta `{"type":"clickfix:reset"}` gönderin; ziyaretçi unutulur, sonraki açılış yeni ziyaretçidir.
+
+Webview'in çerez ve depolaması oturumu sayfa yenilemeleri arasında taşır; `reset` göndermeden hesap değiştirmeyin.
+
+**Yerel çekirdekle oturum devri (CF-201).** Uygulama widget uçlarını webview olmadan da çağırabilir: Web widget → Gelişmiş → **Mobil uygulamalar** bölümünde platform ve paket adıyla bir **uygulama anahtarı** oluşturun; `@getclickfix/visitor-core` paketi `mode: "app"` ile bu anahtarı `X-ClickFix-App-Key` ve `X-ClickFix-App-Package` başlıklarında gönderir, sayfa kaynağı gerekmez. Yerel oturumu webview'e `{"type":"clickfix:session","token":client.getToken()}` komutuyla devredin; widget de `ready`, `identify` ve `reset` sonrasında `clickfix:session` mesajıyla kendi belirtecini verir (`client.adoptToken`). Anahtar yalnızca oluşturulduğunda gösterilir ve panelden iptal edilir; `user_hash` doğrulaması tarayıcıdakiyle aynıdır.
+
+### Köprü: uygulamadan widget'a ve widget'tan uygulamaya [#mobile-bridge]
+
+Uygulama → widget (komutlar): `clickfix:identify`, `clickfix:track` (uygulama olayını ekran bağlamına ekler), `clickfix:open` (`view` ya da `conversation`), `clickfix:close`, `clickfix:update` (dil, tema, profil, öznitelik), `clickfix:consent`, `clickfix:reset`, `clickfix:get-state`. Her komut isteğe bağlı bir `id` taşır; `id` varsa widget `clickfix:result` ile cevap verir. Komut `window.ClickFixBridge.receive(json)` çağrısıyla ya da sayfaya `postMessage` ile ulaşır.
+
+Widget → uygulama: `clickfix:ready`, `clickfix:event` (her SDK olayı: `message`, `unread`, `close`, `conversation:ended`…), `clickfix:link` (dışarı açılacak bağlantı; sistem tarayıcısında açın) ve `clickfix:result`. Taşıma, platforma göre widget'ın kendisi tarafından seçilir: `ReactNativeWebView.postMessage`, iOS `webkit.messageHandlers.ClickFix`, Android `ClickFixAndroid` arayüzü, Flutter `ClickFixFlutter` kanalı.
+
+Aşağıdaki uygulama tarafı örnekleri köprüyü kurar, hazır olunca oturumu devreder, uygulama olayı gönderir ve widget'ın `close` olayında destek ekranını kapatır. Bunlar kılavuzun otomatik testine girmez; kendi projenizde derleyip doğrulayın.
+
+```dart tab="Flutter"
+// Paket: clickfix_webview (sdks/flutter/clickfix_webview; ilk sürüme kadar git bağımlılığı). Köprüyü, kaynak
+// kilidini ve ClickFixFlutter kanalını paket kurar; siz oturumu devredersiniz.
+import 'package:clickfix_webview/clickfix_webview.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+final controller = ClickFixController(
+  widgetId: 'WIDGET_ID',
+  locale: 'tr',
+  conversation: conversationUuid, // isteğe bağlı derin bağlantı
+);
+
+ClickFixWebView(
+  controller: controller,
+  onReady: (_) async {
+    final s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
+    try {
+      await controller.identify(ClickFixIdentity(
+        userId: s.userId, userHash: s.userHash, company: ClickFixCompany(id: s.companyId)));
+      await controller.track('app_screen', properties: {'screen': 'orders'});
+    } on ClickFixBridgeError catch (e) {
+      debugPrint('kimlik reddedildi: ${e.code}'); // WIDGET_IDENTITY_INVALID gibi; ziyaretçi anonim kalır
+    }
+  },
+  onUnread: (count) => badge.value = count,
+  onLink: (link) => launchUrl(link.url, mode: LaunchMode.externalApplication), // yalnız https gelir
+  onClose: () => Navigator.of(context).pop(),
+);
+// Çıkışta: controller.reset(); ekran kapanınca: controller.dispose().
+```
+
+```tsx tab="React Native"
+// react-native-webview: onMessage widget'tan, injectJavaScript widget'a.
+import { useRef } from "react";
+import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
+
+export function Support({ onClose }: { onClose: () => void }) {
+  const ref = useRef<WebView>(null);
+  const send = (m: object) =>
+    ref.current?.injectJavaScript(
+      `window.ClickFixBridge && window.ClickFixBridge.receive(${JSON.stringify(JSON.stringify(m))}); true;`,
+    );
+  return (
+    <WebView
+      ref={ref}
+      source={{
+        uri: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr",
+      }}
+      originWhitelist={["https://getclickfix.com"]}
+      onShouldStartLoadWithRequest={(r) =>
+        r.url.startsWith("https://getclickfix.com/")
+      }
+      sharedCookiesEnabled={false}
+      onMessage={async (e) => {
+        const data = JSON.parse(e.nativeEvent.data);
+        if (data.type === "clickfix:ready") {
+          const s = await api.supportSession(); // { user_id, user_hash } sunucunuzdan
+          send({
+            type: "clickfix:identify",
+            id: "login",
+            user: { user_id: s.user_id, user_hash: s.user_hash },
+          });
+          send({
+            type: "clickfix:track",
+            name: "app_screen",
+            properties: { screen: "orders" },
+          });
+        } else if (data.type === "clickfix:link") Linking.openURL(data.url);
+        else if (data.type === "clickfix:event" && data.event === "close")
+          onClose();
+      }}
+    />
+  );
+}
+```
+
+```swift tab="iOS"
+// WKWebView: mesaj işleyici adı "ClickFix"; komutlar evaluateJavaScript ile gider.
+final class SupportViewController: UIViewController, WKScriptMessageHandler, WKNavigationDelegate {
+    private lazy var webView: WKWebView = {
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(self, name: "ClickFix")
+        config.websiteDataStore = .default() // oturum açılışlar arasında kalır; çıkışta clickfix:reset gönderin
+        let w = WKWebView(frame: .zero, configuration: config)
+        w.navigationDelegate = self
+        return w
+    }()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view = webView
+        webView.load(URLRequest(url: URL(string: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr")!))
+    }
+
+    func send(_ message: [String: Any]) {
+        let json = try! JSONSerialization.data(withJSONObject: message)
+        let literal = String(data: try! JSONSerialization.data(withJSONObject: [String(decoding: json, as: UTF8.self)]), encoding: .utf8)!
+        webView.evaluateJavaScript("window.ClickFixBridge && window.ClickFixBridge.receive(\(literal)[0])")
+    }
+
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let text = m.body as? String, let data = text.data(using: .utf8),
+              let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        switch msg["type"] as? String {
+        case "clickfix:ready":
+            api.supportSession { s in // { user_id, user_hash } sunucunuzdan
+                self.send(["type": "clickfix:identify", "id": "login", "user": ["user_id": s.userId, "user_hash": s.userHash]])
+            }
+        case "clickfix:link":
+            if let url = URL(string: msg["url"] as? String ?? "") { UIApplication.shared.open(url) }
+        case "clickfix:event" where msg["event"] as? String == "close":
+            dismiss(animated: true)
+        default: break
+        }
+    }
+
+    func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        decisionHandler(a.request.url?.host == "getclickfix.com" ? .allow : .cancel) // başka adres webview'de açılmaz
+    }
+}
+```
+
+```kotlin tab="Android"
+// WebView: JavascriptInterface adı "ClickFixAndroid"; komutlar evaluateJavascript ile gider.
+class SupportActivity : AppCompatActivity() {
+    private lateinit var web: WebView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        web = WebView(this).also { setContentView(it) }
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true      // oturum açılışlar arasında kalır; çıkışta clickfix:reset gönderin
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) =
+                r.url.host != "getclickfix.com" // başka adres webview'de açılmaz
+        }
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun postMessage(text: String) = runOnUiThread { onBridge(JSONObject(text)) }
+        }, "ClickFixAndroid")
+        web.loadUrl("https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr")
+    }
+
+    private fun send(m: JSONObject) =
+        web.evaluateJavascript("window.ClickFixBridge && window.ClickFixBridge.receive(${JSONObject.quote(m.toString())})", null)
+
+    private fun onBridge(m: JSONObject) = when (m.optString("type")) {
+        "clickfix:ready" -> lifecycleScope.launch {
+            val s = api.supportSession() // { user_id, user_hash } sunucunuzdan
+            send(JSONObject().put("type", "clickfix:identify").put("id", "login")
+                .put("user", JSONObject().put("user_id", s.userId).put("user_hash", s.userHash)))
+        }
+        "clickfix:link" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(m.getString("url"))))
+        "clickfix:event" -> if (m.optString("event") == "close") finish() else Unit
+        else -> Unit
+    }
+}
+```
+
+### Derin bağlantı [#mobile-deep-link]
+
+- **Belirli bir konuşmayı açmak:** sayfayı `…/widget-embed.html?widget=WIDGET_ID&conversation=KONUSMA_UUID` ile açın ya da açık webview'e `{"type":"clickfix:open","conversation":"KONUSMA_UUID"}` gönderin. Sekme için `view` (`home`, `messages`, `help`, `new`).
+- **Bildirimden konuşmaya:** uygulamanızın kendi anlık bildirimi için `message.sent` webhook olayına abone olun; olay `conversation_uuid` ve `contact_external_id` taşır. Bildirimin derin bağlantısı (`uygulamam://destek?conversation=…`) açılınca webview'i yukarıdaki adresle açın. Okunmamış rozeti için widget'ın `unread` olayı (`clickfix:event`) yeterlidir.
+- **Widget'tan dışarı:** yardım makaleleri ve mesajlardaki bağlantılar `clickfix:link` olarak gelir; sistem tarayıcısında açın. Webview içinde `getclickfix.com` dışına gezinmeye izin vermeyin.
+
+### Güvenlik notları [#mobile-security]
+
+- **Kimlik anahtarı uygulamaya girmez.** `user_hash` sunucunuzdan, kimliği doğrulanmış bir uçtan gelir; uygulamada hesaplanmaz, sabitlenmez.
+- **Kaynak kısıtı:** webview yalnız `https://getclickfix.com` (ya da size verilen uygulama adresi) yükler; başka adrese gezinme engellenir, `clickfix:link` ile gelen adres uygulamada yeniden doğrulanıp (yalnız `https:`) sistem tarayıcısında açılır, intent ya da derin bağlantı işleyicisine verilmez. Üçüncü taraf çerez ve paylaşılan çerez depolarını kapatın; dosya ve içerik erişimini (`allowFileAccess`, `allowContentAccess`) kapatın.
+- **JS köprüsü:** `window.ClickFixBridge.receive` yalnız bu sayfada vardır; sayfa ClickFix'e aittir. Köprü, `postMessage` ile gelen iletileri çerçeve içindeyken yalnız yapılandırılmış üst kaynaktan (`boot({ bridge: { origin } })`), çerçeve dışındayken yalnız sayfanın kendisinden kabul eder; `"*"` kabul edilmez. Reddedilen komutlarda ileti içeriği (örneğin `user_hash`) ne konsola ne sonuca yazılır.
+- **Çerez ve depolama:** oturum webview'in depolamasında kalır; hesap değişiminde ve çıkışta `clickfix:reset` gönderin. Cihaz paylaşımlıysa webview depolamasını da temizleyin.
+- **Onay:** uygulamanız onay topluyorsa adrese `consent=1` ekleyin ya da `clickfix:consent` gönderin; onaysız hiçbir şey saklanmaz.
+
+### Köprü sözleşmesi [#bridge-contract]
+
+Her komut bir JSON nesnesidir; `type` zorunlu, `id` isteğe bağlıdır (≤128 karakter). `id` verilirse widget `clickfix:result` ile cevap verir. Mesaj metni 64 KB'ı aşamaz. Sözleşmede yalnız geriye uyumlu değişiklik yapılır; uygulama tanımadığı alan ve olayları yok saymalıdır.
+
+**Uygulama → widget (komutlar)**
+
+| `type`               | Alanlar                                                                                               | Widget ne yapar                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `clickfix:identify`  | `user: { user_id, user_hash, name?, email?, phone?, company?: { id?, name?, domain? }, attributes? }` | `identify`; `user_hash` sunucunuzda hesaplanır, `company.id` imzaya girerse firma doğrulanmış bağlanır |
+| `clickfix:track`     | `name` (≤100), `properties?`                                                                          | Uygulama olayını ekran bağlamına ekler                                                                 |
+| `clickfix:open`      | `view?` (`home`/`messages`/`help`/`new`), `conversation?` (UUID)                                      | Konuşmayı ya da sekmeyi açar                                                                           |
+| `clickfix:close`     | –                                                                                                     | Paneli kapatır                                                                                         |
+| `clickfix:update`    | `update` (`locale`, `theme`, `name`, `email`, `phone`, öznitelikler)                                  | Profil ve görünümü günceller                                                                           |
+| `clickfix:consent`   | `granted` (boolean)                                                                                   | Onayı iletir; `false` saklanan her şeyi siler                                                          |
+| `clickfix:reset`     | –                                                                                                     | Ziyaretçiyi unutur (çıkış, hesap değişimi)                                                             |
+| `clickfix:get-state` | –                                                                                                     | `result.data` içinde `ClickFixState` döner (`open`, `view`, `unread`, `verified`, `visitor_id`…)       |
+| `clickfix:session`   | `token` (≤2048)                                                                                       | Yerel çekirdeğin oturumunu devralır                                                                    |
+
+**Widget → uygulama (mesajlar)**
+
+| `type`             | Alanlar                                                                           | Ne zaman                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `clickfix:ready`   | `bridge_version: 1`, `protocol_version`, `sdk_version`, `widget_id`, `visitor_id` | Widget çizildiğinde; `identify` bundan sonra gönderilir (önce gönderilirse kuyruklanır)        |
+| `clickfix:event`   | `event`, `payload`                                                                | Her SDK olayında (`ready`, `open`, `close`, `message`, `unread`, `identify`, `csat`, `error`…) |
+| `clickfix:link`    | `url`                                                                             | Dışa açılacak bağlantı; uygulama `https:` olduğunu doğrulayıp sistem tarayıcısında açar        |
+| `clickfix:result`  | `id`, `ok`, `data?`, `error?: { code, message }`                                  | `id` taşıyan her komuttan sonra                                                                |
+| `clickfix:session` | `token`, `visitor_id`                                                             | `ready`, `identify` ve `reset` sonrasında; yerel çekirdeğe `adoptToken` ile verilir            |
+
+Hata kodları (`result.error.code`): `INVALID_JSON`, `INVALID_MESSAGE`, `UNKNOWN_COMMAND`, `TOO_LARGE`, komut çalışırken oluşan SDK hataları (`WIDGET_IDENTITY_DISABLED`, `WIDGET_IDENTITY_INVALID`, `RATE_LIMITED`, `NETWORK_ERROR`…) ve bilinmeyen hatalar için `COMMAND_FAILED`. `error.message` yalnız kodu tekrarlar; mesaj içeriği hiçbir zaman sonuca, konsola ya da `error` olayına yazılmaz.
+
+Taşıma yolu platforma göre widget tarafından seçilir: React Native `window.ReactNativeWebView.postMessage`, iOS `window.webkit.messageHandlers.ClickFix`, Android `window.ClickFixAndroid` (`@JavascriptInterface`), Flutter `window.ClickFixFlutter` (`JavaScriptChannel`), iframe içinde `window.parent.postMessage` (yalnız yapılandırılmış `origin`). Uygulama → widget yönünde komut `window.ClickFixBridge.receive(json)` ile (tercih edilen) ya da sayfaya `postMessage` ile verilir.
+
+### Flutter paketi: `clickfix_webview` [#flutter]
+
+[`clickfix_webview`](https://pub.dev/packages/clickfix_webview) (Flutter 3.38+, Dart 3.10+; `webview_flutter` üzerinde, Android `minSdk` 24, iOS 12+) köprü sözleşmesini `ClickFixController` + `ClickFixWebView` olarak uygular: kaynak kilidi, `ready` öncesi komut kuyruğu, derin bağlantı, `clickfix:link` doğrulaması. Yukarıdaki Flutter sekmesi bu paketi kullanır; çalışan uygulama [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview) klasöründedir.
+
+```sh
+flutter pub add clickfix_webview
+```
+
+| Yöntem                       | Köprü komutu                           |
+| ---------------------------- | -------------------------------------- |
+| `identify(ClickFixIdentity)` | `clickfix:identify`                    |
+| `track(name, properties:)`   | `clickfix:track`                       |
+| `open(view:, conversation:)` | `clickfix:open`                        |
+| `close()`                    | `clickfix:close`                       |
+| `update({...})`              | `clickfix:update`                      |
+| `setConsent(bool)`           | `clickfix:consent`                     |
+| `reset()`                    | `clickfix:reset`                       |
+| `getState()`                 | `clickfix:get-state` → `ClickFixState` |
+| `send(ClickFixCommand)`      | herhangi bir komut, ham                |
+
+Widget → uygulama mesajları `onUnread`, `onLink`, `onClose` gibi geri çağrılar ve `controller.messages`, `events`, `links`, `results` akışları olarak gelir; hatalar `ClickFixBridgeError` (`ClickFixErrorCode`) olarak fırlatılır. Yerel Dart istemcisi ve diğer yerel SDK'lar ayrı işlerdir; çıktıklarında aynı köprü sözleşmesini kullanacaklardır.

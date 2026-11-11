@@ -1,0 +1,150 @@
+---
+title: Connect your system
+description: "Let ClickFix read your system: connection, concepts, resources, actions and AI playbooks; write an endpoint that answers by the customer's external id."
+---
+
+The **Integrations → Connect your system** screen lets ClickFix call your system; it is not an API in the other direction. You only write an endpoint that answers by the customer's external id; the rest is set up in the panel:
+
+1. **Connection:** your system's base URL (public `https` only) and authentication (none, Bearer, custom header or username/password). The secret is stored encrypted, never shown again and masked in logs.
+2. **Concepts:** the objects of your system (Invoice, Order, License…). Each concept is a custom object type.
+3. **Source:** which endpoint the concept is read from, relative to the base URL: `/customers/{external_id}/invoices`. `{external_id}` is the customer's id in your system, `{company_external_id}` their company's; one of them must appear in the path. **Try** calls it with a real id; you pick where the records are in the answer (`items`) and which fields the AI sees by clicking on the answer.
+4. **Actions:** operations such as "Resend invoice": method, endpoint, parameters, whether approval is needed and who may use it (AI, agent, workflow).
+5. **AI playbooks:** for one intent, which concepts to read and which actions may run.
+
+ClickFix calls public hosts only (private networks, localhost and cloud metadata addresses are refused), follows no redirects, caps the response at 256 KB and makes at most 60 calls per minute per organization. The shape of your endpoint is yours; the sample below answers a source set up in the panel as `/customers/{external_id}/invoices` with record path `items`. The `curl` sample is the exact call the panel's **Try** button makes.
+
+{/* example: widget/08-system-endpoint.js */}
+
+```js tab="Widget"
+// Adım 8: sistem bağlama için widget'ta ek bir şey yoktur; ClickFix sisteminizi
+// identify'daki user_id (dış kimlik) ile çağırır. Doğru kimliği verdiğinizden emin olun:
+// @ts-check
+ClickFix("on", "ready", () => {
+  const state = ClickFix("getState");
+  if (state && !state.verified)
+    console.warn("identify yapılmadı: sistem verisi eşleşmez");
+});
+```
+
+{/* example: node/08-system-endpoint.ts */}
+
+```ts tab="Node.js"
+// Adım 8: sistem bağlama. ClickFix sizin sisteminizi çağırır; siz yalnız
+// müşterinin dış kimliğiyle cevap veren bir uç yazarsınız. Panelde
+// Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+import { createServer } from "node:http";
+
+const token = process.env.SYSTEM_TOKEN ?? "example-system-token"; // bağlantıda Bearer
+
+createServer((req, res) => {
+  if (req.headers.authorization !== `Bearer ${token}`) {
+    res.writeHead(401).end();
+    return;
+  }
+  const m = /^\/customers\/([^/]+)\/invoices$/.exec(req.url ?? "");
+  if (!m) {
+    res.writeHead(404).end();
+    return;
+  }
+  const externalId = decodeURIComponent(m[1]);
+  // Gerçek sisteminizde: veritabanından externalId'nin faturaları
+  const items = [
+    {
+      number: "F-2026-0042",
+      total: 1250.5,
+      currency: "TRY",
+      status: "paid",
+      customer_id: externalId,
+    },
+  ];
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ items })); // Kayıt yolu: items
+}).listen(Number(process.env.PORT ?? 3000), () => console.log("listening"));
+```
+
+{/* example: go/system_endpoint.go */}
+
+```go tab="Go"
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+)
+
+// Adım 8: sistem bağlama. ClickFix bu ucu müşterinin dış kimliğiyle çağırır:
+// Panel > Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+func systemEndpoint(ctx context.Context) error {
+	token := os.Getenv("SYSTEM_TOKEN") // bağlantıda Bearer olarak girilir
+	if token == "" {
+		token = "example-system-token"
+	}
+	http.HandleFunc("GET /customers/{external_id}/invoices", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		externalID := r.PathValue("external_id")
+		// Gerçek sisteminizde: veritabanından externalID'nin faturaları
+		items := []map[string]any{{"number": "F-2026-0042", "total": 1250.5, "currency": "TRY", "status": "paid", "customer_id": externalID}}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": items}) // Kayıt yolu: items
+	})
+	port := strings.TrimSpace(os.Getenv("PORT"))
+	if port == "" {
+		port = "3000"
+	}
+	fmt.Println("listening")
+	return http.ListenAndServe("127.0.0.1:"+port, nil)
+}
+```
+
+{/* example: php/08-system-endpoint.php */}
+
+```php tab="PHP"
+<?php
+// Adım 8: sistem bağlama. ClickFix sizin sisteminizi çağırır; siz yalnız
+// müşterinin dış kimliğiyle cevap veren bir uç yazarsınız. Panelde
+// Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+// Çalıştırma: php -S 127.0.0.1:3000 08-system-endpoint.php (ya da framework rotanız)
+
+$token = getenv('SYSTEM_TOKEN') ?: 'example-system-token'; // bağlantıda Bearer
+
+if (($_SERVER['HTTP_AUTHORIZATION'] ?? '') !== 'Bearer '.$token) {
+    http_response_code(401);
+    exit;
+}
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+if (!preg_match('#^/customers/([^/]+)/invoices$#', $path, $m)) {
+    http_response_code(404);
+    exit;
+}
+$externalId = rawurldecode($m[1]);
+// Gerçek sisteminizde: veritabanından externalId'nin faturaları
+$items = [
+    [
+        'number' => 'F-2026-0042',
+        'total' => 1250.5,
+        'currency' => 'TRY',
+        'status' => 'paid',
+        'customer_id' => $externalId,
+    ],
+];
+header('Content-Type: application/json');
+echo json_encode(['items' => $items]); // Kayıt yolu: items
+```
+
+{/* example: curl/08-system-endpoint.sh */}
+
+```bash tab="curl"
+# Adım 8: ClickFix'in sisteminize atacağı çağrının aynısı (Sistemini bağla > Dene düğmesi).
+# SYSTEM_BASE_URL sizin sisteminiz, {external_id} müşterinin dış kimliğidir.
+curl -sS --fail-with-body "$SYSTEM_BASE_URL/customers/1001/invoices" \
+  -H "Authorization: Bearer $SYSTEM_TOKEN"
+```
+
+Concept data is read by the customer's **external id**, so system binding only works once [external ids](/docs/integration-guide/contacts-companies?lang=en#external-id) are in place. The panel's **Try as this customer** preview shows what is accepted for an external id, which concepts are read and the context the AI sees.

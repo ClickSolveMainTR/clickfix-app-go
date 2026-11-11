@@ -1,0 +1,409 @@
+---
+title: SDKs
+description: "The Node.js, visitor-core, React, Go, PHP, Laravel and Flutter packages: installation, the smallest example, the example app; creating a client, pagination, webhook signatures and requests without an SDK."
+---
+
+ClickFix has server SDKs for Node.js, Go and PHP; a DOM-free visitor client for React Native, Node and browsers (`@getclickfix/visitor-core`); UI-free widget hooks for React; a full Laravel package and a webview package for Flutter. The server SDKs provide authentication, bounded retries (including `Retry-After`), pagination, `user_hash` and webhook signature verification. All are MIT licensed; the source lives in the public [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) and [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) repositories, and every package has a runnable example app in [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples). Everything is published under [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR).
+
+<include>../../../generated/packages.en.mdx</include>
+
+Use `https://api.getclickfix.com` as the base URL (no `/v1` suffix). API keys stay on the server; never put them in browser or mobile code. Creating keys, scopes, the response envelope and error codes: [API](/docs/api?lang=en). Every endpoint page of the [API reference](/docs/api-reference/conversations?lang=en) also carries ready-made requests for curl, Node.js, Go and PHP.
+
+## Node.js: `@getclickfix/node` [#node]
+
+A typed Node 22+ `fetch` client whose `paths` types come from the API contract. Example app: [`clickfix-examples/node-express`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/node-express).
+
+```sh
+npm install @getclickfix/node
+```
+
+```ts
+import { createClient } from "@getclickfix/node";
+
+const client = createClient({
+  baseURL: "https://api.getclickfix.com",
+  apiKey: process.env.CLICKFIX_API_KEY!,
+});
+
+const created = await client.request(
+  "/v1/public-api/conversations",
+  "post",
+  {
+    contact_external_id: "1001",
+    inbox_uuid: inboxUUID,
+    subject: "Delivery question",
+  },
+  {
+    idempotencyKey: "order-1042-support",
+    signal: AbortSignal.timeout(30_000),
+  },
+);
+```
+
+| Export                                              | What it does                                                                                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createClient({ baseURL, apiKey, attempts? })`      | `request(path, method, body?, { path?, query?, idempotencyKey?, signal? })`; error responses throw an `APIError` with status, code, request id and details |
+| `paginate(fetchPage)`                               | An `AsyncGenerator` that unrolls `{ items, total, limit, offset }` pages into items                                                                        |
+| `verifyWebhook(secret, timestamp, signature, body)` | The `v1=` signature over the raw body with a 5 minute tolerance; [webhooks](/docs/integration-guide/webhooks?lang=en)                                      |
+| `identityHash(secret, userId, companyId?)`          | The widget `user_hash`; with `companyId` the company is signed too ([identity verification](/docs/integration-guide/identity?lang=en))                     |
+
+GETs and writes with an `idempotencyKey` are attempted at most three times (exponential backoff, bounded `Retry-After`; on `429`, `502`, `503`, `504` and network errors); writes without a key are not retried. The API stores completed write responses, errors included: retrying with the same key cannot turn a recorded error into a success; use a new key for corrected input.
+
+## Visitor client: `@getclickfix/visitor-core` [#visitor-core]
+
+Calls the widget endpoints (`/v1/widget/{public_id}/*`) without a DOM: through the same-origin proxy in the browser (`mode: "browser"`), with an [app key](/docs/integration-guide/mobile?lang=en#mobile-session) in a mobile app (`mode: "app"`). Includes retries, session renewal, a realtime abstraction and the [webview bridge](/docs/integration-guide/mobile?lang=en#bridge-contract) types (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`). Example app: [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
+
+```sh
+npm install @getclickfix/visitor-core
+```
+
+```ts
+import { createVisitorClient, commandScript } from "@getclickfix/visitor-core";
+
+const client = createVisitorClient({
+  mode: "app",
+  baseURL: "https://getclickfix.com/api",
+  publicId: "WIDGET_ID",
+  app: { key: APP_KEY, packageName: "com.example.app" },
+});
+await client.init();
+await client.identify({ user_id: user.id, user_hash: userHashFromServer });
+
+// Once the webview is open and clickfix:ready arrived, hand the session over:
+webview.injectJavaScript(
+  commandScript({
+    type: "clickfix:session",
+    id: "s1",
+    token: client.getToken(),
+  }),
+);
+```
+
+The app key lives only in the native core's HTTP header; it never reaches the webview or the page.
+
+## React: `@getclickfix/react-widget` [#react-widget]
+
+Typed hooks to drive the ready-made messenger (launcher, home, help center) from your own button, and `createWidgetClient` + `useWidget` on top of `visitor-core` to draw your own UI. Example app: [`clickfix-examples/nextjs-widget`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/nextjs-widget).
+
+```sh
+npm install @getclickfix/react-widget
+```
+
+```tsx tab="Ready-made widget"
+"use client";
+import { useMemo } from "react";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
+
+export function Support({ consent }: { consent: boolean }) {
+  const options = useMemo(
+    () =>
+      consent
+        ? {
+            appOrigin: "https://getclickfix.com",
+            widgetId: "WIDGET_ID",
+            hideLauncher: true,
+          }
+        : null, // null defers loading until consent is given
+    [consent],
+  );
+  const { ready, unread, open, sdk } = useClickFix(options);
+  useClickFixEvent("conversation:ended", (e) => console.log(e.status));
+
+  return (
+    <button aria-expanded={open} disabled={!ready} onClick={() => sdk.toggle()}>
+      Support {unread || ""}
+    </button>
+  );
+}
+```
+
+```tsx tab="Your own UI"
+"use client";
+import { useEffect, useState } from "react";
+import { createWidgetClient, useWidget } from "@getclickfix/react-widget";
+
+export function Support() {
+  const [client] = useState(() =>
+    createWidgetClient({
+      publicId: "WIDGET_ID",
+      baseURL: "/api", // same-origin proxy on your own site
+      onToken: (token) => sessionStorage.setItem("support-token", token),
+    }),
+  );
+  const { visitor } = useWidget(client);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    void client.init(abort.signal).catch(console.error);
+    return () => abort.abort();
+  }, [client]);
+
+  return <span>{visitor ? "Ready" : "Connecting"}</span>;
+}
+```
+
+With the UI-free client you render conversations and messages yourself:
+
+```ts
+await client.identify({ user_id: user.id, user_hash: serverProvidedHmac });
+const { items } = await client.conversations();
+await client.createConversation({
+  text: "Hello",
+  client_id: crypto.randomUUID(),
+});
+await client.sendMessage(
+  conversationUUID,
+  { text: "Photo", client_id: stableMessageUUID },
+  file,
+);
+await client.markRead(conversationUUID);
+```
+
+`user_hash` is produced on your server; never send the identity secret to the browser. Widget commands and events: [Web widget](/docs/web-widget?lang=en#javascript-api).
+
+## Go: `github.com/ClickSolveMainTR/clickfix-sdks/go` [#go]
+
+A client generated from the API contract (`oapi-codegen`) plus authentication, a 30 second HTTP timeout, bounded retries, pagination and webhook verification. Releases are tagged `go/vX.Y.Z`. Example app: [`clickfix-examples/go-server`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/go-server).
+
+```sh
+go get github.com/ClickSolveMainTR/clickfix-sdks/go@latest
+```
+
+```go
+import clickfix "github.com/ClickSolveMainTR/clickfix-sdks/go"
+
+client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+if err != nil {
+	log.Fatal(err)
+}
+res, err := client.GetV1PublicApiContactsWithResponse(ctx, &clickfix.GetV1PublicApiContactsParams{})
+```
+
+| Function                                                                          | What it does                                                                                                   |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `New(baseURL, key)`                                                               | The generated `ClientWithResponses` with a retrying transport; every operation is `<Name>WithResponse(ctx, …)` |
+| `Iterate(ctx, fetch, yield)` / `ListPage[T](ctx, c, resource, limit, offset)`     | Unrolls `{items, total, limit, offset}` pages into items                                                       |
+| `VerifyWebhook(secret, timestamp, signature, body, now, tolerance)`               | The `v1=` signature over the raw body                                                                          |
+| `IdentityHash(secret, userID)` / `IdentityCompanyHash(secret, userID, companyID)` | The widget `user_hash`; the second also signs the company id                                                   |
+
+## PHP: `clickfix/sdk` [#php]
+
+A PSR-18 client for PHP 8.1+ (Guzzle recommended; PSR-17 factories via `php-http/discovery`) with typed errors, bounded retries, offset pagination, webhook verification and `user_hash`. Source: [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php). Example app: [`clickfix-examples/php-plain`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/php-plain).
+
+```sh
+composer require clickfix/sdk guzzlehttp/guzzle
+```
+
+```php
+use ClickFix\Client;
+use ClickFix\UserHash;
+use ClickFix\Webhooks;
+
+$client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+$contact = $client->contacts()->upsertByExternalId('1001', [
+    'name' => 'Ayşe Yılmaz',
+    'email' => 'ayse@example.com',
+], idempotencyKey: 'user-1001-v3');
+
+foreach ($client->contacts()->all(['q' => 'acme']) as $item) {
+    // every matching contact, page by page
+}
+
+$userHash = UserHash::make($identitySecret, $authenticatedUserId); // only this value goes to the widget
+$ok = Webhooks::verify($secret, $headers['ClickFix-Webhook-Timestamp'], $headers['ClickFix-Webhook-Signature'], $rawBody);
+```
+
+Resource classes are `contacts()`, `companies()`, `customFields()`, `conversations()`, `events()`, `webhooks()`, `triggers()` and `apiChannel($instance, $secret)`, with `list`/`all`/`get`/`create`/`update`/`delete` style methods per endpoint. Error responses are subclasses of `ClickFix\Exception\ApiException` (`AuthenticationException` 401, `ForbiddenException` 403, `NotFoundException` 404, `ConflictException` 409, `ValidationException` 400/422, `RateLimitException` 429 with `retryAfter`, `ServerException` 5xx); network failures throw `TransportException`.
+
+## Laravel package [#laravel]
+
+For Laravel 10, 11, 12 and 13 (PHP 8.1+) [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) packs the steps of this guide: a service provider and the `ClickFix` facade, `config/clickfix.php`, artisan commands, a signature-checking `POST /clickfix/webhook` route with one Laravel event per ClickFix event, and the `@clickfixWidget` Blade directive. Package discovery registers the provider. Source and changelog: [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel). Example app: [`clickfix-examples/laravel-app`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/laravel-app).
+
+### Install [#laravel-install]
+
+```sh
+composer require clickfix/laravel
+php artisan clickfix:install
+php artisan clickfix:check
+```
+
+`clickfix:install` publishes `config/clickfix.php`, adds the missing `CLICKFIX_*` keys to `.env` (generating the webhook secret), and prints the webhook URL to subscribe plus the next steps. Once the keys are filled in, `clickfix:check` tries the API key against the API and verifies the widget id, the identity secret, the webhook secret and that the route is `https`; anything missing exits with code 1.
+
+| `.env` key                 | Where                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `CLICKFIX_API_KEY`         | The API key from the [Before you start](/docs/integration-guide?lang=en#before-you-start) table          |
+| `CLICKFIX_WIDGET_ID`       | Web widget → Install                                                                                     |
+| `CLICKFIX_IDENTITY_SECRET` | Web widget → Security → Identity verification; stays on the server                                       |
+| `CLICKFIX_WEBHOOK_SECRET`  | The subscription's `data.secret`, or the value `clickfix:install` generated (use it in the subscription) |
+| `CLICKFIX_WEBHOOK_QUEUE`   | Empty: events fire inside the request; `true` or a queue name: from a queued job                         |
+
+### Artisan commands [#laravel-artisan]
+
+| Command                                                             | What it does                                                                                                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `clickfix:install [--force] [--no-env]`                             | Publish the config, add the `.env` keys, generate the webhook secret, print the webhook URL                                               |
+| `clickfix:check`                                                    | API key, widget id, identity secret, webhook secret and route; exit code 1 on failure                                                     |
+| `clickfix:user-hash {user} [--raw] [--json]`                        | `user_hash` for a user (model key), to debug `WIDGET_IDENTITY_INVALID`                                                                    |
+| `clickfix:webhook:secret [--write]`                                 | 64 hex character secret; `--write` stores it in `.env`                                                                                    |
+| `clickfix:sync:contacts [--id=*] [--since=] [--chunk=] [--dry-run]` | Create or update the model in `config('clickfix.contacts')` as contacts by external id (`PUT /contacts/by-external-id`, `contacts:write`) |
+
+`clickfix:sync:contacts` reads the model (`App\Models\User`), the field map (`name`, `email`, `phone`, `job_title`, `locale`, `timezone` → model attribute or dotted path) and the custom field map from the config. The external id is always the model's primary key, the same value `identify` sends as `user_id`, so the synced contact and the widget session are one person ([external id](/docs/integration-guide/contacts-companies?lang=en#external-id)).
+
+### Widget and identity verification [#laravel-widget]
+
+```blade
+    @clickfixWidget
+</body>
+```
+
+The directive prints the queue snippet, the `ClickFix("boot", {...})` call and the `widget.js` tag. Without arguments it identifies the authenticated user (`user_id` is the model key, `user_hash` is computed on the server with the identity secret, `name` and `email` come from the model); with nobody logged in the widget opens anonymously. `@clickfixWidget($customer)` takes a specific model, `@clickfixWidget(null)` is always anonymous, `@clickfixWidget(auth()->user(), ['locale' => 'en'])` adds boot options. The fields in the identity come from `clickfix.widget.user`, or the model implements `ProvidesClickFixIdentity` (including `company` and `attributes`).
+
+For Inertia, Livewire or a SPA that boots the widget itself, build the identity on the server and share it with the page:
+
+```php
+use ClickFix\Laravel\Facades\ClickFix;
+
+ClickFix::userHash($user);  // hex HMAC-SHA256(identity secret, model key)
+ClickFix::identity($user);  // ['user_id' => '42', 'user_hash' => '…', 'name' => …, 'email' => …]
+```
+
+Call `ClickFix("identify", identity)` in the browser; the identity secret never leaves the server ([identity verification](/docs/integration-guide/identity?lang=en)).
+
+### Webhook [#laravel-webhook]
+
+The package registers `POST /clickfix/webhook` outside the `web` group (no session, no CSRF) behind the `clickfix.webhook` middleware. The middleware verifies `ClickFix-Webhook-Timestamp` and `ClickFix-Webhook-Signature` over the raw body (the rule in [Webhooks](/docs/integration-guide/webhooks?lang=en); 5 minute tolerance, constant-time comparison); a bad or stale signature is `401`, a missing secret `503`. A redelivery with the same `ClickFix-Webhook-Id` is recognised from the cache and acknowledged with `200` without firing the events twice.
+
+Every verified delivery raises `ClickFix\Laravel\Events\WebhookReceived`; a known event name also raises its own class: `ConversationCreated`, `ConversationResolved`, `MessageReceived`, `MessageSent`, `ContactCreated`, `ContactUpdated`, `CompanyUpdated`, `SlaBreached`, `CsatSubmitted` … (one class per event; an unknown name raises only `WebhookReceived`).
+
+```php
+use ClickFix\Laravel\Events\MessageReceived;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(MessageReceived::class, function (MessageReceived $event) {
+    $event->get('conversation_uuid');
+    $event->get('contact_external_id'); // your user id
+    $event->payload->occurredAt();      // Carbon
+});
+```
+
+With `CLICKFIX_WEBHOOK_QUEUE=true` (or a queue name) the events fire from the `ProcessWebhook` job instead of the request and the route answers `202`. To define the route yourself set `CLICKFIX_WEBHOOK_ROUTE=false` and attach the `clickfix.webhook` middleware to your own route. Creating the subscription: [Webhooks](/docs/integration-guide/webhooks?lang=en).
+
+## Flutter: `clickfix_webview` [#flutter]
+
+Mobile apps show the widget in a secure webview that carries the session; for Flutter the ready-made [`clickfix_webview`](https://pub.dev/packages/clickfix_webview) package implements the bridge contract as `ClickFixController` + `ClickFixWebView`. Installation, the method table and samples: [Mobile: webview and Flutter](/docs/integration-guide/mobile?lang=en#flutter). Example app: [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
+
+## Shared behaviour [#common]
+
+### Pagination [#pagination]
+
+```ts tab="Node.js"
+import { paginate } from "@getclickfix/node";
+
+for await (const contact of paginate(async (limit, offset) => {
+  const envelope = await client.request(
+    "/v1/public-api/contacts",
+    "get",
+    undefined,
+    { query: { limit, offset } },
+  );
+  // Validate envelope.data against your own schema and return {items, total, limit, offset}.
+  return validateContactPage(envelope.data);
+})) {
+  await consume(contact);
+}
+```
+
+```go tab="Go"
+type Contact struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+err = clickfix.Iterate(ctx,
+	func(ctx context.Context, limit, offset int) (clickfix.Page[Contact], error) {
+		return clickfix.ListPage[Contact](ctx, client, "contacts", limit, offset)
+	},
+	func(contact Contact) bool { /* handle */ return true },
+)
+```
+
+```php tab="PHP"
+foreach ($client->contacts()->all(['q' => 'acme']) as $contact) {
+    // page by page, one at a time
+}
+```
+
+Offset pagination is for snapshots; concurrent inserts can shift pages. De-duplicate by UUID when syncing; for incremental sync use the [trigger cursor](/docs/mcp-integrations?lang=en) or [webhooks](/docs/integration-guide/webhooks?lang=en).
+
+### Webhook signature and identity hash [#webhook-signature]
+
+```ts tab="Node.js"
+import { identityHash, verifyWebhook } from "@getclickfix/node";
+
+const valid = verifyWebhook(
+  secret,
+  headers.timestamp,
+  headers.signature,
+  rawBody,
+);
+
+// user_hash for the signed-in user and their company in the web widget
+const userHash = identityHash(identitySecret, authenticatedUser.id, company.id);
+```
+
+```go tab="Go"
+err = clickfix.VerifyWebhook(secret,
+	r.Header.Get("ClickFix-Webhook-Timestamp"),
+	r.Header.Get("ClickFix-Webhook-Signature"), rawBody, time.Now(), 5*time.Minute)
+
+userHash := clickfix.IdentityCompanyHash(identitySecret, userID, companyID)
+```
+
+```php tab="PHP"
+$ok = Webhooks::verify($secret, $timestamp, $signature, $rawBody);
+$userHash = UserHash::make($identitySecret, $userId);
+```
+
+Verify the signature over the raw body before parsing JSON, and record and de-duplicate `ClickFix-Webhook-Id` before any side effect. Verification without an SDK (Node.js, Python, Go): [Webhooks](/docs/webhooks?lang=en#verifying-the-signature).
+
+## Without an SDK [#without-an-sdk]
+
+Example scripts: [`clickfix-examples/curl`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/curl).
+
+```bash tab="curl"
+curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID/messages" \
+  -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-1042-note" \
+  -d '{ "content": "The order has shipped.", "private": true }'
+```
+
+```ts tab="fetch"
+const res = await fetch(
+  "https://api.getclickfix.com/v1/public-api/contacts?limit=20",
+  {
+    headers: { Authorization: `Bearer ${process.env.CLICKFIX_API_KEY}` },
+  },
+);
+const body = await res.json();
+if (!body.success) throw new Error(`${body.error.code}: ${body.error.message}`);
+```
+
+```python tab="Python"
+import os, requests
+
+API = "https://api.getclickfix.com/v1/public-api"
+headers = {"Authorization": f"Bearer {os.environ['CLICKFIX_API_KEY']}"}
+
+contacts = requests.get(f"{API}/contacts", params={"limit": 20}, headers=headers, timeout=30).json()
+
+created = requests.post(
+    f"{API}/conversations",
+    json={"contact_uuid": contact_uuid, "inbox_uuid": inbox_uuid, "subject": "Delivery question"},
+    headers={**headers, "Idempotency-Key": "order-1042-support"},
+    timeout=30,
+).json()
+```
+
+On `429 RATE_LIMITED` wait for `Retry-After` and retry with the same `Idempotency-Key`; do not retry `400`, `401` and `403`.

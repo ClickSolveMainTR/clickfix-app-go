@@ -57,7 +57,7 @@ function rememberLocale(locale: AppLocale) {
  * Fixed top bar: transparent over the hero, ink glass once the page
  * scrolls, with a signal-green progress line along its bottom edge.
  */
-export function LandingNav() {
+export function LandingNav({ solid = false }: { solid?: boolean }) {
   const { t, locale } = useLanding();
   const { isAuthenticated, user } = useAuth();
   const panelHref = user ? defaultHomeForUser(user) : routes.cms.home;
@@ -131,9 +131,11 @@ export function LandingNav() {
     <header
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-500",
-        scrolled
-          ? "border-b border-white/8 bg-[#0A0D0B]/75 backdrop-blur-xl"
-          : "border-b border-transparent",
+        solid
+          ? "border-b border-white/8 bg-[#0A0D0B]"
+          : scrolled
+            ? "border-b border-white/8 bg-[#0A0D0B]/75 backdrop-blur-xl"
+            : "border-b border-transparent",
       )}
     >
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
@@ -147,7 +149,7 @@ export function LandingNav() {
 
         <nav
           aria-label={t("landing.nav.label")}
-          className="hidden items-center gap-1 lg:flex"
+          className="flex items-center gap-1 max-lg:hidden"
         >
           {SITE_PAGES.map((page) => (
             <Link
@@ -165,10 +167,10 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden sm:block">{languages}</div>
+          <div className="max-sm:hidden">{languages}</div>
           <a
             href={isAuthenticated ? panelHref : routes.guest.login}
-            className="hidden rounded-full px-3 py-1.5 text-sm text-white/80 transition-colors hover:text-white sm:inline-flex"
+            className="inline-flex rounded-full px-3 py-1.5 text-sm text-white/80 transition-colors hover:text-white max-sm:hidden"
           >
             {isAuthenticated
               ? locale === "tr"
@@ -177,7 +179,7 @@ export function LandingNav() {
               : t("landing.nav.login")}
           </a>
           {!isAuthenticated && (
-            <LandingCta size="sm" className="hidden sm:inline-flex" />
+            <LandingCta size="sm" className="max-sm:hidden" />
           )}
           <Sheet>
             <SheetTrigger asChild>

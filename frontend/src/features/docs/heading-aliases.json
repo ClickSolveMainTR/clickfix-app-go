@@ -181,12 +181,19 @@
     "yanit-yapisi": "response-format",
     "sayfalama": "pagination",
     "yazma-istekleri-ve-idempotency-key": "idempotency",
-    "ornek-konusma-olusturma": "create-conversation",
-    "ornek-ic-not-ekleme": "add-note",
+    "ornek-konusma-olusturma": "first-request",
+    "ornek-ic-not-ekleme": "first-request",
     "uc-noktalar": "endpoints",
     "hiz-sinirlari-ve-boyutlar": "rate-limits",
-    "sdk-lar": "sdks",
+    "sdk-lar": "next-steps",
     "sonraki-adimlar": "next-steps",
-    "uc-nokta-basvurusu": "endpoint-reference"
+    "uc-nokta-basvurusu": "endpoints",
+    "create-conversation": "first-request",
+    "add-note": "first-request",
+    "sdks": "next-steps",
+    "endpoint-reference": "endpoints",
+    "hata-kodlari": "errors",
+    "surumleme": "versioning",
+    "yanit-zarfi": "response-format"
   }
 }

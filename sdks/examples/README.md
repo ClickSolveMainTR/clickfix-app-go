@@ -1,6 +1,6 @@
 # Kılavuz örnekleri (CF-199)
 
-[Entegrasyon kılavuzundaki](../../frontend/content/docs/tr/integration-guide.mdx) kod örneklerinin kaynağı burasıdır; sayfalardaki kod bloklarına `sync-docs.mjs` ile gömülür (`pnpm examples:sync`, CI `--check` ile denetler). Örnekler değişince önce burada değiştirin, sonra eşitleyin.
+[Entegrasyon kılavuzundaki](../../frontend/content/docs/tr/integration-guide/) kod örneklerinin kaynağı burasıdır; sayfalardaki kod bloklarına `sync-docs.mjs` ile gömülür (`pnpm examples:sync`, CI `--check` ile denetler). Örnekler değişince önce burada değiştirin, sonra eşitleyin.
 
 | Klasör | İçerik | Nasıl doğrulanır |
 |---|---|---|
