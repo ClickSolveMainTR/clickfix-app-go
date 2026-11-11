@@ -413,7 +413,11 @@ jobs:
       - name: Install Laravel ${{ matrix.laravel }} with Testbench ${{ matrix.testbench }}
         working-directory: sdks/laravel
         run: |
-          composer update --prefer-dist --no-progress \
+          # Composer >= 2.11 refuses to install releases with security advisories by default;
+          # Laravel 10 (EOL) and 11 have some, and the matrix must still prove the package on them.
+          # Which framework version an application runs is the application's choice, not this job's.
+          flag=""; composer update --help | grep -q -- --no-security-blocking && flag=--no-security-blocking
+          composer update --prefer-dist --no-progress $flag \
             --with="laravel/framework:${{ matrix.laravel }}" \
             --with="orchestra/testbench:${{ matrix.testbench }}"
           for p in laravel/framework orchestra/testbench phpunit/phpunit clickfix/sdk; do
