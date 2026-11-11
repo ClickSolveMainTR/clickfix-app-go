@@ -681,12 +681,13 @@ jobs:
           node-version-file: frontend/.nvmrc
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      # After setup-node: the self-hosted machine has no preinstalled Node.
-      - name: Check frontend public API docs copy
-        run: node frontend/scripts/sync-docs-spec.mjs --check
       - name: Install
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      # After Install: the sync script parses YAML with the frontend's `yaml` package (CF-208).
+      - name: Check frontend public API docs copies (EN + derived TR)
+        working-directory: frontend
+        run: pnpm docs:check
       - name: api-generate is up to date
         working-directory: frontend
         run: |
