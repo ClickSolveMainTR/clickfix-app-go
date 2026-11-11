@@ -12076,6 +12076,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/forum/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List forum posts taken down
+         * @description Organization-scoped. Requires tenant.feedback.manage. Topics and replies in `removed` status (CF-182), newest takedown first, with who removed each, when and why, and the topic of a removed reply. These are the posts `POST /posts/{uuid}/republish` can bring back.
+         */
+        get: operations["listForumRemoved"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/forum/posts/{uuid}": {
         parameters: {
             query?: never;
@@ -12091,7 +12111,7 @@ export interface paths {
         head?: never;
         /**
          * moderate Forum Post
-         * @description Organization-scoped. Requires tenant.feedback.manage. Decides a pending post once: only a post whose status is `pending` can be published or rejected. A post that was already decided (for example by another moderator working from the same queue) is left unchanged and answers 409 CONFLICT; clients should tell the moderator the post was already handled and reload the queue. Publishing a reply whose topic is not published also answers 409. An unknown post answers 404.
+         * @description Organization-scoped. Requires tenant.feedback.manage. Decides a pending post once: only a post whose status is `pending` can be published or rejected. A post that was already decided (for example by another moderator working from the same queue) is left unchanged and answers 409 CONFLICT; clients should tell the moderator the post was already handled and reload the queue. Publishing a reply whose topic is not published also answers 409. An unknown post answers 404. A published post is taken down with `POST /posts/{uuid}/unpublish`, not here.
          */
         patch: operations["moderateForumPost"];
         trace?: never;
@@ -12110,6 +12130,46 @@ export interface paths {
          * @description Explicit credit-controlled AI triage. Requires tenant.feedback.manage. Respects existing org AI enablement, credits, concurrency, daily and cost budgets. Saves suggestion only; never publishes or rejects content.
          */
         post: operations["assistForumModeration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/forum/posts/{uuid}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a published forum post down
+         * @description Organization-scoped. Requires tenant.feedback.manage. Moves a `published` topic or reply to `removed` (CF-182): it leaves every public read at once (topic page, topic list, sitemap, title search, the subscriber notification inbox), a removed topic hides its replies, and a removed accepted reply stops being the topic's answer. A post in any other status (pending, rejected, already removed) is left unchanged and answers 409 CONFLICT; an unknown post or one of another organization answers 404. The optional `reason` (up to 500 characters) is stored with who removed the post and when, and the `forum.moderated` event carries `status: removed`. Undo with `POST /posts/{uuid}/republish`.
+         */
+        post: operations["unpublishForumPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/forum/posts/{uuid}/republish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a removed forum post again
+         * @description Organization-scoped. Requires tenant.feedback.manage. Only a `removed` post (taken down with `POST /posts/{uuid}/unpublish`) returns to `published`; a pending, rejected or already published post answers 409 CONFLICT, as does a removed reply whose topic is not published. The takedown fields are cleared, notifications sent when the reply was first published stay as they were, and the `forum.moderated` event carries `status: published` with `previous_status: removed`. An unknown post answers 404.
+         */
+        post: operations["republishForumPost"];
         delete?: never;
         options?: never;
         head?: never;
@@ -18143,6 +18203,26 @@ export interface components {
             slug: string;
             /** @enum {string} */
             status: "pending" | "published" | "rejected";
+        };
+        /** @description A topic or reply taken down with CF-182. `topic_id`, `topic_title` and `topic_slug` are null for a topic and set for a reply. */
+        ForumRemovedPost: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            title: string;
+            body: string;
+            /** Format: int64 */
+            topic_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            removed_at: string | null;
+            removed_reason: string;
+            /** Format: uuid */
+            removed_by_uuid: string | null;
+            removed_by_name: string | null;
+            topic_title: string | null;
+            topic_slug: string | null;
         };
         ForumNotification: {
             /** Format: uuid */
@@ -54967,6 +55047,53 @@ export interface operations {
             };
         };
     };
+    listForumRemoved: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["ForumRemovedPost"][];
+                            /** Format: int64 */
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Rate limited (or AI credit/budget limit) */
+            429: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     moderateForumPost: {
         parameters: {
             query?: never;
@@ -55050,6 +55177,98 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description Rate limited (or AI credit/budget limit) */
+            429: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unpublishForumPost: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            [key: string]: unknown;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Rate limited (or AI credit/budget limit) */
+            429: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    republishForumPost: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            [key: string]: unknown;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             /** @description Rate limited (or AI credit/budget limit) */
             429: {
                 headers: {

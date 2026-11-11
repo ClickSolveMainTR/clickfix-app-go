@@ -38,6 +38,21 @@ SELECT * FROM forum_posts WHERE organization_id=$1 AND status='pending' ORDER BY
 SELECT count(*) FROM forum_posts WHERE organization_id=$1 AND status='pending';
 -- name: ForumModerate :one
 UPDATE forum_posts SET status=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING *;
+-- name: ForumUnpublish :one
+UPDATE forum_posts SET status='removed',removed_at=now(),removed_by_user_id=sqlc.arg(actor)::bigint,removed_reason=sqlc.arg(reason)
+WHERE organization_id=$1 AND uuid=$2 AND status='published' RETURNING *;
+-- name: ForumRepublish :one
+UPDATE forum_posts SET status='published',removed_at=NULL,removed_by_user_id=NULL,removed_reason=''
+WHERE organization_id=$1 AND uuid=$2 AND status='removed' RETURNING *;
+-- name: ForumRemoved :many
+SELECT p.uuid,p.slug,p.title,p.body,p.topic_id,p.created_at,p.removed_at,p.removed_reason,
+ u.uuid AS removed_by_uuid,u.name AS removed_by_name,t.title AS topic_title,t.slug AS topic_slug
+FROM forum_posts p
+LEFT JOIN forum_posts t ON t.organization_id=p.organization_id AND t.id=p.topic_id
+LEFT JOIN users u ON u.id=p.removed_by_user_id
+WHERE p.organization_id=$1 AND p.status='removed' ORDER BY p.removed_at DESC,p.id DESC LIMIT $2 OFFSET $3;
+-- name: ForumRemovedCount :one
+SELECT count(*) FROM forum_posts WHERE organization_id=$1 AND status='removed';
 -- name: ForumFlag :exec
 UPDATE forum_posts SET flag_reason=$3 WHERE organization_id=$1 AND uuid=$2 AND status='pending';
 -- name: ForumAccept :exec

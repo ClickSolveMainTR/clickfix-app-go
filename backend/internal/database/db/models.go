@@ -2315,6 +2315,9 @@ type ForumPost struct {
 	ConversationID  pgtype.Int8        `json:"conversation_id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	RemovedAt       pgtype.Timestamptz `json:"removed_at"`
+	RemovedByUserID pgtype.Int8        `json:"removed_by_user_id"`
+	RemovedReason   string             `json:"removed_reason"`
 }
 
 type ForumSubscription struct {

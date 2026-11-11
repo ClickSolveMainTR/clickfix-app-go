@@ -13,12 +13,14 @@ import { StatusPill } from '@/ui/status-pill';
 import { Text } from '@/ui/text';
 
 import {
+  type ForumRemovedPost,
   type ForumTopicSummary,
   useForumActions,
   useForumCategories,
   useForumScope,
   useForumTopics,
   useModerationQueue,
+  useRemovedPosts,
 } from './api';
 import {
   categoryName,
@@ -29,18 +31,21 @@ import {
   type ModerationItem,
   needsConfirm,
   type Outcome,
+  removedLine,
+  visibilityCopy,
 } from './core';
 import { confirmAction, ForumNotice, useForumT, useSingleFlight } from './parts';
 
-type Tab = 'moderation' | 'topics';
+type Tab = 'moderation' | 'topics' | 'removed';
 const ALL = '';
 
 /**
  * Community forum moderation (CF-171), the phone version of the panel's
  * forum page (`frontend/src/features/forum/components/forum-admin-page.tsx`):
  * the queue of pending posts with approve / reject / spam and the explicit AI
- * review, and the published topics with search and category. Categories and
- * the conversions to and from conversations stay on the panel.
+ * review, the published topics with search and category, and the posts
+ * taken down (CF-182) with "publish again". Categories and the conversions
+ * to and from conversations stay on the panel.
  */
 export function ForumScreen() {
   const t = useForumT();
@@ -64,13 +69,20 @@ export function ForumScreen() {
       options={[
         { value: 'moderation', label: t('forum.tab_moderation'), count: pending },
         { value: 'topics', label: t('forum.tab_topics') },
+        { value: 'removed', label: t('forum.tab_removed') },
       ]}
     />
   );
   return (
     <>
       <Stack.Screen options={{ title: t('forum.title') }} />
-      {tab === 'moderation' ? <Moderation tabs={tabs} /> : <Topics tabs={tabs} />}
+      {tab === 'moderation' ? (
+        <Moderation tabs={tabs} />
+      ) : tab === 'topics' ? (
+        <Topics tabs={tabs} />
+      ) : (
+        <Removed tabs={tabs} />
+      )}
     </>
   );
 }
@@ -245,6 +257,78 @@ function Topics({ tabs }: { tabs: React.ReactElement }) {
           onPress={() => router.push({ pathname: '/more/forum-topic', params: { slug: topic.slug } })}
           last={last}
         />
+      )}
+    />
+  );
+}
+
+/** Topics and replies taken down, newest first; each can be published again after asking. */
+function Removed({ tabs }: { tabs: React.ReactElement }) {
+  const t = useForumT();
+  const removed = useRemovedPosts();
+  const { visibility } = useForumActions();
+  const flight = useSingleFlight();
+  const republish = (p: ForumRemovedPost) => {
+    const copy = visibilityCopy('republish', p.topic_id != null ? 'reply' : 'topic');
+    confirmAction(t, {
+      title: t(copy.title),
+      body: t(copy.body),
+      action: t(copy.action),
+      run: () => {
+        if (!flight.start()) return;
+        visibility.mutate({ uuid: p.uuid, action: 'republish' }, { onSettled: flight.end });
+      },
+    });
+  };
+  return (
+    <PagedList<ForumRemovedPost>
+      query={removed}
+      keyOf={(p) => p.uuid}
+      emptyIcon="hide"
+      empty={t('forum.removed_empty')}
+      header={
+        <View className="gap-3">
+          {tabs}
+          <Text variant="footnote" tone="muted" className="px-1">
+            {t('forum.removed_hint')}
+          </Text>
+        </View>
+      }
+      renderItem={(p) => (
+        <View className="gap-2 border-b border-border px-4 py-3">
+          <View className="flex-row flex-wrap items-center gap-2">
+            <StatusPill
+              label={t(p.topic_id != null ? 'forum.kind_reply' : 'forum.kind_topic')}
+              icon={p.topic_id != null ? 'reply' : 'chat'}
+            />
+            {p.topic_title ? (
+              <Text variant="footnote" tone="muted" numberOfLines={1} className="flex-1">
+                {t('forum.of_topic', { title: p.topic_title })}
+              </Text>
+            ) : null}
+          </View>
+          {p.title ? (
+            <Text variant="body" className="font-sans-semibold" selectable>
+              {p.title}
+            </Text>
+          ) : null}
+          {/* Visitor text is shown as plain text, never rendered as markup. */}
+          <Text variant="callout" tone="muted" numberOfLines={4} selectable>
+            {p.body}
+          </Text>
+          <Text variant="footnote" tone="muted">
+            {removedLine(t, p, p.removed_at ? formatShortWithYear(p.removed_at) : '')}
+          </Text>
+          <Button
+            title={t('forum.republish')}
+            icon="undo"
+            variant="outline"
+            disabled={visibility.isPending}
+            loading={visibility.isPending && visibility.variables?.uuid === p.uuid}
+            onPress={() => republish(p)}
+            className="self-start"
+          />
+        </View>
       )}
     />
   );
