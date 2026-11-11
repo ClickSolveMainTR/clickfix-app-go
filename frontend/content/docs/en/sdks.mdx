@@ -1,17 +1,18 @@
 ---
 title: SDKs and sample code
-description: ClickFix SDK examples for Go, Node.js and React; authentication, retries, pagination, webhook signatures and requests without an SDK.
+description: ClickFix SDK examples for Go, Node.js, PHP and React; authentication, retries, pagination, webhook signatures and requests without an SDK.
 section: developers
 order: 2
 ---
 
-ClickFix has server SDKs for Go and Node.js and a UI-free widget client for React. The SDKs handle authentication, bounded retries (including `Retry-After`), pagination and webhook signature verification.
+ClickFix has server SDKs for Go, Node.js and PHP and a UI-free widget client for React. The SDKs handle authentication, bounded retries (including `Retry-After`), pagination and webhook signature verification.
 
 <Callout title="Packages">
   `npm install @clickfix/node` (0.1.0, Node 22+), `npm install
-  @clickfix/react-widget` (0.1.0, React 18+) and `go get
-  github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`. The end-to-end setup
-  order with verified samples at every step: [Integration
+  @clickfix/react-widget` (0.1.0, React 18+), `composer require clickfix/sdk`
+  (0.1.0, PHP 8.1+) and `go get
+  github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`. The end-to-end
+  setup order with verified samples at every step: [Integration
   guide](/docs/integration-guide?lang=en). The [examples without an
   SDK](#without-an-sdk) below do the same work over plain HTTP; every endpoint
   in the [API reference](/docs/api-reference/conversations?lang=en) also ships
