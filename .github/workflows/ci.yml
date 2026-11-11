@@ -48,8 +48,9 @@ jobs:
   #   backend/**                  -> backend, contracts
   #   backend/migrations/**       -> backend, contracts, infra
   #   mobile/**                   -> mobile
-  #   sdks/php/**, sdks/laravel/** -> laravel (plus backend, contracts like sdks/**)
-  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile
+  #   sdks/php/**, sdks/examples/** -> backend, contracts, php (sdks/php/** also laravel)
+  #   sdks/laravel/**             -> backend, contracts, laravel
+  #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile, php
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
   #   Makefile, scripts/, other   -> backend, frontend, contracts
@@ -60,11 +61,23 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       contracts: ${{ steps.filter.outputs.contracts }}
       mobile: ${{ steps.filter.outputs.mobile }}
+      php: ${{ steps.filter.outputs.php }}
       infra: ${{ steps.filter.outputs.infra }}
       laravel: ${{ steps.filter.outputs.laravel }}
       flutter: ${{ steps.filter.outputs.flutter }}
       full: ${{ steps.filter.outputs.full }}
     steps:
+      # Self-hosted only: a container job that ran as root (php) can leave
+      # root-owned files in a runner's workspace, and every later checkout on
+      # that runner then fails with EACCES. Hand the workspaces of all runners
+      # on this machine back to the runner user before the first checkout.
+      - name: Repair workspace ownership (self-hosted)
+        if: ${{ runner.environment != 'github-hosted' }}
+        run: |
+          command -v docker >/dev/null || { echo "no docker; skipped"; exit 0; }
+          root=$(dirname "$(dirname "$(dirname "$RUNNER_WORKSPACE")")")
+          repo=$(basename "$RUNNER_WORKSPACE")
+          docker run --rm -v "$root:/r" alpine:3 sh -c "for d in /r/*/_work/$repo; do [ -d \"\$d\" ] && chown -R $(id -u):$(id -g) \"\$d\"; done; true"
       - uses: actions/checkout@v7
         with:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
@@ -76,7 +89,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; infra=false; laravel=false; flutter=false; full=false
+          mobile=false; php=false; infra=false; laravel=false; flutter=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -97,26 +110,28 @@ jobs:
               .github/workflows/ci.yml) full=true ;;
               .github/*) ;;
               backend/docs/openapi.yaml)
-                backend=true; frontend=true; contracts=true; mobile=true ;;
+                backend=true; frontend=true; contracts=true; mobile=true; php=true ;;
               *.md|docs/*) ;;
               backend/Dockerfile|frontend/Dockerfile|compose.prod.yml|deploy/*|.dockerignore|*/.dockerignore)
                 infra=true ;;
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
-              sdks/php/*|sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
+              sdks/php/*) backend=true; contracts=true; php=true; laravel=true ;;
+              sdks/examples/*) backend=true; contracts=true; php=true ;;
+              sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
               sdks/flutter/*) flutter=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; infra=true; laravel=true; flutter=true
+            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; laravel=true; flutter=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
+            echo "php=$php"; echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -412,6 +427,96 @@ jobs:
         if: always()
         run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE"
 
+  # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
+  # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
+  # then the guide's PHP examples against the stub API (the sdks job also runs
+  # them when the runner has php; here they are required). The version is the
+  # newest `## X.Y.Z` heading of sdks/php/CHANGELOG.md and Client::USER_AGENT;
+  # the sdks-mirror job pushes sdks/php to ClickSolveMainTR/clickfix-php and
+  # tags vX.Y.Z there, which Packagist (clickfix/sdk) watches.
+  # Runs in the official php:<version>-cli image: the self-hosted runners have
+  # no PHP and setup-php's apt/sudo install hangs there, while the container
+  # already has the interpreter; Composer comes from the signed installer.
+  php:
+    needs: [changes]
+    if: needs.changes.outputs.php == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.2', '8.3', '8.4']
+    container:
+      image: php:${{ matrix.php }}-cli
+    env:
+      COMPOSER_ALLOW_SUPERUSER: '1'
+      COMPOSER_NO_INTERACTION: '1'
+    steps:
+      # The container runs as root on a workspace the runner user owns: hand
+      # back anything root left behind (vendor/, caches, node tool cache) at
+      # the end, and repair it up front, or the next checkout on this runner
+      # fails with EACCES.
+      - name: Workspace ownership (before checkout)
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          echo "workspace owner $owner"
+          chown -R "$owner" "$GITHUB_WORKSPACE" 2>/dev/null || true
+      - name: Tools (git, unzip, jq, Composer)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git unzip jq ca-certificates curl >/dev/null
+          expected=$(curl -fsS https://composer.github.io/installer.sig)
+          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+          actual=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');")
+          [ "$expected" = "$actual" ] || { echo "::error::Composer installer checksum mismatch"; exit 1; }
+          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+          rm /tmp/composer-setup.php
+          php --version | head -1; composer --version
+      - uses: actions/checkout@v7
+      - name: Package metadata (composer validate, name, license, version)
+        working-directory: sdks/php
+        run: |
+          composer validate --strict --no-check-lock
+          [ "$(jq -r .name composer.json)" = "clickfix/sdk" ] || { echo "::error::composer.json name must be clickfix/sdk"; exit 1; }
+          [ "$(jq -r .license composer.json)" = "MIT" ] && [ -s LICENSE ] || { echo "::error::MIT license missing"; exit 1; }
+          version=$(sed -n 's/^## \([0-9][0-9.]*\) - .*/\1/p' CHANGELOG.md | head -1)
+          [ -n "$version" ] || { echo "::error::CHANGELOG.md has no '## X.Y.Z - date' entry"; exit 1; }
+          grep -q "'clickfix-php-sdk/$version'" src/Client.php || { echo "::error::Client::USER_AGENT must carry version $version"; exit 1; }
+          echo "clickfix/sdk $version -> clickfix-php tag v$version"
+      # GitHub dist downloads count against the API rate limit; the job token lifts it.
+      - name: Install
+        working-directory: sdks/php
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer install --no-progress --prefer-dist
+      - name: Code style (php-cs-fixer)
+        working-directory: sdks/php
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
+        run: composer cs
+      - name: Static analysis (PHPStan level 8)
+        working-directory: sdks/php
+        run: composer stan
+      - name: Unit tests (PHPUnit)
+        working-directory: sdks/php
+        run: composer test
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Guide PHP examples against the stub API
+        working-directory: sdks
+        env:
+          CLICKFIX_EXAMPLES_PHP: required
+        run: |
+          node examples/run.mjs --check --only=php
+          node examples/run.mjs --only=php
+      - name: Workspace ownership (after)
+        if: always()
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          rm -rf sdks/php/vendor sdks/php/composer.lock sdks/php/.phpunit.cache sdks/php/.php-cs-fixer.cache sdks/examples/php/vendor
+          chown -R "$owner" "$GITHUB_WORKSPACE" || true
+          [ -d "$RUNNER_TOOL_CACHE" ] && chown -R "$owner" "$RUNNER_TOOL_CACHE" || true
+
   # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
   # formatter, unit + widget tests, the example app compiled to a Flutter
   # bundle (no Android SDK / Xcode needed) and the pub.dev publish dry run.
@@ -609,7 +714,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, laravel, flutter]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, laravel, flutter]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green

@@ -1,11 +1,11 @@
 ---
 title: Integration guide
-description: Connect ClickFix to your own product end to end; identity verification, external ids, custom fields, companies, events, the API channel, webhooks, system binding and the mobile webview. Widget, Node.js, Go and curl samples at every step.
+description: Connect ClickFix to your own product end to end; identity verification, external ids, custom fields, companies, events, the API channel, webhooks, system binding and the mobile webview. Widget, Node.js, Go, PHP and curl samples at every step.
 section: developers
 order: 0
 ---
 
-This is the single integration guide: in the order the **Setup** wizard in the panel follows, it covers everything you write to connect your own product to ClickFix. Every step has four samples: the **widget** in the browser (JavaScript), **Node.js** (`@clickfix/node`), **Go** (the `sdks/go` module) and **curl**. The samples come from the repository's [`sdks/examples`](https://github.com/ClickSolveMainTR/clickfix-app-go/tree/main/sdks/examples) folder and are executed on every release; the code you see here is the code that passed.
+This is the single integration guide: in the order the **Setup** wizard in the panel follows, it covers everything you write to connect your own product to ClickFix. Every step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@clickfix/node`), **Go** (the `sdks/go` module), **PHP** (`clickfix/sdk`) and **curl**. The samples come from the repository's [`sdks/examples`](https://github.com/ClickSolveMainTR/clickfix-app-go/tree/main/sdks/examples) folder and are executed on every release; the code you see here is the code that passed.
 
 ## Before you start [#before-you-start]
 
@@ -26,7 +26,8 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 | [`@clickfix/node`](https://www.npmjs.com/package/@clickfix/node)                       | 0.1.0                                                                               | `npm install @clickfix/node` (Node 22+)                                                        |
 | [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)             |
 | [`@clickfix/react-widget`](https://www.npmjs.com/package/@clickfix/react-widget)       | 0.1.1                                                                               | `npm install @clickfix/react-widget` (React 18+)                                               |
-| Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
+| Go module                                                                              | `sdks/go/v0.1.0`                                                                    | `go get github.com/ClickSolveMainTR/clickfix-app-go/sdks/go@v0.1.0`                            |
+| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)                |
 | [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)                  | 0.1.0                                                                               | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); see [Laravel package](#laravel) |
 
 Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
@@ -119,6 +120,28 @@ func userHash(ctx context.Context) error {
 	hash := clickfix.IdentityHash(secret, userID)
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"user_id": userID, "user_hash": hash})
 }
+```
+
+{/* example: php/01-user-hash.php */}
+
+```php tab="PHP"
+<?php
+// Adım 1: user_hash sunucuda hesaplanır ve giriş yapmış kullanıcıya verilir.
+require __DIR__.'/vendor/autoload.php'; // composer require clickfix/sdk
+
+use ClickFix\UserHash;
+
+// Panel > Web widget > Güvenlik > Kimlik doğrulama anahtarı (bir kez gösterilir)
+$secret = getenv('CLICKFIX_IDENTITY_SECRET');
+
+// Oturum açmış kullanıcının sizin sisteminizdeki kimliği (dış kimlik)
+function userHashFor(string $secret, string $userId): string
+{
+    return UserHash::make($secret, $userId);
+}
+
+// Örnek: /api/support-session uç noktanız bunu döner, tarayıcı identify'a verir
+echo json_encode(['user_id' => '1001', 'user_hash' => userHashFor($secret, '1001')]), PHP_EOL;
 ```
 
 {/* example: curl/01-user-hash.sh */}
@@ -230,6 +253,33 @@ func externalID(ctx context.Context) error {
 }
 ```
 
+{/* example: php/02-external-id.php */}
+
+```php tab="PHP"
+<?php
+// Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
+require __DIR__.'/vendor/autoload.php'; // composer require clickfix/sdk guzzlehttp/guzzle
+
+use ClickFix\Client;
+
+$client = new Client(
+    getenv('CLICKFIX_BASE_URL'), // https://api.getclickfix.com
+    getenv('CLICKFIX_API_KEY'),  // contacts:read, contacts:write, companies:read
+);
+
+// Aynı dış kimlikle ikinci çağrı yeni kişi açmaz, günceller (200); ilki 201 döner.
+$contact = $client->contacts()->upsertByExternalId(
+    '1001',
+    ['name' => 'Ayşe Yılmaz', 'email' => 'ayse@example.com'],
+    idempotencyKey: 'user-1001-'.(int) (microtime(true) * 1000),
+);
+
+// Şirketin dış kimliği kişininkinden ayrıdır (widget: company.id).
+$company = $client->companies()->findByExternalId('F-77');
+
+echo json_encode(['contact' => $contact, 'company' => $company]), PHP_EOL;
+```
+
 {/* example: curl/02-external-id.sh */}
 
 ```bash tab="curl"
@@ -326,6 +376,28 @@ func customFields(ctx context.Context) error {
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
 }
+```
+
+{/* example: php/03-custom-fields.php */}
+
+```php tab="PHP"
+<?php
+// Adım 3: özel alanlar. Alanı panelde tanımlayın (Ayarlar > Özel alanlar);
+// anahtarı neyse custom_fields içinde o anahtarla gönderin.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+
+$client = new Client(getenv('CLICKFIX_BASE_URL'), getenv('CLICKFIX_API_KEY'));
+
+// Liste alanlarında seçeneğin kimliği ya da etiketi kabul edilir.
+$contact = $client->customFields()->setForContact(
+    '1001',
+    ['plan' => 'pro', 'seats' => 12, 'renewal_date' => '2027-01-31'],
+    idempotencyKey: 'user-1001-fields-'.(int) (microtime(true) * 1000),
+);
+
+echo json_encode($contact), PHP_EOL;
 ```
 
 {/* example: curl/03-custom-fields.sh */}
@@ -431,6 +503,33 @@ func company(ctx context.Context) error {
 }
 ```
 
+{/* example: php/04-company.php */}
+
+```php tab="PHP"
+<?php
+// Adım 4: şirket. Şirket widget identify (company.id) ile oluşur; API ile
+// bulunur ve müşteri sağlığı sinyalleri (kullanım, gelir, olay) gönderilir.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+
+$client = new Client(
+    getenv('CLICKFIX_BASE_URL'),
+    getenv('CLICKFIX_API_KEY'), // companies:read, health:write
+);
+
+$found = $client->companies()->findByExternalId('F-77');
+
+// 0-100 arası kullanım sinyali; 30 gün boyunca sağlık puanına katılır.
+$usage = $client->companies()->setUsage(
+    ['external_id' => 'F-77', 'score' => 82],
+    // İşlemi tanımlayan sabit değer: kendi ölçüm kaydınızın kimliği (örnekte zaman damgası)
+    idempotencyKey: 'usage-F-77-'.(int) (microtime(true) * 1000),
+);
+
+echo json_encode(['found' => $found, 'usage' => $usage]), PHP_EOL;
+```
+
 {/* example: curl/04-company.sh */}
 
 ```bash tab="curl"
@@ -532,6 +631,33 @@ func events(ctx context.Context) error {
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode()})
 }
+```
+
+{/* example: php/05-events.php */}
+
+```php tab="PHP"
+<?php
+// Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
+// şirket zaman çizelgesine API ile yazılır (events:write).
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+
+$client = new Client(getenv('CLICKFIX_BASE_URL'), getenv('CLICKFIX_API_KEY'));
+
+// Olayı sizin sisteminizde tanımlayan kimlik; tekrar gönderimde aynı kalır (örnekte zaman damgası)
+$eventId = 'seat-limit-F-77-'.(int) (microtime(true) * 1000);
+
+// idempotency_key aynı zamanda Idempotency-Key başlığı olur.
+$event = $client->events()->track([
+    'external_id' => 'F-77', // şirketin dış kimliği (ya da company_uuid / domain)
+    'contact_email' => 'ayse@example.com', // olayı bilinen kişiye bağlar
+    'name' => 'seat_limit_reached',
+    'properties' => ['seats' => 12, 'limit' => 12],
+    'idempotency_key' => $eventId,
+]);
+
+echo json_encode($event), PHP_EOL;
 ```
 
 {/* example: curl/05-events.sh */}
@@ -647,6 +773,41 @@ func systemEndpoint(ctx context.Context) error {
 	fmt.Println("listening")
 	return http.ListenAndServe("127.0.0.1:"+port, nil)
 }
+```
+
+{/* example: php/08-system-endpoint.php */}
+
+```php tab="PHP"
+<?php
+// Adım 8: sistem bağlama. ClickFix sizin sisteminizi çağırır; siz yalnız
+// müşterinin dış kimliğiyle cevap veren bir uç yazarsınız. Panelde
+// Entegrasyonlar > Sistemini bağla > Kaynak: /customers/{external_id}/invoices
+// Çalıştırma: php -S 127.0.0.1:3000 08-system-endpoint.php (ya da framework rotanız)
+
+$token = getenv('SYSTEM_TOKEN') ?: 'example-system-token'; // bağlantıda Bearer
+
+if (($_SERVER['HTTP_AUTHORIZATION'] ?? '') !== 'Bearer '.$token) {
+    http_response_code(401);
+    exit;
+}
+$path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+if (!preg_match('#^/customers/([^/]+)/invoices$#', $path, $m)) {
+    http_response_code(404);
+    exit;
+}
+$externalId = rawurldecode($m[1]);
+// Gerçek sisteminizde: veritabanından externalId'nin faturaları
+$items = [
+    [
+        'number' => 'F-2026-0042',
+        'total' => 1250.5,
+        'currency' => 'TRY',
+        'status' => 'paid',
+        'customer_id' => $externalId,
+    ],
+];
+header('Content-Type: application/json');
+echo json_encode(['items' => $items]); // Kayıt yolu: items
 ```
 
 {/* example: curl/08-system-endpoint.sh */}
@@ -766,6 +927,33 @@ func apiChannel(ctx context.Context) error {
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]int{"status": res.StatusCode})
 }
+```
+
+{/* example: php/06-api-channel.php */}
+
+```php tab="PHP"
+<?php
+// Adım 6: API kanalı. Kendi uygulamanızdaki müşteri mesajını ClickFix'e
+// gönderin; imza API anahtarıyla değil kanalın imza anahtarıyla atılır.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\ApiChannel;
+
+$channel = new ApiChannel(
+    getenv('CLICKFIX_BASE_URL'),
+    getenv('CLICKFIX_CHANNEL_INSTANCE'), // Kanallar > API kanalı
+    getenv('CLICKFIX_CHANNEL_SECRET'),
+);
+
+// X-ClickFix-Timestamp ve X-ClickFix-Signature başlıklarını SDK ekler.
+$received = $channel->send([
+    'id' => 'msg-'.(int) (microtime(true) * 1000), // kanal içinde tekil; aynı id bir kez kaydedilir
+    'sender_id' => '1001', // müşterinin sizin sisteminizdeki kimliği
+    'sender_name' => 'Ayşe Yılmaz',
+    'text' => 'Siparişim ne zaman gelir?',
+]);
+
+echo json_encode($received), PHP_EOL;
 ```
 
 {/* example: curl/06-api-channel.sh */}
@@ -929,6 +1117,54 @@ func webhooks(ctx context.Context) error {
 	fmt.Println("listening")
 	return http.ListenAndServe("127.0.0.1:"+port, nil)
 }
+```
+
+{/* example: php/07-webhooks.php */}
+
+```php tab="PHP"
+<?php
+// Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
+// Komut satırından çalışınca aboneliği açar; web sunucusu altında
+// (php -S 127.0.0.1:3000 07-webhooks.php ya da framework rotanız) teslimatları doğrular.
+require __DIR__.'/vendor/autoload.php';
+
+use ClickFix\Client;
+use ClickFix\Webhooks;
+
+if (PHP_SAPI === 'cli') {
+    $client = new Client(
+        getenv('CLICKFIX_BASE_URL'),
+        getenv('CLICKFIX_API_KEY'), // webhooks:write
+    );
+    $created = $client->webhooks()->create([
+        'name' => 'CRM senkronizasyonu',
+        'url' => 'https://example.com/clickfix/webhook',
+        'events' => ['conversation.created', 'message.received', 'contact.updated'],
+        'enabled' => true,
+    ], idempotencyKey: 'webhook-crm-'.(int) (microtime(true) * 1000));
+    // secret yalnız bu yanıtta döner: güvenli saklayın (ör. gizli değer deposu),
+    // loglamayın. Doğrulama sunucunuz onu oradan okur (örnekte CLICKFIX_WEBHOOK_SECRET).
+    unset($created['secret']);
+    echo json_encode(['subscription' => $created]), PHP_EOL;
+    exit;
+}
+
+$secret = getenv('CLICKFIX_WEBHOOK_SECRET');
+$raw = file_get_contents('php://input'); // ham gövde; JSON'a çevirmeden doğrulayın
+$ok = Webhooks::verify(
+    $secret,
+    $_SERVER['HTTP_CLICKFIX_WEBHOOK_TIMESTAMP'] ?? '',
+    $_SERVER['HTTP_CLICKFIX_WEBHOOK_SIGNATURE'] ?? '',
+    $raw,
+);
+if (!$ok) {
+    http_response_code(401);
+    exit;
+}
+// ClickFix-Webhook-Id ile tekilleştirin, kaydedin, sonra 2xx dönün.
+$event = json_decode($raw, true);
+error_log(json_encode(['received' => $event['event'] ?? null]));
+http_response_code(200);
 ```
 
 {/* example: curl/07-webhooks.sh */}
