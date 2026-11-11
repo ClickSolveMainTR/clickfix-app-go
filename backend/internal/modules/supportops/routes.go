@@ -53,6 +53,29 @@ func Read[T any](r *http.Request) (T, error) {
 	if err != nil || len(b) > 64*1024 {
 		return in, ErrInvalid
 	}
+	return decode[T](b)
+}
+
+// ReadOptional is Read for a body that may be left out: no body, an empty
+// one or whitespace only (whatever Content-Length or chunked encoding says)
+// gives the zero value; anything else must be a valid object like Read.
+func ReadOptional[T any](r *http.Request) (T, error) {
+	var in T
+	if r.Body == nil {
+		return in, nil
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, 64*1024+1))
+	if err != nil || len(b) > 64*1024 {
+		return in, ErrInvalid
+	}
+	if strings.TrimSpace(string(b)) == "" {
+		return in, nil
+	}
+	return decode[T](b)
+}
+
+func decode[T any](b []byte) (T, error) {
+	var in T
 	d := json.NewDecoder(strings.NewReader(string(b)))
 	d.DisallowUnknownFields()
 	if d.Decode(&in) != nil {
