@@ -1,6 +1,6 @@
 module clickfix-guide-examples
 
-go 1.26.10
+go 1.26.11
 
 require github.com/ClickSolveMainTR/clickfix-app-go/sdks/go v0.0.0
 
