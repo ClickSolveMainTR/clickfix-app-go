@@ -1045,7 +1045,8 @@ jobs:
             echo "SDKS_MIRROR_TOKEN secret is not set: SDK mirror skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-          printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"
+          # git-credential-store format: one URL per line.
+          printf 'https://x-access-token:%s@github.com\n' "$SDKS_MIRROR_TOKEN" > "$work/cred"; chmod 600 "$work/cred"
           export GIT_CONFIG_GLOBAL="$work/gitconfig"   # job-private: the runner's own git config stays untouched
           git config --global credential.helper "store --file=$work/cred"
           release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
