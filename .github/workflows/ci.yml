@@ -372,6 +372,15 @@ jobs:
       COMPOSER_ALLOW_SUPERUSER: '1'
       COMPOSER_NO_INTERACTION: '1'
     steps:
+      # The container runs as root on a workspace the runner user owns: hand
+      # back anything root left behind (vendor/, caches, node tool cache) at
+      # the end, and repair it up front, or the next checkout on this runner
+      # fails with EACCES.
+      - name: Workspace ownership (before checkout)
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          echo "workspace owner $owner"
+          chown -R "$owner" "$GITHUB_WORKSPACE" 2>/dev/null || true
       - name: Tools (git, unzip, jq, Composer)
         run: |
           apt-get update -qq
@@ -421,6 +430,13 @@ jobs:
         run: |
           node examples/run.mjs --check --only=php
           node examples/run.mjs --only=php
+      - name: Workspace ownership (after)
+        if: always()
+        run: |
+          owner=$(stat -c %u:%g "$GITHUB_WORKSPACE")
+          rm -rf sdks/php/vendor sdks/php/composer.lock sdks/php/.phpunit.cache sdks/php/.php-cs-fixer.cache sdks/examples/php/vendor
+          chown -R "$owner" "$GITHUB_WORKSPACE" || true
+          [ -d "$RUNNER_TOOL_CACHE" ] && chown -R "$owner" "$RUNNER_TOOL_CACHE" || true
 
   # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
   # formatter, unit + widget tests, the example app compiled to a Flutter
