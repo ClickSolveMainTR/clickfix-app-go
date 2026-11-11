@@ -66,14 +66,17 @@ export function DocumentStrip({ disabled }: { disabled: boolean }) {
 
   const items = docs.data?.items ?? [];
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div
+      data-slot="document-strip"
+      className="flex flex-wrap items-center gap-1"
+    >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="text-muted-foreground h-7 gap-1 px-2 text-xs"
+            className="text-muted-foreground hover:text-foreground h-7 gap-1 rounded-full px-2 text-xs"
             disabled={disabled}
           >
             <Link2 className="size-3.5" />

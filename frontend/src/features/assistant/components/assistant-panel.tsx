@@ -8,27 +8,32 @@ import {
 } from "@assistant-ui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bot,
+  Compass,
   History,
   LifeBuoy,
+  ListChecks,
   Maximize2,
   MessagesSquare,
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  UserPlus,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { AppMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { routes } from "@/config/routes";
 import { guidesService } from "@/features/guides/services/guides.service";
 import { cn } from "@/lib/utils";
+import { relativeDatetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
 
 import { errorKey } from "../lib/errors";
@@ -37,8 +42,13 @@ import { bumpUsage, runSettled } from "../lib/usage";
 import { useAssistantSurface } from "../runtime/surface";
 import { assistantService } from "../services/assistant.service";
 
+import { AssistantAvatar } from "./assistant-avatar";
 import { useOptionalAssistant } from "./assistant-provider";
-import { AssistantThread } from "./assistant-thread";
+import {
+  AssistantThread,
+  AssistantWelcome,
+  type AssistantStarter,
+} from "./assistant-thread";
 import { PageStateCard } from "./page-state-card";
 import { useSupportWidget } from "./support-widget";
 
@@ -127,26 +137,30 @@ export function AssistantPanel({
     onError: (err) => setError(errorKey(err)),
   });
 
-  const starters = [
-    pageTitle
-      ? t("assistant.starters.context", { title: pageTitle })
-      : t("assistant.starters.page"),
-    t("assistant.starters.setup"),
-    t("assistant.starters.invite"),
-    t("assistant.starters.problem"),
+  const starters: AssistantStarter[] = [
+    {
+      prompt: pageTitle
+        ? t("assistant.starters.context", { title: pageTitle })
+        : t("assistant.starters.page"),
+      icon: <Compass />,
+    },
+    { prompt: t("assistant.starters.setup"), icon: <ListChecks /> },
+    { prompt: t("assistant.starters.invite"), icon: <UserPlus /> },
+    { prompt: t("assistant.starters.problem"), icon: <LifeBuoy /> },
   ];
 
   return (
     <>
       {variant !== "page" ? (
-        <div className="flex items-center gap-2 border-b px-4 py-3 pr-12">
-          <span className="bg-primary/10 text-primary flex size-8 items-center justify-center rounded-lg">
-            <Bot className="size-4" />
-          </span>
+        <div
+          data-slot="assistant-header"
+          className="flex items-center gap-3 border-b px-4 py-3 pr-12"
+        >
+          <AssistantAvatar size="md" />
           <div className="min-w-0 flex-1">
             {variant === "sheet" ? (
               <>
-                <SheetTitle className="text-base">
+                <SheetTitle className="font-display truncate text-base tracking-tight">
                   {t("assistant.title")}
                 </SheetTitle>
                 <SheetDescription className="truncate text-xs">
@@ -155,7 +169,7 @@ export function AssistantPanel({
               </>
             ) : (
               <>
-                <p className="text-base font-semibold">
+                <p className="font-display truncate text-base font-semibold tracking-tight">
                   {t("assistant.title")}
                 </p>
                 <p className="text-muted-foreground truncate text-xs">
@@ -252,12 +266,11 @@ export function AssistantPanel({
             starters={starters}
             welcome={
               <>
-                <div className="bg-card rounded-2xl border p-5 text-sm shadow-xs">
-                  <p className="font-medium">{t("assistant.welcome_title")}</p>
-                  <p className="text-muted-foreground mt-1">
-                    {t("assistant.welcome_body")}
-                  </p>
-                </div>
+                <AssistantWelcome
+                  eyebrow={t("assistant.welcome.eyebrow")}
+                  title={t("assistant.welcome_title")}
+                  body={t("assistant.welcome_body")}
+                />
                 {status.isError ? (
                   <QueryFailure onRetry={() => void status.refetch()} />
                 ) : null}
@@ -274,9 +287,15 @@ export function AssistantPanel({
         </div>
       )}
 
-      <div className="space-y-2 border-t px-3 py-2">
+      <div
+        data-slot="assistant-footer"
+        className="bg-background space-y-2 border-t px-3 py-2"
+      >
         {disabled ? (
-          <p className="text-muted-foreground text-xs">
+          <p
+            role="status"
+            className="bg-muted/60 text-muted-foreground rounded-lg px-3 py-2 text-xs"
+          >
             {t(`assistant.status.${status.data?.reason ?? "disabled"}`)}
           </p>
         ) : null}
@@ -291,7 +310,7 @@ export function AssistantPanel({
           </p>
         ) : null}
         {escalating && status.data?.escalation_available !== false ? (
-          <div className="space-y-2 rounded-lg border p-2">
+          <div className="bg-card space-y-2 rounded-xl border p-2 shadow-xs">
             <p className="text-xs">{t("assistant.escalate.hint")}</p>
             <Textarea
               autoFocus
@@ -327,7 +346,8 @@ export function AssistantPanel({
             {status.data?.escalation_available === false ? null : (
               <button
                 type="button"
-                className="hover:text-foreground inline-flex items-center gap-1"
+                className="hover:text-foreground focus-visible:ring-ring/50 inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2"
+                aria-expanded={escalating}
                 onClick={() => setEscalating((v) => !v)}
               >
                 <LifeBuoy className="size-3.5" />
@@ -339,7 +359,7 @@ export function AssistantPanel({
             {supportWidget.data?.available ? (
               <button
                 type="button"
-                className="hover:text-foreground inline-flex items-center gap-1"
+                className="hover:text-foreground focus-visible:ring-ring/50 inline-flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2"
                 onClick={() => {
                   if (openSupportChat()) onClose?.();
                 }}
@@ -350,7 +370,7 @@ export function AssistantPanel({
             ) : null}
           </span>
           {status.data ? (
-            <span>
+            <span className="tabular-nums">
               {t("assistant.usage", {
                 used: status.data.used_today,
                 limit: status.data.daily_limit,
@@ -363,39 +383,75 @@ export function AssistantPanel({
   );
 }
 
-/** Past chats of the member (RemoteThreadListAdapter over GET threads). */
-export function ThreadHistory({ onPick }: { onPick?: () => void }) {
+/**
+ * Past chats of the member (RemoteThreadListAdapter over GET threads):
+ * title, when the last message was, a signal dot on the open chat. The
+ * page variant passes a `header` (title + new chat).
+ */
+export function ThreadHistory({
+  onPick,
+  header,
+}: {
+  onPick?: () => void;
+  header?: ReactNode;
+}) {
   const { t } = useLocale();
   const loading = useAuiState((s) => s.threads.isLoading);
   const count = useAuiState((s) => s.threads.threadIds.length);
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      {loading ? (
-        <p role="status" className="text-muted-foreground p-6 text-sm">
-          {t("common.loading")}
-        </p>
-      ) : null}
-      <ThreadListPrimitive.Root asChild>
-        <ul className="divide-y">
-          <ThreadListPrimitive.Items
-            components={{
-              ThreadListItem: () => <ThreadHistoryItem onPick={onPick} />,
-            }}
-          />
-          {!loading && count === 0 ? (
-            <li className="text-muted-foreground px-4 py-6 text-sm">
-              {t("assistant.no_history")}
-            </li>
-          ) : null}
-        </ul>
-      </ThreadListPrimitive.Root>
-    </ScrollArea>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {header}
+      <ScrollArea className="min-h-0 flex-1">
+        {loading ? (
+          <div
+            role="status"
+            aria-label={t("common.loading")}
+            className="space-y-3 px-4 py-3"
+          >
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-1.5">
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <ThreadListPrimitive.Root asChild>
+          <ul className="divide-y" aria-label={t("assistant.history.title")}>
+            <ThreadListPrimitive.Items
+              components={{
+                ThreadListItem: () => <ThreadHistoryItem onPick={onPick} />,
+              }}
+            />
+            {!loading && count === 0 ? (
+              <li className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                <span className="bg-ink flex size-9 items-center justify-center rounded-xl ring-1 ring-white/10">
+                  <AppMark
+                    glyph="cursor"
+                    className="text-signal size-4"
+                    title=""
+                  />
+                </span>
+                <p className="text-sm font-medium">
+                  {t("assistant.no_history")}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {t("assistant.history.empty_hint")}
+                </p>
+              </li>
+            ) : null}
+          </ul>
+        </ThreadListPrimitive.Root>
+      </ScrollArea>
+    </div>
   );
 }
 
 function ThreadHistoryItem({ onPick }: { onPick?: () => void }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const title = useAuiState((s) => s.threadListItem.title);
+  const lastMessageAt = useAuiState((s) => s.threadListItem.lastMessageAt);
+  const running = useAuiState((s) => s.threadListItem.isRunning);
   const isMain = useAuiState(
     (s) => s.threads.mainThreadId === s.threadListItem.id,
   );
@@ -406,14 +462,40 @@ function ThreadHistoryItem({ onPick }: { onPick?: () => void }) {
           <button
             type="button"
             className={cn(
-              "hover:bg-muted focus-visible:ring-ring w-full px-4 py-3 text-left text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
-              isMain && "bg-muted",
+              "hover:bg-muted/60 focus-visible:ring-ring/50 relative flex w-full flex-col gap-0.5 px-4 py-2.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset",
+              isMain && "bg-signal-soft/60 dark:bg-signal-soft/40",
             )}
             aria-current={isMain ? "true" : undefined}
             onClick={onPick}
           >
-            <span className="block truncate font-medium">
-              {title || t("assistant.untitled")}
+            {isMain ? (
+              <span
+                aria-hidden
+                className="bg-signal absolute inset-y-2 left-0 w-0.5 rounded-full"
+              />
+            ) : null}
+            <span className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {title || t("assistant.untitled")}
+              </span>
+              {running ? (
+                <span
+                  aria-label={t("assistant.history.running")}
+                  role="status"
+                  className="signal-dot size-1.5!"
+                  data-pulse="true"
+                />
+              ) : null}
+            </span>
+            <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+              {lastMessageAt ? (
+                <time dateTime={lastMessageAt.toISOString()}>
+                  {relativeDatetime(lastMessageAt, locale)}
+                </time>
+              ) : null}
+              {isMain ? (
+                <span className="sr-only">{t("assistant.history.active")}</span>
+              ) : null}
             </span>
           </button>
         </ThreadListItemPrimitive.Trigger>
@@ -427,7 +509,7 @@ function QueryFailure({ onRetry }: { onRetry: () => void }) {
   return (
     <div
       role="alert"
-      className="bg-destructive/5 text-destructive border-destructive/20 space-y-2 rounded-xl border p-3 text-sm"
+      className="bg-destructive/5 text-destructive border-destructive/20 space-y-2 rounded-2xl border p-4 text-sm"
     >
       <p>{t("assistant.errors.generic")}</p>
       <Button variant="outline" size="sm" onClick={onRetry}>
