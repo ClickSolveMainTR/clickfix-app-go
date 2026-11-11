@@ -20,36 +20,15 @@ The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require 
 
 ### Packages [#packages]
 
-<<<<<<< HEAD
-| Package | Version | Install |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
-| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
-| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
-| Go module | `go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
-| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
-||||||| b8b5d3cd
-| Package | Version | Install |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
-| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
-| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
-| Go module | `go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
-| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
-=======
-| Package | Version | Install |
+| Package                                                                                | Version                                                                             | Install                                                                                        |
 | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `widget.js` (SDK 2.1) | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>` |
-| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node) | 0.1.0 | `npm install @getclickfix/node` (Node 22+) |
-| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0 | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM) |
-| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1 | `npm install @getclickfix/react-widget` (React 18+) |
-| Go module | `sdks/go/v0.1.0` | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0` |
-| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk) | 0.1.0 | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client) |
-| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel) | 0.1.0 | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); see [Laravel package](#laravel) |
-
-> > > > > > > origin/cf-toplu
+| `widget.js` (SDK 2.1)                                                                  | `https://getclickfix.com/widget.js`, types at `https://getclickfix.com/widget.d.ts` | `<script src="https://getclickfix.com/widget.js" data-widget="WIDGET_ID" async></script>`      |
+| [`@getclickfix/node`](https://www.npmjs.com/package/@getclickfix/node)                 | 0.1.0                                                                               | `npm install @getclickfix/node` (Node 22+)                                                     |
+| [`@getclickfix/visitor-core`](https://www.npmjs.com/package/@getclickfix/visitor-core) | 0.1.0                                                                               | `npm install @getclickfix/visitor-core` (React Native, Node 22+, browsers; no DOM)             |
+| [`@getclickfix/react-widget`](https://www.npmjs.com/package/@getclickfix/react-widget) | 0.1.1                                                                               | `npm install @getclickfix/react-widget` (React 18+)                                            |
+| Go module                                                                              | `go/v0.1.0`                                                                         | `go get github.com/ClickSolveMainTR/clickfix-sdks/go@v0.1.0`                                   |
+| [`clickfix/sdk`](https://packagist.org/packages/clickfix/sdk)                          | 0.1.0                                                                               | `composer require clickfix/sdk guzzlehttp/guzzle` (PHP 8.1+, any PSR-18 client)                |
+| [`clickfix/laravel`](https://packagist.org/packages/clickfix/laravel)                  | 0.1.0                                                                               | `composer require clickfix/laravel` (Laravel 10-13, PHP 8.1+); see [Laravel package](#laravel) |
 
 Each package keeps its changelog in `CHANGELOG.md`. In `0.x` a minor version may carry a breaking change; the changelog marks it **Breaking**. To run the samples against your own environment set `CLICKFIX_BASE_URL`, `CLICKFIX_API_KEY`, `CLICKFIX_IDENTITY_SECRET`, `CLICKFIX_CHANNEL_INSTANCE` and `CLICKFIX_CHANNEL_SECRET`.
 
