@@ -77,16 +77,11 @@ func RegisterRoutes(rt supportops.Router, h *handler.Handler) {
 	})
 	rt.Tenant("POST "+tenant+"/posts/{uuid}/unpublish", "tenant.feedback.manage", func(r *http.Request) (any, error) {
 		// The reason is optional, and so is the body itself.
-		var in struct {
+		in, err := supportops.ReadOptional[struct {
 			Reason string `json:"reason"`
-		}
-		if r.ContentLength != 0 {
-			var err error
-			if in, err = supportops.Read[struct {
-				Reason string `json:"reason"`
-			}](r); err != nil {
-				return nil, err
-			}
+		}](r)
+		if err != nil {
+			return nil, err
 		}
 		return h.Service.Unpublish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r), in.Reason)
 	})

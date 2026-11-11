@@ -7,6 +7,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
@@ -135,7 +136,8 @@ func (s *Service) Moderate(ctx context.Context, org, actor int64, id uuid.UUID, 
 func (s *Service) Unpublish(ctx context.Context, org, actor int64, id uuid.UUID, reason string) (db.ForumPost, error) {
 	var out db.ForumPost
 	reason = strings.TrimSpace(reason)
-	if len(reason) > 500 {
+	// Characters, not bytes: the column and OpenAPI cap it at 500 characters.
+	if utf8.RuneCountInString(reason) > 500 {
 		return out, supportops.ErrInvalid
 	}
 	err := s.Repo.Within(ctx, func(r *repository.Repository) error {

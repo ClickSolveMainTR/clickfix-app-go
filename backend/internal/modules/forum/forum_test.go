@@ -23,6 +23,8 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forum/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/supportops"
 	widgetuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	widgettoken "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels/widget"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
@@ -368,6 +370,7 @@ func TestForumUnpublishAndRepublish(t *testing.T) {
 	must(pool.QueryRow(ctx, "INSERT INTO contacts(organization_id,name) VALUES($1,'Subscriber') RETURNING id", org).Scan(&subscriber))
 	defer func() {
 		for _, stmt := range []string{
+			"DELETE FROM activity_events WHERE organization_id=$1",
 			"DELETE FROM outbox_events WHERE organization_id=$1",
 			"DELETE FROM forum_notifications WHERE organization_id=$1",
 			"DELETE FROM forum_subscriptions WHERE organization_id=$1",
@@ -461,6 +464,10 @@ func TestForumUnpublishAndRepublish(t *testing.T) {
 	if _, err = s.Unpublish(ctx, org, actor, reply.Uuid, strings.Repeat("x", 501)); !errors.Is(err, supportops.ErrInvalid) {
 		t.Fatal("reason longer than 500 accepted", err)
 	}
+	// The limit counts characters like the column and OpenAPI, not bytes.
+	if _, err = s.Unpublish(ctx, org, actor, pending.Uuid, strings.Repeat("ğ", 500)); !errors.Is(err, supportops.ErrConflict) {
+		t.Fatal("500 multi-byte characters refused as too long", err)
+	}
 	// Only a removed post can be republished; a rejected post stays rejected.
 	for _, id := range []uuid.UUID{rejected.Uuid, pending.Uuid, reply.Uuid} {
 		if _, err = s.Republish(ctx, org, actor, id); !errors.Is(err, supportops.ErrConflict) {
@@ -521,40 +528,78 @@ func TestForumUnpublishAndRepublish(t *testing.T) {
 		t.Fatalf("republish events: got %d rows, want 2", count)
 	}
 
-	// Over HTTP: the permission gate answers 403, another organization 404,
-	// a post that is not published 409. The audit recorder is nil here; the
-	// tenant router records every non-GET call as support_operations.updated.
+	// Over HTTP, through the tenant router's handler with the real activity
+	// recorder: the permission gate answers 403, another organization 404, a
+	// post that is not published 409, and every call that went through is
+	// recorded as support_operations.updated for the actor and organization.
+	// The body is optional (absent, empty, chunked without content); a reason
+	// in it is stored.
+	rt := supportops.Router{Activity: activity.NewRecorder(q, nil)}
+	type body struct {
+		Reason string `json:"reason"`
+	}
 	api := http.NewServeMux()
-	api.Handle("POST /posts/{uuid}/unpublish", middleware.RequireTenantPermission("tenant.feedback.manage")(supportops.Router{}.Handler(func(r *http.Request) (any, error) {
-		return s.Unpublish(r.Context(), orgctx.Must(r.Context()).ID, actor, supportops.ID(r), "")
-	}, false)))
-	api.Handle("POST /posts/{uuid}/republish", middleware.RequireTenantPermission("tenant.feedback.manage")(supportops.Router{}.Handler(func(r *http.Request) (any, error) {
-		return s.Republish(r.Context(), orgctx.Must(r.Context()).ID, actor, supportops.ID(r))
-	}, false)))
+	api.Handle("POST /posts/{uuid}/unpublish", middleware.RequireTenantPermission("tenant.feedback.manage")(rt.Handler(func(r *http.Request) (any, error) {
+		in, err := supportops.ReadOptional[body](r)
+		if err != nil {
+			return nil, err
+		}
+		return s.Unpublish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r), in.Reason)
+	}, true)))
+	api.Handle("POST /posts/{uuid}/republish", middleware.RequireTenantPermission("tenant.feedback.manage")(rt.Handler(func(r *http.Request) (any, error) {
+		return s.Republish(r.Context(), orgctx.Must(r.Context()).ID, supportops.Actor(r.Context()), supportops.ID(r))
+	}, true)))
 	manage := []string{"tenant.feedback.manage"}
+	chunked := func(content string) *http.Request {
+		req := httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(content))
+		req.ContentLength = -1
+		req.TransferEncoding = []string{"chunked"}
+		return req
+	}
 	for _, tc := range []struct {
 		name  string
 		scope orgctx.Scope
-		path  string
+		req   *http.Request
 		code  int
 	}{
-		{"no permission", orgctx.Scope{ID: org, Permissions: []string{"tenant.feedback.read"}}, "/posts/" + topic.Uuid.String() + "/unpublish", http.StatusForbidden},
-		{"other organization", orgctx.Scope{ID: other, Permissions: manage}, "/posts/" + topic.Uuid.String() + "/unpublish", http.StatusNotFound},
-		{"unknown post", orgctx.Scope{ID: org, Permissions: manage}, "/posts/" + uuid.NewString() + "/unpublish", http.StatusNotFound},
-		{"republish a published post", orgctx.Scope{ID: org, Permissions: manage}, "/posts/" + topic.Uuid.String() + "/republish", http.StatusConflict},
-		{"unpublish", orgctx.Scope{ID: org, Permissions: manage}, "/posts/" + topic.Uuid.String() + "/unpublish", http.StatusOK},
-		{"unpublish twice", orgctx.Scope{ID: org, Permissions: manage}, "/posts/" + topic.Uuid.String() + "/unpublish", http.StatusConflict},
-		{"republish without permission", orgctx.Scope{ID: org}, "/posts/" + topic.Uuid.String() + "/republish", http.StatusForbidden},
-		{"republish", orgctx.Scope{ID: org, Permissions: manage}, "/posts/" + topic.Uuid.String() + "/republish", http.StatusOK},
+		{"no permission", orgctx.Scope{ID: org, Permissions: []string{"tenant.feedback.read"}}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusForbidden},
+		{"other organization", orgctx.Scope{ID: other, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusNotFound},
+		{"unknown post", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+uuid.NewString()+"/unpublish", nil), http.StatusNotFound},
+		{"republish a published post", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusConflict},
+		{"unknown field in the body", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(`{"status":"removed"}`)), http.StatusBadRequest},
+		{"unpublish without a body", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", nil), http.StatusOK},
+		{"unpublish twice", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/unpublish", strings.NewReader(`{}`)), http.StatusConflict},
+		{"republish without permission", orgctx.Scope{ID: org}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusForbidden},
+		{"republish", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
+		{"unpublish with an empty chunked body", orgctx.Scope{ID: org, Permissions: manage}, chunked(""), http.StatusOK},
+		{"republish again", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
+		{"unpublish with a chunked reason", orgctx.Scope{ID: org, Permissions: manage}, chunked(`{"reason":"chunked spam"}`), http.StatusOK},
+		{"republish once more", orgctx.Scope{ID: org, Permissions: manage}, httptest.NewRequest("POST", "/posts/"+topic.Uuid.String()+"/republish", nil), http.StatusOK},
 	} {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest("POST", tc.path, nil).WithContext(orgctx.WithScope(ctx, tc.scope))
+		req := tc.req.WithContext(authctx.WithPrincipal(orgctx.WithScope(ctx, tc.scope), authctx.Principal{UserInternal: actor}))
 		api.ServeHTTP(w, req)
 		if w.Code != tc.code {
 			t.Fatalf("%s: got %d want %d: %s", tc.name, w.Code, tc.code, w.Body.String())
 		}
+		if tc.name == "unpublish with a chunked reason" {
+			var reason string
+			must(pool.QueryRow(ctx, "SELECT removed_reason FROM forum_posts WHERE organization_id=$1 AND uuid=$2", org, topic.Uuid).Scan(&reason))
+			if reason != "chunked spam" {
+				t.Fatalf("reason from a chunked body not stored: %q", reason)
+			}
+		}
 	}
 	public(true, true)
+	// Six calls went through (the refused ones record nothing).
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM activity_events WHERE organization_id=$1 AND action='support_operations.updated' AND resource='support_operations' AND actor_user_id=$2", org, actor).Scan(&count))
+	if count != 6 {
+		t.Fatalf("support-operations audit rows: got %d, want 6", count)
+	}
+	must(pool.QueryRow(ctx, "SELECT count(*) FROM activity_events WHERE organization_id=$1", other).Scan(&count))
+	if count != 0 {
+		t.Fatal("audit row written for the other organization")
+	}
 }
 func TestSpamFlagging(t *testing.T) {
 	if usecase.Flag("https://a https://b https://c https://d") != "link_spam" {
