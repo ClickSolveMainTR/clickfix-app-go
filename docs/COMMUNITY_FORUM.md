@@ -36,12 +36,39 @@ remain enforced. It saves a suggestion only; provider failures or exhausted cred
 leave the pending post untouched. No public action spends AI credits.
 
 `POST /topics/{uuid}/accept` accepts only a published reply to that same published
-topic. The moderation endpoint cannot reject a published post, so there is no API
-to take a published topic or an accepted reply down yet (CF-182); public reads
-already skip an accepted reply that is not `published`. Votes have a composite
-unique key and are idempotent;
+topic. Votes have a composite unique key and are idempotent;
 pass `remove:true` to unvote. To vote for a reply pass `reply_uuid`; omission votes
 for the topic.
+
+## Taking a published post down (CF-182)
+
+The moderation endpoint decides a pending post once and cannot touch a
+published one. A published topic or reply is taken down with
+`POST /v1/tenant/forum/posts/{uuid}/unpublish` (`tenant.feedback.manage`, optional
+`reason` up to 500 characters, the body itself may be omitted). The post moves to
+its own `removed` status, not `rejected`: the queue's decision stays final, and a
+removed post is the only one `POST /posts/{uuid}/republish` brings back to
+`published`. Any other status answers `409 CONFLICT` for both routes; an unknown
+post or one of another organization answers `404`. A removed reply cannot be
+republished while its topic is not published (409, like the queue).
+
+Public reads filter on `status='published'`, so a takedown needs no other row
+change: a removed topic leaves the topic page, the topic list and its title
+search, the sitemap and the subscribers' notification inbox at once, and hides
+its replies; a removed accepted reply disappears from the topic page and the
+topic stops reporting an accepted answer (`accepted_answer` / `accepted_reply_uuid`
+are null) until it is republished. Notifications created when a reply was first
+published are kept and come back with it; republishing sends none.
+
+The row records `removed_at`, `removed_by_user_id` and `removed_reason`
+(migration 000224; republishing clears them), `GET /v1/tenant/forum/removed`
+lists the removed posts newest first with who, when and why and the topic of a
+removed reply, the tenant router writes the usual `support_operations.updated`
+activity record, and the transactional outbox gets a `forum.moderated` event
+whose payload carries `status: removed` and the reason, or `status: published`
+with `previous_status: removed`. The panel's Topics tab and the mobile forum
+offer "Take down" on a topic and on each reply and a "Taken down" view with
+"Publish again"; both ask before sending.
 
 `POST /topics/{topic_slug}/subscribe` subscribes/unsubscribes (`remove:true`) the
 signed contact; topic authors subscribe automatically. Publishing a reply inserts
@@ -49,8 +76,8 @@ one durable notification per other subscriber in the same transaction. A reply
 is published at most once, and unique post/contact keys keep one notification
 per subscriber.
 `GET /notifications` returns that visitor's notification inbox;
-`POST /notifications/{uuid}/read` marks their own notification read. Hidden replies
-and topics never appear in the inbox. Delivery here is a durable in-product inbox,
+`POST /notifications/{uuid}/read` marks their own notification read. Hidden
+(rejected or removed) replies and topics never appear in the inbox. Delivery here is a durable in-product inbox,
 not an email subscription. Domain events are also emitted via the transactional
 outbox for future delivery integrations.
 

@@ -124,6 +124,74 @@ func (s *Service) Moderate(ctx context.Context, org, actor int64, id uuid.UUID, 
 	})
 	return out, err
 }
+
+// Unpublish takes a published post down (CF-182). The post moves to its own
+// `removed` status rather than `rejected`: the moderation queue's decision
+// stays final, and a removed post can be published again with Republish. A
+// post in any other status answers a conflict. Public reads filter on
+// `published`, so a removed topic hides its replies and a removed accepted
+// reply stops being the topic's answer without touching other rows. The row
+// records who removed it, when and why, and the event carries the same.
+func (s *Service) Unpublish(ctx context.Context, org, actor int64, id uuid.UUID, reason string) (db.ForumPost, error) {
+	var out db.ForumPost
+	reason = strings.TrimSpace(reason)
+	if len(reason) > 500 {
+		return out, supportops.ErrInvalid
+	}
+	err := s.Repo.Within(ctx, func(r *repository.Repository) error {
+		old, err := r.Q.ForumPost(ctx, db.ForumPostParams{OrganizationID: org, Uuid: id})
+		if err != nil {
+			return err
+		}
+		if old.Status != "published" {
+			return supportops.ErrConflict
+		}
+		out, err = r.Q.ForumUnpublish(ctx, db.ForumUnpublishParams{OrganizationID: org, Uuid: id, Actor: actor, Reason: reason})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return supportops.ErrConflict
+		}
+		if err != nil {
+			return err
+		}
+		return r.Emit(ctx, events.New("forum.moderated").WithOrganization(org).WithActor(actor).WithEntity("forum_post", &out.ID, &out.Uuid).WithPayload(map[string]any{"status": "removed", "previous_status": "published", "reason": reason}))
+	})
+	return out, err
+}
+
+// Republish publishes a removed post again. Only a `removed` post qualifies
+// (a rejected post stays rejected); a removed reply needs its topic
+// published, like the moderation queue. Notifications created when the reply
+// was first published are kept, so no new ones are sent.
+func (s *Service) Republish(ctx context.Context, org, actor int64, id uuid.UUID) (db.ForumPost, error) {
+	var out db.ForumPost
+	err := s.Repo.Within(ctx, func(r *repository.Repository) error {
+		old, err := r.Q.ForumPost(ctx, db.ForumPostParams{OrganizationID: org, Uuid: id})
+		if err != nil {
+			return err
+		}
+		if old.Status != "removed" {
+			return supportops.ErrConflict
+		}
+		if old.TopicID.Valid {
+			topic, err := r.Q.ForumTopicByID(ctx, db.ForumTopicByIDParams{OrganizationID: org, ID: old.TopicID.Int64})
+			if err != nil {
+				return err
+			}
+			if topic.Status != "published" {
+				return supportops.ErrConflict
+			}
+		}
+		out, err = r.Q.ForumRepublish(ctx, db.ForumRepublishParams{OrganizationID: org, Uuid: id})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return supportops.ErrConflict
+		}
+		if err != nil {
+			return err
+		}
+		return r.Emit(ctx, events.New("forum.moderated").WithOrganization(org).WithActor(actor).WithEntity("forum_post", &out.ID, &out.Uuid).WithPayload(map[string]any{"status": "published", "previous_status": "removed"}))
+	})
+	return out, err
+}
 func (s *Service) Accept(ctx context.Context, org, actor int64, topicID, replyID uuid.UUID) error {
 	return s.Repo.Within(ctx, func(r *repository.Repository) error {
 		t, err := r.Q.ForumPost(ctx, db.ForumPostParams{OrganizationID: org, Uuid: topicID})

@@ -920,14 +920,18 @@ type Querier interface {
 	ForumPost(ctx context.Context, arg ForumPostParams) (ForumPost, error)
 	ForumPublicAnswer(ctx context.Context, arg ForumPublicAnswerParams) (ForumPublicAnswerRow, error)
 	ForumReadNotification(ctx context.Context, arg ForumReadNotificationParams) (int64, error)
+	ForumRemoved(ctx context.Context, arg ForumRemovedParams) ([]ForumRemovedRow, error)
+	ForumRemovedCount(ctx context.Context, organizationID int64) (int64, error)
 	ForumReplies(ctx context.Context, arg ForumRepliesParams) ([]ForumRepliesRow, error)
 	ForumReplyCount(ctx context.Context, arg ForumReplyCountParams) (int64, error)
+	ForumRepublish(ctx context.Context, arg ForumRepublishParams) (ForumPost, error)
 	ForumSitemap(ctx context.Context, arg ForumSitemapParams) ([]ForumSitemapRow, error)
 	ForumSubscribe(ctx context.Context, arg ForumSubscribeParams) error
 	ForumTopicByID(ctx context.Context, arg ForumTopicByIDParams) (ForumPost, error)
 	ForumTopicBySlug(ctx context.Context, arg ForumTopicBySlugParams) (ForumPost, error)
 	ForumTopicCount(ctx context.Context, arg ForumTopicCountParams) (int64, error)
 	ForumTopics(ctx context.Context, arg ForumTopicsParams) ([]ForumTopicsRow, error)
+	ForumUnpublish(ctx context.Context, arg ForumUnpublishParams) (ForumPost, error)
 	ForumUnsubscribe(ctx context.Context, arg ForumUnsubscribeParams) error
 	ForumUnvote(ctx context.Context, arg ForumUnvoteParams) error
 	ForumVote(ctx context.Context, arg ForumVoteParams) error
