@@ -7,7 +7,7 @@ namespace ClickFix;
 /**
  * Widget identity verification: user_hash = hex(HMAC-SHA256(identity secret, user id)).
  * Server only. Send the hash to the browser, never the secret.
- * Bit-identical to `identityHash` in @clickfix/node and `IdentityHash` in the Go module.
+ * Bit-identical to `identityHash` in @getclickfix/node and `IdentityHash` in the Go module.
  */
 final class UserHash
 {

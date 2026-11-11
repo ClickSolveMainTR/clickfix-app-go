@@ -1,6 +1,6 @@
 // Adım 5: olaylar. Ekran bağlamı widget'tan (track) gelir; ürün olayları
 // şirket zaman çizelgesine API ile yazılır (events:write).
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,

@@ -5,7 +5,7 @@
  *
  * Served at https://<app>/widget.d.ts next to https://<app>/widget.js.
  * Copy it into your project (e.g. `types/clickfix-widget.d.ts`) to type
- * `window.ClickFix`, or use @clickfix/react-widget. Source:
+ * `window.ClickFix`, or use @getclickfix/react-widget. Source:
  * frontend/widget-sdk/src/widget.ts. Docs: docs/widget-sdk.md.
  */
 

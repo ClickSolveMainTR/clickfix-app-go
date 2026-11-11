@@ -215,7 +215,7 @@ Mobil uygulamalar widget'ı `https://<app>/widget-embed.html?widget=<id>` sayfas
 ## React
 
 ```tsx
-import { useClickFix, useClickFixEvent } from "@clickfix/react-widget";
+import { useClickFix, useClickFixEvent } from "@getclickfix/react-widget";
 const { ready, unread, open, sdk } = useClickFix({ appOrigin: "https://<app>", widgetId: "<id>" });
 useClickFixEvent("message", (m) => console.log(m.text));
 ```

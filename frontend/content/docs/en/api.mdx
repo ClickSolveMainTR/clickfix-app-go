@@ -145,12 +145,12 @@ Body fields and response schemas are in the [API reference](/docs/api?lang=en).
 
 ## SDKs
 
-ClickFix has server SDKs for Go and Node.js and a UI-free widget client for React: `@clickfix/node` 0.1.0 and `@clickfix/react-widget` 0.1.0 on npm, and `github.com/ClickSolveMainTR/clickfix-sdks/go` v0.1.0. Usage examples for every language and the same calls without an SDK are on [SDKs and sample code](/docs/sdks?lang=en); the end-to-end setup is the [Integration guide](/docs/integration-guide?lang=en).
+ClickFix has server SDKs for Go and Node.js and a UI-free widget client for React: `@getclickfix/node` 0.1.0 and `@getclickfix/react-widget` 0.1.0 on npm, and `github.com/ClickSolveMainTR/clickfix-sdks/go` v0.1.0. Usage examples for every language and the same calls without an SDK are on [SDKs and sample code](/docs/sdks?lang=en); the end-to-end setup is the [Integration guide](/docs/integration-guide?lang=en).
 
 The SDKs handle authentication, bounded retries, pagination and webhook signature verification. For example, in Node.js:
 
 ```ts
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: "https://api.getclickfix.com",

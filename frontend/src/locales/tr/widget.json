@@ -407,7 +407,7 @@
   "platform.identify": "Kullanıcıyı tanıt",
   "platform_hint.html": "Her sayfada </body> öncesine bir kez yapıştırın.",
   "platform_hint.nextjs": "Kök layout'ta next/script ile yükleyin.",
-  "platform_hint.react": "@clickfix/react-widget'in tipli hook'ları; useClickFix widget'ı yükleyip başlatır.",
+  "platform_hint.react": "@getclickfix/react-widget'in tipli hook'ları; useClickFix widget'ı yükleyip başlatır.",
   "platform_hint.vue": "Betiği kök bileşenden bir kez yükleyin.",
   "platform_hint.wordpress": "(Alt) temanızın functions.php dosyasına veya bir kod parçası eklentisine ekleyin.",
   "platform_hint.shopify": "layout/theme.liquid'e ekleyin; giriş yapmış müşteriler iletilir.",

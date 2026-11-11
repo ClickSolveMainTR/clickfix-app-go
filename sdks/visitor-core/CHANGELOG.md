@@ -4,7 +4,7 @@ Sürümleme: [SemVer](https://semver.org). `0.x` sürümlerinde küçük sürüm
 
 ## 0.1.0 - 2026-11-13
 
-İlk yayın (CF-201). `@clickfix/react-widget` içindeki taşıma katmanı buraya taşındı; DOM ve `window` yok (tsconfig `lib: ES2022`), React Native (Hermes), Node 22+ ve tarayıcıda çalışır.
+İlk yayın (CF-201). `@getclickfix/react-widget` içindeki taşıma katmanı buraya taşındı; DOM ve `window` yok (tsconfig `lib: ES2022`), React Native (Hermes), Node 22+ ve tarayıcıda çalışır.
 
 - `createVisitorClient`: bootstrap, `identify` (`user_hash`, kişi ve şirket dış kimliği), profil, özel alanlar (`setAttributes`), konuşma listesi / mesajlar / okundu / yazıyor, dosya ekleme (`Blob` ya da RN `{uri,name,type}`), olay ve ekran bağlamı (`track`, `setScreen`), yardım araması, puanlama, realtime belirteci. Tarayıcı modunda aynı kökenli BFF, `app` modunda `X-ClickFix-App-Key` + `X-ClickFix-App-Package` başlıkları.
 - Sınırlı yeniden deneme (GET ve `client_id` taşıyan yazmalar; `Retry-After`) ve `WIDGET_VISITOR_TOKEN_INVALID` cevabında bir kez oturum yenileme.

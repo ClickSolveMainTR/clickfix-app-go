@@ -20,7 +20,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 /**
  * ClickFix public API client (`/v1/public-api/*`, API key auth).
  *
- * Mirrors `createClient` in @clickfix/node: Bearer key, JSON envelopes, `Idempotency-Key` on writes,
+ * Mirrors `createClient` in @getclickfix/node: Bearer key, JSON envelopes, `Idempotency-Key` on writes,
  * bounded retries for GETs and keyed writes (429/502/503/504 and network errors, exponential backoff,
  * bounded `Retry-After`), typed exceptions for error responses.
  */

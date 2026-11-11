@@ -1,5 +1,5 @@
 // Adım 6: web'de API kanalı gerekmez; widget zaten kanaldır. Kendi arayüzünüz
-// varsa @clickfix/react-widget'ın arayüzsüz istemcisini kullanın.
+// varsa @getclickfix/react-widget'ın arayüzsüz istemcisini kullanın.
 // @ts-check
 ClickFix("on", "message", (m) => {
   // Temsilci veya AI yanıtı: kendi bildirim sisteminize aktarabilirsiniz

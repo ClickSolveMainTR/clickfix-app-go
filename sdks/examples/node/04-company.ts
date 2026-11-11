@@ -1,6 +1,6 @@
 // Adım 4: şirket. Şirket widget identify (company.id) ile oluşur; API ile
 // bulunur ve müşteri sağlığı sinyalleri (kullanım, gelir, olay) gönderilir.
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,

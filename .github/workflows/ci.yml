@@ -878,8 +878,8 @@ jobs:
             echo "pushed $image:main ($short)" >> "$GITHUB_STEP_SUMMARY"
           done
 
-  # SDK release (CF-199): a green main run publishes @clickfix/node,
-  # @getclickfix/visitor-core (CF-201) and @clickfix/react-widget to npm when
+  # SDK release (CF-199): a green main run publishes @getclickfix/node,
+  # @getclickfix/visitor-core (CF-201) and @getclickfix/react-widget to npm when
   # the version in package.json is not on the registry yet. Needs the
   # NPM_TOKEN repository secret (an npm automation token of the account that
   # owns the scopes); without it the job skips with a summary note and never

@@ -4,7 +4,7 @@
 
 | Klasör | İçerik | Nasıl doğrulanır |
 |---|---|---|
-| `node/` | `@clickfix/node` ile adım adım TypeScript (Node 22, tip silme ile doğrudan çalışır) | çalıştırılır |
+| `node/` | `@getclickfix/node` ile adım adım TypeScript (Node 22, tip silme ile doğrudan çalışır) | çalıştırılır |
 | `go/` | Go modülü; `go run . <adım>` (`replace` ile `../../go`) | çalıştırılır |
 | `php/` | `clickfix/sdk` ile PHP 8.1+ (`php 0X-....php`; istek işleyen adımlar `php -S` altında) | çalıştırılır (`php` ve `composer` varsa; CI `php` işinde zorunlu) |
 | `curl/` | bash + curl + openssl | çalıştırılır |

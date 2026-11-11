@@ -16,7 +16,7 @@ Full walkthrough: https://getclickfix.com/docs/integration-guide. Changes:
 
 | Mode | Credential | `baseURL` | Who |
 |---|---|---|---|
-| `browser` (default) | the page origin, checked against the widget's allowed sites; requests go through the app's same-origin BFF | `/api` | `@clickfix/react-widget`, your own web UI |
+| `browser` (default) | the page origin, checked against the widget's allowed sites; requests go through the app's same-origin BFF | `/api` | `@getclickfix/react-widget`, your own web UI |
 | `app` | a **mobile app key** (`X-ClickFix-App-Key`) plus the app's package name (`X-ClickFix-App-Package`), created in Web widget → Advanced → Mobile apps | absolute, `https://<app>/api` | React Native / native SDKs |
 
 Everything after that is the same: the visitor token, `identify` with a

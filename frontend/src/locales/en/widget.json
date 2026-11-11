@@ -407,7 +407,7 @@
   "platform.identify": "Identify users",
   "platform_hint.html": "Paste once before </body> on every page.",
   "platform_hint.nextjs": "Load it from the root layout with next/script.",
-  "platform_hint.react": "Typed hooks from @clickfix/react-widget; useClickFix loads and boots the widget.",
+  "platform_hint.react": "Typed hooks from @getclickfix/react-widget; useClickFix loads and boots the widget.",
   "platform_hint.vue": "Load the script once from your root component.",
   "platform_hint.wordpress": "Add to your (child) theme's functions.php or a code snippets plugin.",
   "platform_hint.shopify": "Add to layout/theme.liquid; signed-in customers are passed on.",

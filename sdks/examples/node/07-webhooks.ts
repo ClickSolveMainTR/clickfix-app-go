@@ -1,6 +1,6 @@
 // Adım 7: webhook aboneliği aç ve teslimatları ham gövde üzerinde doğrula.
 import { createServer } from "node:http";
-import { createClient, verifyWebhook } from "@clickfix/node";
+import { createClient, verifyWebhook } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!,

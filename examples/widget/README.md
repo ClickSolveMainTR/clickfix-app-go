@@ -15,7 +15,7 @@ Ne gösterir:
 - Olaylar: `ready`, `open`, `close`, `message`, `unread`, `conversation:started`, `conversation:ended`,
   `csat`, `trigger`, `attributes`, `visibility`, `error`
 - Tek sayfa uygulama gezinmesi (`history.pushState`): hedefleme ve proaktif mesajlar her gezinmede yeniden değerlendirilir
-- React: [`react/Support.tsx`](react/Support.tsx) (`@clickfix/react-widget` ile tipli hook'lar)
+- React: [`react/Support.tsx`](react/Support.tsx) (`@getclickfix/react-widget` ile tipli hook'lar)
 
 ## Çalıştırma
 

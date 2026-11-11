@@ -1,5 +1,5 @@
 // Adım 2: kişiyi dış kimliğiyle oluştur/güncelle, şirketi dış kimliğiyle bul.
-import { createClient } from "@clickfix/node";
+import { createClient } from "@getclickfix/node";
 
 const client = createClient({
   baseURL: process.env.CLICKFIX_BASE_URL!, // https://api.getclickfix.com
