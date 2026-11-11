@@ -71,3 +71,15 @@ The **VERBİS inventory** tab provides a draft inventory of the personal data ca
 - **Organization → Support access**: let the ClickFix support team access your organization for a limited time; every action they take is written to the audit log.
 - **Organization → Security**: SSO, SCIM and IP restrictions. See [SSO and SCIM](/docs/sso-scim?lang=en).
 - Personal data is masked in AI run logs. See [AI](/docs/ai?lang=en).
+
+## FAQ [#faq]
+
+**Do sensitive custom fields reach the AI?** No; fields marked **sensitive** are masked and never enter the AI context or exports ([Custom fields](/docs/integration-guide/custom-fields?lang=en)).
+
+**Do data subject requests cover contacts created through the API?** Yes; a contact is also found by external id, and export and erasure act on the same record.
+
+**What do the Assistant and MCP record?** Every action is written to the audit log; secrets never enter the chat history or logs.
+
+## Related API [#related-api]
+
+- Reading and updating contacts: [`GET /contacts`](/docs/api-reference/contacts/list-contacts?lang=en), [`PATCH /contacts/{uuid}`](/docs/api-reference/contacts/update-a-contact?lang=en).

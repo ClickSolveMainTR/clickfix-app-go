@@ -54,3 +54,16 @@ Bir kişi kartından veya konuşmadan **Randevu oluştur** ile tür, görüşmec
 Randevu ayrıntısında randevuyu **Onayla**, **Yeniden planla**, **Tamamlandı işaretle**, **Gelmedi** olarak işaretleyebilir veya iptal edebilirsiniz. **Müşteri bağlantısını kopyala** ile müşterinin randevu sayfasını paylaşabilirsiniz.
 
 Randevular mobil uygulamada da görünür.
+
+## Sık sorulanlar [#faq]
+
+**Randevu saatleri hangi çalışma saatini kullanır?** Randevu türünün kendi takvimini; organizasyonun çalışma saatleri (SLA → Çalışma saatleri) varsayılan olarak önerilir, isterseniz türe özel saat tanımlarsınız.
+
+**Widget'tan randevu alınabilir mi?** Evet; modül açıksa widget herkese açık randevu sayfanıza bağlantı verir. Müşteri doğrulanmışsa ad ve e-posta yeniden sorulmaz.
+
+**Randevu olayları dışarı gider mi?** Randevu oluşturma ve iptal, konuşmanın zaman çizelgesine yazılır; webhook olayı olarak `conversation.updated` ile izlenir.
+
+## İlgili API [#related-api]
+
+- Randevuya bağlı konuşma: [`GET /conversations/{uuid}`](/docs/api-reference/conversations/get-a-conversation).
+- Şirket zaman çizelgesine olay: [`POST /company-events`](/docs/api-reference/companies/send-an-event-to-the-company-timeline).

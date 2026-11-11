@@ -26,25 +26,28 @@ export function DocsPageActions({
   feedbackEmail: string;
 }) {
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
-  const t = (tr: string, en: string) => (locale === "tr" ? tr : en);
-  const prompt = t(
+  const label = (tr: string, en: string) => (locale === "tr" ? tr : en);
+  const prompt = label(
     `${pageUrl} sayfasını oku; bu sayfayla ilgili sorular soracağım.`,
     `Read ${pageUrl}, I want to ask questions about it.`,
   );
   const links = [
     {
       key: "chatgpt",
-      label: t("ChatGPT'de aç", "Open in ChatGPT"),
+      label: label("ChatGPT'de aç", "Open in ChatGPT"),
       href: `https://chatgpt.com/?${new URLSearchParams({ q: prompt })}`,
     },
     {
       key: "claude",
-      label: t("Claude'da aç", "Open in Claude"),
+      label: label("Claude'da aç", "Open in Claude"),
       href: `https://claude.ai/new?${new URLSearchParams({ q: prompt })}`,
     },
   ];
   const feedback = `mailto:${feedbackEmail}?${new URLSearchParams({
-    subject: t(`Doküman geri bildirimi: ${title}`, `Docs feedback: ${title}`),
+    subject: label(
+      `Doküman geri bildirimi: ${title}`,
+      `Docs feedback: ${title}`,
+    ),
     body: `${pageUrl}\n\n`,
   })
     .toString()
@@ -74,13 +77,13 @@ export function DocsPageActions({
           <Copy aria-hidden className="size-3.5" />
         )}
         {copied === "done"
-          ? t("Kopyalandı", "Copied")
+          ? label("Kopyalandı", "Copied")
           : copied === "failed"
-            ? t("Kopyalanamadı", "Copy failed")
-            : t("Kopyala (Markdown)", "Copy as Markdown")}
+            ? label("Kopyalanamadı", "Copy failed")
+            : label("Kopyala (Markdown)", "Copy as Markdown")}
       </button>
       <a href={markdownUrl} className={chip} target="_blank" rel="noreferrer">
-        {t("Markdown olarak gör", "View as Markdown")}
+        {label("Markdown olarak gör", "View as Markdown")}
       </a>
       {links.map((link) => (
         <a
@@ -96,7 +99,7 @@ export function DocsPageActions({
       ))}
       <a href={feedback} className={cn(chip, "ms-auto")}>
         <MessageSquareText aria-hidden className="size-3.5" />
-        {t("Geri bildirim", "Feedback")}
+        {label("Geri bildirim", "Feedback")}
       </a>
     </div>
   );

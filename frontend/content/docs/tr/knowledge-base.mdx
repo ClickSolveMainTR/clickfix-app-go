@@ -67,3 +67,16 @@ Forumu sol menüdeki **Topluluk forumu** sayfasından yönetirsiniz:
 ### Konuşmadan forum sorusu [#forum-question-from-a-conversation]
 
 Bir müşteri konuşmasından herkese açık bir forum sorusu oluşturabilirsiniz. Konuşma metni kopyalanmaz; yalnızca sizin yazdığınız metin moderasyon kuyruğuna gider. Bu metinden kişisel bilgileri (ad, e-posta, sipariş numarası vb.) çıkarın.
+
+## Sık sorulanlar [#faq]
+
+**AI ajanı hangi makaleleri kullanır?** Yalnız **herkese açık** ve **yayında** olanları. Taslak ve iç makaleler ajana gitmez; [Sistemini bağla](/docs/integration-guide/system-binding) ile sisteminizden okunan kayıtlar ise müşteri bazında eklenir.
+
+**Makaleyi belli müşterilere gösterebilir miyim?** Evet; makale hedeflemesi liste tipli [özel alan](/docs/integration-guide/custom-fields) seçeneklerini kullanır (ör. paket = Pro).
+
+**Widget'ta arama nasıl çalışır?** Yayındaki makalelerde arar; sonuçlar ziyaretçinin diline göre gelir.
+
+## İlgili API [#related-api]
+
+- Yardım merkezi araması widget içinden `helpSearch` ile ([`@getclickfix/visitor-core`](/docs/integration-guide/sdks#visitor-core)).
+- Makale içeriğini AI ajanının nasıl kullandığı: [Yapay zekâ](/docs/ai#knowledge-source).

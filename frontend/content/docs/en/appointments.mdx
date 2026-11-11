@@ -54,3 +54,16 @@ From a contact card or a conversation, click **Book appointment** and pick the t
 In the appointment details you can **Confirm**, **Reschedule**, **Mark completed**, mark as **No-show** or cancel. **Copy customer link** shares the customer's appointment page.
 
 Appointments are available in the mobile app too.
+
+## FAQ [#faq]
+
+**Which working hours do appointment slots use?** The appointment type's own calendar; the organization's working hours (SLA → Working hours) are suggested by default, and you can define type-specific hours.
+
+**Can customers book from the widget?** Yes; with the module on, the widget links to your public booking page. A verified customer is not asked for name and email again.
+
+**Do appointment events go out?** Creating and cancelling an appointment is written to the conversation timeline; watch it through the `conversation.updated` webhook event.
+
+## Related API [#related-api]
+
+- The conversation linked to an appointment: [`GET /conversations/{uuid}`](/docs/api-reference/conversations/get-a-conversation?lang=en).
+- An event on the company timeline: [`POST /company-events`](/docs/api-reference/companies/send-an-event-to-the-company-timeline?lang=en).

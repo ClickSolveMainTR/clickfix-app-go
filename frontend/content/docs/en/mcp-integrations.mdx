@@ -88,3 +88,20 @@ ClickFix doesn't have an official app published in the Zapier, Make or n8n marke
 Open your own web app (order panel, CRM record, billing history) in the conversation sidebar, the contact panel or the menu, or install tools such as Calendly, Uptime Kuma or Metabase from the gallery in one click. Manage apps on **Organization → Manage apps**.
 
 For the context token, signature verification, messages, theming and publishing, see [Build your own app](/docs/apps?lang=en).
+
+## ClickFix MCP server [#mcp]
+
+ClickFix exposes an **MCP server** that Claude, Cursor and other MCP clients can connect to. The tools come from the capability registry [ClickFix Assistant](/docs/ai?lang=en#assistant) uses; there are no two catalogs. The connection is set up with OAuth (the client is authorized as an organization member) and every tool is limited to the member's permissions. Capabilities that carry secrets (creating keys) or are destructive are not on MCP; write tools require confirmation.
+
+Example tools: `channels_list`, `channels_api_sample_request`, `workflows_list`, `workflows_reference`, `workflows_dry_run`, `automations_list`, `automations_dry_run`, `sla_list`, `sla_check`, `teams_list`, `members_list`, `webhooks_list`, `widget_install_code`, `integrations_list`, `integrations_system_describe`, `integrations_concepts_lookup`, `search_conversations`, `get_conversation`, `list_contacts`, `ai_status`. The server address and setup steps are under **Organization → API and automations → MCP**.
+
+## FAQ [#faq]
+
+**REST hook or polling for Zapier?** Zapier and Make use the REST hook subscription (`POST /subscriptions`) for instant triggers; for n8n and scheduled jobs cursor polling with `GET /triggers` is enough.
+
+**What can't I do over MCP?** Create keys, delete records or read secrets; those stay in the panel (or on the Assistant's approval card).
+
+## Related API [#related-api]
+
+- [REST hook subscription](/docs/api-reference/triggers/create-a-rest-hook-subscription?lang=en), [trigger polling](/docs/api-reference/triggers/poll-trigger-events?lang=en).
+- [Webhooks](/docs/webhooks?lang=en).

@@ -1,14 +1,15 @@
 ---
-title: AI ajanı ve Copilot
-description: AI ajanının çalışma modunu, sınıflandırmayı, prosedürleri ve araçları ayarlayın; temsilciler için Copilot'u kullanın.
+title: AI ajanı, Copilot ve ClickFix Asistan
+description: "AI ajanının çalışma modunu, sınıflandırmayı, prosedürleri ve araçları ayarlayın; temsilciler için Copilot, panel için iş yapan ClickFix Asistan; tek çalışma saati, anında yanıt ve sistemini bağla ile AI."
 section: product
 order: 1
 ---
 
-ClickFix'te yapay zekâ iki şekilde çalışır:
+ClickFix'te yapay zekâ üç şekilde çalışır:
 
-- **AI ajanı**: Müşteri konuşmalarını sınıflandırır, bilgi bankanıza dayanarak yanıt taslağı hazırlar veya seçtiğiniz koşullarda yanıtı kendisi gönderir.
+- **AI ajanı**: Müşteri konuşmalarını sınıflandırır, bilgi bankanıza ve sizin sisteminizden okuduğu kavramlara dayanarak yanıt taslağı hazırlar veya seçtiğiniz koşullarda yanıtı kendisi gönderir.
 - **Copilot**: Gelen kutusunda temsilcinin yanında çalışır; yanıt önerir, özetler, metni düzenler.
+- **ClickFix Asistan**: Panelde sizinle konuşur; kurulumunuzun neresinde olduğunuzu söyler, kanal, iş akışı ve ayarları onayınızla kurar ve test eder ([aşağıda](#assistant)).
 
 Yapay zekâ kullanımı planınızdaki yapay zekâ kredilerinden düşer. Kredi biterse ajan konuşmaları temsilcilere devreder.
 
@@ -97,6 +98,47 @@ Gelen kutusunda bir konuşma açıkken Copilot şu işlemleri yapar:
 
 Copilot menüsünü yanıt editöründen veya klavye kısayollarıyla açarsınız (`?` tüm kısayolları gösterir). Copilot'un önerileri siz göndermedikçe müşteriye gitmez.
 
+## ClickFix Asistan [#assistant]
+
+ClickFix Asistan, panelin her sayfasında `⌘J` (Windows'ta `Ctrl+J`) ile açılan ve **iş yapan** AI yardımcıdır; müşteriye yanıt veren AI ajanından ayrıdır. Ne istediğinizi yazarsınız, asistan gerekli bilgiyi sorar, eylemi bir **onay kartında** gösterir, siz onaylarsınız, asistan uygular ve sonucu doğrular.
+
+- **Yetenek kartları:** her modül kendi yeteneklerini tek bir kayıt defterine yazar (okuma, eylem, test, sayfa rehberi). Asistan bulunduğunuz sayfaya ve yetkinize göre yalnız ilgili yetenekleri kullanır. Örnekler: kanalları listeleme ve API kanalı oluşturma, kanal sağlık kontrolü, iş akışı taslağı kurup kuru çalıştırma ve kaydetme, otomasyon kuralı, SLA politikası ve çalışma saatleri, üye daveti ve ekip atama, AI'ı açma, widget kurulumu, webhook aboneliği ve test teslimatı, API anahtarı oluşturma (adım yükseltmeli).
+- **Sayfa durumu:** asistanı açtığınız sayfada ne yapılabileceğini ve neyi eksik bıraktığınızı söyler ("kimlik anahtarı yok", "bu kanalda AI kapalı"); kurulum sırasını kurulum sihirbazıyla aynı sırada izler. Yaptığınız ayarın testini (e-posta kanalı test gönderimi, webhook test teslimatı, SLA kuralı kuru çalıştırma) asistan içinden çalıştırır.
+- **Onay kartı:** parametreleri düzenlenebilir bir form, kuru çalıştırma sonucu ve uygulandıktan sonra doğrulama adımı. Yıkıcı eylemler (anahtar iptali, kural silme) her zaman onaylıdır; gizli değerler sohbet geçmişine ve loga yazılmaz; asistan sizin yetkinizi aşamaz, her eylem sunucuda yeniden denetlenir.
+- **Dosya ve bağlantı:** kendi API dokümanınızı ya da bir bağlantıyı paylaşırsınız; asistan okur, örneğin [Sistemini bağla](/docs/integration-guide/system-binding) ekranı için kavram ve uç önerir.
+- **Yönlendirme:** "şu sayfaya geç" dediğinde onayla o sayfaya gider ve ilgili alanı vurgular.
+- **Yüzeyler:** panel çekmecesi, mobil uygulama ve (yalnız kimliği doğrulanmış üyeler için) destek widget'ı. Widget'ta yalnız okuma, yönlendirme ve birkaç güvenli eylem vardır.
+- **MCP araçları:** aynı yetenek defteri [MCP sunucusu](/docs/mcp-integrations#mcp) üzerinden Claude, Cursor gibi istemcilere de sunulur; iki ayrı katalog tutulmaz. Gizli alan taşıyan ve yıkıcı yetenekler MCP'de yoktur.
+- **Sınırlar:** bir turda birden çok araç çağrısı sıralı işlenir, tur sınırı aşılırsa asistan eldeki sonuçlarla yanıt verir; uzun yanıtlar kesilmez, otomatik devam eder ("yanıt kısaltıldı" notuyla en fazla iki devam); araç kullandıktan sonra her zaman metin üretir. Günlük asistan kullanım hakkı planınıza göredir ve çekmecede görünür.
+
+Asistan her yanıtta kaynak gösterir ve gerektiğinde sizi destek ekibimize bağlar. Her sayfada ayrıca adım adım **rehber turu** vardır.
+
+## Tek çalışma saati ve anında yanıt [#working-hours-and-instant-reply]
+
+AI ajanının "mesai dışındayız" metni, widget'ın çevrimiçi/çevrimdışı durumu ve SLA sayaçları **tek çalışma saati kaynağından** beslenir: **Organizasyon → SLA ve çalışma saatleri**. Bu sayfanın **Kapsam** sekmesindeki günler ve saatler ajanın yanıt vereceği aralığı daraltır, kaynağı değiştirmez.
+
+Her modda (AI, temsilci, karma) mesai içindeki yeni konuşmaya 10 saniye içinde "aldık, tahmini süre şu" karşılaması gider; AI insana devrederken müşteriye haber verir. Metinler **Otomasyon → Karşılama** altındadır. Ayrıntı: [Otomasyon](/docs/automation#instant-reply).
+
+## Sistemini bağla ile AI [#ai-and-system-binding]
+
+**Entegrasyonlar → Sistemini bağla** ekranında tanımladığınız kavramlar (Fatura, Sipariş, Lisans…) ve işler ("faturayı tekrar gönder") AI tariflerine girer: ajan müşterinin **dış kimliğiyle** kavramı sizin sisteminizden okur, tarifteki adımı izler ve işi (onay kuralına göre) yapar. Prosedür ve HTTP aracı tanımlamaya gerek kalmaz; serbest cümleyle yazılan tarif niyet eşleşmesinde anahtar kelimeye değil AI sınıflandırmasına dayanır. **Bu müşteri olarak dene** önizlemesi ajanın o müşteri için gördüğü bağlamı gösterir. Kurulum: [Sistemini bağla](/docs/integration-guide/system-binding).
+
 ## Kurulumda yapay zekâ [#ai-during-set-up]
 
 Yeni bir organizasyon açarken kurulum sihirbazı, web sitenizden ve birkaç sorudan yola çıkarak ekipler, SLA'lar, hazır yanıtlar, başlangıç makaleleri ve ajan kişiliği için öneri hazırlayabilir. Bkz. [Başlarken](/docs/getting-started).
+
+## Sık sorulanlar [#faq]
+
+**AI ajanı ile ClickFix Asistan arasındaki fark ne?** Ajan müşteriyle konuşur (widget, WhatsApp, e-posta…); Asistan sizinle konuşur, paneli kurar ve test eder. İkisi ayrı ayarlardır ve ayrı kredi/hak kullanır.
+
+**Ajan müşterinin paketini, faturasını nereden bilir?** [Özel alanlar](/docs/integration-guide/custom-fields) (AI'a açık işaretlenenler), [ekran bağlamı](/docs/integration-guide/events) ve [Sistemini bağla](/docs/integration-guide/system-binding) ile sizin sisteminizden okunan kavramlar ajanın girdisine girer. Hassas işaretli alanlar AI'a gitmez.
+
+**Ajan yanlış bir şey söylerse?** Güven eşiği altında taslak olarak bekler; devir anahtar kelimeleri konuşmayı hemen temsilciye verir; her çalışma kayıt altındadır ve kalite incelemesine alınabilir.
+
+**Kredi bitince ne olur?** Ajan yeni konuşmaları temsilcilere devreder, Copilot ve Asistan kapanır; mevcut taslaklar silinmez.
+
+## İlgili API [#related-api]
+
+- Konuşma ve mesaj uçları ([API başvurusu](/docs/api-reference)); `identity_state` ve `custom_fields` alanları ajanın gördüğü bağlamın aynısıdır.
+- Ekran bağlamı ve ürün olayları: [`POST /company-events`](/docs/api-reference/companies/send-an-event-to-the-company-timeline), widget `track`.
+- MCP sunucusu ve araç kataloğu: [Zapier, Make, n8n ve MCP](/docs/mcp-integrations#mcp).

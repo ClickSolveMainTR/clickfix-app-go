@@ -64,3 +64,28 @@ Gelen kutusunda `?` tuşu tüm kısayolların listesini açar. Sık kullanılanl
 ## SLA [#sla]
 
 Yanıt ve çözüm hedeflerini, mesai saatlerini ve tatilleri **Organizasyon → SLA ve çalışma saatleri** sayfasında tanımlarsınız. Hedefe yaklaşan ve hedefi aşan konuşmalar **SLA 1 saat** ve **SLA ihlali** filtrelerinde görünür.
+
+## Müşteri kimliği ve bağlam [#identity-and-context]
+
+- **Doğrulanmış rozeti:** widget'ta `user_hash` ile kimliğini kanıtlayan kişi **Doğrulanmış** rozeti taşır; firma kimliği de imzalıysa firma da. Kişi kartı ve konuşma paneli üç durumu ayırır: **doğrulanmış**, **anonim**, **adını kendisi yazdı**. Konuşma listesinde süzgeç olarak seçilebilir.
+- **Dış kimlik:** kişinin ve firmanın sizin sisteminizdeki numarası kartta görünür ve aranabilir; API ve webhook'larda `external_id` / `company_external_id` olarak döner.
+- **Özel alanlar:** kabul edilen değerler (paket, lisans bitişi…) kişi ve şirket kartında ve konuşma sağ panelinde; tanımsız alan geldiyse uyarı ve tek tıkla tanım.
+- **Ekran bağlamı:** müşterinin hangi ekrandan yazdığı ve son olayları konuşma başlığında; iş akışı koşullarında da kullanılır.
+- **Sisteminizden okunan kayıtlar:** [Sistemini bağla](/docs/integration-guide/system-binding) kurulduysa müşterinin faturası, siparişi gibi kavramlar sağ panelde okunur ve tanımlı işler oradan çalıştırılır.
+
+## Anında yanıt [#instant-reply]
+
+Mesai içinde yazılan her yeni konuşmaya 10 saniye içinde otomatik karşılama ("aldık, tahmini süre şu") gider; mesai dışında tek kaynaklı çevrimdışı metni. Bu mesajlar konuşmada sistem mesajı olarak görünür ve SLA'nın ilk yanıt sayacını durdurmaz. Ayar: [Otomasyon → Karşılama](/docs/automation#instant-reply).
+
+## Sık sorulanlar [#faq]
+
+**"Adını kendisi yazdı" ne demek?** Kişi ya da kanalı bir ad, e-posta veya telefon verdi ama `user_hash` ile kanıtlanmadı. Doğrulanmış saymak için siteye [kimlik doğrulama](/docs/integration-guide/identity) ekleyin.
+
+**Müşteri siteye girmeden ona nasıl yazarım?** Kişiyi API ile dış kimlikle açın ve `contact_external_id` ile konuşma oluşturun; kullanıcı `identify` ile girince konuşmayı widget'ta görür. Panelden: kişi kartında **Yeni konuşma**.
+
+**Copilot ile Asistan farkı?** Copilot yanıt editöründe metinle ilgilenir; [ClickFix Asistan](/docs/ai#assistant) paneli kurar ve test eder.
+
+## İlgili API [#related-api]
+
+- [Konuşmalar](/docs/api-reference/conversations/list-conversations), [mesajlar](/docs/api-reference/conversations/add-a-message-or-internal-note), [kişiler](/docs/api-reference/contacts/list-contacts); yanıtlar `identity_state`, `external_id`, `custom_fields` taşır.
+- Olaylar: [Webhook'lar](/docs/webhooks).

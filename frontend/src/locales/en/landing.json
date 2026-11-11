@@ -67,7 +67,7 @@
   "tour.mobile_push_title": "New conversation · WhatsApp",
   "tour.mobile_push_body": "Mert D.: Could you share the size chart?",
   "tour.integrations_title": "Integrations",
-  "tour.integrations_body": "Connect your channels through official APIs and let your own systems talk to ClickFix over the REST API and signed webhooks.",
+  "tour.integrations_body": "Connect your channels through official APIs; talk to ClickFix from your own systems with the REST API, signed webhooks, SDKs in six languages and the API channel. With Connect your system the AI reads from your API.",
   "tour.integrations_api": "REST API",
   "tour.integrations_webhook": "Webhooks",
   "how.eyebrow": "How it works",
@@ -326,5 +326,12 @@
   "consent.customize": "Manage preferences",
   "consent.save": "Save choice",
   "footer.cookie_settings": "Cookie preferences",
-  "pricing.offer_name": "ClickFix {{plan}} plan"
+  "pricing.offer_name": "ClickFix {{plan}} plan",
+  "tour.integrations_sdk": "SDKs: Node.js, Go, PHP, Laravel, React, Flutter",
+  "tour.integrations_mcp": "MCP server",
+  "tour.ai_assistant": "ClickFix Assistant sets up and tests the panel with you",
+  "faq.sdk_q": "Which SDKs and samples are there?",
+  "faq.sdk_a": "Node.js (@getclickfix/node), Go, PHP (clickfix/sdk), Laravel (clickfix/laravel), React (@getclickfix/react-widget), a platform-independent visitor core (@getclickfix/visitor-core) and a Flutter webview package (clickfix_webview). All MIT licensed and open source; runnable example apps live in github.com/ClickSolveMainTR/clickfix-examples and the step-by-step walkthrough is the integration guide.",
+  "faq.assistant_q": "What does ClickFix Assistant do?",
+  "faq.assistant_a": "Opened in the panel with ⌘J, the assistant explains the page you are on, tells you what your setup is missing and performs settings such as channels, workflows, SLAs, webhooks and the widget for you through an approval card; it dry-runs the change and verifies the result. The same capabilities are open to clients such as Claude and Cursor through the MCP server."
 }

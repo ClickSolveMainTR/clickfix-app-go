@@ -1,8 +1,39 @@
 ---
-title: Apps gallery
-description: Add ready-made apps to your ClickFix workspace.
+title: App gallery
+description: Add the ready-made gallery apps (order lookup, Calendly, Uptime Kuma, Google Docs, Metabase, OpenStreetMap) to the panel in one click; their limits and the difference from your own app.
+section: developers
+order: 5
 ---
 
-Open **Organization → App management → Gallery**, select a card and enter your HTTPS URL. The gallery includes order lookup, Calendly, Uptime Kuma, Google Docs, Metabase and OpenStreetMap.
+The gallery is a set of ready-made **sidebar apps** you can add to the panel without writing code. Under **Organization → App management → Gallery** pick a card, enter your own HTTPS address and choose where the app appears (conversation sidebar, contact card, full page). Gallery apps only show the address you entered in an iframe; ClickFix sends them no conversation data, contact details or signed context token.
 
-Gallery apps display your URL without receiving conversation data. For conversation context and panel actions, [build your own app](/docs/apps?lang=en).
+## What it does [#what-it-does]
+
+| Card          | What it shows                                                                                       | Input                                                                                        |
+| ------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Order lookup  | Your own order page next to the conversation; the customer email can be passed as a query parameter | The address of your order page; see [Order lookup sample](/docs/order-lookup-sample?lang=en) |
+| Calendly      | A booking calendar                                                                                  | Your Calendly event link                                                                     |
+| Uptime Kuma   | A status page                                                                                       | The public address of your status page                                                       |
+| Google Docs   | A shared document (internal procedure, FAQ)                                                         | An "anyone with the link can view" link                                                      |
+| Metabase      | An embedded dashboard                                                                               | A Metabase public / embed link                                                               |
+| OpenStreetMap | An address map                                                                                      | A map embed link                                                                             |
+
+## How to set up [#how-to-set-up]
+
+1. Pick the card in the **Gallery** and press **Add**.
+2. Enter the address. Only `https://` is accepted and the address must be embeddable (your site's `X-Frame-Options` / `frame-ancestors` rule must allow `getclickfix.com`).
+3. Choose the **placement**: conversation sidebar, contact card or a full page in the left menu. You can limit who sees it by role.
+4. **Save**. The app shows at once; **Disable** hides it, **Remove** deletes it.
+
+## FAQ [#faq]
+
+**How does the app know the customer in the conversation?** Gallery apps do not; they only show a fixed address. For customer-specific content [build your own app](/docs/apps?lang=en): a signed context token tells it who is looking, which conversation and which organization.
+
+**The address does not open in the iframe.** Your site's `Content-Security-Policy: frame-ancestors` or `X-Frame-Options` header must allow the `https://getclickfix.com` origin.
+
+**Can I embed a page that requires sign-in?** Yes; the iframe opens with its own cookies and the user signs in there. Because of third-party cookie limits the page should live on its own domain.
+
+## Related API [#related-api]
+
+- Verification keys of the context token for your own app: [`GET /v1/app-context/jwks`](/docs/api-reference/apps/read-the-app-context-verification-keys?lang=en).
+- App messaging and events: [Build your own app](/docs/apps?lang=en#messages-and-events).

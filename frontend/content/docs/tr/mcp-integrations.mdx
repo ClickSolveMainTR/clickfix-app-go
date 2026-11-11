@@ -88,3 +88,20 @@ ClickFix'in Zapier, Make veya n8n mağazalarında yayımlanmış resmi bir uygul
 Kendi web uygulamanızı (sipariş paneli, CRM kaydı, fatura geçmişi gibi) konuşma kenar çubuğunda, kişi panelinde veya menüde açabilir; galeriden Calendly, Uptime Kuma, Metabase gibi araçları tek tıkla kurabilirsiniz. Uygulamalar **Organizasyon → Uygulama yönetimi** sayfasından yönetilir.
 
 Bağlam belirteci, imza doğrulama, mesajlar, tema ve yayınlama adımları için [Kendi uygulamanızı yapın](/docs/apps) rehberine bakın.
+
+## ClickFix MCP sunucusu [#mcp]
+
+ClickFix, Claude, Cursor ve MCP destekleyen diğer istemcilerin bağlanabildiği bir **MCP sunucusu** sunar. Araçlar, [ClickFix Asistan](/docs/ai#assistant)'ın kullandığı yetenek defterinden gelir; iki ayrı katalog yoktur. Bağlantı OAuth ile kurulur (istemci, organizasyon üyesi olarak yetkilendirilir) ve her araç üyenin yetkisiyle sınırlıdır. Gizli alan taşıyan (anahtar üretme) ve yıkıcı yetenekler MCP'de yoktur; yazma araçları onay gerektirir.
+
+Örnek araçlar: `channels_list`, `channels_api_sample_request`, `workflows_list`, `workflows_reference`, `workflows_dry_run`, `automations_list`, `automations_dry_run`, `sla_list`, `sla_check`, `teams_list`, `members_list`, `webhooks_list`, `widget_install_code`, `integrations_list`, `integrations_system_describe`, `integrations_concepts_lookup`, `search_conversations`, `get_conversation`, `list_contacts`, `ai_status`. Sunucu adresi ve kurulum adımları **Organizasyon → API ve otomasyonlar → MCP** sayfasındadır.
+
+## Sık sorulanlar [#faq]
+
+**Zapier için REST hook mu, yoklama mı?** Zapier ve Make anlık tetikleyici için REST hook aboneliğini (`POST /subscriptions`) kullanır; n8n ve zamanlanmış işler için `GET /triggers` imleçli yoklama yeter.
+
+**MCP ile ne yapamam?** Anahtar üretemez, kayıt silemez, gizli değer okuyamazsınız; bunlar panelde (ya da Asistan onay kartında) kalır.
+
+## İlgili API [#related-api]
+
+- [REST hook aboneliği](/docs/api-reference/triggers/create-a-rest-hook-subscription), [tetikleyici yoklama](/docs/api-reference/triggers/poll-trigger-events).
+- [Webhook'lar](/docs/webhooks).

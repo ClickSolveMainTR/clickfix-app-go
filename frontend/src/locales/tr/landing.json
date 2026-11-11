@@ -67,7 +67,7 @@
   "tour.mobile_push_title": "Yeni konuşma · WhatsApp",
   "tour.mobile_push_body": "Mert D.: Ürün beden tablosunu paylaşır mısınız?",
   "tour.integrations_title": "Entegrasyonlar",
-  "tour.integrations_body": "Kanallarınızı resmi API'lerle bağlayın, kendi sistemlerinizi REST API ve imzalı webhook'lar üzerinden ClickFix'e konuşturun.",
+  "tour.integrations_body": "Kanallarınızı resmi API'lerle bağlayın; kendi sistemlerinizi REST API, imzalı webhook'lar, altı dilde SDK ve API kanalıyla ClickFix'e konuşturun. Sistemini bağla ile AI sizin API'nizden okur.",
   "tour.integrations_api": "REST API",
   "tour.integrations_webhook": "Webhook",
   "how.eyebrow": "Nasıl çalışır",
@@ -326,5 +326,12 @@
   "consent.customize": "Tercihleri yönet",
   "consent.save": "Seçimi kaydet",
   "footer.cookie_settings": "Çerez tercihleri",
-  "pricing.offer_name": "ClickFix {{plan}} planı"
+  "pricing.offer_name": "ClickFix {{plan}} planı",
+  "tour.integrations_sdk": "SDK'lar: Node.js, Go, PHP, Laravel, React, Flutter",
+  "tour.integrations_mcp": "MCP sunucusu",
+  "tour.ai_assistant": "ClickFix Asistan paneli sizinle birlikte kurar ve test eder",
+  "faq.sdk_q": "Hangi SDK'lar ve örnekler var?",
+  "faq.sdk_a": "Node.js (@getclickfix/node), Go, PHP (clickfix/sdk), Laravel (clickfix/laravel), React (@getclickfix/react-widget), platform bağımsız ziyaretçi çekirdeği (@getclickfix/visitor-core) ve Flutter webview paketi (clickfix_webview). Hepsi MIT lisanslı ve açık kaynaktır; çalışan örnek uygulamalar github.com/ClickSolveMainTR/clickfix-examples deposunda, adım adım anlatım entegrasyon kılavuzundadır.",
+  "faq.assistant_q": "ClickFix Asistan ne yapar?",
+  "faq.assistant_a": "Panelde ⌘J ile açılan asistan bulunduğunuz sayfayı anlatır, kurulumunuzda neyi eksik bıraktığınızı söyler ve kanal, iş akışı, SLA, webhook, widget gibi ayarları onay kartıyla sizin yerinize yapar; değişikliği kuru çalıştırır ve sonucu doğrular. Aynı yetenekler MCP sunucusu üzerinden Claude ve Cursor gibi istemcilere de açıktır."
 }

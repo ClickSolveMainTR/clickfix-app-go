@@ -13,15 +13,22 @@ Web widget, sitenize eklenen bir canlı destek balonudur. Ziyaretçiler balondan
 2. Bir ad yazıp **Widget oluştur**'a basın.
 3. Sekmelerden ayarları yapıp **Kaydet**'e basın.
 
-| Sekme            | Ayarlar                                                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Görünüm          | Ana renk, konum (sağ alt / sol alt), dil, ekibi göster                                                                    |
-| Sohbet           | Karşılama başlığı ve metni, sohbet öncesi form (ad ve e-posta), dosya gönderimi (en fazla 10 MB), memnuniyet puanı (CSAT) |
-| Çalışma saatleri | Gün ve saatler, saat dilimi, çevrimdışı mesajı                                                                            |
-| Güvenlik         | İzin verilen alan adları, kimlik doğrulama anahtarı, yalnızca doğrulanmış kullanıcılar                                    |
-| Kurulum          | Kurulum kodu ve kullanıcı tanıtma örneği                                                                                  |
+Widget sayfasının iki sekmesi vardır:
 
-Çalışma saatleri dışında widget çevrimdışı görünür ve e-posta adresi zorunlu olur.
+- **Temel kurulum**: üç adımlık sihirbaz. **Görünüm** (renk, tema, balon), **Kimlik** (dil, karşılama metinleri, logo, ekip) ve **Kanal** (AI asistan, ön sohbet formu, izinli alan adları, kurulum kodu). İlk widget'ı yayına almak için bu üç adım yeter.
+- **Gelişmiş ayarlar**: altmıştan fazla ayarın tamamı, bölümler hâlinde. Temel kurulumda değiştirdiğiniz her alan burada da aynı alanı günceller.
+
+| Gelişmiş bölüm    | Ayarlar                                                                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Görünüm           | Ana renk, tema, konum (sağ alt / sol alt), dil, ekibi göster                                                                                                  |
+| Sohbet            | Karşılama başlığı ve metni, ön sohbet formu, dosya gönderimi (en fazla 10 MB), memnuniyet puanı (CSAT)                                                        |
+| Çalışma saatleri  | Widget'ın çevrimiçi/çevrimdışı durumu **organizasyonun çalışma saatlerinden** gelir (SLA → Çalışma saatleri); burada yalnız uygulanıp uygulanmayacağı seçilir |
+| Güvenlik          | İzin verilen alan adları, kimlik doğrulama anahtarı, yalnızca doğrulanmış kullanıcılar                                                                        |
+| Mobil uygulamalar | Yerel iOS ve Android uygulamaları için uygulama anahtarları (aşağıda)                                                                                         |
+| Kurulum           | Kurulum kodu ve kullanıcı tanıtma örneği                                                                                                                      |
+| Oturum kaydı      | Birlikte göz atma ve oturum kaydı (onaylı)                                                                                                                    |
+
+Çalışma saatleri dışında widget çevrimdışı görünür, çevrimdışı mesajı gösterir ve e-posta adresi zorunlu olur. Aynı çalışma saati kaynağını AI ajanı ("mesai dışındayız" metni) ve SLA sayaçları da kullanır; saati tek yerde değiştirmek üçünü birden değiştirir.
 
 ## Kurulum [#install]
 
@@ -62,6 +69,8 @@ Widget yüklendikten sonra `window.ClickFix` üzerinden kontrol edilebilir. Scri
 | `ClickFix("open")` / `"close"` / `"toggle"`  | Sohbet penceresini açar, kapatır veya değiştirir                                                                          |
 | `ClickFix("identify", {...})`                | Giriş yapmış kullanıcıyı tanıtır (aşağıda)                                                                                |
 | `ClickFix("update", { name, email, phone })` | Ziyaretçi bilgilerini günceller                                                                                           |
+| `ClickFix("setAttributes", {...})`           | Özel alan değerlerini gönderir (anahtar, Ayarlar → Özel alanlar'daki anahtardır)                                          |
+| `ClickFix("consent", true)`                  | Çerez onayını iletir; onay gelene kadar tarayıcıya hiçbir şey yazılmaz                                                    |
 | `ClickFix("track", "olay_adi", {...})`       | Sayfa olayı kaydeder; son 20 olay ziyaretçinin bir sonraki mesajına eklenir                                               |
 | `ClickFix("on", "message", fn)`              | Olay dinler: `ready`, `open`, `close`, `message`, `message:sent`, `conversation`, `unread`, `identify`, `rating`, `track` |
 | `ClickFix("reset")`                          | Ziyaretçiyi unutur (çıkış yaparken çağırın)                                                                               |
@@ -76,11 +85,17 @@ TypeScript tipleri `https://getclickfix.com/widget.d.ts` adresinde yayınlanır.
 Sitenizde giriş yapmış kullanıcıları widget'a güvenli biçimde tanıtabilirsiniz. Böylece konuşmalar doğru kişiye ve şirkete bağlanır.
 
 1. **Güvenlik** sekmesinde **Anahtar oluştur** ile bir kimlik doğrulama anahtarı üretin. Anahtar yalnızca bir kez gösterilir; kopyalayıp sunucunuzda saklayın.
-2. Sunucunuzda her kullanıcı için `user_hash` üretin:
+2. Sunucunuzda her kullanıcı için `user_hash` üretin. Kullanıcı bir firmaya bağlıysa firma kimliğini de imzaya katın; böylece doğrulanmış bir kullanıcı başka bir firmayı iddia edemez ve firma da **Doğrulanmış** rozeti alır:
 
    ```text
+   # firma ile (identify'da company.id gönderilir)
+   user_hash = hex(HMAC-SHA256(kimlik_dogrulama_anahtari, user_id + "\n" + company_id))
+
+   # firma yoksa
    user_hash = hex(HMAC-SHA256(kimlik_dogrulama_anahtari, user_id))
    ```
+
+   `user_id` ve `company.id` kendi sisteminizdeki kimliklerdir ve ClickFix'te kişi ile şirketin **dış kimliği** olur (API'de `external_id`). Yalnız `user_id` ile hesaplanan eski değer çalışmaya devam eder; o durumda `company.id` bağlanmaz, `company.name` ve `domain` yalnız eşleştirme ipucudur.
 
 3. Sayfada `identify` çağırın:
 
@@ -91,21 +106,25 @@ Sitenizde giriş yapmış kullanıcıları widget'a güvenli biçimde tanıtabil
        user_hash: "USER_HASH",
        name: "Ada Yılmaz",
        email: "ada@example.com",
-       company: { id: "acme", name: "Acme A.Ş.", domain: "acme.com" },
+       company: { id: "F-77", name: "Acme A.Ş.", domain: "acme.com" },
+       attributes: { plan: "pro" },
      });
    </script>
    ```
 
-Anahtarı asla tarayıcıya göndermeyin. Örneğin Node.js'te:
+Doğrulanan kişi panelde **Doğrulanmış** rozeti alır; anonim geçmişi aynı kişiye taşınır. Reddedilen `identify` çağrısında widget çalışmaya devam eder ama kullanıcı anonim kalır ve `error` olayı `WIDGET_IDENTITY_DISABLED` (anahtar üretilmemiş) ya da `WIDGET_IDENTITY_INVALID` (eşleşmiyor) kodunu verir; kanal sağlığı **Uyarı** olur ve nedeni yazılır. Anahtarı asla tarayıcıya göndermeyin. Örneğin Node.js'te SDK ile:
 
 ```js
-import crypto from "node:crypto";
+import { identityHash } from "@getclickfix/node";
 
-const userHash = crypto
-  .createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
-  .update(String(user.id))
-  .digest("hex");
+const userHash = identityHash(
+  process.env.CLICKFIX_IDENTITY_SECRET,
+  String(user.id),
+  user.companyId, // isteğe bağlı
+);
 ```
+
+Adım adım anlatım, Go, PHP, curl ve Laravel örnekleri: [Entegrasyon kılavuzu → Kimlik doğrulama](/docs/integration-guide/identity).
 
 **Yalnızca doğrulanmış kullanıcılar** seçeneğini açarsanız anonim ziyaretçiler mesaj gönderemez. Bu, müşteri paneli gibi giriş gerektiren siteler için uygundur. Anahtarı **Anahtarı yenile** ile değiştirebilirsiniz; bu durumda sunucunuzdaki anahtarı da güncelleyin.
 
@@ -165,45 +184,91 @@ ClickFix("track", "checkout_started", { total: 349.9 });
 
 ### Sunucuda `user_hash` üretme [#user-hash-on-the-server]
 
-Oturum açmış kullanıcı için `user_hash` değerini sunucunuzda üretip sayfaya yalnızca sonucu verin:
+Oturum açmış kullanıcı için `user_hash` değerini sunucunuzda üretip sayfaya yalnızca sonucu verin. Firma kimliği varsa `user_id + "\n" + company_id` imzalanır:
 
 ```js tab="Node.js"
 import { createHmac } from "node:crypto";
 
-export function userHash(userId) {
+export function userHash(userId, companyId) {
+  const message = companyId ? `${userId}\n${companyId}` : String(userId);
   return createHmac("sha256", process.env.CLICKFIX_IDENTITY_SECRET)
-    .update(String(userId))
+    .update(message)
     .digest("hex");
 }
 ```
 
 ```php tab="PHP"
 <?php
-function clickfix_user_hash(string $userId): string {
-    return hash_hmac('sha256', $userId, getenv('CLICKFIX_IDENTITY_SECRET'));
+function clickfix_user_hash(string $userId, ?string $companyId = null): string {
+    $message = $companyId === null ? $userId : $userId . "\n" . $companyId;
+    return hash_hmac('sha256', $message, getenv('CLICKFIX_IDENTITY_SECRET'));
 }
 ```
 
 ```python tab="Python"
 import hashlib, hmac, os
 
-def user_hash(user_id: str) -> str:
+def user_hash(user_id: str, company_id: str | None = None) -> str:
     secret = os.environ["CLICKFIX_IDENTITY_SECRET"].encode()
-    return hmac.new(secret, str(user_id).encode(), hashlib.sha256).hexdigest()
+    message = f"{user_id}\n{company_id}" if company_id else str(user_id)
+    return hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
 ```
 
 ```go tab="Go"
-func UserHash(userID string) string {
+func UserHash(userID, companyID string) string {
+	message := userID
+	if companyID != "" {
+		message = userID + "\n" + companyID
+	}
 	mac := hmac.New(sha256.New, []byte(os.Getenv("CLICKFIX_IDENTITY_SECRET")))
-	mac.Write([]byte(userID))
+	mac.Write([]byte(message))
 	return hex.EncodeToString(mac.Sum(nil))
 }
 ```
+
+Hazır yardımcılar: Node `identityHash`, Go `IdentityCompanyHash`, PHP `UserHash::make`, Laravel `ClickFix::userHash($user)` ([SDK'lar](/docs/integration-guide/sdks)).
 
 ### React [#react]
 
 React uygulamalarında tipli hook'larla widget'ı yönetmek için: [SDK'lar → React](/docs/integration-guide/sdks#react-widget).
 
+## Özel alanlar ve ekran bağlamı [#custom-fields-and-screen-context]
+
+- **Özel alanlar:** **Ayarlar → Özel alanlar** altında bir kez tanımladığınız alanın anahtarını `identify({ attributes })` ya da `ClickFix("setAttributes", { plan: "pro" })` ile gönderirsiniz; değer alanın tipine göre doğrulanır, liste alanlarında seçenek kimliği ya da etiketi kabul edilir. Tanımsız bir anahtar sessizce atılmaz: kanal kurulum kontrolünde ve kişi kartında **tanımsız alan geldi** uyarısı olarak görünür ve tek tıkla tanımlanır. Alanın **widget erişimi** anonim ziyaretçinin yazıp yazamayacağını belirler. Kabul edilen değerler kişi kartında, konuşma panelinde ve (izin verildiyse) AI bağlamında görünür.
+- **Ekran bağlamı:** `ClickFix("track", "checkout_started", { total: 349.9 })` ile kaydettiğiniz son 20 olay ve sayfa adresi ziyaretçinin sonraki mesajıyla gider; panelde konuşma başlığında **hangi ekrandan yazdı** olarak görünür, AI ajanının girdisine ve iş akışı koşullarına katılır. Adresin sorgu dizesi ve `#` parçası sunucuda atılır; kişisel veriyi olay özelliklerine koymayın.
+
+Ayrıntı: [Özel alanlar](/docs/integration-guide/custom-fields), [Olaylar ve ekran bağlamı](/docs/integration-guide/events).
+
+## Ön sohbet formu [#pre-chat-form]
+
+Ön sohbet formu ile panel talep formları aynı **Formlar** altyapısındadır: **Ayarlar → Formlar** altında bir form tanımlar, widget'ın **Kanal** adımında (ya da Gelişmiş → Sohbet) hangi formun sorulacağını seçersiniz. Form alanları özel alanlara bağlanabilir; doğrulanmış kullanıcıya ad ve e-posta yeniden sorulmaz. Çalışma saatleri dışında e-posta alanı zorunlu olur.
+
+## Anında yanıt ve çevrimdışı mesaj [#instant-reply]
+
+Müşteri boşlukta kalmaz: mesai içinde yazılan her yeni konuşmaya 10 saniye içinde "aldık, tahmini süre şu" türünde otomatik bir karşılama gider (metin ve tahmini süre **Otomasyon → Karşılama** altında, modlara göre: AI, temsilci, karma). AI ajanı konuşmayı insana devrederken müşteriye haber verir. Mesai dışı mesajın metni tek kaynaktan, organizasyonun çalışma saatlerinden gelir. Ayrıntı: [Otomasyon](/docs/automation#instant-reply).
+
+## Mobil uygulamalar: uygulama anahtarı [#mobile-apps]
+
+Mobil uygulamalar için önerilen yol, oturumu taşıyan güvenli bir **webview**'dir (`widget-embed.html`); Flutter için hazır paket vardır. Uygulama widget uçlarını webview olmadan, yerel çekirdekle (`@getclickfix/visitor-core`) de çağırabilir; bunun için **Gelişmiş → Mobil uygulamalar** bölümünde platform (iOS/Android) ve paket adı ile bir **uygulama anahtarı** oluşturursunuz. Anahtar yalnız oluşturulduğunda gösterilir, hash'lenerek saklanır ve iptal edilebilir; bir widget'ta en fazla 20 etkin anahtar olur. Uygulama her widget isteğine `X-ClickFix-App-Key` ve `X-ClickFix-App-Package` başlıklarını ekler; `user_hash` doğrulaması ve hız sınırı tarayıcıdakiyle aynıdır. Anahtar webview'e ya da sayfaya girmez. Ayrıntı: [Mobil: webview ve Flutter](/docs/integration-guide/mobile).
+
 ## Yardım merkezi ve randevu [#help-center-and-booking]
 
 Bilgi bankanızda herkese açık yayınlanmış makaleler varsa ziyaretçiler widget içinden arama yapabilir. Randevular modülü açıksa widget herkese açık randevu sayfanıza bağlantı verir. Ayrıntılar: [Bilgi bankası](/docs/knowledge-base), [Randevular](/docs/appointments).
+
+## Sık sorulanlar [#faq]
+
+**Widget "çevrimiçi" diyor ama AI "mesai dışındayız" diyor.** Artık olmaz: widget durumu, AI'ın metni ve SLA aynı çalışma saati kaynağını kullanır (SLA → Çalışma saatleri). Widget'ta **Çalışma saatlerini uygula** kapalıysa widget her zaman çevrimiçi görünür.
+
+**`identify` çağırdım ama kişi anonim görünüyor.** `error` olayının koduna bakın: `WIDGET_IDENTITY_DISABLED` ise Güvenlik sekmesinde anahtar üretilmemiştir; `WIDGET_IDENTITY_INVALID` ise `user_hash` yanlış anahtarla ya da yanlış mesajla hesaplanmıştır (firma kimliği gönderiyorsanız `user_id + "\n" + company_id`). Kanal sağlığı da aynı nedeni gösterir.
+
+**Gönderdiğim özel alan panelde görünmüyor.** Alan tanımlı değilse kişi kartında "tanımsız alan geldi" uyarısı vardır; oradan tanımlayın. Tanımlıysa alanın widget erişimi anonim ziyaretçiye kapalı olabilir; kullanıcıyı `identify` ile doğrulayın.
+
+**Birden çok site için tek widget kullanabilir miyim?** Evet; izin verilen alan adlarına hepsini ekleyin. Farklı dil, renk ya da ekip istiyorsanız ayrı widget oluşturun; her widget ayrı bir gelen kutusudur.
+
+**Çerez onayı gerektiren sitelerde ne olur?** `ClickFix("consent", true)` çağrılana (ya da `boot({ consent })`) kadar tarayıcıya hiçbir şey yazılmaz; onay gelince ziyaretçi oturumu başlar.
+
+## İlgili API [#related-api]
+
+- Widget uçları tarayıcıdan ve mobil uygulamadan çağrılır; sunucu tarafı için [`PUT /contacts/by-external-id`](/docs/api-reference/contacts/create-or-update-a-contact-by-external-id) kişiyi dış kimlikle oluşturur, [`POST /conversations`](/docs/api-reference/conversations/create-a-conversation) `contact_external_id` ile müşteri siteye girmeden konuşma açar.
+- SDK'lar: [`@getclickfix/react-widget`](/docs/integration-guide/sdks#react-widget), [`@getclickfix/visitor-core`](/docs/integration-guide/sdks#visitor-core), [`clickfix_webview`](/docs/integration-guide/mobile#flutter).
+- Olaylar: [Webhook'lar](/docs/webhooks) (`conversation.created`, `message.received`, `contact.updated`).
