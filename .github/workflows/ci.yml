@@ -355,6 +355,9 @@ jobs:
   # newest `## X.Y.Z` heading of sdks/php/CHANGELOG.md and Client::USER_AGENT;
   # the sdks-mirror job pushes sdks/php to ClickSolveMainTR/clickfix-php and
   # tags vX.Y.Z there, which Packagist (clickfix/sdk) watches.
+  # Runs in the official php:<version>-cli image: the self-hosted runners have
+  # no PHP and setup-php's apt/sudo install hangs there, while the container
+  # already has the interpreter; Composer comes from the signed installer.
   php:
     needs: [changes]
     if: needs.changes.outputs.php == 'true'
@@ -363,13 +366,24 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.1', '8.2', '8.3', '8.4']
+    container:
+      image: php:${{ matrix.php }}-cli
+    env:
+      COMPOSER_ALLOW_SUPERUSER: '1'
+      COMPOSER_NO_INTERACTION: '1'
     steps:
+      - name: Tools (git, unzip, jq, Composer)
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git unzip jq ca-certificates curl >/dev/null
+          expected=$(curl -fsS https://composer.github.io/installer.sig)
+          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+          actual=$(php -r "echo hash_file('sha384', '/tmp/composer-setup.php');")
+          [ "$expected" = "$actual" ] || { echo "::error::Composer installer checksum mismatch"; exit 1; }
+          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+          rm /tmp/composer-setup.php
+          php --version | head -1; composer --version
       - uses: actions/checkout@v7
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          tools: composer:v2
-          coverage: none
       - name: Package metadata (composer validate, name, license, version)
         working-directory: sdks/php
         run: |
@@ -380,9 +394,12 @@ jobs:
           [ -n "$version" ] || { echo "::error::CHANGELOG.md has no '## X.Y.Z - date' entry"; exit 1; }
           grep -q "'clickfix-php-sdk/$version'" src/Client.php || { echo "::error::Client::USER_AGENT must carry version $version"; exit 1; }
           echo "clickfix/sdk $version -> clickfix-php tag v$version"
+      # GitHub dist downloads count against the API rate limit; the job token lifts it.
       - name: Install
         working-directory: sdks/php
-        run: composer install --no-interaction --no-progress --prefer-dist
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer install --no-progress --prefer-dist
       - name: Code style (php-cs-fixer)
         working-directory: sdks/php
         env:
