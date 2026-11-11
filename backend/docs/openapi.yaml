@@ -35354,6 +35354,7 @@ paths:
         "Developer platform"
       ],
       "operationId": "getV1AppContextJwks",
+      "x-public": true,
       "summary": "Read iframe context verification keys",
       "security": [],
       "parameters": [],

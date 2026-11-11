@@ -4,435 +4,197 @@ openapi: 3.1.0
 info:
   title: ClickFix API
   version: v1
-  summary: Konuşmalar, kişiler, şirketler ve webhook'lar için herkese açık REST API
+  summary: Public REST API for conversations, contacts, companies, webhooks and the API channel
+  description: |
+    The ClickFix REST API lets you open conversations, add messages and internal notes, keep contacts and companies in sync with your own system, send customer-health signals and subscribe to events. Base URL `https://api.getclickfix.com/v1/public-api`; every request carries `Authorization: Bearer cf_sk_…`; writes require `Idempotency-Key`.
+
+    Guides: [API keys, envelope, errors, pagination, rate limits](https://getclickfix.com/docs/api) · [Integration guide](https://getclickfix.com/docs/integration-guide) · [SDKs](https://getclickfix.com/docs/integration-guide/sdks) · [Webhooks](https://getclickfix.com/docs/webhooks).
   contact:
-    name: ClickFix Destek
+    name: ClickFix Support
     email: destek@getclickfix.com
     url: https://getclickfix.com/docs/api
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
-  description: |
-    # Hızlı başlangıç
-
-    ClickFix REST API'si; konuşma açmanızı, mesaj ve iç not eklemenizi, kişi ve şirket verinizi senkron tutmanızı ve olaylara webhook ile abone olmanızı sağlar. Bu başvuruda yalnızca herkese açık ve kararlı uç noktalar yer alır; panelin kendi kullandığı iç uç noktalar burada listelenmez ve API anahtarıyla çağrılamaz.
-
-    **Temel adres:** `https://api.getclickfix.com/v1/public-api`
-
-    Beş dakikada ilk isteğiniz:
-
-    1. Panelde **Organizasyon → API ve otomasyonlar → API anahtarları** sayfasını açın ve **Yeni API anahtarı**'na basın.
-    2. Anahtara bir ad verin ve yalnızca ihtiyacınız olan kapsamları seçin. Bu örnek için `contacts:read` ve `conversations:write` yeterli.
-    3. **Anahtar oluştur**'a basın ve `cf_sk_` ile başlayan anahtarı hemen kopyalayın. Anahtar yalnızca bir kez gösterilir.
-    4. Anahtarı sunucunuzda bir ortam değişkenine koyun ve kişileri listeleyin:
-
-    ```bash
-    export CLICKFIX_API_KEY="cf_sk_..."
-
-    curl "https://api.getclickfix.com/v1/public-api/contacts?limit=5" \
-      -H "Authorization: Bearer $CLICKFIX_API_KEY"
-    ```
-
-    5. Bir kişi ve bir kanal (`inbox_uuid`) seçip konuşma açın. Yazma isteklerinde `Idempotency-Key` zorunludur:
-
-    ```bash
-    curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
-      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
-      -H "Content-Type: application/json" \
-      -H "Idempotency-Key: siparis-1042-destek" \
-      -d '{
-        "contact_uuid": "KISI_UUID",
-        "inbox_uuid": "KANAL_UUID",
-        "subject": "Teslimat sorusu"
-      }'
-    ```
-
-    Yanıt `201` ve `data.uuid` alanında konuşmanın kimliğini döner. Aynı isteği aynı `Idempotency-Key` ile tekrar gönderirseniz yeni konuşma açılmaz, ilk yanıt aynen döner.
-
-    Sonraki adımlar: aşağıdaki **Kimlik doğrulama ve kapsamlar** ve **Webhook'lar** bölümleri, ardından uç nokta başvurusu. Kullanım kılavuzu: [getclickfix.com/docs/api](https://getclickfix.com/docs/api).
-
-    # Kimlik doğrulama ve kapsamlar
-
-    Her istek bir **API anahtarıyla** doğrulanır. Anahtarı `Authorization` başlığında `Bearer` olarak gönderin:
-
-    ```http
-    Authorization: Bearer cf_sk_...
-    ```
-
-    ## API anahtarı oluşturma
-
-    1. **Organizasyon → API ve otomasyonlar → API anahtarları** sayfasını açın. Sayfayı görmek için organizasyonda API anahtarlarını yönetme yetkiniz olmalıdır.
-    2. **Yeni API anahtarı**'na basın; anahtara entegrasyonu tanıtan bir ad verin (ör. "ERP senkronizasyonu").
-    3. Yalnızca entegrasyonun ihtiyaç duyduğu **kapsamları** seçin.
-    4. İsterseniz **dakikalık istek limiti** (1–6000, varsayılan 120) ve **son geçerlilik tarihi** belirleyin.
-    5. **Anahtar oluştur**'a basın ve anahtarı kopyalayın. ClickFix anahtarın yalnızca özetini saklar; anahtar bir daha gösterilmez.
-
-    Bir anahtarı aynı sayfadaki **İptal et** ile hemen geçersiz kılabilirsiniz. Anahtar sızdıysa önce iptal edin, sonra yenisini oluşturun.
-
-    > API anahtarları yalnızca sunucuda kullanılır. Tarayıcı, mobil uygulama veya herkese açık bir depodaki koda koymayın.
-
-    ## Anahtar hangi verilere erişir?
-
-    - Anahtar oluşturulduğu **organizasyona** bağlıdır; `X-Organization` gibi bir başlık göndermeniz gerekmez.
-    - Anahtar, onu oluşturan üyenin **güncel** yetkileriyle sınırlıdır. Üyenin yetkisi düşerse, üye pasifleşirse veya organizasyondan çıkarılırsa anahtar da aynı oranda kısıtlanır ya da çalışmaz.
-    - Bir isteğin geçmesi için hem anahtarın ilgili **kapsamı** hem de üyenin ilgili **yetkisi** gerekir.
-
-    ## Kapsamlar
-
-    | Kapsam | İzin verdiği |
-    |---|---|
-    | `conversations:read` | Konuşmaları ve mesajları okuma |
-    | `conversations:write` | Konuşma oluşturma ve güncelleme, mesaj ve iç not ekleme |
-    | `contacts:read` | Kişileri okuma |
-    | `contacts:write` | Kişileri güncelleme |
-    | `companies:read` | Şirketleri okuma |
-    | `triggers:read` | Tetikleyici olaylarını yoklama |
-    | `webhooks:read` | Webhook aboneliklerini okuma |
-    | `webhooks:write` | Webhook aboneliği oluşturma, güncelleme ve silme |
-    | `revenue:write` | Şirket gelir verisi gönderme |
-    | `health:write` | Şirket kullanım sinyali (0–100) gönderme |
-    | `events:write` | Şirket zaman çizelgesine ürün olayı gönderme |
-
-    Her uç noktanın gerektirdiği kapsam, başvurudaki açıklamasında yazar. Kapsam eksikse `403 FORBIDDEN` döner ve mesajda eksik kapsam belirtilir.
-
-    # Yanıtlar ve hatalar
-
-    Tüm yanıtlar aynı zarfı kullanır. Başarılı yanıt:
-
-    ```json
-    {
-      "success": true,
-      "data": { "uuid": "8f0e…", "status": "open" },
-      "meta": { "request_id": "01JB…" }
-    }
-    ```
-
-    Hatalı yanıt:
-
-    ```json
-    {
-      "success": false,
-      "error": {
-        "code": "VALIDATION_ERROR",
-        "message": "Invalid input; writes require Idempotency-Key",
-        "details": [{ "field": "subject", "message": "too long", "code": "max" }]
-      },
-      "meta": { "request_id": "01JB…" }
-    }
-    ```
-
-    Hata yönetimini `error.code` değerine göre yapın; `message` metni bilgilendirme amaçlıdır ve değişebilir. Bize ulaştığınızda `meta.request_id` değerini paylaşın; isteği bu değerle buluruz.
-
-    | HTTP | `error.code` | Ne zaman | Ne yapmalı |
-    |---|---|---|---|
-    | 400 | `VALIDATION_ERROR` | Gövde geçersiz, alan kuralı ihlal edildi veya yazma isteğinde `Idempotency-Key` yok | `details` alanına bakıp isteği düzeltin; aynı isteği tekrar denemeyin |
-    | 401 | `UNAUTHENTICATED` | Anahtar yok, hatalı, iptal edilmiş veya süresi dolmuş | Anahtarı kontrol edin, gerekirse yenisini oluşturun |
-    | 403 | `FORBIDDEN` | Anahtarın kapsamı veya anahtarı oluşturan üyenin yetkisi yetmiyor | Anahtara kapsamı ekleyin (yeni anahtar) veya üyenin rolünü güncelleyin |
-    | 403 | `ENTITLEMENT_REQUIRED`, `PLAN_LIMIT_EXCEEDED`, `SUBSCRIPTION_READ_ONLY` | Organizasyonun planı bu özelliği içermiyor, kota doldu veya abonelik salt okunur | Organizasyon yöneticinizle planı gözden geçirin |
-    | 404 | `NOT_FOUND` | Kayıt yok, başka organizasyona ait veya uç nokta herkese açık API'de yok | Kimliği ve yolu kontrol edin |
-    | 409 | `IDEMPOTENCY_CONFLICT` | Aynı `Idempotency-Key` farklı bir istekle kullanıldı veya ilk istek hâlâ işleniyor | Yeni işlem için yeni anahtar üretin; işlenen istek için kısa bir süre sonra aynı anahtarla tekrar deneyin |
-    | 410 | `CURSOR_EXPIRED` | Tetikleyici imleci artık geçerli değil | Kaynakları yeniden okuyup `cursor=0` ile baştan başlayın |
-    | 429 | `RATE_LIMITED` | Anahtarın dakikalık limiti aşıldı | `Retry-After` saniye kadar bekleyip tekrar deneyin |
-    | 502 | `RESULT_TOO_LARGE` | Yanıt çok büyük | `limit` değerini düşürün veya filtre ekleyin |
-    | 500 | `INTERNAL_ERROR` | Beklenmeyen sunucu hatası | Üstel bekleme ile tekrar deneyin; sürerse `request_id` ile bize yazın |
-
-    # Sayfalama
-
-    Liste uç noktaları `limit` (varsayılan 20, en fazla 100) ve `offset` parametrelerini kabul eder ve sonucu tek bir yapıda döner:
-
-    ```json
-    {
-      "success": true,
-      "data": { "items": [], "total": 134, "limit": 20, "offset": 40 }
-    }
-    ```
-
-    Sonraki sayfa için `offset` değerini `limit` kadar artırın; `items` boş geldiğinde veya `offset + limit >= total` olduğunda durun. Kişi listesi ayrıca `q` ile arama destekler.
-
-    Sayfalama anlık görüntü almak içindir; çok sayıda kaydı sürekli senkron tutmak için sayfa sayfa yoklamak yerine **webhook** veya **tetikleyici yoklama** (`GET /triggers`, imleç tabanlı) kullanın.
-
-    # Idempotency
-
-    `GET` dışındaki her istekte `Idempotency-Key` başlığı **zorunludur** (en fazla 200 bayt).
-
-    - Her mantıksal işlem için benzersiz bir değer üretin, ör. `siparis-1042-iade` veya bir UUID.
-    - Ağ hatası veya zaman aşımında aynı isteği **aynı anahtar ve aynı gövdeyle** tekrar gönderin. ClickFix ilk tamamlanan yanıtı saklar ve aynen döner; işlem iki kez yapılmaz.
-    - Anahtar 24 saat saklanır. Aynı anahtarı farklı bir gövde, yöntem veya yolla kullanırsanız `409 IDEMPOTENCY_CONFLICT` döner.
-    - Saklanan yanıt bir hata ise (ör. `400`), aynı anahtarla tekrar denemek yine aynı hatayı döner. Girdiyi düzelttiyseniz yeni bir anahtar kullanın.
-    - Mesaj gönderirken `client_id` alanı ek bir tekrar koruması sağlar.
-
-    # Hız sınırları ve boyutlar
-
-    - Her API anahtarının dakikalık bir istek limiti vardır: varsayılan **120**, anahtar oluştururken 1–6000 arasında ayarlanabilir.
-    - Limit aşıldığında `429 RATE_LIMITED` ve `Retry-After` başlığı (saniye) döner. Bu süre kadar bekleyin, ardından üstel bekleme ve rastgele sapma (jitter) ile tekrar deneyin.
-    - Birden çok entegrasyon için ayrı anahtar kullanın; limit anahtar başına uygulanır.
-    - İstek gövdesi en fazla **128 KB** olabilir.
-    - `400`, `401`, `403` ve `404` yanıtlarını tekrar denemeyin; önce isteği düzeltin.
-
-    # Sürümleme
-
-    - API'nin sürümü yoldadır: `/v1/...`. `v1` içinde yalnızca **geriye uyumlu** değişiklikler yapılır: yeni uç nokta, yeni isteğe bağlı alan, yeni olay türü, yeni hata kodu.
-    - İstemciniz tanımadığı yanıt alanlarını ve olay türlerini yok saymalıdır.
-    - Bir alanı kaldırmak, anlamını değiştirmek veya zorunlu alan eklemek gibi kırıcı değişiklikler yalnızca yeni bir ana sürümle (`/v2`) gelir ve önceden duyurulur; eski sürüm geçiş süresi boyunca çalışmaya devam eder.
-    - Bu başvuruda yer almayan uç noktalar herkese açık API'nin parçası değildir ve haber verilmeden değişebilir.
-
-    # Webhook'lar
-
-    Webhook'lar, ClickFix'te bir olay olduğunda (yeni konuşma, gelen mesaj, SLA ihlali…) belirttiğiniz HTTPS adresine imzalı bir `POST` isteği gönderir. Böylece yoklama yapmadan sisteminizi güncel tutarsınız.
-
-    ## Abonelik
-
-    `webhooks:write` kapsamlı bir anahtarla `POST /webhooks` çağırın. Yanıttaki `data.secret` imza anahtarıdır ve **yalnızca oluşturma yanıtında** döner; güvenli bir yerde saklayın.
-
-    - Adres `https://` olmalı ve herkese açık bir sunucuya işaret etmelidir; `localhost`, özel IP'ler ve yönlendirmeler (3xx) kabul edilmez.
-    - Sunucunuz 10 saniye içinde `2xx` dönmelidir. Başarısız teslimatlar artan aralıklarla (1 dk, 5 dk, 30 dk, 2 sa, 6 sa, 12 sa, 24 sa) tekrar denenir; bu yüzden aynı olay birden fazla gelebilir.
-    - Zapier, Make veya n8n gibi araçlar için `POST /subscriptions` (REST hook) aynı teslimat altyapısını kullanır.
-
-    ## Olaylar
-
-    | Grup | Olaylar |
-    |---|---|
-    | Konuşma | `conversation.created`, `conversation.updated`, `conversation.assigned`, `conversation.unassigned`, `conversation.status_changed`, `conversation.priority_changed`, `conversation.resolved`, `conversation.reopened`, `conversation.snoozed`, `conversation.tag_added` |
-    | Mesaj | `message.received`, `message.sent`, `message.failed` |
-    | Kişi ve şirket | `contact.created`, `contact.updated`, `contact.merged`, `company.created`, `company.updated` |
-    | SLA | `sla.warning`, `sla.breached` |
-    | Memnuniyet | `csat.submitted` |
-
-    Listeye zamanla yeni olaylar eklenir; tanımadığınız olay türlerini yok sayın.
-
-    ## İstek biçimi
-
-    | Başlık | Açıklama |
-    |---|---|
-    | `ClickFix-Webhook-Id` | Teslimatın benzersiz kimliği. Tekrar denemelerde aynı kalır; tekilleştirmek için kullanın. |
-    | `ClickFix-Webhook-Event` | Olay adı, ör. `conversation.created` |
-    | `ClickFix-Webhook-Timestamp` | İsteğin imzalandığı an (Unix saniye) |
-    | `ClickFix-Webhook-Signature` | `v1=` + onaltılık (hex) HMAC-SHA256 imzası |
-
-    ```json
-    {
-      "id": "6c1d…",
-      "event": "conversation.created",
-      "version": 1,
-      "occurred_at": "2026-10-29T10:15:00Z",
-      "data": { "conversation_uuid": "8f0e…", "status": "open", "channel_type": "whatsapp" }
-    }
-    ```
-
-    `data` içeriği olaya göre değişir ve yalnızca kimlikleri ve özet alanları taşır. Ayrıntı gerekiyorsa kaydı API ile okuyun.
-
-    Konuşma olayları kişinin ve şirketin dış kimliğini de taşır (`contact_external_id`, `company_external_id`); ayrıntı için **Dış kimlik ve doğrulanmış müşteri** bölümüne bakın.
-
-    ## İmza doğrulama
-
-    ```text
-    ClickFix-Webhook-Signature = "v1=" + hex(HMAC-SHA256(secret, timestamp + "." + ham_gövde))
-    ```
-
-    1. Gövdeyi JSON olarak ayrıştırmadan önce, gelen **ham baytlarla** imzayı hesaplayın.
-    2. Sonucu başlıktaki değerle **sabit zamanlı** karşılaştırın.
-    3. Zaman damgası 5 dakikadan eski veya ileriyse isteği reddedin.
-    4. `ClickFix-Webhook-Id` değerini kaydedin; aynı kimlik tekrar gelirse işlemi yinelemeyin.
-    5. Olayı kalıcı olarak kaydettikten sonra `2xx` dönün; uzun işleri arka planda yapın.
-
-    **Node.js**
-
-    ```js
-    import crypto from "node:crypto";
-
-    export function verifyClickFix(rawBody, timestamp, signature, secret) {
-      const age = Math.abs(Date.now() / 1000 - Number(timestamp));
-      if (!signature || !Number.isFinite(age) || age > 300) return false;
-      const expected =
-        "v1=" +
-        crypto.createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest("hex");
-      const a = Buffer.from(expected);
-      const b = Buffer.from(signature);
-      return a.length === b.length && crypto.timingSafeEqual(a, b);
-    }
-    ```
-
-    **Python**
-
-    ```python
-    import hashlib, hmac, time
-
-    def verify_clickfix(raw_body: bytes, timestamp: str, signature: str, secret: str) -> bool:
-        try:
-            if abs(time.time() - int(timestamp)) > 300:
-                return False
-        except (TypeError, ValueError):
-            return False
-        mac = hmac.new(secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256)
-        return hmac.compare_digest("v1=" + mac.hexdigest(), signature or "")
-    ```
-
-    **Go**
-
-    ```go
-    err := clickfix.VerifyWebhook(secret,
-        r.Header.Get("ClickFix-Webhook-Timestamp"),
-        r.Header.Get("ClickFix-Webhook-Signature"),
-        rawBody, time.Now(), 5*time.Minute)
-    ```
-
-    ## API kanalı
-
-    Kendi sohbet uygulamanızı veya sisteminizi ClickFix'e bir kanal olarak bağlamak için **API kanalı** kullanılır. Kanal kurulduğunda size bir gelen adresi (`/v1/webhooks/channels/api/{instance}`) ve imza anahtarı verilir. Müşteri mesajlarını bu adrese gönderirsiniz (aşağıda **API kanalı** başlığı altında), temsilcilerin yanıtları ise kanalda tanımladığınız adrese `apiChannelReply` webhook'u olarak gelir. İmza başlıkları `X-ClickFix-Timestamp` ve `X-ClickFix-Signature: sha256=…` biçimindedir; hesaplama yukarıdakiyle aynıdır.
-
-    # SDK'lar ve örnek kod
-
-    Go ve Node.js için sunucu SDK'ları vardır: `@getclickfix/node` (npm, Node 22+), `@getclickfix/react-widget` (npm, React 18+) ve `github.com/ClickSolveMainTR/clickfix-sdks/go` (Go modülü, `go/vX.Y.Z` etiketleri). Tüm diller için kullanım örnekleri [SDK'lar ve örnek kod](https://getclickfix.com/docs/sdks) sayfasında, baştan sona kurulum sırası ve her adımda doğrulanmış örnekler [Entegrasyon kılavuzu](https://getclickfix.com/docs/integration-guide) sayfasındadır. SDK'lar kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama ve webhook imza doğrulaması sağlar. Temel adres olarak `https://api.getclickfix.com` verin (sonuna `/v1` eklemeyin). Her uç noktanın sağ panelinde curl, JavaScript, Python ve Go için hazır istek örnekleri de bulunur.
-
-    **curl**
-
-    ```bash
-    curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/KONUSMA_UUID/messages" \
-      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
-      -H "Content-Type: application/json" \
-      -H "Idempotency-Key: siparis-1042-not" \
-      -d '{ "content": "Sipariş kargoya verildi.", "private": true }'
-    ```
-
-    **JavaScript / TypeScript (Node.js 22+)**
-
-    ```ts
-    import { createClient } from "@getclickfix/node";
-
-    const client = createClient({
-      baseURL: "https://api.getclickfix.com",
-      apiKey: process.env.CLICKFIX_API_KEY!,
-    });
-
-    const created = await client.request(
-      "/v1/public-api/conversations",
-      "post",
-      { contact_uuid: contactUUID, inbox_uuid: inboxUUID, subject: "Teslimat sorusu" },
-      { idempotencyKey: "siparis-1042-destek" },
-    );
-    ```
-
-    SDK kullanmadan `fetch` ile:
-
-    ```ts
-    const res = await fetch("https://api.getclickfix.com/v1/public-api/contacts?limit=20", {
-      headers: { Authorization: `Bearer ${process.env.CLICKFIX_API_KEY}` },
-    });
-    const body = await res.json();
-    if (!body.success) throw new Error(`${body.error.code}: ${body.error.message}`);
-    ```
-
-    **Go**
-
-    ```go
-    client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
-    if err != nil {
-        log.Fatal(err)
-    }
-    res, err := client.GetV1PublicApiContactsWithResponse(ctx, &clickfix.GetV1PublicApiContactsParams{})
-    ```
-
-    **Python (requests)**
-
-    ```python
-    import os, requests
-
-    API = "https://api.getclickfix.com/v1/public-api"
-    headers = {"Authorization": f"Bearer {os.environ['CLICKFIX_API_KEY']}"}
-
-    contacts = requests.get(f"{API}/contacts", params={"limit": 20}, headers=headers, timeout=30).json()
-
-    created = requests.post(
-        f"{API}/conversations",
-        json={"contact_uuid": contact_uuid, "inbox_uuid": inbox_uuid, "subject": "Teslimat sorusu"},
-        headers={**headers, "Idempotency-Key": "siparis-1042-destek"},
-        timeout=30,
-    ).json()
-    ```
-
-    `Idempotency-Key` için işlemi tanımlayan sabit bir değer (ör. sipariş numarası) kullanın ve tekrar denemelerde aynı değeri gönderin; her denemede yeni değer üretmeyin.
-
-    # Dış kimlik ve doğrulanmış müşteri
-
-    Kendi sisteminizdeki kullanıcı numarasını ClickFix'te **dış kimlik** (`external_id`) olarak tutarsınız. Kişi ve şirket dış kimlikleri ayrı alanlardır: kişinin `external_id` değeri sizin kullanıcı numaranızdır, şirketin `external_id` değeri sizin firma numaranızdır. İkisi de organizasyon içinde tekildir.
-
-    | Kayıt | Alan | Widget `identify` karşılığı |
-    |---|---|---|
-    | Kişi | `external_id` | `user_id` |
-    | Şirket | `external_id` | `company.id` |
-
-    ## Kişiyi dış kimlikle senkron tutun
-
-    `PUT /contacts/by-external-id` kişiyi dış kimliğiyle oluşturur ya da günceller. Aynı dış kimlikle ikinci çağrı yeni kişi açmaz, mevcut kişiyi günceller. Yanıt kişi oluşturulduysa `201`, güncellendiyse `200` döner. Kapsam `contacts:write`; anahtarı oluşturan üyenin kişi yazma yetkisi de aranır.
-
-    ```bash
-    curl -X PUT "https://api.getclickfix.com/v1/public-api/contacts/by-external-id" \
-      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
-      -H "Content-Type: application/json" \
-      -H "Idempotency-Key: kullanici-1001-v3" \
-      -d '{ "external_id": "1001", "name": "Ayşe Yılmaz", "email": "ayse@example.com" }'
-    ```
-
-    - Eşleşme yalnızca dış kimlikle yapılır. E-posta veya telefon üzerinden başka bir kişi devralınmaz; sitede adresini yazmış anonim bir ziyaretçi bu kişiye karışmaz.
-    - Başka bir kişide olan bir dış kimliği atamaya çalışırsanız `409 EXTERNAL_ID_EXISTS` döner.
-    - Her değişiklik için yeni bir `Idempotency-Key` kullanın; aynı anahtar ilk yanıtı tekrar döndürür.
-
-    Kişiyi bulmak için `GET /contacts?external_id=1001`, şirketi bulmak için `GET /companies?external_id=F-77` kullanın.
-
-    ## Müşteri siteye girmeden ilk mesaj
-
-    Konuşmayı `contact_external_id` ile açabilirsiniz; ayrı bir kanal gerekmez:
-
-    ```bash
-    curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
-      -H "Authorization: Bearer $CLICKFIX_API_KEY" \
-      -H "Content-Type: application/json" \
-      -H "Idempotency-Key: hosgeldin-1001" \
-      -d '{ "contact_external_id": "1001", "inbox_uuid": "WIDGET_KANAL_UUID", "subject": "Hoş geldiniz" }'
-    ```
-
-    Ardından `POST /conversations/{uuid}/messages` ile mesajı yazın. Kanal web widget'ı ise kullanıcı sitenize girip `identify` ile oturum açtığında konuşmayı ve mesajı widget'ta görür.
-
-    ## Doğrulanmış, anonim, adını kendisi yazdı
-
-    Kişi ve konuşma yanıtlarında `identity_state` alanı vardır:
-
-    | Değer | Anlamı |
-    |---|---|
-    | `verified` | Kişi widget `identify` çağrısında `user_hash` ile kimliğini kanıtladı. `verified_at` son doğrulama zamanıdır. |
-    | `anonymous` | Ad, e-posta veya telefon yok. |
-    | `self_named` | Kişi ya da kanalı bir ad, e-posta veya telefon verdi, ama kanıtlanmadı. |
-
-    API ile oluşturulan kişi, kullanıcı `identify` ile oturum açana kadar doğrulanmış sayılmaz.
-
-    ## Webhook'larda dış kimlik
-
-    Konuşma olaylarının `data` alanı `contact_external_id`, `contact_verified`, `company_uuid` ve `company_external_id` taşır; `contact.created` olayı `contact_external_id` taşır. Kendi kaydınızı ek bir istek atmadan eşleştirebilirsiniz.
+  x-i18n:
+    tr:
+      summary: Konuşmalar, kişiler, şirketler, webhook'lar ve API kanalı için herkese açık REST API
+      description: |
+        ClickFix REST API'si konuşma açmanızı, mesaj ve iç not eklemenizi, kişi ve şirketleri kendi sisteminizle senkron tutmanızı, müşteri sağlığı sinyali göndermenizi ve olaylara abone olmanızı sağlar. Temel adres `https://api.getclickfix.com/v1/public-api`; her istek `Authorization: Bearer cf_sk_…` taşır; yazma isteklerinde `Idempotency-Key` zorunludur.
+
+        Kılavuzlar: [API anahtarları, zarf, hatalar, sayfalama, hız sınırları](https://getclickfix.com/docs/api) · [Entegrasyon kılavuzu](https://getclickfix.com/docs/integration-guide) · [SDK'lar](https://getclickfix.com/docs/integration-guide/sdks) · [Webhook'lar](https://getclickfix.com/docs/webhooks).
 servers:
   - url: https://api.getclickfix.com
-    description: Üretim
+    description: Production
+    x-i18n:
+      tr:
+        description: Üretim
 security:
   - integrationKey: []
 tags:
-  - name: Konuşmalar
-    description: Konuşma oluşturma, okuma, güncelleme; mesaj ve iç not ekleme.
-  - name: Kişiler
-    description: Son müşterilerinizin kişi kayıtları; kendi kullanıcı numaranızla (dış kimlik) senkron tutulabilir.
-  - name: Şirketler
-    description: Şirket listesi ve müşteri sağlığı için gelir, kullanım ve ürün olayı sinyalleri.
-  - name: Webhook'lar
-    description: Olay aboneliklerini yönetme. Teslimat biçimi ve imza doğrulama için giriş bölümündeki "Webhook'lar" başlığına bakın.
-  - name: Tetikleyiciler
-    description: Zapier, Make ve n8n gibi araçlar için imleç tabanlı yoklama ve REST hook aboneliği.
-  - name: API kanalı
-    description: Kendi sohbet sisteminizi ClickFix'e kanal olarak bağlama. Müşteri mesajlarını gönderirsiniz; temsilci yanıtları webhook ile size gelir.
+  - name: Conversations
+    description: Create, read and update conversations; add messages and internal notes.
+    x-i18n:
+      tr:
+        name: Konuşmalar
+        description: Konuşma oluşturma, okuma, güncelleme; mesaj ve iç not ekleme.
+  - name: Contacts
+    description: Contact records of your end customers, kept in sync with your own user ids (external ids).
+    x-i18n:
+      tr:
+        name: Kişiler
+        description: Son müşterilerinizin kişi kayıtları; kendi kullanıcı numaranızla (dış kimlik) senkron tutulabilir.
+  - name: Companies
+    description: Company list and the revenue, usage and product-event signals that feed customer health.
+    x-i18n:
+      tr:
+        name: Şirketler
+        description: Şirket listesi ve müşteri sağlığı için gelir, kullanım ve ürün olayı sinyalleri.
+  - name: Webhooks
+    description: Manage event subscriptions. Delivery format and signature verification are described in the Webhooks guide.
+    x-i18n:
+      tr:
+        name: Webhook'lar
+        description: Olay aboneliklerini yönetme. Teslimat biçimi ve imza doğrulama Webhook'lar kılavuzundadır.
+  - name: Triggers
+    description: Cursor-based polling and REST hook subscriptions for tools such as Zapier, Make and n8n.
+    x-i18n:
+      tr:
+        name: Tetikleyiciler
+        description: Zapier, Make ve n8n gibi araçlar için imleç tabanlı yoklama ve REST hook aboneliği.
+  - name: API channel
+    description: Connect your own chat system to ClickFix as a channel. You send customer messages; agent replies reach you by webhook.
+    x-i18n:
+      tr:
+        name: API kanalı
+        description: Kendi sohbet sisteminizi ClickFix'e kanal olarak bağlama. Müşteri mesajlarını gönderirsiniz; temsilci yanıtları webhook ile size gelir.
+  - name: Apps
+    description: Public keys of the developer platform; verifying the signed context an embedded app receives.
+    x-i18n:
+      tr:
+        name: Uygulamalar
+        description: Geliştirici platformunun açık anahtarları; gömülü bir uygulamanın aldığı imzalı bağlamı doğrulama.
 paths:
+  /v1/app-context/jwks:
+    get:
+      tags:
+        - Apps
+      operationId: getV1AppContextJwks
+      summary: Read the app context verification keys
+      security: []
+      parameters: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      keys:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            kty:
+                              type: string
+                            crv:
+                              type: string
+                            alg:
+                              type: string
+                            use:
+                              type: string
+                            kid:
+                              type: string
+                            x:
+                              type: string
+                    required:
+                      - keys
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - data
+                  - meta
+              example:
+                success: true
+                data:
+                  keys:
+                    - kty: OKP
+                      crv: Ed25519
+                      kid: 2026-11-a
+                      x: 11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo
+                      use: sig
+                      alg: EdDSA
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      description: No authentication. The JSON Web Key Set that signs the context token an embedded app (iframe) receives from the panel. Verify the token's signature with the key whose `kid` matches; keys rotate, so cache the set briefly and refetch on an unknown `kid`. See the Build your own app guide.
+      x-i18n:
+        tr:
+          summary: Uygulama bağlamı doğrulama anahtarlarını oku
+          description: Kimlik doğrulama gerekmez. Gömülü bir uygulamanın (iframe) panelden aldığı bağlam belirtecini imzalayan JSON Web Key Set. Belirtecin imzasını `kid` değeri eşleşen anahtarla doğrulayın; anahtarlar döner, kümeyi kısa süre önbelleğe alıp bilinmeyen `kid` görünce yeniden çekin. Bkz. Kendi uygulamanızı yapın kılavuzu.
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: curl "https://api.getclickfix.com/v1/app-context/jwks"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createRemoteJWKSet, jwtVerify } from "jose";
+
+            const jwks = createRemoteJWKSet(new URL("https://api.getclickfix.com/v1/app-context/jwks"));
+            // contextToken: the signed context the panel hands to your embedded app
+            const { payload } = await jwtVerify(contextToken, jwks, {
+              issuer: "https://getclickfix.com",
+            });
+            console.log(payload.org, payload.sub);
+        - lang: go
+          label: Go
+          source: |-
+            res, err := http.Get("https://api.getclickfix.com/v1/app-context/jwks")
+            if err != nil {
+            	log.Fatal(err)
+            }
+            defer res.Body.Close()
+            var jwks struct {
+            	Data struct {
+            		Keys []map[string]string `json:"keys"`
+            	} `json:"data"`
+            }
+            if err := json.NewDecoder(res.Body).Decode(&jwks); err != nil {
+            	log.Fatal(err)
+            }
+            // pick the key whose "kid" matches the token header, then verify the EdDSA signature
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            $jwks = json_decode(file_get_contents('https://api.getclickfix.com/v1/app-context/jwks'), true)['data']['keys'];
+            // pick the key whose 'kid' matches the token header, then verify the EdDSA signature
   /v1/public-api/conversations:
     get:
       tags:
-        - Konuşmalar
+        - Conversations
       operationId: getV1PublicApiConversations
-      summary: Konuşmaları listele
+      summary: List conversations
       security:
         - integrationKey: []
       responses:
@@ -442,13 +204,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  items:
+                    - uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                      number: 1042
+                      status: open
+                      priority: normal
+                      subject: Delivery question
+                      inbox:
+                        uuid: c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f
+                        name: Web widget
+                      contact:
+                        uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                        name: Ayşe Yılmaz
+                        external_id: "1001"
+                        identity_state: verified
+                      assignee:
+                        uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
+                        name: Mehmet Kaya
+                      created_at: 2026-11-11T09:15:00Z
+                      updated_at: 2026-11-11T09:15:00Z
+                  total: 134
+                  limit: 20
+                  offset: 0
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `conversations:read`. Sayfalı liste (`limit`, `offset`); anahtarı oluşturan üyenin görebildiği konuşmalarla sınırlıdır."
+      description: "Scope: `conversations:read`. Paged list (`limit`, `offset`), limited to the conversations the member who created the key can see."
       parameters:
         - name: limit
           in: query
@@ -463,14 +255,69 @@ paths:
             type: integer
             minimum: 0
             default: 0
+      x-i18n:
+        tr:
+          summary: Konuşmaları listele
+          description: "Kapsam: `conversations:read`. Sayfalı liste (`limit`, `offset`); anahtarı oluşturan üyenin görebildiği konuşmalarla sınırlıdır."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/conversations?limit=20&offset=0" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations",
+              "get",
+              undefined,
+              { query: { limit: 20, offset: 0 } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            limit := 20
+            offset := 0
+            res, err := client.GetV1PublicApiConversationsWithResponse(ctx, &clickfix.GetV1PublicApiConversationsParams{Limit: &limit, Offset: &offset})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $page = $client->conversations()->list([
+                'limit' => 20,
+                'offset' => 0,
+            ]);
     post:
       operationId: createIntegrationConversation
-      summary: Konuşma oluştur
+      summary: Create a conversation
       tags:
-        - Konuşmalar
+        - Conversations
       security:
         - integrationKey: []
-      description: "Kapsam: `conversations:write`. Kişiyi `contact_uuid` ya da kendi kullanıcı numaranızla `contact_external_id` olarak verin. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Web widget kanalında kişi siteye girip `identify` ile oturum açtığında konuşmayı görür. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
+      description: "Scope: `conversations:write`. Give the contact as `contact_uuid` or, with your own user id, as `contact_external_id`. Contact and channel (`inbox_uuid`) must belong to the key's organization and the channel must be active. On a web widget channel the contact sees the conversation once they sign in on your site with `identify`. The conversation is assigned to the member who created the key. `Idempotency-Key` is required."
       responses:
         "201":
           description: Success
@@ -504,6 +351,17 @@ paths:
                   - data
                   - meta
                 additionalProperties: false
+              example:
+                success: true
+                data:
+                  uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  number: 1042
+                  status: open
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -527,15 +385,85 @@ paths:
             schema:
               $ref: "#/components/schemas/IntegrationCreateConversation"
             example:
-              contact_uuid: 00000000-0000-4000-8000-000000000001
-              inbox_uuid: 00000000-0000-4000-8000-000000000001
-              subject: API support request
+              contact_external_id: "1001"
+              inbox_uuid: c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f
+              subject: Delivery question
+      x-i18n:
+        tr:
+          summary: Konuşma oluştur
+          description: "Kapsam: `conversations:write`. Kişiyi `contact_uuid` ya da kendi kullanıcı numaranızla `contact_external_id` olarak verin. Kişi ve kanal (`inbox_uuid`) anahtarın organizasyonuna ait olmalı ve kanal etkin olmalıdır. Web widget kanalında kişi siteye girip `identify` ile oturum açtığında konuşmayı görür. Konuşma, anahtarı oluşturan üyeye atanır. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/conversations" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: order-1042-support" \
+              -d '{
+              "contact_external_id": "1001",
+              "inbox_uuid": "c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f",
+              "subject": "Delivery question"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations",
+              "post",
+              {
+                contact_external_id: "1001",
+                inbox_uuid: "c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f",
+                subject: "Delivery question"
+              },
+              { idempotencyKey: "order-1042-support" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.CreateIntegrationConversationWithBodyWithResponse(ctx, &clickfix.CreateIntegrationConversationParams{IdempotencyKey: "order-1042-support"}, "application/json",
+            	strings.NewReader(`{
+              "contact_external_id": "1001",
+              "inbox_uuid": "c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f",
+              "subject": "Delivery question"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $conversation = $client->conversations()->create([
+                'contact_external_id' => '1001',
+                'inbox_uuid' => 'c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f',
+                'subject' => 'Delivery question',
+            ], idempotencyKey: 'order-1042-support');
   /v1/public-api/conversations/{uuid}:
     get:
       tags:
-        - Konuşmalar
+        - Conversations
       operationId: getV1PublicApiConversationsUuid
-      summary: Konuşmayı getir
+      summary: Get a conversation
       security:
         - integrationKey: []
       responses:
@@ -545,13 +473,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  number: 1042
+                  status: open
+                  priority: normal
+                  subject: Delivery question
+                  inbox:
+                    uuid: c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f
+                    name: Web widget
+                  contact:
+                    uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                    name: Ayşe Yılmaz
+                    external_id: "1001"
+                    identity_state: verified
+                  assignee:
+                    uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
+                    name: Mehmet Kaya
+                  created_at: 2026-11-11T09:15:00Z
+                  updated_at: 2026-11-11T09:15:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `conversations:read`."
+      description: "Scope: `conversations:read`."
       parameters:
         - name: uuid
           in: path
@@ -559,11 +513,61 @@ paths:
           schema:
             type: string
             format: uuid
+      x-i18n:
+        tr:
+          summary: Konuşmayı getir
+          description: "Kapsam: `conversations:read`."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations/{uuid}",
+              "get",
+              undefined,
+              { path: { uuid: "CONVERSATION_UUID" } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.GetV1PublicApiConversationsUuidWithResponse(ctx, uuid.MustParse("CONVERSATION_UUID"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $conversation = $client->conversations()->get('CONVERSATION_UUID');
     patch:
       tags:
-        - Konuşmalar
+        - Conversations
       operationId: patchV1PublicApiConversationsUuid
-      summary: Konuşmayı güncelle
+      summary: Update a conversation
       security:
         - integrationKey: []
       responses:
@@ -573,13 +577,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  number: 1042
+                  status: pending
+                  priority: high
+                  subject: Delivery question
+                  inbox:
+                    uuid: c2a9d7e4-1f3b-4c5d-8e6f-7a8b9c0d1e2f
+                    name: Web widget
+                  contact:
+                    uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                    name: Ayşe Yılmaz
+                    external_id: "1001"
+                    identity_state: verified
+                  assignee:
+                    uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
+                    name: Mehmet Kaya
+                  created_at: 2026-11-11T09:15:00Z
+                  updated_at: 2026-11-11T09:15:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `conversations:write`. Durum, öncelik, konu, atanan temsilci, ekip ve erteleme zamanını (`snoozed_until`) günceller; yalnızca gönderdiğiniz alanlar değişir. `Idempotency-Key` zorunludur."
+      description: "Scope: `conversations:write`. Updates status, priority, subject, assignee, team and snooze time (`snoozed_until`); only the fields you send change. `Idempotency-Key` is required."
       parameters:
         - name: Idempotency-Key
           in: header
@@ -599,12 +629,86 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ConversationUpdate"
+            example:
+              status: pending
+              priority: high
+              assignee: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
+      x-i18n:
+        tr:
+          summary: Konuşmayı güncelle
+          description: "Kapsam: `conversations:write`. Durum, öncelik, konu, atanan temsilci, ekip ve erteleme zamanını (`snoozed_until`) günceller; yalnızca gönderdiğiniz alanlar değişir. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PATCH "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: order-1042-assign" \
+              -d '{
+              "status": "pending",
+              "priority": "high",
+              "assignee": "5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations/{uuid}",
+              "patch",
+              {
+                status: "pending",
+                priority: "high",
+                assignee: "5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f"
+              },
+              { path: { uuid: "CONVERSATION_UUID" }, idempotencyKey: "order-1042-assign" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PatchV1PublicApiConversationsUuidWithBodyWithResponse(ctx, uuid.MustParse("CONVERSATION_UUID"), &clickfix.PatchV1PublicApiConversationsUuidParams{IdempotencyKey: "order-1042-assign"}, "application/json",
+            	strings.NewReader(`{
+              "status": "pending",
+              "priority": "high",
+              "assignee": "5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $conversation = $client->conversations()->update('CONVERSATION_UUID', [
+                'status' => 'pending',
+                'priority' => 'high',
+                'assignee' => '5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f',
+            ], idempotencyKey: 'order-1042-assign');
   /v1/public-api/conversations/{uuid}/messages:
     get:
       tags:
-        - Konuşmalar
+        - Conversations
       operationId: getV1PublicApiConversationsUuidMessages
-      summary: Mesajları listele
+      summary: List messages
       security:
         - integrationKey: []
       responses:
@@ -614,13 +718,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  items:
+                    - uuid: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
+                      conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                      direction: outgoing
+                      private: false
+                      content: Your order has shipped; the tracking number is in the next message.
+                      sender:
+                        type: agent
+                        name: Mehmet Kaya
+                      client_id: 6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90
+                      created_at: 2026-11-11T09:20:00Z
+                  total: 1
+                  limit: 20
+                  offset: 0
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `conversations:read`. Konuşmanın mesajları ve iç notları, sayfalı."
+      description: "Scope: `conversations:read`. Messages and internal notes of the conversation, paged."
       parameters:
         - name: uuid
           in: path
@@ -628,11 +754,61 @@ paths:
           schema:
             type: string
             format: uuid
+      x-i18n:
+        tr:
+          summary: Mesajları listele
+          description: "Kapsam: `conversations:read`. Konuşmanın mesajları ve iç notları, sayfalı."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID/messages" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations/{uuid}/messages",
+              "get",
+              undefined,
+              { path: { uuid: "CONVERSATION_UUID" } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.GetV1PublicApiConversationsUuidMessagesWithResponse(ctx, uuid.MustParse("CONVERSATION_UUID"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $messages = $client->conversations()->messages('CONVERSATION_UUID');
     post:
       tags:
-        - Konuşmalar
+        - Conversations
       operationId: postV1PublicApiConversationsUuidMessages
-      summary: Mesaj veya iç not ekle
+      summary: Add a message or internal note
       security:
         - integrationKey: []
       responses:
@@ -642,13 +818,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  uuid: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
+                  conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  direction: outgoing
+                  private: true
+                  content: The order has shipped.
+                  sender:
+                    type: agent
+                    name: Mehmet Kaya
+                  client_id: 6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90
+                  created_at: 2026-11-11T09:20:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `conversations:write`. `private: true` iç not ekler (müşteriye gitmez); aksi hâlde yanıt kanalın üzerinden müşteriye gönderilir. `client_id` ile ek tekrar koruması sağlayın. `Idempotency-Key` zorunludur."
+      description: "Scope: `conversations:write`. `private: true` adds an internal note (never delivered to the customer); otherwise the reply is sent to the customer through the channel. `client_id` adds extra duplicate protection. `Idempotency-Key` is required."
       parameters:
         - name: Idempotency-Key
           in: header
@@ -678,13 +872,83 @@ paths:
                   format: uuid
               required:
                 - content
+            example:
+              content: The order has shipped.
+              private: true
+              client_id: 6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90
+      x-i18n:
+        tr:
+          summary: Mesaj veya iç not ekle
+          description: "Kapsam: `conversations:write`. `private: true` iç not ekler (müşteriye gitmez); aksi hâlde yanıt kanalın üzerinden müşteriye gönderilir. `client_id` ile ek tekrar koruması sağlayın. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/conversations/CONVERSATION_UUID/messages" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: order-1042-note-1" \
+              -d '{
+              "content": "The order has shipped.",
+              "private": true,
+              "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/conversations/{uuid}/messages",
+              "post",
+              {
+                content: "The order has shipped.",
+                private: true,
+                client_id: "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90"
+              },
+              { path: { uuid: "CONVERSATION_UUID" }, idempotencyKey: "order-1042-note-1" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PostV1PublicApiConversationsUuidMessagesWithBodyWithResponse(ctx, uuid.MustParse("CONVERSATION_UUID"), &clickfix.PostV1PublicApiConversationsUuidMessagesParams{IdempotencyKey: "order-1042-note-1"}, "application/json",
+            	strings.NewReader(`{
+              "content": "The order has shipped.",
+              "private": true,
+              "client_id": "6f1c0e3a-0d0b-4a4e-9a51-3c8b7d2f1e90"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $message = $client->conversations()->addMessage('CONVERSATION_UUID', 'The order has shipped.', private: true, idempotencyKey: 'order-1042-note-1');
   /v1/public-api/contacts:
     get:
       tags:
-        - Kişiler
+        - Contacts
       operationId: getV1PublicApiContacts
-      summary: Kişileri listele
-      description: "Kapsam: `contacts:read`. `q` ile kişi adında veya e-postasında arama yapılabilir (büyük/küçük harf duyarsız). `external_id` kendi kullanıcı numaranızla tam eşleşir. Kayıtlar `external_id`, `verified_at` ve şirketin `company_external_id` alanını taşır."
+      summary: List contacts
+      description: "Scope: `contacts:read`. `q` searches name and email (case-insensitive). `external_id` matches your own user id exactly. Records carry `external_id`, `verified_at` and the company's `company_external_id`."
       security:
         - integrationKey: []
       responses:
@@ -694,6 +958,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  items:
+                    - uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                      name: Ayşe Yılmaz
+                      email: ayse@example.com
+                      phone: "+905551112233"
+                      external_id: "1001"
+                      identity_state: verified
+                      verified_at: 2026-11-10T18:42:11Z
+                      job_title: Operations manager
+                      company:
+                        uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                        name: Acme Ltd.
+                        external_id: F-77
+                      locale: tr
+                      timezone: Europe/Istanbul
+                      notes: ""
+                      custom_fields:
+                        plan: pro
+                        seats: 12
+                      blocked: false
+                      channel_types:
+                        - widget
+                        - email
+                      conversation_count: 3
+                      last_seen_at: 2026-11-11T09:14:50Z
+                      created_at: 2026-10-01T07:00:00Z
+                      updated_at: 2026-11-11T09:14:50Z
+                  total: 1
+                  limit: 20
+                  offset: 0
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -719,18 +1021,79 @@ paths:
           description: Case-insensitive match on the contact name or e-mail.
           schema:
             type: string
+          x-i18n:
+            tr:
+              description: Kişi adında veya e-postasında büyük/küçük harf duyarsız arama.
         - name: external_id
           in: query
-          description: "CF-195: the customer's own user id, exact match."
+          description: The customer's own user id, exact match.
           schema:
             type: string
             maxLength: 200
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası, tam eşleşme.
+      x-i18n:
+        tr:
+          summary: Kişileri listele
+          description: "Kapsam: `contacts:read`. `q` ile kişi adında veya e-postasında arama yapılabilir (büyük/küçük harf duyarsız). `external_id` kendi kullanıcı numaranızla tam eşleşir. Kayıtlar `external_id`, `verified_at` ve şirketin `company_external_id` alanını taşır."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/contacts?limit=20&offset=0" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/contacts",
+              "get",
+              undefined,
+              { query: { limit: 20, offset: 0 } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            limit := 20
+            offset := 0
+            res, err := client.GetV1PublicApiContactsWithResponse(ctx, &clickfix.GetV1PublicApiContactsParams{Limit: &limit, Offset: &offset})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $page = $client->contacts()->list([
+                'limit' => 20,
+                'offset' => 0,
+            ]);
     post:
       tags:
-        - Kişiler
+        - Contacts
       operationId: postV1PublicApiContacts
-      summary: Kişi oluştur
-      description: "Kapsam: `contacts:write`. Kendi sisteminizdeki kullanıcıları senkron tutmak için `PUT /contacts/by-external-id` tercih edin. `Idempotency-Key` zorunludur."
+      summary: Create a contact
+      description: "Scope: `contacts:write`. To keep the users of your own system in sync prefer `PUT /contacts/by-external-id`. `Idempotency-Key` is required."
       security:
         - integrationKey: []
       parameters:
@@ -746,6 +1109,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ContactInput"
+            example:
+              name: Ayşe Yılmaz
+              email: ayse@example.com
+              phone: "+905551112233"
+              external_id: "1001"
+              locale: tr
+              custom_fields:
+                plan: pro
       responses:
         "201":
           description: Created
@@ -753,6 +1124,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeContact"
+              example:
+                success: true
+                data:
+                  uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                  name: Ayşe Yılmaz
+                  email: ayse@example.com
+                  phone: "+905551112233"
+                  external_id: "1001"
+                  identity_state: self_named
+                  verified_at: null
+                  job_title: Operations manager
+                  company:
+                    uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                    name: Acme Ltd.
+                    external_id: F-77
+                  locale: tr
+                  timezone: Europe/Istanbul
+                  notes: ""
+                  custom_fields:
+                    plan: pro
+                    seats: 12
+                  blocked: false
+                  channel_types: []
+                  conversation_count: 0
+                  last_seen_at: 2026-11-11T09:14:50Z
+                  created_at: 2026-10-01T07:00:00Z
+                  updated_at: 2026-11-11T09:14:50Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -761,13 +1164,103 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+      x-i18n:
+        tr:
+          summary: Kişi oluştur
+          description: "Kapsam: `contacts:write`. Kendi sisteminizdeki kullanıcıları senkron tutmak için `PUT /contacts/by-external-id` tercih edin. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/contacts" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: user-1001-create" \
+              -d '{
+              "name": "Ayşe Yılmaz",
+              "email": "ayse@example.com",
+              "phone": "+905551112233",
+              "external_id": "1001",
+              "locale": "tr",
+              "custom_fields": {
+                "plan": "pro"
+              }
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/contacts",
+              "post",
+              {
+                name: "Ayşe Yılmaz",
+                email: "ayse@example.com",
+                phone: "+905551112233",
+                external_id: "1001",
+                locale: "tr",
+                custom_fields: {
+                  plan: "pro"
+                }
+              },
+              { idempotencyKey: "user-1001-create" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PostV1PublicApiContactsWithBodyWithResponse(ctx, &clickfix.PostV1PublicApiContactsParams{IdempotencyKey: "user-1001-create"}, "application/json",
+            	strings.NewReader(`{
+              "name": "Ayşe Yılmaz",
+              "email": "ayse@example.com",
+              "phone": "+905551112233",
+              "external_id": "1001",
+              "locale": "tr",
+              "custom_fields": {
+                "plan": "pro"
+              }
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $contact = $client->contacts()->create([
+                'name' => 'Ayşe Yılmaz',
+                'email' => 'ayse@example.com',
+                'phone' => '+905551112233',
+                'external_id' => '1001',
+                'locale' => 'tr',
+                'custom_fields' => [
+                    'plan' => 'pro',
+                ],
+            ], idempotencyKey: 'user-1001-create');
   /v1/public-api/contacts/by-external-id:
     put:
       tags:
-        - Kişiler
+        - Contacts
       operationId: putV1PublicApiContactByExternalId
-      summary: Kişiyi dış kimlikle oluştur veya güncelle
-      description: "Kapsam: `contacts:write`. `external_id` zorunludur ve sizin kullanıcı numaranızdır (widget `identify` içindeki `user_id`). Bu kimlikte kişi varsa güncellenir (`200`), yoksa oluşturulur (`201`); e-posta veya telefonla eşleşme yapılmaz. Başka kişideki bir kimlik `409 EXTERNAL_ID_EXISTS` döner. `Idempotency-Key` zorunludur."
+      summary: Create or update a contact by external id
+      description: "Scope: `contacts:write`. `external_id` is required and is your own user id (the `user_id` of the widget `identify` call). If a contact with that id exists it is updated (`200`), otherwise created (`201`); no matching by email or phone. An id that belongs to another contact returns `409 EXTERNAL_ID_EXISTS`. `Idempotency-Key` is required."
       security:
         - integrationKey: []
       parameters:
@@ -787,6 +1280,13 @@ paths:
                 - type: object
                   required:
                     - external_id
+            example:
+              external_id: "1001"
+              name: Ayşe Yılmaz
+              email: ayse@example.com
+              custom_fields:
+                plan: pro
+                seats: 12
       responses:
         "200":
           description: Updated
@@ -794,12 +1294,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeContact"
+              example:
+                success: true
+                data:
+                  uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                  name: Ayşe Yılmaz
+                  email: ayse@example.com
+                  phone: "+905551112233"
+                  external_id: "1001"
+                  identity_state: verified
+                  verified_at: 2026-11-10T18:42:11Z
+                  job_title: Operations manager
+                  company:
+                    uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                    name: Acme Ltd.
+                    external_id: F-77
+                  locale: tr
+                  timezone: Europe/Istanbul
+                  notes: ""
+                  custom_fields:
+                    plan: pro
+                    seats: 12
+                  blocked: false
+                  channel_types:
+                    - widget
+                    - email
+                  conversation_count: 3
+                  last_seen_at: 2026-11-11T09:14:50Z
+                  created_at: 2026-10-01T07:00:00Z
+                  updated_at: 2026-11-11T09:14:50Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Güncellendi
         "201":
           description: Created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeContact"
+              example:
+                success: true
+                data:
+                  uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                  name: Ayşe Yılmaz
+                  email: ayse@example.com
+                  phone: "+905551112233"
+                  external_id: "1001"
+                  identity_state: self_named
+                  verified_at: null
+                  job_title: Operations manager
+                  company:
+                    uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                    name: Acme Ltd.
+                    external_id: F-77
+                  locale: tr
+                  timezone: Europe/Istanbul
+                  notes: ""
+                  custom_fields:
+                    plan: pro
+                    seats: 12
+                  blocked: false
+                  channel_types: []
+                  conversation_count: 0
+                  last_seen_at: 2026-11-11T09:14:50Z
+                  created_at: 2026-10-01T07:00:00Z
+                  updated_at: 2026-11-11T09:14:50Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -808,13 +1374,98 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+      x-i18n:
+        tr:
+          summary: Kişiyi dış kimlikle oluştur veya güncelle
+          description: "Kapsam: `contacts:write`. `external_id` zorunludur ve sizin kullanıcı numaranızdır (widget `identify` içindeki `user_id`). Bu kimlikte kişi varsa güncellenir (`200`), yoksa oluşturulur (`201`); e-posta veya telefonla eşleşme yapılmaz. Başka kişideki bir kimlik `409 EXTERNAL_ID_EXISTS` döner. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PUT "https://api.getclickfix.com/v1/public-api/contacts/by-external-id" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: user-1001-sync-42" \
+              -d '{
+              "external_id": "1001",
+              "name": "Ayşe Yılmaz",
+              "email": "ayse@example.com",
+              "custom_fields": {
+                "plan": "pro",
+                "seats": 12
+              }
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/contacts/by-external-id",
+              "put",
+              {
+                external_id: "1001",
+                name: "Ayşe Yılmaz",
+                email: "ayse@example.com",
+                custom_fields: {
+                  plan: "pro",
+                  seats: 12
+                }
+              },
+              { idempotencyKey: "user-1001-sync-42" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PutV1PublicApiContactByExternalIdWithBodyWithResponse(ctx, &clickfix.PutV1PublicApiContactByExternalIdParams{IdempotencyKey: "user-1001-sync-42"}, "application/json",
+            	strings.NewReader(`{
+              "external_id": "1001",
+              "name": "Ayşe Yılmaz",
+              "email": "ayse@example.com",
+              "custom_fields": {
+                "plan": "pro",
+                "seats": 12
+              }
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $contact = $client->contacts()->upsertByExternalId('1001', [
+                'name' => 'Ayşe Yılmaz',
+                'email' => 'ayse@example.com',
+                'custom_fields' => [
+                    'plan' => 'pro',
+                    'seats' => 12,
+                ],
+            ], idempotencyKey: 'user-1001-sync-42');
   /v1/public-api/companies:
     get:
       tags:
-        - Şirketler
+        - Companies
       operationId: getV1PublicApiCompanies
-      summary: Şirketleri listele
-      description: "Kapsam: `companies:read`. `external_id` firmanın sizin sisteminizdeki numarasıyla tam eşleşir; kişi dış kimliklerinden ayrıdır."
+      summary: List companies
+      description: "Scope: `companies:read`. `external_id` matches the company's id in your own system exactly; it is separate from contact external ids."
       security:
         - integrationKey: []
       responses:
@@ -824,6 +1475,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  items:
+                    - uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                      name: Acme Ltd.
+                      domain: acme.example
+                      external_id: F-77
+                      verified: true
+                      health:
+                        score: 82
+                        usage: 90
+                        trend: up
+                      revenue:
+                        mrr_minor: 490000
+                        currency: TRY
+                        plan: pro
+                        billing_status: active
+                      contact_count: 4
+                      created_at: 2026-09-12T08:00:00Z
+                      updated_at: 2026-11-11T09:00:00Z
+                  total: 1
+                  limit: 20
+                  offset: 0
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -846,17 +1526,75 @@ paths:
             default: 0
         - name: external_id
           in: query
-          description: "CF-195: the company's id in your system, exact match."
+          description: The company's id in your system, exact match.
           schema:
             type: string
             maxLength: 200
+          x-i18n:
+            tr:
+              description: Firmanın sizin sisteminizdeki numarası, tam eşleşme.
+      x-i18n:
+        tr:
+          summary: Şirketleri listele
+          description: "Kapsam: `companies:read`. `external_id` firmanın sizin sisteminizdeki numarasıyla tam eşleşir; kişi dış kimliklerinden ayrıdır."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/companies?limit=20&offset=0" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/companies",
+              "get",
+              undefined,
+              { query: { limit: 20, offset: 0 } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            limit := 20
+            offset := 0
+            res, err := client.GetV1PublicApiCompaniesWithResponse(ctx, &clickfix.GetV1PublicApiCompaniesParams{Limit: &limit, Offset: &offset})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $page = $client->companies()->list([
+                'limit' => 20,
+                'offset' => 0,
+            ]);
   /v1/public-api/company-usage:
     put:
       tags:
-        - Şirketler
+        - Companies
       operationId: putV1PublicApiCompanyUsage
-      summary: Şirket kullanım sinyalini gönder
-      description: "Kapsam: `health:write`. Kendi ürününüzden 0–100 arası kullanım sinyali; 30 gün boyunca müşteri sağlığı puanına katılır. Şirket `company_uuid`, `external_id` veya `domain` ile bulunur. `Idempotency-Key` zorunludur."
+      summary: Send a company usage signal
+      description: "Scope: `health:write`. A 0–100 usage signal from your own product; it counts towards the customer-health score for 30 days. The company is found by `company_uuid`, `external_id` or `domain`. `Idempotency-Key` is required."
       security:
         - integrationKey: []
       parameters:
@@ -872,6 +1610,9 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CompanyUsageInput"
+            example:
+              external_id: F-77
+              score: 90
       responses:
         "200":
           description: OK
@@ -879,6 +1620,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeCompanyUsage"
+              example:
+                success: true
+                data:
+                  company_uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                  score: 90
+                  expires_at: 2026-12-11T09:30:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -891,13 +1643,79 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/ValidationError"
+      x-i18n:
+        tr:
+          summary: Şirket kullanım sinyalini gönder
+          description: "Kapsam: `health:write`. Kendi ürününüzden 0–100 arası kullanım sinyali; 30 gün boyunca müşteri sağlığı puanına katılır. Şirket `company_uuid`, `external_id` veya `domain` ile bulunur. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PUT "https://api.getclickfix.com/v1/public-api/company-usage" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: company-f77-usage-2026-11-11" \
+              -d '{
+              "external_id": "F-77",
+              "score": 90
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/company-usage",
+              "put",
+              {
+                external_id: "F-77",
+                score: 90
+              },
+              { idempotencyKey: "company-f77-usage-2026-11-11" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PutV1PublicApiCompanyUsageWithBodyWithResponse(ctx, &clickfix.PutV1PublicApiCompanyUsageParams{IdempotencyKey: "company-f77-usage-2026-11-11"}, "application/json",
+            	strings.NewReader(`{
+              "external_id": "F-77",
+              "score": 90
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $result = $client->companies()->setUsage([
+                'external_id' => 'F-77',
+                'score' => 90,
+            ], idempotencyKey: 'company-f77-usage-2026-11-11');
   /v1/public-api/company-events:
     post:
       tags:
-        - Şirketler
+        - Companies
       operationId: postV1PublicApiCompanyEvent
-      summary: Şirket zaman çizelgesine olay gönder
-      description: "Kapsam: `events:write`. Ürününüzdeki önemli bir olayı (ör. plan yükseltme, hata) şirketin zaman çizelgesine ekler. `contact_email` olayı bilinen bir kişiye bağlar. Tekrarlanan `idempotency_key` kayıtlı olayı `duplicate: true` ile döner."
+      summary: Send an event to the company timeline
+      description: "Scope: `events:write`. Adds a notable event of your product (e.g. plan upgrade, error) to the company's timeline. `contact_email` links the event to a known contact. A repeated `idempotency_key` returns the stored event with `duplicate: true`."
       security:
         - integrationKey: []
       parameters:
@@ -913,6 +1731,16 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CompanyEventInput"
+            example:
+              external_id: F-77
+              name: seat_limit_reached
+              properties:
+                seats: 12
+                limit: 12
+              contact_email: ayse@example.com
+              source: billing
+              idempotency_key: evt-2026-11-11-f77-seats
+              occurred_at: 2026-11-11T09:31:00Z
       responses:
         "200":
           description: OK
@@ -920,12 +1748,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeCompanyEvent"
+              example:
+                success: true
+                data:
+                  uuid: 9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+                  company_uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                  name: seat_limit_reached
+                  properties:
+                    seats: 12
+                    limit: 12
+                  source: billing
+                  occurred_at: 2026-11-11T09:31:00Z
+                  duplicate: true
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "201":
           description: Created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeCompanyEvent"
+              example:
+                success: true
+                data:
+                  uuid: 9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
+                  company_uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                  name: seat_limit_reached
+                  properties:
+                    seats: 12
+                    limit: 12
+                  source: billing
+                  occurred_at: 2026-11-11T09:31:00Z
+                  duplicate: false
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Oluşturuldu
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -938,13 +1800,111 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/ValidationError"
+      x-i18n:
+        tr:
+          summary: Şirket zaman çizelgesine olay gönder
+          description: "Kapsam: `events:write`. Ürününüzdeki önemli bir olayı (ör. plan yükseltme, hata) şirketin zaman çizelgesine ekler. `contact_email` olayı bilinen bir kişiye bağlar. Tekrarlanan `idempotency_key` kayıtlı olayı `duplicate: true` ile döner."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/company-events" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: evt-2026-11-11-f77-seats" \
+              -d '{
+              "external_id": "F-77",
+              "name": "seat_limit_reached",
+              "properties": {
+                "seats": 12,
+                "limit": 12
+              },
+              "contact_email": "ayse@example.com",
+              "source": "billing",
+              "idempotency_key": "evt-2026-11-11-f77-seats",
+              "occurred_at": "2026-11-11T09:31:00Z"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/company-events",
+              "post",
+              {
+                external_id: "F-77",
+                name: "seat_limit_reached",
+                properties: {
+                  seats: 12,
+                  limit: 12
+                },
+                contact_email: "ayse@example.com",
+                source: "billing",
+                idempotency_key: "evt-2026-11-11-f77-seats",
+                occurred_at: "2026-11-11T09:31:00Z"
+              },
+              { idempotencyKey: "evt-2026-11-11-f77-seats" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PostV1PublicApiCompanyEventWithBodyWithResponse(ctx, &clickfix.PostV1PublicApiCompanyEventParams{IdempotencyKey: "evt-2026-11-11-f77-seats"}, "application/json",
+            	strings.NewReader(`{
+              "external_id": "F-77",
+              "name": "seat_limit_reached",
+              "properties": {
+                "seats": 12,
+                "limit": 12
+              },
+              "contact_email": "ayse@example.com",
+              "source": "billing",
+              "idempotency_key": "evt-2026-11-11-f77-seats",
+              "occurred_at": "2026-11-11T09:31:00Z"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $event = $client->events()->track([
+                'external_id' => 'F-77',
+                'name' => 'seat_limit_reached',
+                'properties' => [
+                    'seats' => 12,
+                    'limit' => 12,
+                ],
+                'contact_email' => 'ayse@example.com',
+                'source' => 'billing',
+                'idempotency_key' => 'evt-2026-11-11-f77-seats',
+                'occurred_at' => '2026-11-11T09:31:00Z',
+            ], idempotencyKey: 'evt-2026-11-11-f77-seats');
   /v1/public-api/company-revenue:
     put:
       tags:
-        - Şirketler
+        - Companies
       operationId: putV1PublicApiCompanyRevenue
-      summary: Şirket gelirini gönder
-      description: "Kapsam: `revenue:write`. Şirket `company_uuid`, yoksa `external_id` (kendi sisteminizdeki kimlik), yoksa `domain` ile bulunur. Aynı `Idempotency-Key` farklı gövdeyle kullanılırsa `409` döner."
+      summary: Send company revenue
+      description: "Scope: `revenue:write`. The company is found by `company_uuid`, else `external_id` (its id in your system), else `domain`. The same `Idempotency-Key` with a different body returns `409`."
       security:
         - integrationKey: []
       parameters:
@@ -960,6 +1920,16 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CompanyRevenueUpsertInput"
+            example:
+              external_id: F-77
+              source: api
+              mrr_minor: 490000
+              currency: TRY
+              plan: pro
+              billing_status: active
+              renewal_at: 2026-12-01T00:00:00Z
+              lifetime_value_minor: 5880000
+              external_ref: sub_9f3k2
       responses:
         "200":
           description: OK
@@ -967,6 +1937,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeCompanyRevenueUpsert"
+              example:
+                success: true
+                data:
+                  company_uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                  revenue:
+                    mrr_minor: 490000
+                    currency: TRY
+                    plan: pro
+                    billing_status: active
+                    renewal_at: 2026-12-01T00:00:00Z
+                    lifetime_value_minor: 5880000
+                    source: api
+                    external_ref: sub_9f3k2
+                    updated_at: 2026-11-11T09:30:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Tamam
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -979,12 +1968,106 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           $ref: "#/components/responses/ValidationError"
+      x-i18n:
+        tr:
+          summary: Şirket gelirini gönder
+          description: "Kapsam: `revenue:write`. Şirket `company_uuid`, yoksa `external_id` (kendi sisteminizdeki kimlik), yoksa `domain` ile bulunur. Aynı `Idempotency-Key` farklı gövdeyle kullanılırsa `409` döner."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PUT "https://api.getclickfix.com/v1/public-api/company-revenue" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: company-f77-revenue-2026-11" \
+              -d '{
+              "external_id": "F-77",
+              "source": "api",
+              "mrr_minor": 490000,
+              "currency": "TRY",
+              "plan": "pro",
+              "billing_status": "active",
+              "renewal_at": "2026-12-01T00:00:00Z",
+              "lifetime_value_minor": 5880000,
+              "external_ref": "sub_9f3k2"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/company-revenue",
+              "put",
+              {
+                external_id: "F-77",
+                source: "api",
+                mrr_minor: 490000,
+                currency: "TRY",
+                plan: "pro",
+                billing_status: "active",
+                renewal_at: "2026-12-01T00:00:00Z",
+                lifetime_value_minor: 5880000,
+                external_ref: "sub_9f3k2"
+              },
+              { idempotencyKey: "company-f77-revenue-2026-11" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PutV1PublicApiCompanyRevenueWithBodyWithResponse(ctx, &clickfix.PutV1PublicApiCompanyRevenueParams{IdempotencyKey: "company-f77-revenue-2026-11"}, "application/json",
+            	strings.NewReader(`{
+              "external_id": "F-77",
+              "source": "api",
+              "mrr_minor": 490000,
+              "currency": "TRY",
+              "plan": "pro",
+              "billing_status": "active",
+              "renewal_at": "2026-12-01T00:00:00Z",
+              "lifetime_value_minor": 5880000,
+              "external_ref": "sub_9f3k2"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $result = $client->companies()->setRevenue([
+                'external_id' => 'F-77',
+                'source' => 'api',
+                'mrr_minor' => 490000,
+                'currency' => 'TRY',
+                'plan' => 'pro',
+                'billing_status' => 'active',
+                'renewal_at' => '2026-12-01T00:00:00Z',
+                'lifetime_value_minor' => 5880000,
+                'external_ref' => 'sub_9f3k2',
+            ], idempotencyKey: 'company-f77-revenue-2026-11');
   /v1/public-api/webhooks:
     get:
       tags:
-        - Webhook'lar
+        - Webhooks
       operationId: getV1PublicApiWebhooks
-      summary: Webhook aboneliklerini listele
+      summary: List webhook subscriptions
       security:
         - integrationKey: []
       responses:
@@ -994,13 +2077,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  items:
+                    - uuid: 7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d
+                      name: ERP sync
+                      url: https://erp.example.com/clickfix/webhook
+                      events:
+                        - conversation.created
+                        - message.received
+                        - contact.updated
+                      enabled: true
+                      created_at: 2026-11-01T10:00:00Z
+                  total: 1
+                  limit: 20
+                  offset: 0
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `webhooks:read`. İmza anahtarı (`secret`) listede dönmez."
+      description: "Scope: `webhooks:read`. The signing secret (`secret`) is not returned in the list."
       parameters:
         - name: limit
           in: query
@@ -1015,11 +2119,66 @@ paths:
             type: integer
             minimum: 0
             default: 0
+      x-i18n:
+        tr:
+          summary: Webhook aboneliklerini listele
+          description: "Kapsam: `webhooks:read`. İmza anahtarı (`secret`) listede dönmez."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/webhooks?limit=20&offset=0" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/webhooks",
+              "get",
+              undefined,
+              { query: { limit: 20, offset: 0 } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            limit := 20
+            offset := 0
+            res, err := client.GetV1PublicApiWebhooksWithResponse(ctx, &clickfix.GetV1PublicApiWebhooksParams{Limit: &limit, Offset: &offset})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $page = $client->webhooks()->list([
+                'limit' => 20,
+                'offset' => 0,
+            ]);
     post:
       tags:
-        - Webhook'lar
+        - Webhooks
       operationId: postV1PublicApiWebhooks
-      summary: Webhook aboneliği oluştur
+      summary: Create a webhook subscription
       security:
         - integrationKey: []
       responses:
@@ -1029,13 +2188,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  uuid: 7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d
+                  name: ERP sync
+                  url: https://erp.example.com/clickfix/webhook
+                  events:
+                    - conversation.created
+                    - message.received
+                    - contact.updated
+                  enabled: true
+                  created_at: 2026-11-01T10:00:00Z
+                  secret: whsec_3f9c1a7e5b2d4c8f0a6e9b1d3c5f7a2e4b6d8c0f1a3e5b7d9c2f4a6e8b0d1c3f
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `webhooks:write`. Adres herkese açık bir HTTPS adresi olmalıdır. İmza anahtarı (`secret`) yalnızca bu yanıtta döner. `Idempotency-Key` zorunludur."
+      description: "Scope: `webhooks:write`. The URL must be a public HTTPS address. The signing secret (`secret`) is returned only in this response. `Idempotency-Key` is required."
       parameters:
         - name: Idempotency-Key
           in: header
@@ -1049,12 +2226,106 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/OutboundWebhookInput"
+            example:
+              name: ERP sync
+              url: https://erp.example.com/clickfix/webhook
+              events:
+                - conversation.created
+                - message.received
+                - contact.updated
+              enabled: true
+      x-i18n:
+        tr:
+          summary: Webhook aboneliği oluştur
+          description: "Kapsam: `webhooks:write`. Adres herkese açık bir HTTPS adresi olmalıdır. İmza anahtarı (`secret`) yalnızca bu yanıtta döner. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/webhooks" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: webhook-erp-sync" \
+              -d '{
+              "name": "ERP sync",
+              "url": "https://erp.example.com/clickfix/webhook",
+              "events": [
+                "conversation.created",
+                "message.received",
+                "contact.updated"
+              ],
+              "enabled": true
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/webhooks",
+              "post",
+              {
+                name: "ERP sync",
+                url: "https://erp.example.com/clickfix/webhook",
+                events: [
+                  "conversation.created",
+                  "message.received",
+                  "contact.updated"
+                ],
+                enabled: true
+              },
+              { idempotencyKey: "webhook-erp-sync" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PostV1PublicApiWebhooksWithBodyWithResponse(ctx, &clickfix.PostV1PublicApiWebhooksParams{IdempotencyKey: "webhook-erp-sync"}, "application/json",
+            	strings.NewReader(`{
+              "name": "ERP sync",
+              "url": "https://erp.example.com/clickfix/webhook",
+              "events": [
+                "conversation.created",
+                "message.received",
+                "contact.updated"
+              ],
+              "enabled": true
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $webhook = $client->webhooks()->create([
+                'name' => 'ERP sync',
+                'url' => 'https://erp.example.com/clickfix/webhook',
+                'events' => ['conversation.created', 'message.received', 'contact.updated'],
+                'enabled' => true,
+            ], idempotencyKey: 'webhook-erp-sync'); // $webhook['secret'] is shown only once
   /v1/public-api/webhooks/{uuid}:
     put:
       tags:
-        - Webhook'lar
+        - Webhooks
       operationId: putV1PublicApiWebhooksUuid
-      summary: Webhook aboneliğini güncelle
+      summary: Update a webhook subscription
       security:
         - integrationKey: []
       responses:
@@ -1064,13 +2335,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  uuid: 7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d
+                  name: ERP sync
+                  url: https://erp.example.com/clickfix/webhook
+                  events:
+                    - conversation.created
+                    - conversation.resolved
+                    - message.received
+                  enabled: true
+                  created_at: 2026-11-01T10:00:00Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `webhooks:write`. Ad, adres, olaylar ve etkinlik durumunu değiştirir; imza anahtarı değişmez. `Idempotency-Key` zorunludur."
+      description: "Scope: `webhooks:write`. Changes name, URL, events and enabled state; the signing secret stays the same. `Idempotency-Key` is required."
       parameters:
         - name: Idempotency-Key
           in: header
@@ -1090,11 +2378,105 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/OutboundWebhookInput"
+            example:
+              name: ERP sync
+              url: https://erp.example.com/clickfix/webhook
+              events:
+                - conversation.created
+                - conversation.resolved
+                - message.received
+              enabled: true
+      x-i18n:
+        tr:
+          summary: Webhook aboneliğini güncelle
+          description: "Kapsam: `webhooks:write`. Ad, adres, olaylar ve etkinlik durumunu değiştirir; imza anahtarı değişmez. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PUT "https://api.getclickfix.com/v1/public-api/webhooks/WEBHOOK_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: webhook-erp-sync-v2" \
+              -d '{
+              "name": "ERP sync",
+              "url": "https://erp.example.com/clickfix/webhook",
+              "events": [
+                "conversation.created",
+                "conversation.resolved",
+                "message.received"
+              ],
+              "enabled": true
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/webhooks/{uuid}",
+              "put",
+              {
+                name: "ERP sync",
+                url: "https://erp.example.com/clickfix/webhook",
+                events: [
+                  "conversation.created",
+                  "conversation.resolved",
+                  "message.received"
+                ],
+                enabled: true
+              },
+              { path: { uuid: "WEBHOOK_UUID" }, idempotencyKey: "webhook-erp-sync-v2" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.PutV1PublicApiWebhooksUuidWithBodyWithResponse(ctx, uuid.MustParse("WEBHOOK_UUID"), &clickfix.PutV1PublicApiWebhooksUuidParams{IdempotencyKey: "webhook-erp-sync-v2"}, "application/json",
+            	strings.NewReader(`{
+              "name": "ERP sync",
+              "url": "https://erp.example.com/clickfix/webhook",
+              "events": [
+                "conversation.created",
+                "conversation.resolved",
+                "message.received"
+              ],
+              "enabled": true
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $webhook = $client->webhooks()->update('WEBHOOK_UUID', [
+                'name' => 'ERP sync',
+                'url' => 'https://erp.example.com/clickfix/webhook',
+                'events' => ['conversation.created', 'conversation.resolved', 'message.received'],
+                'enabled' => true,
+            ], idempotencyKey: 'webhook-erp-sync-v2');
     delete:
       tags:
-        - Webhook'lar
+        - Webhooks
       operationId: deleteV1PublicApiWebhooksUuid
-      summary: Webhook aboneliğini sil
+      summary: Delete a webhook subscription
       security:
         - integrationKey: []
       responses:
@@ -1104,13 +2486,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IntegrationEnvelope"
+              example:
+                success: true
+                data:
+                  deleted: true
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Kapsam: `webhooks:write`. `Idempotency-Key` zorunludur."
+      description: "Scope: `webhooks:write`. `Idempotency-Key` is required."
       parameters:
         - name: Idempotency-Key
           in: header
@@ -1124,15 +2515,66 @@ paths:
           schema:
             type: string
             format: uuid
+      x-i18n:
+        tr:
+          summary: Webhook aboneliğini sil
+          description: "Kapsam: `webhooks:write`. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X DELETE "https://api.getclickfix.com/v1/public-api/webhooks/WEBHOOK_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Idempotency-Key: webhook-erp-sync-delete"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/webhooks/{uuid}",
+              "delete",
+              undefined,
+              { path: { uuid: "WEBHOOK_UUID" }, idempotencyKey: "webhook-erp-sync-delete" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.DeleteV1PublicApiWebhooksUuidWithResponse(ctx, uuid.MustParse("WEBHOOK_UUID"), &clickfix.DeleteV1PublicApiWebhooksUuidParams{IdempotencyKey: "webhook-erp-sync-delete"})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $client->webhooks()->delete('WEBHOOK_UUID', idempotencyKey: 'webhook-erp-sync-delete');
   /v1/public-api/triggers:
     get:
       operationId: pollIntegrationTriggers
-      summary: Tetikleyici olaylarını yokla
+      summary: Poll trigger events
       tags:
-        - Tetikleyiciler
+        - Triggers
       security:
         - integrationKey: []
-      description: "Kapsam: `triggers:read`. Seçilen olay türü için `cursor` değerinden sonraki olayları döner; ilk çağrıda `cursor=0` gönderin ve yanıttaki imleci saklayın. Yanıtlar konuşma metnini değil, kayıt kimliklerini içerir. İmleç süresi dolarsa `410 CURSOR_EXPIRED` döner."
+      description: "Scope: `triggers:read`. Returns the events of the chosen type after `cursor`; send `cursor=0` on the first call and keep the cursor from the response. Responses carry record ids, not conversation text. An expired cursor returns `410 CURSOR_EXPIRED`."
       responses:
         "200":
           description: Success
@@ -1153,6 +2595,22 @@ paths:
                   - data
                   - meta
                 additionalProperties: false
+              example:
+                success: true
+                data:
+                  items:
+                    - id: 2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f
+                      event: conversation.created
+                      entity_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                      occurred_at: 2026-11-11T09:15:00Z
+                  next_cursor: 1762852500000:2c3d4e5f
+                  has_more: false
+                  retention_days: 7
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1167,6 +2625,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+          x-i18n:
+            tr:
+              description: "CURSOR_EXPIRED: kaynakları yeniden okuyup cursor=0 ile baştan başlayın"
       parameters:
         - name: event
           in: query
@@ -1184,15 +2645,67 @@ paths:
           schema:
             type: string
           example: "0"
+      x-i18n:
+        tr:
+          summary: Tetikleyici olaylarını yokla
+          description: "Kapsam: `triggers:read`. Seçilen olay türü için `cursor` değerinden sonraki olayları döner; ilk çağrıda `cursor=0` gönderin ve yanıttaki imleci saklayın. Yanıtlar konuşma metnini değil, kayıt kimliklerini içerir. İmleç süresi dolarsa `410 CURSOR_EXPIRED` döner."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl "https://api.getclickfix.com/v1/public-api/triggers?event=conversation.created&cursor=0" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/triggers",
+              "get",
+              undefined,
+              { query: { event: "conversation.created", cursor: "0" } },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            event := "conversation.created"
+            cursor := "0"
+            res, err := client.PollIntegrationTriggersWithResponse(ctx, &clickfix.PollIntegrationTriggersParams{Event: &event, Cursor: &cursor})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $page = $client->triggers()->poll('conversation.created', $cursor); // $cursor: null on the first call, then $page['next_cursor']
   /v1/public-api/subscriptions:
     post:
       operationId: subscribeIntegrationTrigger
-      summary: REST hook aboneliği oluştur
+      summary: Create a REST hook subscription
       tags:
-        - Tetikleyiciler
+        - Triggers
       security:
         - integrationKey: []
-      description: "Kapsam: `webhooks:write`. Zapier, Make ve n8n gibi araçların kullandığı REST hook aboneliği; webhook'larla aynı imzalı teslimat altyapısını kullanır. İmza anahtarı yalnızca bu yanıtta döner. `Idempotency-Key` zorunludur."
+      description: "Scope: `webhooks:write`. The REST hook subscription used by tools such as Zapier, Make and n8n; it shares the signed delivery infrastructure of webhooks. The signing secret is returned only in this response. `Idempotency-Key` is required."
       responses:
         "200":
           description: Success
@@ -1214,6 +2727,21 @@ paths:
                   - data
                   - meta
                 additionalProperties: false
+              example:
+                success: true
+                data:
+                  uuid: 6e5d4c3b-2a19-4f8e-9d7c-6b5a4f3e2d1c
+                  name: Zapier new conversation
+                  url: https://hooks.zapier.com/hooks/catch/123456/abcdef
+                  events:
+                    - conversation.created
+                  enabled: true
+                  secret: whsec_a4f0…
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1238,19 +2766,99 @@ paths:
               $ref: "#/components/schemas/IntegrationSubscription"
             example:
               name: Zapier new conversation
-              url: https://hooks.example.com/clickfix
+              url: https://hooks.zapier.com/hooks/catch/123456/abcdef
               events:
                 - conversation.created
               enabled: true
+      x-i18n:
+        tr:
+          summary: REST hook aboneliği oluştur
+          description: "Kapsam: `webhooks:write`. Zapier, Make ve n8n gibi araçların kullandığı REST hook aboneliği; webhook'larla aynı imzalı teslimat altyapısını kullanır. İmza anahtarı yalnızca bu yanıtta döner. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X POST "https://api.getclickfix.com/v1/public-api/subscriptions" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: zapier-new-conversation" \
+              -d '{
+              "name": "Zapier new conversation",
+              "url": "https://hooks.zapier.com/hooks/catch/123456/abcdef",
+              "events": [
+                "conversation.created"
+              ],
+              "enabled": true
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/subscriptions",
+              "post",
+              {
+                name: "Zapier new conversation",
+                url: "https://hooks.zapier.com/hooks/catch/123456/abcdef",
+                events: [
+                  "conversation.created"
+                ],
+                enabled: true
+              },
+              { idempotencyKey: "zapier-new-conversation" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.SubscribeIntegrationTriggerWithBodyWithResponse(ctx, &clickfix.SubscribeIntegrationTriggerParams{IdempotencyKey: "zapier-new-conversation"}, "application/json",
+            	strings.NewReader(`{
+              "name": "Zapier new conversation",
+              "url": "https://hooks.zapier.com/hooks/catch/123456/abcdef",
+              "events": [
+                "conversation.created"
+              ],
+              "enabled": true
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $subscription = $client->triggers()->subscribe([
+                'name' => 'Zapier new conversation',
+                'url' => 'https://hooks.zapier.com/hooks/catch/123456/abcdef',
+                'events' => ['conversation.created'],
+                'enabled' => true,
+            ], idempotencyKey: 'zapier-new-conversation');
   /v1/public-api/subscriptions/{uuid}:
     delete:
       operationId: unsubscribeIntegrationTrigger
-      summary: REST hook aboneliğini sil
+      summary: Delete a REST hook subscription
       tags:
-        - Tetikleyiciler
+        - Triggers
       security:
         - integrationKey: []
-      description: "Kapsam: `webhooks:write`. `Idempotency-Key` zorunludur; tekrar denemelerde aynı değeri kullanın."
+      description: "Scope: `webhooks:write`. `Idempotency-Key` is required; reuse the same value on retries."
       responses:
         "200":
           description: Success
@@ -1277,6 +2885,15 @@ paths:
                   - data
                   - meta
                 additionalProperties: false
+              example:
+                success: true
+                data:
+                  deleted: true
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1299,15 +2916,66 @@ paths:
             type: string
             maxLength: 200
           example: workflow-42-step-1
+      x-i18n:
+        tr:
+          summary: REST hook aboneliğini sil
+          description: "Kapsam: `webhooks:write`. `Idempotency-Key` zorunludur; tekrar denemelerde aynı değeri kullanın."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X DELETE "https://api.getclickfix.com/v1/public-api/subscriptions/SUBSCRIPTION_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Idempotency-Key: zapier-new-conversation-delete"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/subscriptions/{uuid}",
+              "delete",
+              undefined,
+              { path: { uuid: "SUBSCRIPTION_UUID" }, idempotencyKey: "zapier-new-conversation-delete" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.UnsubscribeIntegrationTriggerWithResponse(ctx, uuid.MustParse("SUBSCRIPTION_UUID"), &clickfix.UnsubscribeIntegrationTriggerParams{IdempotencyKey: "zapier-new-conversation-delete"})
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $client->triggers()->unsubscribe('SUBSCRIPTION_UUID', idempotencyKey: 'zapier-new-conversation-delete');
   /v1/public-api/contacts/{uuid}:
     patch:
       operationId: updateIntegrationContact
-      summary: Kişiyi güncelle
+      summary: Update a contact
       tags:
-        - Kişiler
+        - Contacts
       security:
         - integrationKey: []
-      description: "Kapsam: `contacts:write`. Paneldeki kişi doğrulama kuralları aynen uygulanır. `Idempotency-Key` zorunludur."
+      description: "Scope: `contacts:write`. The panel's contact validation rules apply as is. `Idempotency-Key` is required."
       responses:
         "200":
           description: Success
@@ -1329,6 +2997,40 @@ paths:
                   - data
                   - meta
                 additionalProperties: false
+              example:
+                success: true
+                data:
+                  uuid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+                  name: Ayşe Yılmaz
+                  email: ayse@example.com
+                  phone: "+905551112233"
+                  external_id: "1001"
+                  identity_state: verified
+                  verified_at: 2026-11-10T18:42:11Z
+                  job_title: Operations manager
+                  company:
+                    uuid: 0f9e8d7c-6b5a-4493-8271-605f4e3d2c1b
+                    name: Acme Ltd.
+                    external_id: F-77
+                  locale: tr
+                  timezone: Europe/Istanbul
+                  notes: VIP customer
+                  custom_fields:
+                    plan: pro
+                    seats: 12
+                  blocked: false
+                  channel_types:
+                    - widget
+                    - email
+                  conversation_count: 3
+                  last_seen_at: 2026-11-11T09:14:50Z
+                  created_at: 2026-10-01T07:00:00Z
+                  updated_at: 2026-11-11T09:14:50Z
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Başarılı
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1358,31 +3060,109 @@ paths:
             schema:
               $ref: "#/components/schemas/IntegrationContactUpdate"
             example:
-              name: Updated contact
+              name: Ayşe Yılmaz
+              phone: "+905551112233"
+              notes: VIP customer
+      x-i18n:
+        tr:
+          summary: Kişiyi güncelle
+          description: "Kapsam: `contacts:write`. Paneldeki kişi doğrulama kuralları aynen uygulanır. `Idempotency-Key` zorunludur."
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            curl -X PATCH "https://api.getclickfix.com/v1/public-api/contacts/CONTACT_UUID" \
+              -H "Authorization: Bearer $CLICKFIX_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Idempotency-Key: user-1001-update-3" \
+              -d '{
+              "name": "Ayşe Yılmaz",
+              "phone": "+905551112233",
+              "notes": "VIP customer"
+            }'
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createClient } from "@getclickfix/node";
+
+            const client = createClient({
+              baseURL: "https://api.getclickfix.com",
+              apiKey: process.env.CLICKFIX_API_KEY!,
+            });
+
+            const res = await client.request(
+              "/v1/public-api/contacts/{uuid}",
+              "patch",
+              {
+                name: "Ayşe Yılmaz",
+                phone: "+905551112233",
+                notes: "VIP customer"
+              },
+              { path: { uuid: "CONTACT_UUID" }, idempotencyKey: "user-1001-update-3" },
+            );
+            console.log(res.data);
+        - lang: go
+          label: Go
+          source: |-
+            client, err := clickfix.New("https://api.getclickfix.com", os.Getenv("CLICKFIX_API_KEY"))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            res, err := client.UpdateIntegrationContactWithBodyWithResponse(ctx, uuid.MustParse("CONTACT_UUID"), &clickfix.UpdateIntegrationContactParams{IdempotencyKey: "user-1001-update-3"}, "application/json",
+            	strings.NewReader(`{
+              "name": "Ayşe Yılmaz",
+              "phone": "+905551112233",
+              "notes": "VIP customer"
+            }`))
+            if err != nil {
+            	log.Fatal(err)
+            }
+            fmt.Println(res.StatusCode(), string(res.Body))
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+
+            $contact = $client->contacts()->update('CONTACT_UUID', [
+                'name' => 'Ayşe Yılmaz',
+                'phone' => '+905551112233',
+                'notes' => 'VIP customer',
+            ], idempotencyKey: 'user-1001-update-3');
   /v1/webhooks/channels/api/{instance}:
     post:
       operationId: receiveAPIChannelMessage
-      summary: Müşteri mesajı gönder
+      summary: Send a customer message
       description: |
-        API kanalına bir müşteri mesajı gönderir. Kanal **Kanallar → Kanal ekle → API** ile kurulur; kurulumda gelen adresi (`{instance}`), imza anahtarını ve temsilci yanıtlarının gönderileceği adresi alırsınız.
+        Sends a customer message to the API channel. The channel is set up under **Channels → Add channel → API**; the setup gives you the inbound URL (`{instance}`), the signing secret and a field for the URL agent replies are sent to.
 
-        İstek API anahtarıyla değil kanalın imza anahtarıyla doğrulanır: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(imza_anahtarı, timestamp + "." + ham_gövde)). Zaman damgası 5 dakikadan eskiyse istek reddedilir. Aynı `id` ile gelen mesaj bir kez kaydedilir. `5xx` yanıtında tekrar deneyin.
+        The request is verified with the channel's signing secret, not an API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + raw_body)). Requests whose timestamp is older than 5 minutes are rejected. A message with the same `id` is stored once. Retry on `5xx`.
       security:
         - apiChannelSignature: []
       parameters:
         - name: instance
           in: path
           required: true
-          description: Kanal kurulumunda verilen kanal kimliği.
+          description: The channel instance id given during setup.
           schema:
             type: string
+          x-i18n:
+            tr:
+              description: Kanal kurulumunda verilen kanal kimliği.
         - name: X-ClickFix-Timestamp
           in: header
           required: true
-          description: İmzalama anı (Unix saniye).
+          description: Signing time (Unix seconds).
           schema:
             type: string
           example: "1761732900"
+          x-i18n:
+            tr:
+              description: İmzalama anı (Unix saniye).
       requestBody:
         required: true
         content:
@@ -1391,16 +3171,26 @@ paths:
               $ref: "#/components/schemas/APIChannelMessage"
             example:
               id: msg-1001
-              sender_id: musteri-42
+              sender_id: customer-42
               sender_name: Ayşe Yılmaz
-              text: Siparişim ne zaman gelir?
+              text: When will my order arrive?
       responses:
         "200":
-          description: Mesaj alındı.
+          description: Message received.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/EnvelopeWebhookReceived"
+              example:
+                success: true
+                data:
+                  received: true
+                  conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                meta:
+                  request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
+          x-i18n:
+            tr:
+              description: Mesaj alındı.
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1408,16 +3198,112 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
       tags:
-        - API kanalı
+        - API channel
+      x-i18n:
+        tr:
+          summary: Müşteri mesajı gönder
+          description: |
+            API kanalına bir müşteri mesajı gönderir. Kanal **Kanallar → Kanal ekle → API** ile kurulur; kurulumda gelen adresi (`{instance}`), imza anahtarını ve temsilci yanıtlarının gönderileceği adresi alırsınız.
+
+            İstek API anahtarıyla değil kanalın imza anahtarıyla doğrulanır: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(imza_anahtarı, timestamp + "." + ham_gövde)). Zaman damgası 5 dakikadan eskiyse istek reddedilir. Aynı `id` ile gelen mesaj bir kez kaydedilir. `5xx` yanıtında tekrar deneyin.
+      x-codeSamples:
+        - lang: bash
+          label: curl
+          source: |-
+            TIMESTAMP=$(date +%s)
+            BODY='{
+              "id": "msg-1001",
+              "sender_id": "customer-42",
+              "sender_name": "Ayşe Yılmaz",
+              "text": "When will my order arrive?"
+            }'
+            SIGNATURE="sha256=$(printf '%s.%s' "$TIMESTAMP" "$BODY" | openssl dgst -sha256 -hmac "$CLICKFIX_CHANNEL_SECRET" | sed 's/^.* //')"
+
+            curl -X POST "https://api.getclickfix.com/v1/webhooks/channels/api/CHANNEL_INSTANCE" \
+              -H "Content-Type: application/json" \
+              -H "X-ClickFix-Timestamp: $TIMESTAMP" \
+              -H "X-ClickFix-Signature: $SIGNATURE" \
+              -d "$BODY"
+        - lang: typescript
+          label: Node.js
+          source: |-
+            import { createHmac } from "node:crypto";
+
+            const body = JSON.stringify({
+              id: "msg-1001",
+              sender_id: "customer-42",
+              sender_name: "Ayşe Yılmaz",
+              text: "When will my order arrive?"
+            });
+            const timestamp = String(Math.floor(Date.now() / 1000));
+            const signature =
+              "sha256=" +
+              createHmac("sha256", process.env.CLICKFIX_CHANNEL_SECRET!)
+                .update(`${timestamp}.`)
+                .update(body)
+                .digest("hex");
+
+            const res = await fetch("https://api.getclickfix.com/v1/webhooks/channels/api/CHANNEL_INSTANCE", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-ClickFix-Timestamp": timestamp,
+                "X-ClickFix-Signature": signature,
+              },
+              body,
+            });
+            console.log(res.status, await res.json());
+        - lang: go
+          label: Go
+          source: |-
+            body := []byte(`{
+              "id": "msg-1001",
+              "sender_id": "customer-42",
+              "sender_name": "Ayşe Yılmaz",
+              "text": "When will my order arrive?"
+            }`)
+            timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+            mac := hmac.New(sha256.New, []byte(os.Getenv("CLICKFIX_CHANNEL_SECRET")))
+            mac.Write([]byte(timestamp + "."))
+            mac.Write(body)
+            signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+            req, _ := http.NewRequest("POST", "https://api.getclickfix.com/v1/webhooks/channels/api/CHANNEL_INSTANCE", bytes.NewReader(body))
+            req.Header.Set("Content-Type", "application/json")
+            req.Header.Set("X-ClickFix-Timestamp", timestamp)
+            req.Header.Set("X-ClickFix-Signature", signature)
+            res, err := http.DefaultClient.Do(req)
+            if err != nil {
+            	log.Fatal(err)
+            }
+            defer res.Body.Close()
+            fmt.Println(res.StatusCode)
+        - lang: php
+          label: PHP
+          source: |-
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+
+            use ClickFix\Client;
+
+            $client = new Client('https://api.getclickfix.com', getenv('CLICKFIX_API_KEY'));
+            $channel = $client->apiChannel(getenv('CLICKFIX_CHANNEL_INSTANCE'), getenv('CLICKFIX_CHANNEL_SECRET'));
+
+            $result = $channel->send([
+                'id' => 'msg-1001',
+                'sender_id' => 'customer-42',
+                'sender_name' => 'Ayşe Yılmaz',
+                'text' => 'When will my order arrive?',
+            ]);
 webhooks:
   apiChannelReply:
     post:
       tags:
-        - API kanalı
+        - API channel
       operationId: deliverAPIChannelReply
-      summary: Temsilci yanıtı (API kanalı)
+      summary: Agent reply (API channel)
       description: |
-        Bir temsilci API kanalındaki konuşmayı yanıtladığında ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (mesaj UUID'si) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. Mesajı kalıcı olarak kaydettikten sonra `2xx` dönün. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
+        When an agent replies to a conversation on the API channel, ClickFix sends a `POST` with this body to the URL configured on the channel. The request carries `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (the signing method above) and `Idempotency-Key` (the message UUID); process every key only once. Return `2xx` after the message is stored durably. Temporary failures are retried with increasing delays; `4xx` responses other than `408` and `429` count as permanent failures.
       security: []
       parameters:
         - name: X-ClickFix-Timestamp
@@ -1426,12 +3312,18 @@ webhooks:
           schema:
             type: string
             description: Unix seconds
+            x-i18n:
+              tr:
+                description: Unix saniye
         - name: X-ClickFix-Signature
           in: header
           required: true
           schema:
             type: string
             description: sha256= followed by hex HMAC-SHA256
+            x-i18n:
+              tr:
+                description: "`sha256=` ve onaltılık HMAC-SHA256"
         - name: Idempotency-Key
           in: header
           required: true
@@ -1444,19 +3336,49 @@ webhooks:
           application/json:
             schema:
               $ref: "#/components/schemas/APIChannelReply"
+            example:
+              id: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
+              conversation_id: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+              recipient_id: customer-42
+              text: Your order ships today.
+              thread_id: msg-1001
+              reply_to: msg-1001
       responses:
         "200":
           description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "204":
           description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
         "400":
           description: Permanent content rejection
+          x-i18n:
+            tr:
+              description: Kalıcı içerik reddi
         "401":
           description: Permanent authentication rejection
+          x-i18n:
+            tr:
+              description: Kalıcı kimlik doğrulama reddi
         "429":
           description: Rate limit, retried with backoff
+          x-i18n:
+            tr:
+              description: Hız sınırı; artan aralıklarla tekrar denenir
         "500":
           description: Temporary receiver failure, retried with backoff
+          x-i18n:
+            tr:
+              description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
+      x-i18n:
+        tr:
+          summary: Temsilci yanıtı (API kanalı)
+          description: |
+            Bir temsilci API kanalındaki konuşmayı yanıtladığında ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (mesaj UUID'si) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. Mesajı kalıcı olarak kaydettikten sonra `2xx` dönün. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
 components:
   schemas:
     APIChannelMessage:
@@ -1471,6 +3393,9 @@ components:
           minLength: 1
           maxLength: 255
           description: Stable unique message ID within this instance
+          x-i18n:
+            tr:
+              description: Kanal içinde tekil ve sabit mesaj kimliği
         sender_id:
           type: string
           minLength: 1
@@ -1514,6 +3439,9 @@ components:
           type: string
         reply_to:
           type: string
+      x-i18n:
+        tr:
+          description: Organizasyonun herkese açık webhook adresine zaman damgalı HMAC ve Idempotency-Key ile gönderilen JSON.
     CompanyEvent:
       type: object
       required:
@@ -1627,6 +3555,9 @@ components:
         updated_at:
           type: string
           format: date-time
+      x-i18n:
+        tr:
+          description: Müşterinin organizasyona ödediği tutar. Tutarlar `currency` biriminin kuruş cinsindendir.
     CompanyRevenueUpsertInput:
       type: object
       additionalProperties: false
@@ -1667,6 +3598,9 @@ components:
             - string
             - "null"
           description: RFC 3339 time or YYYY-MM-DD date; null clears it.
+          x-i18n:
+            tr:
+              description: RFC 3339 zaman ya da YYYY-MM-DD tarih; null değeri siler.
         lifetime_value_minor:
           type: integer
           format: int64
@@ -1731,7 +3665,10 @@ components:
           type:
             - string
             - "null"
-          description: the customer's own user id, unique in the organization.
+          description: The customer's own user id, unique in the organization.
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası; organizasyon içinde tekil.
         identity_state:
           $ref: "#/components/schemas/ContactIdentityState"
         verified_at:
@@ -1740,6 +3677,9 @@ components:
             - "null"
           format: date-time
           description: Last widget identify that proved the id with user_hash.
+          x-i18n:
+            tr:
+              description: Kimliği user_hash ile kanıtlayan son widget identify zamanı.
         job_title:
           type: string
         company:
@@ -1826,10 +3766,13 @@ components:
         - anonymous
         - self_named
       description: |
-        . verified: the contact proved the customer's user id with
+        Verified: the contact proved the customer's user id with
         user_hash (widget identify). anonymous: no name, e-mail or phone.
         self_named: a name, e-mail or phone the contact or its channel gave,
         not proved.
+      x-i18n:
+        tr:
+          description: "verified: kişi, kullanıcı numarasını user_hash ile (widget identify) kanıtladı. anonymous: ad, e-posta ya da telefon yok. self_named: kişinin ya da kanalının verdiği, kanıtlanmamış ad, e-posta ya da telefon."
     ContactInput:
       type: object
       additionalProperties: false
@@ -1863,7 +3806,10 @@ components:
         external_id:
           type: string
           maxLength: 200
-          description: the customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          description: The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+          x-i18n:
+            tr:
+              description: Kendi sisteminizdeki kullanıcı numarası; boş değer siler. Başka kişideyse 409 EXTERNAL_ID_EXISTS.
     ConversationPriority:
       type: string
       enum:
@@ -1901,6 +3847,9 @@ components:
             - "null"
           format: uuid
           description: Team uuid; null removes the team (tenant.conversations.assign)
+          x-i18n:
+            tr:
+              description: Ekip uuid'si; null ekibi kaldırır (tenant.conversations.assign)
         snoozed_until:
           type: string
           format: date-time
@@ -2054,6 +4003,9 @@ components:
             - NO_TENANT_MEMBERSHIP
             - ORGANIZATION_SUSPENDED
             - ORGANIZATION_ACCESS_EXPIRED
+          x-i18n:
+            tr:
+              description: Makinece okunur hata kodu
         message:
           type: string
         details:
@@ -2096,7 +4048,7 @@ components:
       additionalProperties: false
     IntegrationCreateConversation:
       type: object
-      description: Name the contact by contact_uuid or contact_external_id (, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
+      description: Name the contact by contact_uuid or contact_external_id (the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.
       properties:
         contact_uuid:
           type: string
@@ -2115,6 +4067,9 @@ components:
         - inbox_uuid
         - subject
       additionalProperties: false
+      x-i18n:
+        tr:
+          description: Kişiyi contact_uuid ya da contact_external_id (kendi sisteminizdeki kullanıcı numarası) ile verin, ikisini birden değil. Widget kanalında dış kimlikli kişi widget kimliğini alır; temsilci önce yazabilir, siteye giriş yapan kullanıcı konuşmayı sitede bulur.
     IntegrationEnvelope:
       type: object
       properties:
@@ -2214,6 +4169,9 @@ components:
           type: string
           format: uri
           description: Public HTTPS URL. Private addresses, redirects and DNS rebinding are blocked.
+          x-i18n:
+            tr:
+              description: Herkese açık HTTPS adresi. Özel adresler, yönlendirmeler ve DNS rebinding engellenir.
         events:
           type: array
           minItems: 1
@@ -2240,44 +4198,68 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Doğrulama hatası ya da bozuk istek
     Conflict:
       description: Conflict (duplicate / constraint)
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Çakışma (tekrar / kısıt)
     Forbidden:
       description: Authenticated but not allowed
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Kimlik doğrulandı ama izin yok
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Kayıt bulunamadı
     Unauthenticated:
       description: Missing or invalid credentials / access token
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: Eksik ya da geçersiz kimlik bilgisi / erişim belirteci
     ValidationError:
       description: "`VALIDATION_ERROR`: `details[].field` names each invalid field (dotted path, e.g. `company.tax_number`)"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+      x-i18n:
+        tr:
+          description: "`VALIDATION_ERROR`: `details[].field` her geçersiz alanı adlandırır (noktalı yol, ör. `company.tax_number`)"
   securitySchemes:
     apiChannelSignature:
       type: apiKey
       in: header
       name: X-ClickFix-Signature
-      description: API kanalının imza anahtarıyla hesaplanan `sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + ham_gövde)). `X-ClickFix-Timestamp` (Unix saniye) başlığıyla birlikte gönderilir.
+      description: "`sha256=` + hex(HMAC-SHA256(secret, timestamp + \".\" + raw_body)), computed with the API channel's signing secret and sent together with `X-ClickFix-Timestamp` (Unix seconds)."
+      x-i18n:
+        tr:
+          description: API kanalının imza anahtarıyla hesaplanan `sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + ham_gövde)). `X-ClickFix-Timestamp` (Unix saniye) başlığıyla birlikte gönderilir.
     integrationKey:
       type: http
       scheme: bearer
       bearerFormat: cf_sk_…
-      description: "Organizasyon API anahtarı (`cf_sk_…`). Organizasyon → API ve otomasyonlar → API anahtarları sayfasında oluşturulur; `Authorization: Bearer cf_sk_…` başlığıyla gönderilir."
+      description: "Organization API key (`cf_sk_…`), created under Organization → API and automations → API keys and sent as `Authorization: Bearer cf_sk_…`."
+      x-i18n:
+        tr:
+          description: "Organizasyon API anahtarı (`cf_sk_…`). Organizasyon → API ve otomasyonlar → API anahtarları sayfasında oluşturulur; `Authorization: Bearer cf_sk_…` başlığıyla gönderilir."

@@ -25,19 +25,28 @@ export async function pageMarkdown(page: DocsPage, locale: AppLocale) {
   const data = page.data as {
     title: string;
     description?: string;
-    _openapi?: { structuredData?: { headings?: { content: string }[] } };
+    _openapi?: {
+      method?: string;
+      structuredData?: {
+        headings?: { content: string }[];
+        contents?: { content: string }[];
+      };
+    };
     getText?: (type: "raw" | "processed") => Promise<string>;
   };
   const head = `# ${data.title}\n\n${data.description ?? ""}\n\nURL: ${pageUrl(page)}\n`;
   if (data._openapi) {
-    const ops = (data._openapi.structuredData?.headings ?? [])
-      .map((h) => `- ${h.content}`)
-      .join("\n");
+    const structured =
+      (data as { structuredData?: { contents?: { content: string }[] } })
+        .structuredData ?? data._openapi.structuredData;
+    const text = (structured?.contents ?? [])
+      .map((c) => c.content)
+      .join("\n\n");
     const note =
       locale === "tr"
-        ? "Bu sayfa OpenAPI şemasından üretilen API başvurusudur; istek ve yanıt şemaları ile örnekler HTML sayfasındadır."
-        : "This page is the API reference generated from the OpenAPI schema; request and response schemas and samples are on the HTML page.";
-    return `${head}\n${note}\n\n${ops}\n`;
+        ? "Bu sayfa OpenAPI şemasından üretilen API başvurusudur; istek ve yanıt şemaları, örnekler ve curl/Node.js/Go/PHP istekleri HTML sayfasındadır. Ortak kurallar: https://getclickfix.com/docs/api.md"
+        : "This page is the API reference generated from the OpenAPI schema; request and response schemas, examples and curl/Node.js/Go/PHP requests are on the HTML page. Shared rules: https://getclickfix.com/docs/api.md?lang=en";
+    return `${head}\n${text}\n\n${note}\n`;
   }
   const body = data.getText ? await data.getText("processed") : "";
   return `${head}\n${body.trim()}\n`;

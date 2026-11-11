@@ -46,9 +46,12 @@ if (want('react-native')) {
   log('react-native example: tsc');
   run('pnpm', ['exec', 'tsc', '--noEmit', '-p', '.'], { cwd: dir + 'react-native' });
   if (!checkOnly) {
-    // expo-doctor needs the network (SDK version catalogue); CI runs it, --check does not.
+    // EXPO_OFFLINE: versions are checked against the installed SDK's bundled
+    // module map, not the online catalogue, so an Expo patch released today
+    // (newer than the lockfile, held back by pnpm's release-age policy) does
+    // not turn CI red. --check skips expo-doctor.
     log('react-native example: expo-doctor');
-    run('pnpm', ['exec', 'expo-doctor'], { cwd: dir + 'react-native', env: { ...process.env, CI: '1' } });
+    run('pnpm', ['exec', 'expo-doctor'], { cwd: dir + 'react-native', env: { ...process.env, CI: '1', EXPO_OFFLINE: '1' } });
   }
 }
 if (checkOnly) { log('check ok'); process.exit(0); }

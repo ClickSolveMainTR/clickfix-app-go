@@ -74,33 +74,70 @@ const nextConfig: NextConfig = {
    * standalone server only ships traced files, so include the folder.
    */
   outputFileTracingIncludes: {
-    "/docs": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/docs": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
     "/docs/[[...slug]]": [
       "./content/docs/**/*",
       "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
     ],
-    "/docs/search": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/docs/search": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
     "/features/[slug]": [
       "./content/docs/**/*",
       "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
     ],
-    "/security": ["./content/docs/**/*", "./content/api/public-api.yaml"],
-    "/en/docs": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/security": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
+    "/en/docs": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
     "/en/docs/[[...slug]]": [
       "./content/docs/**/*",
       "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
     ],
-    "/sitemap.xml": ["./content/docs/**/*", "./content/api/public-api.yaml"],
-    "/llms.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
-    "/llms-full.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
-    "/en/llms.txt": ["./content/docs/**/*", "./content/api/public-api.yaml"],
+    "/sitemap.xml": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
+    "/llms.txt": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
+    "/llms-full.txt": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
+    "/en/llms.txt": [
+      "./content/docs/**/*",
+      "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
+    ],
     "/en/llms-full.txt": [
       "./content/docs/**/*",
       "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
     ],
     "/llms.mdx/[locale]/[[...slug]]": [
       "./content/docs/**/*",
       "./content/api/public-api.yaml",
+      "./content/api/public-api.tr.yaml",
     ],
   },
   async rewrites() {
