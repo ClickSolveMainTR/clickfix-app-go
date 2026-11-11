@@ -142,7 +142,8 @@ INSERT INTO ai_policies (organization_id, enabled) VALUES ($1, TRUE)
 ON CONFLICT (organization_id) DO UPDATE SET enabled = TRUE;
 
 -- name: AssistantMessageInterrupted :exec
-UPDATE assistant_messages SET interrupted = TRUE WHERE organization_id = sqlc.arg(organization_id) AND uuid = sqlc.arg(uuid);
+UPDATE assistant_messages SET interrupted = TRUE, error_code = sqlc.arg(error_code)
+WHERE organization_id = sqlc.arg(organization_id) AND uuid = sqlc.arg(uuid);
 
 -- name: AssistantThreadTitle :exec
 UPDATE assistant_threads SET title = sqlc.arg(title) WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id);

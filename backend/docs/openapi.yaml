@@ -60343,6 +60343,9 @@ components:
         interrupted:
           type: boolean
           description: Generation stopped or connection lost; content is a saved partial reply.
+        error_code:
+          type: string
+          description: Set with interrupted when the reply failed (the stream's error code, e.g. ASSISTANT_INTERNAL); empty when the user stopped it or the connection dropped.
         uuid: *id004
         role:
           type: string
@@ -60375,7 +60378,7 @@ components:
     AssistantStreamDelta: {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}
     AssistantStreamUsage: {"type": "object", "required": ["input_tokens", "output_tokens", "provider", "model"], "properties": {"input_tokens": {"type": "integer"}, "output_tokens": {"type": "integer"}, "provider": {"type": "string"}, "model": {"type": "string"}}}
     AssistantStreamDone: {"type": "object", "required": ["reply", "usage"], "properties": {"reply": {"$ref": "#/components/schemas/AssistantMessage"}, "usage": {"$ref": "#/components/schemas/AssistantStreamUsage"}}}
-    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}}}
+    AssistantStreamError: {"type": "object", "required": ["code"], "description": "Terminal stream error. ASSISTANT_AI_UNAVAILABLE - the AI provider or route is unavailable. ASSISTANT_INTERNAL - the reply failed after the model answered (storage, action card, stream); the cause is logged server-side as assistant_stream_failed with the same request_id. ASSISTANT_ACTION_FAILED - the panel API could not be reached as the user.", "properties": {"code": {"type": "string", "enum": ["VALIDATION_ERROR", "ASSISTANT_NOT_FOUND", "ASSISTANT_DISABLED", "ASSISTANT_DAILY_LIMIT", "ASSISTANT_MESSAGE_REJECTED", "ASSISTANT_AI_UNAVAILABLE", "ASSISTANT_ACTION_FAILED", "ASSISTANT_INTERNAL"]}, "request_id": {"type": "string", "description": "Correlation id of the request (the client's X-Request-ID when it sent one)."}}}
     AssistantSendInput:
       type: object
       additionalProperties: false

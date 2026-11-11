@@ -76,6 +76,9 @@ type toolRun struct {
 	threadID    int64
 	// caps are the capabilities offered in this reply, by tool name.
 	caps map[string]*capability.Capability
+	// lookupMark is the streamed text length when the last tool ran; only
+	// text after it counts as the answer for suggest_replies.
+	lookupMark int
 }
 
 func toolJSON(v any) ai.ToolResult {

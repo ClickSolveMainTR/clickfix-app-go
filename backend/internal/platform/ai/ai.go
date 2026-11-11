@@ -28,7 +28,10 @@ type Tool struct {
 	Description      string         `json:"description"`
 	Schema           map[string]any `json:"schema"`
 	RequiresApproval bool           `json:"requires_approval"`
-	EndsTurn         bool           `json:"-"` // A trusted application tool may finish the reply after its validated execution.
+	// EndsTurn: a trusted application tool may finish the reply after its
+	// validated execution. An error result (ToolResult.IsError) never ends
+	// the turn: the model reads the error and continues.
+	EndsTurn bool `json:"-"`
 }
 type ToolCall struct {
 	ID    string          `json:"id"`
@@ -51,6 +54,9 @@ type Request struct {
 	MaxTokens    int64
 	Effort       string
 	CachePrefix  bool
+	// ToolChoice "none" keeps the tools defined (earlier tool_use turns need
+	// them) but forbids new calls; the tool loop sets it for its last turn.
+	ToolChoice string
 }
 type Result struct {
 	CacheReadTokens   int64           `json:"-"`
@@ -58,12 +64,15 @@ type Result struct {
 	StopReason        string          `json:"-"`
 	StopDetails       json.RawMessage `json:"-"`
 	FinalUsage        bool            `json:"-"`
-	Provider          string          `json:"provider"`
-	Text              string          `json:"text"`
-	Model             string          `json:"model"`
-	Calls             []ToolCall      `json:"tool_calls"`
-	InputTokens       int64           `json:"input_tokens"`
-	OutputTokens      int64           `json:"output_tokens"`
+	// Truncated: the answer still hit max_tokens after the loop's automatic
+	// continuations; Text holds everything that was produced.
+	Truncated    bool       `json:"-"`
+	Provider     string     `json:"provider"`
+	Text         string     `json:"text"`
+	Model        string     `json:"model"`
+	Calls        []ToolCall `json:"tool_calls"`
+	InputTokens  int64      `json:"input_tokens"`
+	OutputTokens int64      `json:"output_tokens"`
 }
 
 // Delta is ephemeral provider text; callers must guard accumulated output before rendering it.

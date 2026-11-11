@@ -21,6 +21,7 @@ import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useLocale } from "@/providers/locale-provider";
 import { usePermission } from "@/providers/permission-provider";
 
+import { PendingMessages } from "../lib/queue";
 import {
   AssistantSurfaceContext,
   type AssistantSurface,
@@ -89,16 +90,18 @@ function Provider({ children }: { children: ReactNode }) {
     onDocumentUploaded: refreshDocuments,
     translate: t,
   });
+  const [queue] = useState(() => new PendingMessages());
   const surface = useMemo<AssistantSurface>(
     () => ({
       slug,
       locale,
       compact: false,
       decisions,
+      queue,
       ensureThread,
       refreshDocuments,
     }),
-    [slug, locale, decisions, ensureThread, refreshDocuments],
+    [slug, locale, decisions, queue, ensureThread, refreshDocuments],
   );
 
   const toggle = useCallback(() => setOpen((o) => !o), []);

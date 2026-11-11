@@ -428,6 +428,7 @@ type AssistantMessage struct {
 	Actions        []byte             `json:"actions"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	Interrupted    bool               `json:"interrupted"`
+	ErrorCode      string             `json:"error_code"`
 }
 
 type AssistantSetting struct {
