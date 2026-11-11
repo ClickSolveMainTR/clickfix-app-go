@@ -65,6 +65,17 @@ jobs:
       flutter: ${{ steps.filter.outputs.flutter }}
       full: ${{ steps.filter.outputs.full }}
     steps:
+      # Self-hosted only: a container job that ran as root (php) can leave
+      # root-owned files in a runner's workspace, and every later checkout on
+      # that runner then fails with EACCES. Hand the workspaces of all runners
+      # on this machine back to the runner user before the first checkout.
+      - name: Repair workspace ownership (self-hosted)
+        if: ${{ runner.environment != 'github-hosted' }}
+        run: |
+          command -v docker >/dev/null || { echo "no docker; skipped"; exit 0; }
+          root=$(dirname "$(dirname "$(dirname "$RUNNER_WORKSPACE")")")
+          repo=$(basename "$RUNNER_WORKSPACE")
+          docker run --rm -v "$root:/r" alpine:3 sh -c "for d in /r/*/_work/$repo; do [ -d \"\$d\" ] && chown -R $(id -u):$(id -g) \"\$d\"; done; true"
       - uses: actions/checkout@v7
         with:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
