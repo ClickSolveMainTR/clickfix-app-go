@@ -408,11 +408,7 @@ function UserMessage() {
       <div className="bg-primary text-primary-foreground max-w-[92%] min-w-0 rounded-2xl px-4 py-2.5 text-sm break-words">
         <MessagePrimitive.Parts components={{ Text: UserText }} />
       </div>
-      <ActionBarPrimitive.Root
-        hideWhenRunning
-        autohide="not-last"
-        className="text-muted-foreground flex gap-1"
-      >
+      <ActionBarPrimitive.Root className="text-muted-foreground flex h-7 items-center gap-1">
         <ActionBarPrimitive.Copy asChild>
           <TooltipIconButton tooltip={t("assistant.copy")}>
             <AuiIf condition={(s) => s.message.isCopied}>
@@ -557,11 +553,7 @@ function AssistantMessage() {
           ) : null}
         </div>
       </div>
-      <ActionBarPrimitive.Root
-        hideWhenRunning
-        autohide="not-last"
-        className="text-muted-foreground ml-8 flex gap-1"
-      >
+      <ActionBarPrimitive.Root className="text-muted-foreground ml-8 flex h-7 items-center gap-1">
         <ActionBarPrimitive.Copy asChild>
           <TooltipIconButton tooltip={t("assistant.copy")}>
             <AuiIf condition={(s) => s.message.isCopied}>
