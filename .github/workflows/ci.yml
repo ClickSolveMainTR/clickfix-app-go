@@ -48,7 +48,8 @@ jobs:
   #   backend/**                  -> backend, contracts
   #   backend/migrations/**       -> backend, contracts, infra
   #   mobile/**                   -> mobile
-  #   sdks/php/**, sdks/examples/** -> backend, contracts, php
+  #   sdks/php/**, sdks/examples/** -> backend, contracts, php (sdks/php/** also laravel)
+  #   sdks/laravel/**             -> backend, contracts, laravel
   #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile, php
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
@@ -62,6 +63,7 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
       php: ${{ steps.filter.outputs.php }}
       infra: ${{ steps.filter.outputs.infra }}
+      laravel: ${{ steps.filter.outputs.laravel }}
       flutter: ${{ steps.filter.outputs.flutter }}
       full: ${{ steps.filter.outputs.full }}
     steps:
@@ -87,7 +89,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; php=false; infra=false; flutter=false; full=false
+          mobile=false; php=false; infra=false; laravel=false; flutter=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -115,19 +117,21 @@ jobs:
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
               frontend/*) frontend=true; contracts=true ;;
               mobile/*) mobile=true ;;
-              sdks/php/*|sdks/examples/*) backend=true; contracts=true; php=true ;;
+              sdks/php/*) backend=true; contracts=true; php=true; laravel=true ;;
+              sdks/examples/*) backend=true; contracts=true; php=true ;;
+              sdks/laravel/*) backend=true; contracts=true; laravel=true ;;
               sdks/flutter/*) flutter=true ;;
               backend/*|sdks/*) backend=true; contracts=true ;;
               *) backend=true; frontend=true; contracts=true ;;
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; flutter=true
+            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; laravel=true; flutter=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "php=$php"; echo "infra=$infra"; echo "flutter=$flutter"; echo "full=$full"
+            echo "php=$php"; echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -358,6 +362,76 @@ jobs:
             (cd "$p" && pnpm publish --dry-run --no-git-checks --access public)
           done
           echo "sdks/go version $(cat go/VERSION) -> mirror tag go/v$(cat go/VERSION)"
+
+  # Laravel package (CF-205): the Testbench suite on every supported Laravel x PHP
+  # pair. clickfix/laravel depends on clickfix/sdk through a Composer path
+  # repository (../php), so the checkout is enough; nothing is fetched from
+  # Packagist for the SDK itself.
+  laravel:
+    needs: [changes]
+    if: needs.changes.outputs.laravel == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    name: laravel ${{ matrix.laravel }} php ${{ matrix.php }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { laravel: "10.*", testbench: "8.*", php: "8.1" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.2" }
+          - { laravel: "10.*", testbench: "8.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.2" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.3" }
+          - { laravel: "11.*", testbench: "9.*", php: "8.4" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.2" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.3" }
+          - { laravel: "12.*", testbench: "10.*", php: "8.4" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.3" }
+          - { laravel: "13.*", testbench: "11.*", php: "8.4" }
+    # Runs inside the official PHP image so the matrix does not depend on the self-hosted
+    # machine's PHP or package manager (shivammathur/setup-php hung there in its apt/sudo step).
+    container:
+      image: php:${{ matrix.php }}-cli
+    env:
+      COMPOSER_NO_INTERACTION: "1"
+      COMPOSER_ALLOW_SUPERUSER: "1"
+    steps:
+      # Repair up front too: a root-owned leftover from an earlier container job on this
+      # runner slot would otherwise make actions/checkout fail with EACCES (same pattern as
+      # the php job of CF-204).
+      - name: Workspace ownership (before checkout)
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE" 2>/dev/null || true
+      - uses: actions/checkout@v7
+      - name: Install git, unzip and Composer
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends git unzip ca-certificates >/dev/null
+          php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');"
+          php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+          php -v | head -1; composer --version
+      - name: Validate composer.json
+        working-directory: sdks/laravel
+        run: composer validate --strict --no-check-lock
+      - name: Install Laravel ${{ matrix.laravel }} with Testbench ${{ matrix.testbench }}
+        working-directory: sdks/laravel
+        run: |
+          # Composer >= 2.11 refuses to install releases with security advisories by default;
+          # Laravel 10 (EOL) and 11 have some, and the matrix must still prove the package on them.
+          # Which framework version an application runs is the application's choice, not this job's.
+          flag=""; composer update --help | grep -q -- --no-security-blocking && flag=--no-security-blocking
+          composer update --prefer-dist --no-progress $flag \
+            --with="laravel/framework:${{ matrix.laravel }}" \
+            --with="orchestra/testbench:${{ matrix.testbench }}"
+          for p in laravel/framework orchestra/testbench phpunit/phpunit clickfix/sdk; do
+            composer show "$p" | grep -E '^(name|versions)'
+          done
+      - name: Tests
+        working-directory: sdks/laravel
+        run: vendor/bin/phpunit --no-coverage
+      # The container runs as root on the runner's bind-mounted workspace. Hand every file back
+      # to the runner user (owner of the workspace's parent directory), otherwise the next job on
+      # this runner slot fails in actions/checkout with EACCES while cleaning the workspace.
+      - name: Return workspace ownership to the runner user
+        if: always()
+        run: chown -R "$(stat -c '%u:%g' "$GITHUB_WORKSPACE/..")" "$GITHUB_WORKSPACE"
 
   # PHP SDK (CF-204): sdks/php (clickfix/sdk) on every supported PHP version:
   # composer validate and package name, php-cs-fixer, PHPStan level 8, PHPUnit,
@@ -646,7 +720,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, flutter]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, laravel, flutter]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green
