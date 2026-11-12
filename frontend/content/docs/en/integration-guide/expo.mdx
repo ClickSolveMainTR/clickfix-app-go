@@ -1,0 +1,124 @@
+---
+title: "Expo"
+description: "@getclickfix/expo: ClickFix support in an Expo app with expo-secure-store, expo-file-system, expo-linking and expo-constants wired in; Expo Go, user_hash, the webview bridge and common questions."
+---
+
+`@getclickfix/expo` is [`@getclickfix/react-native`](/docs/integration-guide/react-native?lang=en) for Expo (SDK 54+, built against 58). It re-exports the whole package (provider, hooks, screens, bridge helpers) and adds the Expo adapters: the visitor token in `expo-secure-store`, attachments through `expo-file-system`, deep links with `expo-linking` and the package name from `expo-constants`.
+
+<include>../../../generated/packages-mobile.en.mdx</include>
+
+## Install [#install]
+
+```sh
+npx expo install @getclickfix/expo expo-secure-store expo-file-system expo-linking expo-constants
+```
+
+Add the `expo-secure-store` config plugin to `app.json` and set a `scheme` for deep links:
+
+```json
+{
+  "expo": {
+    "scheme": "myshop",
+    "ios": { "bundleIdentifier": "com.example.shop" },
+    "android": { "package": "com.example.shop" },
+    "plugins": ["expo-secure-store"]
+  }
+}
+```
+
+In the panel open **Web widget → Advanced → Mobile apps** and create an **app key** for `com.example.shop` (one per platform when the ids differ).
+
+## Minimal example [#minimal]
+
+```tsx
+import { useState } from "react";
+import {
+  ClickFixExpoProvider,
+  pickAttachment,
+  useExpoDeepLinkConversation,
+} from "@getclickfix/expo";
+import {
+  ChatScreen,
+  ConversationListScreen,
+} from "@getclickfix/react-native/ui";
+
+export default function App() {
+  return (
+    <ClickFixExpoProvider
+      appKey={process.env.EXPO_PUBLIC_CLICKFIX_APP_KEY!} // Web widget → Advanced → Mobile apps
+      widgetId={process.env.EXPO_PUBLIC_CLICKFIX_WIDGET_ID!}
+      baseUrl="https://getclickfix.com" // the ClickFix app; /api is added
+      getUserHash={(userId, companyId) => api.supportSession(userId, companyId)} // your server
+    >
+      <Support />
+    </ClickFixExpoProvider>
+  );
+}
+
+function Support() {
+  const link = useExpoDeepLinkConversation(); // myshop://conversation/<uuid>
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
+  const conversation = link.conversation ?? open;
+  if (conversation === undefined)
+    return (
+      <ConversationListScreen
+        onOpen={(c) => setOpen(c.uuid)}
+        onNew={() => setOpen(null)}
+      />
+    );
+  return (
+    <ChatScreen
+      conversation={conversation}
+      onCreated={setOpen}
+      pickFile={() =>
+        pickAttachment({
+          mimeTypes: ["image/*", "application/pdf"],
+          maxBytes: 10 * 1024 * 1024,
+        })
+      }
+    />
+  );
+}
+```
+
+The package name the app key is bound to comes from `app.json` (`ios.bundleIdentifier` / `android.package`); the token is kept in SecureStore between launches. Identify the signed-in user with `useVisitor().identify({ userId, company: { id } })` exactly as on the [React Native page](/docs/integration-guide/react-native?lang=en#minimal).
+
+`EXPO_PUBLIC_*` values are compiled into the bundle, which is fine for the app key and the widget id. Never put the identity secret or an API key there.
+
+## Expo Go and development builds [#expo-go]
+
+Everything in the package works in **Expo Go**: SecureStore, the file picker, linking, constants, realtime and the screens. The one difference is the package name: inside Expo Go the running bundle id is Expo Go's, so `appPackageName()` returns null and the provider needs an explicit name. Create a **development app key** for a name of your choice (for example `com.example.shop.dev`) and pass `packageName="com.example.shop.dev"` while `isExpoGo()` is true; development builds (`npx expo run:ios`, `eas build`) and store builds use the key of the real bundle id.
+
+```tsx
+<ClickFixExpoProvider
+  packageName={isExpoGo() ? "com.example.shop.dev" : undefined} /* … */
+/>
+```
+
+## Identity: `user_hash` [#identity]
+
+`user_hash` is computed **on your server** with the widget's identity secret: `hex(HMAC-SHA256(identity_secret, user_id))`, or with a company `hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))` sent with `company: { id }` (the visitor then reports `company_verified: true`). `getUserHash` asks your server for it; `@getclickfix/node` (`identityHash`), Go, PHP and Laravel all produce the same bytes. On logout call `useVisitor().reset()`; it also clears the SecureStore token. More: [Identity verification](/docs/integration-guide/identity?lang=en).
+
+## Webview bridge [#webview-bridge]
+
+To show the hosted widget instead of the native screens, install `react-native-webview` (`npx expo install react-native-webview`) and use the bridge helpers that `@getclickfix/expo` re-exports (`commandScript`, `parseMessage`, `isSafeLink`); hand the provider's session to the page after `clickfix:ready` with `{ type: "clickfix:session", token: client.getToken() }`. The component is the same as on the [React Native page](/docs/integration-guide/react-native?lang=en#webview-bridge), and the full contract is in [Mobile](/docs/integration-guide/mobile?lang=en#bridge-contract). `react-native-webview` is part of Expo Go, so this works without a development build too.
+
+## Deep links [#deep-links]
+
+`conversationURL(uuid)` builds `myshop://conversation/<uuid>` from your `scheme` (or `exp://…/--/conversation/<uuid>` in Expo Go) for push payloads and e-mails; `useExpoDeepLinkConversation()` follows `expo-linking` and returns the conversation id, `clear()` after navigating.
+
+## Example app [#example]
+
+[`clickfix-examples/expo`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo) is a complete Expo app (simulated sign-in, `user_hash` server, identify with a company, the screens, deep links); its CI type-checks it and exports the Android bundle.
+
+## Common questions [#faq]
+
+**Which Expo SDK?** 54 to 58 (the package is built against 58 and uses the `File` API of `expo-file-system`, available since 54).
+
+**`identify` fails only in Expo Go.** The provider sent Expo Go's package name or none: pass `packageName` with a development key, see [Expo Go](#expo-go).
+
+**Can I use the bare package instead?** Yes, `@getclickfix/react-native` works in Expo too; you then pass `packageName` and a `storage` yourself. `@getclickfix/expo` only saves that wiring.
+
+**Does this need native code or a config plugin of its own?** No. Only the standard Expo modules listed above; `expo-secure-store` brings its own plugin.
+
+**Where do the base URL and keys come from?** `baseUrl` is the ClickFix app origin (`https://getclickfix.com`, not `api.getclickfix.com`); the app key and widget id come from the panel; the identity secret and API keys stay on your server.

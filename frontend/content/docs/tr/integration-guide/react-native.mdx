@@ -1,0 +1,161 @@
+---
+title: "React Native"
+description: "@getclickfix/react-native: bare React Native uygulamasında yerel destek ekranları ve hook'lar, mobil uygulama anahtarı, sunucudan user_hash, webview köprüsü ve sık sorulanlar."
+---
+
+`@getclickfix/react-native`, ClickFix desteğini bare React Native uygulamasına (0.81+, Hermes, New Architecture) getirir: bir provider, web widget'ın yaptığı her şey için hook'lar (kimlik, konuşmalar, mesajlar, dosyalar, yazıyor, okundu bilgisi, gerçek zamanlı, yardım araması, puanlama) ve isteğe bağlı, temalanabilir ekranlar. Widget API'sini **mobil uygulama anahtarıyla** yerel olarak çağırır; webview gerekmez. Expo kullanıyorsanız [Expo sayfasına](/docs/integration-guide/expo) bakın: `@getclickfix/expo` bu paketin Expo modülleri bağlanmış halidir.
+
+<include>../../../generated/packages-mobile.tr.mdx</include>
+
+## Kurulum [#install]
+
+```sh
+npm install @getclickfix/react-native
+# isteğe bağlı: ziyaretçi belirtecini Keychain / Keystore'da tutmak için
+npm install react-native-keychain && npx pod-install
+```
+
+Peer bağımlılıklar yalnız `react` ve `react-native`'dir. Paket Hermes için derlenmiş ESM'dir ve DOM'a hiç dokunmaz.
+
+Panelde **Web widget → Gelişmiş → Mobil uygulamalar** bölümünü açın ve her platform için bundle id (iOS) ya da application id (Android) ile bir **uygulama anahtarı** oluşturun. Anahtar bu paket adına bağlı, herkese açık bir tanımlayıcıdır: API onu yalnız yerel koddan kabul eder (`Origin` taşıyan istek reddedilir), bu yüzden uygulamaya koymak güvenlidir. Bir kez gösterilir, iptal edilebilir.
+
+## En küçük örnek [#minimal]
+
+```tsx
+import { useEffect, useState } from "react";
+import {
+  ClickFixProvider,
+  keychainStorage,
+  useVisitor,
+} from "@getclickfix/react-native";
+import {
+  ConversationListScreen,
+  ChatScreen,
+  ClickFixThemeProvider,
+  labelsTr,
+} from "@getclickfix/react-native/ui";
+import * as Keychain from "react-native-keychain";
+
+export default function App() {
+  return (
+    <ClickFixProvider
+      appKey="cf_app_…" // Web widget → Gelişmiş → Mobil uygulamalar
+      packageName="com.example.shop" // anahtara kayıtlı paket adı
+      widgetId="WIDGET_ID"
+      baseUrl="https://getclickfix.com" // ClickFix uygulaması; /api eklenir
+      storage={keychainStorage(Keychain)} // varsayılan: bellek
+      getUserHash={(userId, companyId) => api.supportSession(userId, companyId)} // sizin sunucunuz
+      language="tr"
+    >
+      <ClickFixThemeProvider labels={labelsTr}>
+        <Support />
+      </ClickFixThemeProvider>
+    </ClickFixProvider>
+  );
+}
+
+function Support() {
+  const user = useSignedInUser(); // uygulamanızın oturumu
+  const visitor = useVisitor();
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (user)
+      void visitor.identify({
+        userId: user.id,
+        name: user.name,
+        company: { id: user.companyId },
+      });
+  }, [user?.id]);
+  if (open === undefined)
+    return (
+      <ConversationListScreen
+        onOpen={(c) => setOpen(c.uuid)}
+        onNew={() => setOpen(null)}
+      />
+    );
+  return <ChatScreen conversation={open} onCreated={setOpen} />;
+}
+```
+
+Provider açılışta ziyaretçiyi başlatır, belirteci `storage`'dan geri yükler, süresi dolan belirteci kendiliğinden yeniler ve gerçek zamanlı kanalı React Native'in `WebSocket`'i ile izler (soket yokken anket yapar, uygulama ön plana dönünce yeniler). Hazır ekranlar yerine kendi ekranlarınızda hook'ları kullanabilirsiniz: `useConversations()` (`items`, `create`), `useConversation(uuid)` (`messages`, `send(metin, dosya)`, `loadMore`, `setTyping`, `markRead`, `agentTyping`), `useHelpSearch(sorgu)` ve `useRating(uuid)`. Ekranlar `ClickFixThemeProvider`, `lightTheme` / `darkTheme` ve `labelsEn` / `labelsTr` ile temalanır.
+
+**Hangi adres:** `baseUrl`, `widget.js`'i sunan ClickFix **uygulamasının** kökenidir (`https://getclickfix.com`; kendi kurulumunuzda kendi adresiniz). `https://api.getclickfix.com` API anahtarlı sunucu API'sidir; ziyaretçi uçlarını sunmaz ve API anahtarı asla uygulamaya konmaz.
+
+## Kimlik: `user_hash` [#identity]
+
+`identify`, ziyaretçiyi uygulamanıza giriş yapmış kullanıcıya bağlar ve `user_hash` ile doğrulanır; bu değeri widget'ın kimlik anahtarıyla (Web widget → Güvenlik → Kimlik doğrulama) **yalnız sizin sunucunuz** hesaplar:
+
+- yalnız kullanıcı: `hex(HMAC-SHA256(kimlik_anahtarı, user_id))`
+- firmayla: `hex(HMAC-SHA256(kimlik_anahtarı, user_id + "\n" + company_id))`, `company: { id: company_id }` ile birlikte gönderilir; ziyaretçi bu durumda `company_verified: true` döner.
+
+Provider'daki `getUserHash(userId, companyId)` değeri sunucunuzdan ister (örneğin giriş yapmış kullanıcıyı [`@getclickfix/node`](/docs/integration-guide/sdks#node) `identityHash`, Go, PHP ya da Laravel ile imzalayan bir `GET /support-session` ucu); böylece `identify({ userId })` hash vermeden çağrılabilir. Anahtar uygulamaya hiç inmez. Çıkışta `visitor.reset()` çağırın: sonraki ziyaretçi yabancıdır. Ayrıntılar ve diğer diller: [Kimlik doğrulama](/docs/integration-guide/identity).
+
+## Webview köprüsü [#webview-bridge]
+
+Yerel ekranlar ve barındırılan widget sayfası aynı konuşmaları göstermenin iki yoludur. Hazır widget arayüzünü tercih ederseniz `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` sayfasını `react-native-webview` içinde açın ve [köprü sözleşmesiyle](/docs/integration-guide/mobile#bridge-contract) konuşun. Paket `@getclickfix/visitor-core`'un köprü yardımcılarını yeniden dışa aktarır; provider'ın oturumu webview'e devredilebilir, ziyaretçi aynı kalır:
+
+```tsx
+import { useRef } from "react";
+import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
+import {
+  commandScript,
+  isSafeLink,
+  parseMessage,
+  useClickFix,
+} from "@getclickfix/react-native";
+
+export function SupportWebView({
+  onUnread,
+}: {
+  onUnread: (count: number) => void;
+}) {
+  const ref = useRef<WebView>(null);
+  const { client } = useClickFix();
+  return (
+    <WebView
+      ref={ref}
+      source={{
+        uri: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=tr",
+      }}
+      originWhitelist={["https://getclickfix.com"]}
+      onMessage={(e) => {
+        const m = parseMessage(e.nativeEvent.data); // widget mesajı olmayan her şey için null
+        if (m?.type === "clickfix:ready")
+          ref.current?.injectJavaScript(
+            commandScript({
+              type: "clickfix:session",
+              token: client.getToken(),
+            }),
+          );
+        if (m?.type === "clickfix:event" && m.event === "unread")
+          onUnread(m.payload.count); // tipli payload
+        if (m?.type === "clickfix:link" && isSafeLink(m.url))
+          void Linking.openURL(m.url); // yalnız https
+      }}
+    />
+  );
+}
+```
+
+Uygulama anahtarı yerel HTTP başlıklarında kalır, sayfaya hiç ulaşmaz. Yerel provider olmadan çalışacaksanız oturum devri yerine `clickfix:ready`'den sonra sunucunuzdan alınan `user_hash` ile `clickfix:identify` gönderin; bu türden eksiksiz bir uygulama [`clickfix-examples/expo-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo-webview) klasöründedir.
+
+## Derin bağlantı [#deep-links]
+
+`parseConversationLink(url)`, `?conversation=<id>`, `/conversation/<id>` ve `/conversations/<id>` biçimlerini okur; `useDeepLinkConversation()` açılış adresinin ya da uygulama çalışırken gelen adresin konuşmasını döner (gittikten sonra `clear()` çağırın). Bildirim ve e-postalara `myapp://conversation/<uuid>` koyun.
+
+## Örnek uygulama [#example]
+
+[`clickfix-examples/react-native`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native) provider, ekranlar, küçük bir `user_hash` sunucusu ve derin bağlantıyla eksiksiz bir bare React Native uygulamasıdır; CI'ı tipleri denetler ve JavaScript paketini üretir.
+
+## Sık sorulanlar [#faq]
+
+**Uygulama anahtarı gizli mi?** Hayır. Uygulamanızı tanımlar ve paket adına bağlıdır; istek bir sayfa kökeni taşıyorsa API onu reddeder. Uygulamayı değiştirirseniz panelden iptal edin. Kimlik anahtarınız ve API anahtarlarınız gizlidir ve sunucunuzda kalır.
+
+**`identify` neden `WIDGET_IDENTITY_INVALID` ile reddediliyor?** Hash, API'nin hesapladığıyla eşleşmiyor: sunucunun uygulamanın gönderdiği `user_id` metnini aynen imzaladığını, `company.id` gönderiyorsanız hash'in `"\n" + company_id` içerdiğini kontrol edin. Geçerli hash gelene kadar ziyaretçi anonim kalır.
+
+**Ziyaretçi belirteci nerede saklanır?** `storage`'da: varsayılan bellek (her açılışta yeni ziyaretçi), Keychain / Keystore için `keychainStorage(Keychain)` ya da herhangi bir `SecureStorage` (`get`, `set`, `remove`). Çıkışta `visitor.reset()` ile temizleyin.
+
+**Gerçek zamanlı olmadan çalışır mı?** Evet. Soket kapalıyken ya da widget'ta gerçek zamanlı kapalıysa hook'lar açık konuşmayı anketle yeniler, listeleri ön plana dönüşte tazeler.
+
+**Yerel ekranlar mı, webview mi?** Yerel ekranlar uygulamanızın gezintisine ve temasına uyar; webview ek arayüz işi olmadan barındırılan widget'ın tamamını (yardım merkezi, tetikleyiciler, formlar) gösterir. İkisi de aynı ziyaretçiyi ve konuşmaları kullanır.
