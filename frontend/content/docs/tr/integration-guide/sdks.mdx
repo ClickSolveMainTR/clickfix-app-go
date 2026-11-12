@@ -1,9 +1,9 @@
 ---
 title: SDK'lar
-description: "Node.js, visitor-core, React, Go, PHP, Laravel ve Flutter paketleri: kurulum, en küçük örnek, örnek uygulama; istemci oluşturma, sayfalama, webhook imzası ve SDK'sız istekler."
+description: "Node.js, visitor-core, React, React Native, Expo, Go, PHP, Laravel ve Flutter paketleri: kurulum, en küçük örnek, örnek uygulama; istemci oluşturma, sayfalama, webhook imzası ve SDK'sız istekler."
 ---
 
-ClickFix'in Node.js, Go ve PHP için sunucu SDK'ları; React Native, Node ve tarayıcı için DOM'suz bir ziyaretçi istemcisi (`@getclickfix/visitor-core`); React için arayüzsüz widget hook'ları; Laravel için tam paket ve Flutter için webview paketi vardır. Sunucu SDK'ları kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama, `user_hash` ve webhook imza doğrulaması sağlar. Hepsi MIT lisanslıdır; kaynak herkese açık [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) ve [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) depolarındadır; her paketin çalışan bir örnek uygulaması [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposundadır. Tüm paketler [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR) altında yayımlanır.
+ClickFix'in Node.js, Go ve PHP için sunucu SDK'ları; React Native, Node ve tarayıcı için DOM'suz bir ziyaretçi istemcisi (`@getclickfix/visitor-core`); React için arayüzsüz widget hook'ları; [React Native](/docs/integration-guide/react-native) ve [Expo](/docs/integration-guide/expo) için yerel destek ekranları ve hook'lar; Laravel için tam paket ve Flutter için webview paketi vardır. Sunucu SDK'ları kimlik doğrulama, sınırlı tekrar deneme (`Retry-After` dahil), sayfalama, `user_hash` ve webhook imza doğrulaması sağlar. Hepsi MIT lisanslıdır; kaynak herkese açık [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) ve [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) depolarındadır; her paketin çalışan bir örnek uygulaması [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposundadır. Tüm paketler [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR) altında yayımlanır.
 
 <include>../../../generated/packages.tr.mdx</include>
 
@@ -51,7 +51,7 @@ GET istekleri ve `idempotencyKey` verilen yazmalar en fazla üç kez denenir (ü
 
 ## Ziyaretçi istemcisi: `@getclickfix/visitor-core` [#visitor-core]
 
-Widget uçlarını (`/v1/widget/{public_id}/*`) DOM olmadan çağıran istemci: tarayıcıda aynı kökenli vekil üzerinden (`mode: "browser"`), mobil uygulamada [uygulama anahtarıyla](/docs/integration-guide/mobile#mobile-session) (`mode: "app"`). Tekrar deneme, oturum yenileme, gerçek zamanlı soyutlama ve [webview köprüsü](/docs/integration-guide/mobile#bridge-contract) tiplerini (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`) içerir. Örnek uygulama: [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
+Widget uçlarını (`/v1/widget/{public_id}/*`) DOM olmadan çağıran istemci: tarayıcıda sayfa kökeniyle (`mode: "browser"`; aynı kökenli vekil arkasında `/api`, kendi alan adınızdan mutlak `https://getclickfix.com/api`), mobil uygulamada [uygulama anahtarıyla](/docs/integration-guide/mobile#mobile-session) (`mode: "app"`). Tekrar deneme, oturum yenileme, gerçek zamanlı soyutlama ve [webview köprüsü](/docs/integration-guide/mobile#bridge-contract) tiplerini (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`; `clickfix:event` payload'ları olaya göre tiplidir) içerir. `baseURL` her zaman ClickFix uygulamasının kökeni artı `/api`'dir (`widget-embed.html`'i sunan köken); `api.getclickfix.com` API anahtarlı sunucu API'sidir, ziyaretçi uçlarını sunmaz. Örnek uygulama: [`clickfix-examples/expo-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo-webview).
 
 ```sh
 npm install @getclickfix/visitor-core
@@ -126,7 +126,7 @@ export function Support() {
   const [client] = useState(() =>
     createWidgetClient({
       publicId: "WIDGET_ID",
-      baseURL: "/api", // kendi sitenizdeki aynı kökenli vekil
+      appOrigin: "https://getclickfix.com", // sitenizi widget'ın izinli alan adlarına ekleyin
       onToken: (token) => sessionStorage.setItem("support-token", token),
     }),
   );
@@ -159,7 +159,11 @@ await client.sendMessage(
 await client.markRead(conversationUUID);
 ```
 
-`user_hash` sunucunuzda üretilir; kimlik anahtarını tarayıcıya göndermeyin. Widget komutları ve olayları: [Web widget](/docs/web-widget#javascript-api).
+`appOrigin` widget API'sini kökenler arası çağırır (CORS, çerez hiç gönderilmez); widget API'sinin aynı kökenli bir vekili varsa onun yerine `baseURL: "/api"` verin. Hook'lar sunucuda da render edilir (Next.js SSR ve ön render): render sırasında `window`'a dokunmazlar. `user_hash` sunucunuzda üretilir; kimlik anahtarını tarayıcıya göndermeyin. Widget komutları ve olayları: [Web widget](/docs/web-widget#javascript-api).
+
+## React Native ve Expo [#react-native]
+
+`@getclickfix/react-native` (bare React Native 0.81+) ve `@getclickfix/expo` (Expo SDK 54+), konuşmaları uygulamaya `visitor-core` üzerinde app modunda (mobil uygulama anahtarı) yerel ekranlar ve hook'lar olarak getirir; `user_hash` sunucunuzdan gelir. İkisi de hazır widget'ı barındırmak için webview köprüsü yardımcılarını yeniden dışa aktarır. Kılavuzlar: [React Native](/docs/integration-guide/react-native), [Expo](/docs/integration-guide/expo). Örnek uygulamalar: [`clickfix-examples/react-native`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native), [`clickfix-examples/expo`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo).
 
 ## Go: `github.com/ClickSolveMainTR/clickfix-sdks/go` [#go]
 

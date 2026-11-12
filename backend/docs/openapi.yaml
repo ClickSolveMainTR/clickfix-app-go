@@ -26380,6 +26380,8 @@ paths:
                 - $ref: "#/components/schemas/ContactInput"
                 - type: object
                   required: [external_id]
+                  properties:
+                    external_id: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
           description: Updated
@@ -37168,6 +37170,8 @@ paths:
                 - $ref: "#/components/schemas/ContactInput"
                 - type: object
                   required: [external_id]
+                  properties:
+                    external_id: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
           description: Updated

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/contacts"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mcpauth/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/sla"
@@ -20,12 +21,22 @@ import (
 func TestToolsFollowLivePermissionsAndScopes(t *testing.T) {
 	c := testCatalog()
 	p := Principal{Layer: model.LayerBusiness, Scope: &orgctx.Scope{Permissions: []string{rbac.PermTenantConversationsRead, rbac.PermTenantConversationsReply}}}
-	if len(c.Available(p)) != 2 {
-		t.Fatal("read-only grant leaked write tools")
+	names := func() []string {
+		out := []string{}
+		for _, tool := range c.Available(p) {
+			if tool.Write && !p.CanWrite {
+				t.Fatalf("read-only grant leaked write tool %s", tool.Name)
+			}
+			out = append(out, tool.Name)
+		}
+		return out
+	}
+	if got := names(); !slices.Contains(got, "search_conversations") || slices.Contains(got, "reply") || slices.Contains(got, "list_contacts") {
+		t.Fatalf("read-only grant: %v", got)
 	}
 	p.CanWrite = true
-	if len(c.Available(p)) != 3 {
-		t.Fatal("reply permission absent")
+	if got := names(); !slices.Contains(got, "reply") || slices.Contains(got, "set_status") {
+		t.Fatalf("reply permission: %v", got)
 	}
 	p.Scope.Permissions = nil
 	if len(c.Available(p)) != 0 {
@@ -52,7 +63,7 @@ func TestCatalogRejectsUnknownOrMalformedArguments(t *testing.T) {
 
 // testCatalog is the production catalog: the inbox capabilities.
 func testCatalog() *Catalog {
-	return NewCatalog(capability.NewRegistry().Register(conversations.Capabilities()...))
+	return NewCatalog(capability.NewRegistry().Register(conversations.Capabilities()...).Register(contacts.Capabilities()...))
 }
 
 // The catalog is the capability registry's MCP surface: same tool names
@@ -63,16 +74,18 @@ func TestCatalogComesFromTheRegistry(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	want := []string{"search_conversations", "get_conversation", "reply", "assign_conversation", "set_status", "list_contacts"}
-	if !slices.Equal(names, want) {
-		t.Fatalf("tools %v", names)
+	for _, w := range want {
+		if !slices.Contains(names, w) {
+			t.Fatalf("CF-173 tool %s missing from %v", w, names)
+		}
 	}
-	reg := capability.NewRegistry().Register(conversations.Capabilities()...).Register(&capability.Capability{
+	reg := capability.NewRegistry().Register(conversations.Capabilities()...).Register(contacts.Capabilities()...).Register(&capability.Capability{
 		Name: "assistant.only", Kind: capability.Read, Description: "web only",
 		Run: func(context.Context, capability.Exec, capability.Params) (capability.Result, error) {
 			return capability.Result{}, nil
 		},
 	})
-	if len(NewCatalog(reg).tools) != len(want) {
+	if len(NewCatalog(reg).tools) != len(names) {
 		t.Fatal("a web capability reached MCP")
 	}
 }
@@ -118,7 +131,7 @@ func TestToolsCallTheSameRoutes(t *testing.T) {
 		"GET /v1/tenant/conversations?limit=5&q=iade null",
 		`POST /v1/tenant/conversations/` + id + `/messages {"client_id":"` + id + `","content":"Merhaba"}`,
 		`PATCH /v1/tenant/conversations/` + id + ` {"status":"resolved"}`,
-		"GET /v1/tenant/integration-contacts?offset=10 null",
+		"GET /v1/tenant/contacts?offset=10 null",
 	}
 	if !slices.Equal(api.calls, want) {
 		t.Fatalf("calls\n%v\nwant\n%v", api.calls, want)

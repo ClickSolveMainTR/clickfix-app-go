@@ -18,9 +18,15 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/capability"
 )
 
-// maxCapabilityTools caps the capabilities offered to the model in one
-// reply; the page's own come first (docs/design/asistan-yetenekleri.md).
-const maxCapabilityTools = 24
+// maxCapabilityTools caps the capabilities loaded as tools in one reply
+// (CF-211: was every capability up to 24). The page's own and those the
+// user's words point at are loaded; the rest stay reachable through
+// find_tools / use_tool, so a turn never carries the whole registry.
+const maxCapabilityTools = 14
+
+// alwaysLoaded are loaded on every page (navigation is the fallback of
+// every answer).
+var alwaysLoaded = []string{"navigation.open_route"}
 
 // APIFactory gives a capability the panel's /v1 routes as the user.
 type APIFactory func(user, org uuid.UUID) capability.API
@@ -32,31 +38,42 @@ type ConfirmResult struct {
 	SecretOnce map[string]string `json:"secret_once,omitempty"`
 }
 
-// offered are the capabilities of this caller on this page.
-func (s *Service) offered(c Caller, pc Context) []*capability.Capability {
-	return s.Caps.Available(capability.Filter{Surface: pc.Surface, Route: pc.Route, Has: c.Scope.Has, Max: maxCapabilityTools})
+// offered are the capabilities of this caller on this page: the loaded
+// tools of this turn and the others find_tools can reach. intent is the
+// user's recent words.
+func (s *Service) offered(c Caller, pc Context, intent string) capability.Selection {
+	f := capability.Filter{Surface: pc.Surface, Route: pc.Route, Has: c.Scope.Has, Max: maxCapabilityTools}
+	return s.Caps.Select(f, capability.IntentModules(intent), alwaysLoaded...)
 }
 
 func proposalSchema(cp *capability.Capability) map[string]any {
 	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"params"},
 		"properties": map[string]any{
-			"summary": map[string]any{"type": "string", "description": "One sentence: what will change, in the user's language."},
+			"summary": map[string]any{"type": "string", "description": "What changes, one sentence, user's language."},
 			"params":  cp.ToolSchema(),
 		}}
+}
+
+// toolDescription is the short model description: the PROPOSES rule is
+// explained once in the instructions instead of in every tool (CF-211).
+func toolDescription(cp *capability.Capability) string {
+	switch cp.Kind {
+	case capability.Write:
+		return "PROPOSES: " + cp.Description
+	case capability.Destructive:
+		return "PROPOSES (destructive, say what is lost): " + cp.Description
+	}
+	return cp.Description
 }
 
 func capabilityTools(caps []*capability.Capability) []ai.Tool {
 	out := make([]ai.Tool, 0, len(caps))
 	for _, cp := range caps {
+		schema := cp.ToolSchema()
 		if cp.Writes() {
-			desc := "PROPOSES (does not run): " + cp.Description + " Shown to the user as a confirmation card; nothing changes until they confirm."
-			if cp.Kind == capability.Destructive {
-				desc += " Destructive: say clearly what is lost."
-			}
-			out = append(out, ai.Tool{Name: cp.ToolName(), Description: desc, Schema: proposalSchema(cp)})
-			continue
+			schema = proposalSchema(cp)
 		}
-		out = append(out, ai.Tool{Name: cp.ToolName(), Description: cp.Description, Schema: cp.ToolSchema()})
+		out = append(out, ai.Tool{Name: cp.ToolName(), Description: toolDescription(cp), Schema: schema})
 	}
 	return out
 }
@@ -116,11 +133,13 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 		if err := cp.Check(p); err != nil {
 			return toolError(err.Error())
 		}
+		start := time.Now()
 		res, err := cp.Run(ctx, r.svc.exec(ctx, r.caller, r.thread, cp, true), p)
+		r.recordRead(ctx, cp, p, start, err != nil)
 		if err != nil {
 			return toolError(safeError(err))
 		}
-		return compactResult(res)
+		return compactResult(res, cp.FullText)
 	}
 	if len(r.actions) >= maxActions {
 		return toolError("too many proposals in one reply")
@@ -152,11 +171,26 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 	return toolJSON(map[string]any{"status": "proposed", "id": a.ID, "note": "Shown to the user as a confirmation card; wait for their decision. Never say it is done."})
 }
 
-// compactResult fits a read result in one tool result.
-func compactResult(res capability.Result) ai.ToolResult {
+// compactResult fits a read result in one tool result: empty values and
+// noisy keys are dropped, long text clipped and long lists cut to their
+// first items with a note on how to page (CF-211); before, a result over
+// the limit was replaced by "too large".
+func compactResult(res capability.Result, full bool) ai.ToolResult {
 	out := map[string]any{"summary": res.Summary}
 	if res.Data != nil {
-		out["data"] = res.Data
+		budget := maxToolResultBytes - len(res.Summary) - 64
+		compact := capability.Compact
+		if full {
+			compact = capability.CompactFull
+		}
+		if c, ok := compact(res.Data, budget); ok {
+			out["data"] = c.Data
+			if c.Note != "" {
+				out["note"] = c.Note
+			}
+		} else {
+			out["note"] = "The result is too large; ask a narrower question (filters, limit)."
+		}
 	}
 	raw, _ := json.Marshal(out)
 	if len(raw) > maxToolResultBytes {

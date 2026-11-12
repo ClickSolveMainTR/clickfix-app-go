@@ -339,6 +339,8 @@ jobs:
       - name: Generated SDKs and backend/docs/public-api.yaml are current
         working-directory: sdks
         run: pnpm check
+      # pnpm check also runs scripts/public-text.mjs: no internal tracker
+      # references in what the mirrors and the docs publish (CF-212).
       # pnpm test: build, type tests, Node test runner, then the React Native
       # and Expo hooks/screens under jest (react-native preset, fake widget API; CF-202).
       - name: TypeScript and widget SDK tests
@@ -349,12 +351,25 @@ jobs:
         run: go test -p 2 ./...
       # Integration guide samples (CF-199): the code embedded in the guide
       # pages is this code, type-checked, compiled and run against the stub API.
-      # The Expo example (CF-202) is type-checked and passes expo-doctor (offline, against the installed SDK).
+      # The runnable example apps (Expo, React Native, ...) live and run in
+      # ClickSolveMainTR/clickfix-examples (CF-212).
       - name: Guide examples are embedded and run
         working-directory: sdks
         run: |
-          pnpm examples:check
-          pnpm examples
+          node examples/run.mjs --check
+          node examples/sync-docs.mjs --check
+          node examples/run.mjs
+      # The public mirror ships sdks/ without examples/ (sdks-mirror): that tree must install from
+      # its own lockfile and pass its tests (contract tests that read frontend/ skip there).
+      - name: SDK mirror tree installs and tests on its own
+        run: |
+          m=$(mktemp -d); trap 'rm -rf "$m"' EXIT
+          git ls-files sdks | grep -v '^sdks/examples/' | while IFS= read -r f; do
+            mkdir -p "$m/$(dirname "${f#sdks/}")"; cp "$f" "$m/${f#sdks/}"
+          done
+          cd "$m"
+          pnpm install --frozen-lockfile
+          pnpm test
       # What `sdk-publish` would ship from main: publish dry run, no token
       # needed. pnpm (not npm) so `workspace:` dependencies are rewritten to
       # real versions (react-widget and react-native depend on visitor-core,
@@ -925,7 +940,7 @@ jobs:
         run: |
           if [ "$HAS_TOKEN" != "true" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "NPM_TOKEN secret is not set: npm publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+            echo "NPM_TOKEN secret is not set: npm publish skipped (docs/entegrasyon-kilavuzu.md, SDK yayını)" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           list=""
           # Dependency order: a package is published after the ones it depends on.
@@ -979,7 +994,7 @@ jobs:
         run: |
           if [ "$HAS_PUB" != "true" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "PUB_CREDENTIALS secret is not set: pub.dev publish skipped (sdks/README.md, Yayın)" >> "$GITHUB_STEP_SUMMARY"; exit 0
+            echo "PUB_CREDENTIALS secret is not set: pub.dev publish skipped (docs/entegrasyon-kilavuzu.md, SDK yayını)" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
           if [ ! -f "$PKG/LICENSE" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -1043,7 +1058,8 @@ jobs:
           git push origin "$next"
           echo "tagged $next" >> "$GITHUB_STEP_SUMMARY"
 
-  # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree is pushed to the
+  # SDK mirrors (CF-199): after the v0.N tag, the sdks/ tree (without
+  # sdks/examples, CF-212) is pushed to the
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
   # visitor-core/vX.Y.Z, react-native/vX.Y.Z, expo/vX.Y.Z, go/vX.Y.Z (Go module path
@@ -1075,12 +1091,16 @@ jobs:
           git config --global credential.helper "store --file=$work/cred"
           release=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v0\.[0-9]+$' | tail -1)
           changelog_version() { sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' "$1/CHANGELOG.md" | head -1; }
-          # mirror <source dir> <repository> : one commit per release, then tags via tag()
+          # mirror <source dir> <repository> [path ...] : one commit per release, then tags via tag().
+          # The optional paths (relative to the source) are not published, and removed from the
+          # mirror when an earlier release carried them.
           mirror() {
-            src=$1; repo=$2; dir="$work/$repo"
+            src=$1; repo=$2; dir="$work/$repo"; shift 2
             git clone --quiet --branch main "https://github.com/ClickSolveMainTR/$repo.git" "$dir" 2>/dev/null \
               || { git init --quiet -b main "$dir"; git -C "$dir" remote add origin "https://github.com/ClickSolveMainTR/$repo.git"; }
-            rsync -a --delete --exclude .git "$src/" "$dir/"
+            excludes=(--exclude .git); for p in "$@"; do excludes+=(--exclude "/$p"); done
+            rsync -a --delete "${excludes[@]}" "$src/" "$dir/"
+            for p in "$@"; do rm -rf "${dir:?}/$p"; done
             [ -f "$dir/LICENSE" ] || cp sdks/LICENSE "$dir/LICENSE"
             git -C "$dir" config user.name "clickfix-ci"; git -C "$dir" config user.email "ci@getclickfix.com"
             git -C "$dir" add -A
@@ -1095,16 +1115,30 @@ jobs:
             if git -C "$dir" ls-remote --tags origin "refs/tags/$2" | grep -q .; then echo "$1 $2 exists"; return; fi
             git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
           }
-          mirror sdks clickfix-sdks
+          # sdks/examples holds the guide's snippets (embedded in the docs, run in CI) and stays
+          # private; runnable example apps live in ClickSolveMainTR/clickfix-examples.
+          mirror sdks clickfix-sdks examples
           for p in node react-widget visitor-core react-native expo; do
             [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
           done
           [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
           [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          # php before laravel: clickfix/laravel requires the clickfix/sdk release next to it, so
+          # its tag waits (up to 10 minutes) until Packagist lists that clickfix/sdk version.
           for p in php laravel; do
             if [ -f "sdks/$p/composer.json" ]; then
+              if [ "$p" = laravel ] && [ -n "${php_version:-}" ]; then
+                for _ in $(seq 1 40); do
+                  curl -fsS https://repo.packagist.org/p2/clickfix/sdk.json 2>/dev/null \
+                    | jq -e --arg v "$php_version" 'any(.packages["clickfix/sdk"][]?; .version == $v or .version == ("v" + $v))' >/dev/null && break
+                  sleep 15
+                done || true
+                curl -fsS https://repo.packagist.org/p2/clickfix/sdk.json 2>/dev/null | jq -e --arg v "$php_version" 'any(.packages["clickfix/sdk"][]?; .version == $v or .version == ("v" + $v))' >/dev/null \
+                  || echo "::warning::clickfix/sdk $php_version is not on Packagist yet; clickfix/laravel is tagged anyway" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
               mirror "sdks/$p" "clickfix-$p"
               v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+              [ "$p" = php ] && php_version=$v
             fi
           done
           true

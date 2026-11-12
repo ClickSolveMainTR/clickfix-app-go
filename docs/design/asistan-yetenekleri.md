@@ -91,7 +91,7 @@ MCP kataloğu CF-192'de defterden üretilir; o zamana kadar iki sunum yan yana d
 ### 1.5 Asistan döngüsü
 
 1. İstek gelir: `Caller` (kapsam, yetkiler), `Context{surface, route}`.
-2. Defter süzülür: yüzeyde izinli **ve** kullanıcının yetkisi olan yetenekler. Sayfaya uyanlar (`Routes`) öne alınır ve sistem mesajında "bu sayfada" diye işaretlenir. Araç sayısı üst sınırı aşarsa (24) önce sayfadakiler kalır.
+2. Defter süzülür: yüzeyde izinli **ve** kullanıcının yetkisi olan yetenekler. CF-211'den beri hepsi araç olarak gönderilmez: sayfaya uyanlar (`Routes`), kullanıcının sözcüklerinin gösterdiği modüller ve `navigation.open_route` yüklenir (en fazla 14); kalanlar `find_tools` / `use_tool` ile ulaşılabilir (§10.3).
 3. Model araçları: sabit dört araç + her `read` yeteneği bir araç + her `write`/`destructive` yeteneği bir **öneri aracı** (aynı ad; açıklaması "kullanıcıya onay kartı olarak gösterilir" ile başlar).
 4. Öneri aracı çağrılınca: şema + `Validate`; geçerse öneri kaydedilir (`ProposedAction`), modele "kart gösterildi, kullanıcıyı bekle" döner. Geçmezse modele düzeltilebilir hata döner ("webhook_url gerekli; kullanıcıya sor").
 5. Kullanıcı kartta parametreleri düzenler, isterse **Kuru çalıştır**, sonra **Onayla**.
@@ -266,7 +266,7 @@ Varsayılanlar uygulanır; değiştirmek isterseniz issue'ya yazın.
 1. **İmza anahtarının gösterimi.** Varsayılan: sunucu üretir, onay yanıtında bir kez gösterilir, sonra yalnız döndürülerek (rotate) yenilenebilir. Alternatif: kullanıcı kendi anahtarını girer (kart formunda da mümkün).
 2. **Sayfa içi testlerin onayı.** Varsayılan: dış uca istek atan her test (`channels.test`, e-posta test gönderimi, webhook test teslimatı) onaylıdır. Alternatif: yalnız okuma sayılıp onaysız çalışması.
 3. **Kayıtlı iş akışının kuru çalıştırması.** Karar: `workflows.dry_run` ve `automations.dry_run` onaysız `read`'dir (yan etkisiz olduğu doğrulandı) ama `tenant.automations.write` ister. MCP'de de `read` sayılır: `mcp:write` kapsamı gerekmez, üyenin `tenant.automations.write` yetkisi yeterlidir.
-4. **Araç sayısı üst sınırı.** Varsayılan 24; aşarsa sayfa dışı yetenekler düşer. Model maliyeti ölçülünce yeniden bakılır.
+4. **Araç sayısı üst sınırı.** CF-211'de ölçüldü: tur başına en fazla 14 yetenek yüklenir, gerisi `find_tools` ile bulunur (§10.3).
 5. **Widget yüzeyi.** Karar: izin listesi kodda sabit (§6); panelde widget başlatıcısı gizli, asistan tek giriş, birlikte göz atma kapalı.
 6. **Eski eylemler.** Varsayılan: bağdaştırıcıyla çalışmaya devam; CF-188/CF-189'da yeteneğe çevrilir.
 
@@ -281,3 +281,83 @@ Asistan dört yüzeyde (çekmece, yan panel, tam sayfa, mobil çekmece) aynı bi
 - **Boş / yükleme / hata:** karşılama kartı + başlangıç önerileri, iskelet baloncuklar, kırmızı çerçeveli hata satırı; geçmiş listesinde başlık, göreli tarih, açık sohbette sinyal çizgisi.
 
 Ekran görüntüleri (açık/koyu, dört yüzey) CF-210 PR'ındadır; repoya ekran görüntüsü commit edilmez.
+
+## 10. Dijital asistan (CF-211)
+
+CF-211 asistanı temsilcinin ve yöneticinin günlük panel işini yapan bir asistana genişletir. Defterdeki yetenek sayısı 58'den 120'ye çıktı. Bunların 81'i MCP'de de var. Tanım tek yerdedir: modülün `capabilities.go` dosyası. Asistan ve MCP aynı `capability.Registry`'yi kullanır (`httpserver/server.go` → `developerplatform` → `mcp.NewCatalog`).
+
+### 10.1 Envanter
+
+İşaretler:
+- ✓: asistanda ve MCP'de var.
+- A: yalnız asistanda var (gizli alan, kart formu ya da sayfa akışı gerektiği için).
+- —: araç yok; gerekçesi "Not" sütunundadır.
+
+Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:write` kapsamı ister. MCP'de onay kartı olmadığı için **yıkıcı yetenekler MCP'ye hiç konmaz**: defter bunu kayıt anında reddeder. `organization.update` de yalnız asistandadır.
+
+| Modül (`backend/internal/modules/…`) | Panelde yapılan iş | Araç | Durum | Not |
+|---|---|---|---|---|
+| conversations | ara, filtrele (durum, atanan, etiket, SLA ihlali) | `conversations.search` | ✓ | CF-211'de asistana açıldı |
+| | gelen kutusu sayaçları | `conversations.counts` | ✓ | yeni |
+| | konuşmayı aç, mesajları oku | `conversations.get`, `conversations.messages` | ✓ | mesajlar sayfalı (`before`) |
+| | SLA zamanlayıcıları | `conversations.sla` | ✓ | yeni |
+| | yanıtla | `conversations.reply` | ✓ | onaylı; tekrar denemede `client_id` |
+| | iç not, bahsetme | `conversations.add_note` | ✓ | `private: true` |
+| | ata (üye/takım), atanabilirler | `conversations.assign`, `conversations.agents` | ✓ | |
+| | durum, erteleme, öncelik | `conversations.set_status`, `conversations.set_priority` | ✓ | `snoozed` + `snoozed_until` |
+| | etiket ekle/kaldır, etiket listesi/oluştur | `conversations.add_tag`, `conversations.remove_tag`, `tags.list`, `tags.create` | ✓ | |
+| | makro uygula | `conversations.apply_macro` | ✓ | makronun her eylemi ayrıca yetkiyle denetlenir |
+| | hatırlatıcı | `conversations.remind` | ✓ | |
+| | birleştir, böl, toplu işlem, yan konuşma, co-browse, dışa aktarma | — | — | geri alınması zor ya da gerçek zamanlı ekran gerektiriyor; panelde kalır, asistan sayfaya yönlendirir |
+| contacts | kişi ara/aç/oluştur/güncelle/sil | `contacts.list`, `contacts.get`, `contacts.create`, `contacts.update`, `contacts.delete` | ✓ (silme A) | silme yıkıcı, yalnız asistanda; MCP `list_contacts` artık `/v1/tenant/contacts` kullanır (aynı `q/limit/offset`) |
+| | firma ara/özet/oluştur/güncelle/not | `companies.list`, `companies.get`, `companies.create`, `companies.update`, `companies.add_note` | ✓ | |
+| | kişi birleştirme, içe aktarma | — | — | geri alınamaz / dosya akışı; panelde |
+| macros | makro listele/oluştur/güncelle/sil | `macros.list`, `macros.create`, `macros.update`, `macros.delete` | ✓ (silme A) | organizasyon kapsamı `tenant.macros.write` ister (rota denetler) |
+| | hazır yanıt listele/oluştur/güncelle | `canned_responses.list`, `canned_responses.create`, `canned_responses.update` | ✓ | `render` kullanım sayacını artırdığı için okuma aracı yapılmadı |
+| knowledge | ara, makale listele/oku, koleksiyon, inceleme | `knowledge.search`, `knowledge.articles.list`, `knowledge.articles.get`, `knowledge.collections.list`, `knowledge.reviews.list` | ✓ | |
+| | taslak, düzenle, yayınla/kaldır | `knowledge.articles.create`, `knowledge.articles.update`, `knowledge.articles.publish` | ✓ | yayın ayrı onay; sürüm çakışması 409; güncelleme tam değiştirmedir, `body` zorunlu |
+| | kaynak eşitleme, çeviri, çelişki denetimi | — | — | AI maliyeti ve uzun iş; sonraki adım |
+| automation | iş akışları ve kurallar | `workflows.*`, `automations.*` | A/✓ | CF-186/188; okumalar MCP'de |
+| sla | politika, çalışma saatleri, kuru çalıştırma | `sla.*` | A/✓ | CF-188 |
+| teams | takım listele/oluştur/üye ekle | `teams.*` | A/✓ | CF-189 |
+| organizations | organizasyon bilgisi/güncelle | `organization.get`, `organization.update` | ✓ (güncelleme A) | logo yükleme panelde |
+| | üye listele/davet, rol listesi, rol değiştir | `members.list`, `members.invite`, `roles.list`, `members.set_roles` | ✓ (davet ve rol değişikliği A) | rol değişikliği erişimi kaldırabildiği için yıkıcıdır; rol kuralları rotada: sahiplik yalnız sahipten, sahip olunmayan izin verilemez, son sahip korunur |
+| | davet yeniden gönder/iptal | `invitations.resend`, `invitations.revoke` | ✓ (iptal A) | iptal yıkıcı |
+| | üye çıkarma, rol tanımı düzenleme | — | — | hesap erişimini keser; adım yükseltmeli panel akışı |
+| channels | kanal listele/oluştur/test, REST API | `channels.*` | A/✓ | imza anahtarı olanlar MCP'de yok (§1.3) |
+| widget | oluştur/güncelle/kurulum kodu | `widget.*` | A/✓ | CF-189 |
+| webhooks, publicapi | abonelik, test, API anahtarı | `webhooks.*`, `api_keys.*` | A/✓ | gizli değer bir kez gösterilir |
+| integrations, apps | sistemler, kavramlar, eylemler | `integrations.*` | A/✓ | CF-190 |
+| ai, aiagents | AI durumu, aç/kapat, performans, bilgi eksikleri | `ai.status`, `ai.enable`, `ai.disable`, `ai.performance`, `ai.knowledge_gaps` | A/✓ | ajan yapılandırması (persona, prosedür) panelde |
+| reports, analytics, surveys | pano metrikleri, kayıtlı rapor, rapor çalıştır, CSAT/NPS | `analytics.dashboard`, `reports.list`, `reports.run`, `surveys.results` | ✓ | `reports.run` POST ama veri değiştirmez: salt okunur API'de simülasyon olarak izinli |
+| | rapor tanımı oluşturma, zamanlanmış rapor | — | — | sonraki adım |
+| appointments | yaklaşan, liste, tür, boş saat | `appointments.upcoming`, `appointments.list`, `appointments.types`, `appointments.slots` | ✓ | plan modülü rotada denetlenir |
+| | randevu oluştur, ertele, durum (onay/iptal/no-show) | `appointments.create`, `appointments.reschedule`, `appointments.set_status` | ✓ | davetliye bildirim gider; kart bunu söyler |
+| billing | abonelik, kullanım, fatura, cüzdan | `billing.subscription`, `billing.usage`, `billing.invoices`, `billing.wallet` | ✓ | **yalnız okuma**: plan değişikliği, ödeme ve iptal ödeme formu ve adım yükseltme gerektirir; asistan `/billing`'e yönlendirir |
+| audit | denetim kaydı | `audit.list` | ✓ | |
+| customfields | alan tanımları | `custom_fields.list` | ✓ | alan tanımı değiştirme panelde |
+| statuspage | olaylar, bakımlar | `status.incidents` | ✓ | olay açmak abonelere bildirim gönderir; panelde |
+| onboarding | kurulum sırası | `get_setup_state` + sayfa durumları | A | CF-183/198, değişmedi |
+| schedules, workforce, oncall, quality, coaching, engineering, forum, videorooms, teamchat, marketing, compliance, sso, supportaccess, brands, customobjects, routing | vardiya, nöbet, kalite puanlama, mühendislik bağlantıları, video, ekip sohbeti, KVKK, SSO, marka, özel nesne, yönlendirme kuralları | — | — | günlük destek işinin dışında ya da yönetici kurulumları; bilgi için `search_docs`, gitmek için `navigation_open_route`. Sırası gelen: routing ve schedules (P2) |
+
+### 10.2 Ortak tanım ve yürütme
+
+- `capability.Endpoint` bir yeteneği tek bir `/v1/tenant` çağrısı olarak tanımlar. Tanım şunları içerir: yol şablonu (`{param}`, `PathEscape` ile), sorgu ve gövde alanları, ad eşleme (`user_uuid` → `assignee`) ve sabit alanlar (`private: true`). Yeni araçların çoğu birkaç satırdır. Rota kendi yetkisini, modül hakkını, doğrulamasını ve denetim kaydını uygular.
+- Organizasyon modelden gelmez. `capability.Bridge` çağıranın kullanıcı ve organizasyon UUID'siyle kurulur. Şema `additionalProperties: false` olduğu için `organization_uuid` gibi bir alan reddedilir (`TestCF211ToolsAreGuarded`).
+- Okuma araçları salt okunur API'den geçer: yalnız GET ve tanımlı simülasyonlar çalışır. Her okuma çağrısı denetim kaydına `assistant.tool_called` olarak yazılır. Kayıtta yetenek adı, yüzey, parametre **adları**, sonuç ve süre bulunur; değerler kişisel veri taşıyabileceği için yazılmaz. Yazma kayıtları değişmedi: `assistant.action_*` (§7). MCP her çağrıyı `mcp.tool_called` ile yazar.
+
+### 10.3 Token optimizasyonu
+
+1. **Niyete göre yükleme.** `capability.ModuleKeywords`, Türkçe ve İngilizce kök sözcükleri modüllere eşler. Eşleme katlanmış metin üzerinde yapılır: küçük harf, aksansız (`kanalları` → `kanal`). `Registry.Select` her turda şunları yükler: sayfanın yetenekleri, son iki kullanıcı mesajının işaret ettiği modüller ve `navigation.open_route`. Üst sınır 14'tür. Kalan yetenekler `find_tools(query)` ile bulunur. Bu araç ad, tür, tek satır açıklama ve kısa parametre imzası (`conversation_uuid*, limit:integer`) döner. Bulunan yetenek `use_tool(name, params)` ile çalışır: okuma doğrudan çalışır, yazma kart üretir. İkisi de yükleme dışındaki yetkileri aşamaz (`reachable` yalnız kullanıcının yetkili olduklarıdır).
+2. **Kısa açıklamalar.** "PROPOSES" kuralı her araçta tekrarlanmaz, sistem isteminde bir kez anlatılır; araçta yalnız `PROPOSES:` öneki kalır. Form etiketleri (`title`) model şemasından çıkarılır. Yeni araç açıklamaları tek cümledir.
+3. **Sonuç özeti ve sayfalama.** `capability.Compact` boş değerleri ve gürültülü anahtarları atar (`avatar_url`, `embedding`, …) ve liste okumalarında uzun metni 400 karakterde keser. Tek kayıt okumaları (`FullText`: makale, konuşma, mesajlar, kişi, firma) metni bütün döndürür; ancak kayıt bütçeye sığmazsa keser. Kesilen her metnin sonunda `[TRUNCATED: n of m chars shown; …]` işareti olur. Yazma araçları bu işareti taşıyan parametreyi reddeder (`Capability.Check`), böylece kısaltılmış bir gövde aslının üstüne yazılamaz. Sonuç bütçeyi aşarsa en uzun listeyi yarıya indirir, sonuca `note` ekler ("items: first 12 of 50; ask for the next page"). Eskiden büyük sonuç tümüyle atılıyordu ("too large"). Liste araçları `limit/offset` alır.
+4. **Uzun geçmiş.** Son 6 mesaj olduğu gibi gider (her biri en fazla 1500 karakter). Daha eskileri tek bir veri turunda mesaj başına 160 karakterlik satırlara indirilir (`history.go`).
+5. **Önbelleklenebilir önek.** Sistem isteminin sabit kısmı sayfadan bağımsızdır (araç grubu listesi dahil). Değişen bağlam (sayfa, kurulum durumu, sayfa araçları) ayrı veri turunda gider. Sabit araçlar (`search_docs`, `get_setup_state`, `propose_action`, `escalate_to_support`, `suggest_replies`, `find_tools`, `use_tool`) listenin başındadır. Anthropic'te bunlara ayrı bir `cache_control` kırılma noktası konur (`ai.Request.CacheTools`), böylece sayfa değişince de bu kısım önbellekten okunur. Sayfa araçları adlarına göre sıralanır; aynı sayfada art arda turlarda liste birebir aynıdır.
+
+Ölçüm `TestTokenBudget` (`assistant/token_budget_db_test.go`) ile yapılır. Test üretimdeki defterle ve tüm izinlere sahip bir sahip hesabıyla, bir yanıtın ilk model çağrısının girdisini hesaplar (≈ 4 bayt/token). Sonuç PR'daki tablodadır.
+
+### 10.4 Davranış
+
+- Kurulum rehberi (CF-183/198) korunur: `get_setup_state` sırası, sayfa durumu, sayfa içi testler.
+- Çok adımlı iş için asistan önce kısa numaralı bir plan yazar. Sonra adımları tek tek yürütür: oku, öner, kartın sonucunu bekle, denetle. Her adımda sıradakini söyler. Belirsizlikte bir iki soru sorar. Aynı yanıtta en fazla 3 kart önerir (`maxActions`).
+- Yazma işleri her zaman onaylıdır. Onayda yetki yeniden denetlenir (`TestCF211ToolsFromTheChat`), rota da üçüncü kez denetler.

@@ -74,8 +74,12 @@ type toolRun struct {
 	surface     string
 	thread      uuid.UUID
 	threadID    int64
-	// caps are the capabilities offered in this reply, by tool name.
+	// caps are the capabilities loaded as tools in this reply, by tool name.
 	caps map[string]*capability.Capability
+	// other are the caller's capabilities not loaded this turn (find_tools);
+	// reachable holds loaded and other ones by tool name (use_tool).
+	other     []*capability.Capability
+	reachable map[string]*capability.Capability
 	// lookupMark is the streamed text length when the last tool ran; only
 	// text after it counts as the answer for suggest_replies.
 	lookupMark int
@@ -134,6 +138,12 @@ func (r *toolRun) run(ctx context.Context, call ai.ToolCall) (ai.ToolResult, err
 		a := r.svc.escalateAction(r.locale, clipRunes(strings.TrimSpace(in.Note), 2000))
 		r.actions = append(r.actions, a)
 		return toolJSON(map[string]any{"status": "proposed", "id": a.ID, "note": "Shown to the user as a confirmation card."}), nil
+	}
+	switch call.Name {
+	case ToolFindTools:
+		return r.findTools(call.Input), nil
+	case ToolUseTool:
+		return r.useTool(ctx, call.Input), nil
 	}
 	if call.Name == ToolReadDocument {
 		return r.readDocument(ctx, call.Input), nil

@@ -3,7 +3,7 @@ title: Integration guide
 description: Connect ClickFix to your own product end to end; identity verification, external ids, custom fields, events, system binding, the API channel, webhooks, the mobile webview and the SDKs. Widget, Node.js, Go, PHP and curl samples on every step.
 ---
 
-This guide covers, in the order the **Setup** wizard in the panel follows, everything you write to connect your own product to ClickFix. Each step has its own page, and each step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) and **curl**. The samples come from the `examples` folder of the public [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/examples) repository and are executed on every release; the code you see here is the code that passed. For complete, runnable applications (Express, Next.js, React Native, Flutter, Go, PHP, Laravel, curl) see the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository.
+This guide covers, in the order the **Setup** wizard in the panel follows, everything you write to connect your own product to ClickFix. Each step has its own page, and each step has five samples: the **widget** in the browser (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) and **curl**. The samples are executed against a test API on every release; the code you see here is the code that passed. For complete, runnable applications (Express, Next.js, React Native, Expo, Flutter, Go, PHP, Laravel, curl) see the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository.
 
 ## Steps [#steps]
 
@@ -15,17 +15,18 @@ This guide covers, in the order the **Setup** wizard in the panel follows, every
 6. [API channel](/docs/integration-guide/api-channel?lang=en)
 7. [Webhooks](/docs/integration-guide/webhooks?lang=en)
 8. [Mobile: webview and Flutter](/docs/integration-guide/mobile?lang=en)
-9. [SDKs](/docs/integration-guide/sdks?lang=en)
+9. [React Native](/docs/integration-guide/react-native?lang=en) and [Expo](/docs/integration-guide/expo?lang=en)
+10. [SDKs](/docs/integration-guide/sdks?lang=en)
 
 ## Before you start [#before-you-start]
 
-| You need                                    | Where                                         | Used for                                                                             |
-| ------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`)                                |
-| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash` (user + company id), server side only                          |
-| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                                               |
-| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel                                 |
-| **App key** (mobile)                        | Web widget → Advanced → Mobile apps           | Only for apps calling the widget API without a webview (`@getclickfix/visitor-core`) |
+| You need                                    | Where                                         | Used for                                                                                                                      |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **API key** (`cf_sk_…`)                     | Organization → API and automations → API keys | Every call from your server (`Authorization: Bearer`)                                                                         |
+| **Widget identity secret**                  | Web widget → Security → Identity verification | Computing `user_hash` (user + company id), server side only                                                                   |
+| **Widget id** (`WIDGET_ID`)                 | Web widget → Install                          | `widget.js` and the mobile webview URL                                                                                        |
+| **API channel instance and signing secret** | Channels → Add channel → API                  | Only when you connect your own chat app as a channel                                                                          |
+| **App key** (mobile)                        | Web widget → Advanced → Mobile apps           | Apps calling the widget API without a webview (`@getclickfix/react-native`, `@getclickfix/expo`, `@getclickfix/visitor-core`) |
 
 The base URL is `https://api.getclickfix.com` (no `/v1` suffix). Writes require `Idempotency-Key`. Keys never reach the browser or the mobile app. Envelope, error codes and rate limits: [API](/docs/api?lang=en).
 
