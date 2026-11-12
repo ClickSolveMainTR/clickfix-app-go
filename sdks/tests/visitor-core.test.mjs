@@ -5,6 +5,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createVisitorClient,createRealtime,VisitorError,parseMessage,encodeCommand,commandScript,isSafeLink,COMMAND_TYPES,MESSAGE_TYPES,randomUUID,CORE_VERSION} from '../visitor-core/dist/index.js';
+// The public SDK mirror has no frontend/: the contract comparisons run only in the product repository.
+const mirror=!(await import('node:fs')).existsSync(new URL('../../frontend/public/widget.d.ts',import.meta.url))&&'frontend/ is not part of the SDK mirror';
 const response=(data,status=200,code='DENIED',headers={})=>new Response(JSON.stringify({success:status<400,data,error:{code},meta:{request_id:'req-1'}}),{status,headers:{'Content-Type':'application/json',...headers}});
 const APP={key:'cf_app_0123456789abcdef0123456789abcdef01234567',packageName:'com.example.shop'};
 
@@ -105,7 +107,7 @@ test('bridge helpers encode commands, decode only widget messages and gate links
  assert.ok(COMMAND_TYPES.includes('clickfix:session'));assert.ok(MESSAGE_TYPES.includes('clickfix:session'));
 });
 
-test('core bridge types mirror the widget contract (frontend/public/widget.d.ts and shared/bridge.ts)',async()=>{
+test('core bridge types mirror the widget contract (frontend/public/widget.d.ts and shared/bridge.ts)',{skip:mirror},async()=>{
  const types=(s)=>[...s.matchAll(/"(clickfix:[a-z-]+)"/g)].map(m=>m[1]);
  const dts=await readFile(new URL('../../frontend/public/widget.d.ts',import.meta.url),'utf8');
  const widget=await readFile(new URL('../../frontend/widget-sdk/src/shared/bridge.ts',import.meta.url),'utf8');
@@ -116,7 +118,7 @@ test('core bridge types mirror the widget contract (frontend/public/widget.d.ts 
  assert.deepEqual(new Set(types(core.replace(/'/g,'"'))),all,'core bridge.ts');
 });
 
-test('bridge events: known names with an object payload pass, others are ignored; names match the widget',async()=>{
+test('bridge events: known names with an object payload pass, others are ignored; names match the widget',{skip:mirror},async()=>{
  const {EVENT_NAMES}=await import('../visitor-core/dist/index.js');
  const ok=parseMessage('{"type":"clickfix:event","event":"unread","payload":{"count":3}}');
  assert.equal(ok.payload.count,3);

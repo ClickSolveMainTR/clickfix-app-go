@@ -356,8 +356,20 @@ jobs:
       - name: Guide examples are embedded and run
         working-directory: sdks
         run: |
-          pnpm examples:check
-          pnpm examples
+          node examples/run.mjs --check
+          node examples/sync-docs.mjs --check
+          node examples/run.mjs
+      # The public mirror ships sdks/ without examples/ (sdks-mirror): that tree must install from
+      # its own lockfile and pass its tests (contract tests that read frontend/ skip there).
+      - name: SDK mirror tree installs and tests on its own
+        run: |
+          m=$(mktemp -d); trap 'rm -rf "$m"' EXIT
+          git ls-files sdks | grep -v '^sdks/examples/' | while IFS= read -r f; do
+            mkdir -p "$m/$(dirname "${f#sdks/}")"; cp "$f" "$m/${f#sdks/}"
+          done
+          cd "$m"
+          pnpm install --frozen-lockfile
+          pnpm test
       # What `sdk-publish` would ship from main: publish dry run, no token
       # needed. pnpm (not npm) so `workspace:` dependencies are rewritten to
       # real versions (react-widget and react-native depend on visitor-core,
@@ -1111,10 +1123,22 @@ jobs:
           done
           [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
           [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          # php before laravel: clickfix/laravel requires the clickfix/sdk release next to it, so
+          # its tag waits (up to 10 minutes) until Packagist lists that clickfix/sdk version.
           for p in php laravel; do
             if [ -f "sdks/$p/composer.json" ]; then
+              if [ "$p" = laravel ] && [ -n "${php_version:-}" ]; then
+                for _ in $(seq 1 40); do
+                  curl -fsS https://repo.packagist.org/p2/clickfix/sdk.json 2>/dev/null \
+                    | jq -e --arg v "$php_version" 'any(.packages["clickfix/sdk"][]?; .version == $v or .version == ("v" + $v))' >/dev/null && break
+                  sleep 15
+                done || true
+                curl -fsS https://repo.packagist.org/p2/clickfix/sdk.json 2>/dev/null | jq -e --arg v "$php_version" 'any(.packages["clickfix/sdk"][]?; .version == $v or .version == ("v" + $v))' >/dev/null \
+                  || echo "::warning::clickfix/sdk $php_version is not on Packagist yet; clickfix/laravel is tagged anyway" | tee -a "$GITHUB_STEP_SUMMARY"
+              fi
               mirror "sdks/$p" "clickfix-$p"
               v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+              [ "$p" = php ] && php_version=$v
             fi
           done
           true

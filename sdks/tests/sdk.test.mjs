@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
 import {createClient,verifyWebhook,paginate,APIError,identityHash} from '../node/dist/index.js';
 import {createWidgetClient} from '../react-widget/dist/index.js';
+// The public SDK mirror has no frontend/: the contract comparisons run only in the product repository.
+const mirror=!(await import('node:fs')).existsSync(new URL('../../frontend/public/widget.d.ts',import.meta.url))&&'frontend/ is not part of the SDK mirror';
 const response=(data,status=200)=>new Response(JSON.stringify({success:status<400,data,error:{code:'DENIED'}}),{status,headers:{'Content-Type':'application/json'}});
 test('retries preserve idempotency key, body and auth; unsafe writes do not retry',async()=>{
  const calls=[];
@@ -42,7 +44,7 @@ test('aborted requests do not retry',async()=>{
  const client=createClient({baseURL:'https://example.test',apiKey:'test',fetch:async()=>{calls++;throw new Error('aborted');}});
  await assert.rejects(client.request('/v1/public-api/contacts','get',undefined,{signal:abort.signal}));assert.equal(calls,1);
 });
-test('react-widget ships the same script SDK contract as frontend/public/widget.d.ts',async()=>{
+test('react-widget ships the same script SDK contract as frontend/public/widget.d.ts',{skip:mirror},async()=>{
  const {readFile}=await import('node:fs/promises');
  const a=await readFile(new URL('../react-widget/src/clickfix.d.ts',import.meta.url),'utf8');
  const b=await readFile(new URL('../../frontend/public/widget.d.ts',import.meta.url),'utf8');
@@ -85,4 +87,21 @@ test('createWidgetClient with appOrigin calls the ClickFix widget API across ori
  assert.equal(urls[0].url,'https://app.example.test/api/v1/widget/pub/bootstrap');assert.equal(urls[0].credentials,'omit');
  const same=createWidgetClient({publicId:'pub',appOrigin:'https://ignored.test',baseURL:'/bff',fetch:async(url)=>{urls.push({url});return response({visitor:{token:'t'},conversations:[]});}});
  await same.init();assert.equal(urls[1].url,'/bff/v1/widget/pub/bootstrap');
+});
+test('react-widget sdk handle is not a thenable and exposes only ClickFixSDK methods',async()=>{
+ const {clickFix}=await import('../react-widget/dist/index.js');
+ const {SDK_METHODS}=await import('../react-widget/dist/script.js');
+ const dts=await (await import('node:fs/promises')).readFile(new URL('../react-widget/src/clickfix.d.ts',import.meta.url),'utf8');
+ const body=/export interface ClickFixSDK extends ClickFixCommand \{([\s\S]*?)\n\}/.exec(dts)[1];
+ const names=new Set([...body.matchAll(/^\s{2}([a-zA-Z]+)(?:<[^>]*>)?\(/gm)].map(m=>m[1]));
+ assert.deepEqual([...SDK_METHODS].sort(),[...names].sort(),'SDK_METHODS must list every ClickFixSDK method');
+ globalThis.window={};
+ try{
+  const sdk=clickFix();
+  for(const p of ['then','toJSON','$$typeof','constructor','catch','nope'])assert.equal(sdk[p],undefined,p);
+  assert.equal(await Promise.race([Promise.resolve(sdk).then(()=> 'resolved'),new Promise(r=>setTimeout(()=>r('hung'),200))]),'resolved');
+  JSON.stringify({sdk});
+  assert.equal(globalThis.window.ClickFix.q,undefined,'nothing was queued by await or JSON.stringify');
+  sdk.open('messages');assert.deepEqual(globalThis.window.ClickFix.q,[['open','messages']]);
+ }finally{delete globalThis.window;}
 });

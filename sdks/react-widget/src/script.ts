@@ -25,6 +25,13 @@ function stub(): ClickFixSDK {
 }
 
 type AnyFn = (...args: unknown[]) => unknown;
+/** Method names of ClickFixSDK (widget.d.ts); a type test keeps the list complete. */
+export const SDK_METHODS: ReadonlySet<string> = new Set<Exclude<keyof ClickFixSDK, 'version'>>([
+  'init', 'boot', 'open', 'close', 'toggle', 'show', 'hide', 'showLauncher', 'hideLauncher',
+  'identify', 'update', 'setAttributes', 'track', 'startConversation', 'showNewMessage', 'showMessage',
+  'openArticle', 'searchHelp', 'setLocale', 'setTheme', 'consent', 'getUnreadCount', 'getVisitorId',
+  'isOpen', 'getState', 'on', 'once', 'off', 'startReplay', 'stopCapture', 'reset', 'shutdown',
+]);
 /**
  * The SDK handle the hooks hand out. It resolves window.ClickFix on every call,
  * never while rendering, so a component using the hooks can be rendered on the
@@ -40,9 +47,12 @@ const lazySDK = new Proxy(function clickFix() {} as unknown as AnyFn, {
   get(_target, prop) {
     if (typeof prop !== 'string' || typeof window === 'undefined') return undefined;
     const sdk = stub() as unknown as AnyFn & Record<string, unknown>;
+    if (prop === 'version') return sdk.version;
+    // Only ClickFixSDK methods: anything else (then, toJSON, $$typeof, constructor…) is
+    // undefined, so the handle is not a thenable and serializes like a plain function.
+    if (!SDK_METHODS.has(prop)) return undefined;
     const value = sdk[prop];
     if (typeof value === 'function') return (value as AnyFn).bind(sdk);
-    if (value !== undefined || prop === 'version' || prop === 'q') return value;
     return (...args: unknown[]) => sdk(prop, ...args);
   },
 }) as unknown as ClickFixSDK;

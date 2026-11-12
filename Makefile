@@ -153,14 +153,14 @@ sdks:
 # Generated SDK files, guide pages and the public text check (no CF-<n>
 # references, English mirrored Markdown; sdks/scripts/public-text.mjs) are current.
 sdks-check:
-	cd sdks && pnpm install --frozen-lockfile && pnpm check && pnpm examples:check
+	cd sdks && pnpm install --frozen-lockfile && pnpm check && node examples/run.mjs --check && node examples/sync-docs.mjs --check
 
 # Integration guide samples (sdks/examples, not mirrored): compiled, type-checked and run.
 # Runnable example apps live in ClickSolveMainTR/clickfix-examples.
 # Without CLICKFIX_BASE_URL a stub API stands in; set it (plus the keys in
 # sdks/examples/README.md) to run them against a local backend.
 guide-examples:
-	cd sdks && pnpm install --frozen-lockfile && pnpm build && pnpm examples
+	cd sdks && pnpm install --frozen-lockfile && pnpm build && node examples/run.mjs
 
 guide-examples-check:
-	cd sdks && pnpm install --frozen-lockfile && pnpm build && pnpm examples:check
+	cd sdks && pnpm install --frozen-lockfile && pnpm build && node examples/run.mjs --check && node examples/sync-docs.mjs --check

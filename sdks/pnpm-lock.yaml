@@ -30,12 +30,6 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
-  examples/node:
-    dependencies:
-      '@getclickfix/node':
-        specifier: workspace:*
-        version: link:../../node
-
   expo:
     dependencies:
       '@getclickfix/react-native':

@@ -8,7 +8,7 @@
 // a note, unless CLICKFIX_EXAMPLES_PHP=required (the CI `php` job).
 import { spawn, execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { STUB } from './stub-server.mjs';
 
@@ -21,6 +21,14 @@ const want = (lang) => !only || only === lang;
 const log = (...a) => console.log('[examples]', ...a);
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: dir, stdio: 'pipe', encoding: 'utf8', ...opts });
 
+// examples/ is not part of the pnpm workspace (the public SDK mirror ships without it), so the
+// Node samples resolve `@getclickfix/node` through a link to the package next door, like any
+// project that installed it. `pnpm build` (or `pnpm test`) produces its dist/.
+{
+  const mod = dir + 'node/node_modules/@getclickfix';
+  mkdirSync(mod, { recursive: true });
+  if (!existsSync(mod + '/node')) symlinkSync('../../../../node', mod + '/node', 'dir');
+}
 if (want('widget')) {
   log('widget examples: tsc against frontend/public/widget.d.ts');
   run('npx', ['tsc', '-p', 'widget/tsconfig.json'], { cwd: dir });
