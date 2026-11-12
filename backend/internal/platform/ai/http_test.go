@@ -50,3 +50,19 @@ data: [DONE]
 		})
 	}
 }
+
+// CF-211: the stable leading tools get their own cache breakpoint, so a
+// page change (other trailing tools) still reuses them.
+func TestAnthropicCachesStableTools(t *testing.T) {
+	p := NewAnthropic("fake")
+	tools := []Tool{{Name: "a", Schema: map[string]any{"type": "object"}}, {Name: "b", Schema: map[string]any{"type": "object"}}, {Name: "page", Schema: map[string]any{"type": "object"}}}
+	_, body := p.body(Request{Instructions: "x", Tools: tools, CachePrefix: true, CacheTools: 2}, false)
+	wire := body["tools"].([]any)
+	if wire[1].(map[string]any)["cache_control"] == nil || wire[0].(map[string]any)["cache_control"] != nil || wire[2].(map[string]any)["cache_control"] != nil {
+		t.Fatalf("breakpoint: %v", wire)
+	}
+	_, body = p.body(Request{Instructions: "x", Tools: tools, CacheTools: 2}, false)
+	if body["tools"].([]any)[1].(map[string]any)["cache_control"] != nil {
+		t.Fatal("cache breakpoint without CachePrefix")
+	}
+}

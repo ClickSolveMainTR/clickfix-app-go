@@ -131,8 +131,12 @@ func (p *HTTPProvider) body(req Request, stream bool) (string, map[string]any) {
 			messages = append(messages, map[string]any{"role": role, "content": blocks})
 		}
 		tools := []any{}
-		for _, t := range req.Tools {
-			tools = append(tools, map[string]any{"name": t.Name, "description": t.Description, "input_schema": t.Schema})
+		for i, t := range req.Tools {
+			tool := map[string]any{"name": t.Name, "description": t.Description, "input_schema": t.Schema}
+			if req.CachePrefix && req.CacheTools > 0 && req.CacheTools < len(req.Tools) && i == req.CacheTools-1 {
+				tool["cache_control"] = map[string]any{"type": "ephemeral"}
+			}
+			tools = append(tools, tool)
 		}
 		if len(tools) > 0 {
 			body["tools"] = tools

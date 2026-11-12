@@ -159,6 +159,9 @@ type Capability struct {
 	Routes []string
 	// Undo tells the user how to revert (human text or a capability name).
 	Undo string
+	// FullText marks a single-record read (an article, messages): its text
+	// is not clipped unless the record does not fit (CF-211).
+	FullText bool
 	// Simulations are dry-run endpoints ("POST /v1/tenant/workflows/{uuid}/test")
 	// that change no data; only they may pass the read-only API besides GET.
 	Simulations []string
@@ -250,6 +253,7 @@ func (c *Capability) IsSecret(key string) bool {
 }
 
 // ToolSchema is the schema the model sees: the input without "required"
+// and without form labels ("title", CF-211)
 // (a missing field reaches Check, which tells the model to ask the user
 // instead of failing the whole turn) and never with secret fields.
 func (c *Capability) ToolSchema() map[string]any {
@@ -257,9 +261,20 @@ func (c *Capability) ToolSchema() map[string]any {
 	if props, ok := c.Input["properties"].(map[string]any); ok {
 		clean := map[string]any{}
 		for k, v := range props {
-			if !c.IsSecret(k) {
-				clean[k] = v
+			if c.IsSecret(k) {
+				continue
 			}
+			// "title" is the card form label; the model does not need it.
+			if m, ok := v.(map[string]any); ok && m["title"] != nil {
+				cp := make(map[string]any, len(m))
+				for mk, mv := range m {
+					if mk != "title" {
+						cp[mk] = mv
+					}
+				}
+				v = cp
+			}
+			clean[k] = v
 		}
 		out["properties"] = clean
 	}
@@ -289,9 +304,12 @@ func (c *Capability) Check(p Params) error {
 	if p == nil {
 		p = Params{}
 	}
-	for k := range p {
+	for k, v := range p {
 		if c.IsSecret(k) {
 			return Invalid("%s is a secret: it is never accepted from the chat; the user fills it in the confirmation card", k)
+		}
+		if c.Writes() && HasTruncated(v) {
+			return Invalid("%s holds text a read shortened (%s): writing it back would cut the original. Ask the user for the full text, or edit it on its page", k, TruncatedMarker)
 		}
 	}
 	for _, k := range c.required() {

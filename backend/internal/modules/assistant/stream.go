@@ -137,6 +137,16 @@ func toolStatus(tool, locale string) string {
 			return "Preparing support handover…"
 		}
 		return "Destek ekibine devir hazırlanıyor…"
+	case ToolFindTools:
+		if en {
+			return "Looking for the right tool…"
+		}
+		return "Uygun araç aranıyor…"
+	case ToolUseTool:
+		if en {
+			return "Working in the panel…"
+		}
+		return "Panelde işlem hazırlanıyor…"
 	case suggestionToolName:
 		if en {
 			return "Preparing your answer…"
