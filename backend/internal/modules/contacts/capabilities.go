@@ -64,7 +64,7 @@ func Capabilities() []*capability.Capability {
 		},
 		{
 			Name: "contacts.get", Module: "contacts", Kind: capability.Read, Permission: rbac.PermTenantContactsRead,
-			Surfaces: s, Routes: cRoutes, Title: capability.T("Kişiyi getir", "Get a contact"),
+			Surfaces: s, Routes: cRoutes, Title: capability.T("Kişiyi getir", "Get a contact"), FullText: true,
 			Description: "One contact with its channels and conversation count.",
 			Input:       capability.Object([]string{"contact_uuid"}, map[string]any{"contact_uuid": contact}),
 			Run:         capability.Get(contactsPath + "/{contact_uuid}"),
@@ -86,7 +86,7 @@ func Capabilities() []*capability.Capability {
 		},
 		{
 			Name: "contacts.delete", Module: "contacts", Kind: capability.Destructive, Permission: rbac.PermTenantContactsDelete,
-			Surfaces: s, Routes: cRoutes, Title: capability.T("Kişiyi sil", "Delete a contact"),
+			Surfaces: capability.DefaultSurfaces, Routes: cRoutes, Title: capability.T("Kişiyi sil", "Delete a contact"),
 			Description: "Delete a contact; its conversations stay.",
 			Input:       capability.Object([]string{"contact_uuid"}, map[string]any{"contact_uuid": contact}),
 			Apply:       capability.Endpoint{Method: http.MethodDelete, Path: contactsPath + "/{contact_uuid}", Route: "/contacts"}.Do(),
@@ -100,7 +100,7 @@ func Capabilities() []*capability.Capability {
 		},
 		{
 			Name: "companies.get", Module: "companies", Kind: capability.Read, Permission: rbac.PermTenantContactsRead,
-			Surfaces: s, Routes: coRoutes, Title: capability.T("Firma özeti", "Company overview"),
+			Surfaces: s, Routes: coRoutes, Title: capability.T("Firma özeti", "Company overview"), FullText: true,
 			Description: "Company overview: stats, CSAT, open and recently closed conversations.",
 			Input:       capability.Object([]string{"company_uuid"}, map[string]any{"company_uuid": company}),
 			Run:         capability.Get(companiesPath + "/{company_uuid}/overview"),

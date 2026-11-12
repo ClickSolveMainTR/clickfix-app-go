@@ -139,7 +139,7 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 		if err != nil {
 			return toolError(safeError(err))
 		}
-		return compactResult(res)
+		return compactResult(res, cp.FullText)
 	}
 	if len(r.actions) >= maxActions {
 		return toolError("too many proposals in one reply")
@@ -175,11 +175,15 @@ func (r *toolRun) runCapability(ctx context.Context, cp *capability.Capability, 
 // noisy keys are dropped, long text clipped and long lists cut to their
 // first items with a note on how to page (CF-211); before, a result over
 // the limit was replaced by "too large".
-func compactResult(res capability.Result) ai.ToolResult {
+func compactResult(res capability.Result, full bool) ai.ToolResult {
 	out := map[string]any{"summary": res.Summary}
 	if res.Data != nil {
 		budget := maxToolResultBytes - len(res.Summary) - 64
-		if c, ok := capability.Compact(res.Data, budget); ok {
+		compact := capability.Compact
+		if full {
+			compact = capability.CompactFull
+		}
+		if c, ok := compact(res.Data, budget); ok {
 			out["data"] = c.Data
 			if c.Note != "" {
 				out["note"] = c.Note

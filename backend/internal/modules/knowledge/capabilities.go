@@ -48,7 +48,7 @@ func Capabilities() []*capability.Capability {
 		},
 		{
 			Name: "knowledge.articles.get", Module: "knowledge", Kind: capability.Read, Permission: rbac.PermTenantSettingsRead, Surfaces: s, Routes: routes,
-			Title: capability.T("Makaleyi getir", "Get an article"), Description: "One article with its body and current version.",
+			Title: capability.T("Makaleyi getir", "Get an article"), FullText: true, Description: "One article with its body and current version.",
 			Input: capability.Object([]string{"article_uuid"}, map[string]any{"article_uuid": id}),
 			Run:   capability.Get(articlesPath + "/{article_uuid}"),
 		},
@@ -72,8 +72,8 @@ func Capabilities() []*capability.Capability {
 		},
 		{
 			Name: "knowledge.articles.update", Module: "knowledge", Kind: capability.Write, Permission: rbac.PermTenantSettingsWrite, Surfaces: s, Routes: routes,
-			Title: capability.T("Makaleyi düzenle", "Edit an article"), Description: "Save a new draft version; send every field and the current version.",
-			Input: capability.Object([]string{"article_uuid", "version", "title", "slug", "locale", "visibility"}, upd),
+			Title: capability.T("Makaleyi düzenle", "Edit an article"), Description: "Save a new draft version: a full replace, so send every field, the whole body and the current version (read it with knowledge_articles_get first).",
+			Input: capability.Object([]string{"article_uuid", "version", "title", "slug", "locale", "visibility", "body"}, upd),
 			Apply: capability.Endpoint{Method: http.MethodPut, Path: articlesPath + "/{article_uuid}", Route: "/settings/knowledge/{article_uuid}"}.Do(),
 		},
 		{

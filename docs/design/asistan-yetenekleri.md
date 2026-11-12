@@ -284,7 +284,7 @@ Ekran görüntüleri (açık/koyu, dört yüzey) CF-210 PR'ındadır; repoya ekr
 
 ## 10. Dijital asistan (CF-211)
 
-CF-211 asistanı temsilcinin ve yöneticinin günlük panel işini yapan bir asistana genişletir. Defterdeki yetenek sayısı 58'den 120'ye çıktı. Bunların 86'sı MCP'de de var. Tanım tek yerdedir: modülün `capabilities.go` dosyası. Asistan ve MCP aynı `capability.Registry`'yi kullanır (`httpserver/server.go` → `developerplatform` → `mcp.NewCatalog`).
+CF-211 asistanı temsilcinin ve yöneticinin günlük panel işini yapan bir asistana genişletir. Defterdeki yetenek sayısı 58'den 120'ye çıktı. Bunların 81'i MCP'de de var. Tanım tek yerdedir: modülün `capabilities.go` dosyası. Asistan ve MCP aynı `capability.Registry`'yi kullanır (`httpserver/server.go` → `developerplatform` → `mcp.NewCatalog`).
 
 ### 10.1 Envanter
 
@@ -293,7 +293,7 @@ CF-211 asistanı temsilcinin ve yöneticinin günlük panel işini yapan bir asi
 - A: yalnız asistanda var (gizli alan, kart formu ya da sayfa akışı gerektiği için).
 - —: araç yok; gerekçesi "Not" sütunundadır.
 
-Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:write` kapsamı ister; yıkıcı olanlar `destructiveHint` taşır.
+Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:write` kapsamı ister. MCP'de onay kartı olmadığı için **yıkıcı yetenekler MCP'ye hiç konmaz**: defter bunu kayıt anında reddeder. `organization.update` de yalnız asistandadır.
 
 | Modül (`backend/internal/modules/…`) | Panelde yapılan iş | Araç | Durum | Not |
 |---|---|---|---|---|
@@ -309,20 +309,20 @@ Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:
 | | makro uygula | `conversations.apply_macro` | ✓ | makronun her eylemi ayrıca yetkiyle denetlenir |
 | | hatırlatıcı | `conversations.remind` | ✓ | |
 | | birleştir, böl, toplu işlem, yan konuşma, co-browse, dışa aktarma | — | — | geri alınması zor ya da gerçek zamanlı ekran gerektiriyor; panelde kalır, asistan sayfaya yönlendirir |
-| contacts | kişi ara/aç/oluştur/güncelle/sil | `contacts.list`, `contacts.get`, `contacts.create`, `contacts.update`, `contacts.delete` | ✓ | silme yıkıcı; MCP `list_contacts` artık `/v1/tenant/contacts` kullanır (aynı `q/limit/offset`) |
+| contacts | kişi ara/aç/oluştur/güncelle/sil | `contacts.list`, `contacts.get`, `contacts.create`, `contacts.update`, `contacts.delete` | ✓ (silme A) | silme yıkıcı, yalnız asistanda; MCP `list_contacts` artık `/v1/tenant/contacts` kullanır (aynı `q/limit/offset`) |
 | | firma ara/özet/oluştur/güncelle/not | `companies.list`, `companies.get`, `companies.create`, `companies.update`, `companies.add_note` | ✓ | |
 | | kişi birleştirme, içe aktarma | — | — | geri alınamaz / dosya akışı; panelde |
-| macros | makro listele/oluştur/güncelle/sil | `macros.list`, `macros.create`, `macros.update`, `macros.delete` | ✓ | organizasyon kapsamı `tenant.macros.write` ister (rota denetler) |
+| macros | makro listele/oluştur/güncelle/sil | `macros.list`, `macros.create`, `macros.update`, `macros.delete` | ✓ (silme A) | organizasyon kapsamı `tenant.macros.write` ister (rota denetler) |
 | | hazır yanıt listele/oluştur/güncelle | `canned_responses.list`, `canned_responses.create`, `canned_responses.update` | ✓ | `render` kullanım sayacını artırdığı için okuma aracı yapılmadı |
 | knowledge | ara, makale listele/oku, koleksiyon, inceleme | `knowledge.search`, `knowledge.articles.list`, `knowledge.articles.get`, `knowledge.collections.list`, `knowledge.reviews.list` | ✓ | |
-| | taslak, düzenle, yayınla/kaldır | `knowledge.articles.create`, `knowledge.articles.update`, `knowledge.articles.publish` | ✓ | yayın ayrı onay; sürüm çakışması 409 |
+| | taslak, düzenle, yayınla/kaldır | `knowledge.articles.create`, `knowledge.articles.update`, `knowledge.articles.publish` | ✓ | yayın ayrı onay; sürüm çakışması 409; güncelleme tam değiştirmedir, `body` zorunlu |
 | | kaynak eşitleme, çeviri, çelişki denetimi | — | — | AI maliyeti ve uzun iş; sonraki adım |
 | automation | iş akışları ve kurallar | `workflows.*`, `automations.*` | A/✓ | CF-186/188; okumalar MCP'de |
 | sla | politika, çalışma saatleri, kuru çalıştırma | `sla.*` | A/✓ | CF-188 |
 | teams | takım listele/oluştur/üye ekle | `teams.*` | A/✓ | CF-189 |
-| organizations | organizasyon bilgisi/güncelle | `organization.get`, `organization.update` | ✓ | logo yükleme panelde |
-| | üye listele/davet, rol listesi, rol değiştir | `members.list`, `members.invite`, `roles.list`, `members.set_roles` | ✓ (davet A) | rol kuralları rotada: sahiplik yalnız sahipten, sahip olunmayan izin verilemez, son sahip korunur |
-| | davet yeniden gönder/iptal | `invitations.resend`, `invitations.revoke` | ✓ | iptal yıkıcı |
+| organizations | organizasyon bilgisi/güncelle | `organization.get`, `organization.update` | ✓ (güncelleme A) | logo yükleme panelde |
+| | üye listele/davet, rol listesi, rol değiştir | `members.list`, `members.invite`, `roles.list`, `members.set_roles` | ✓ (davet ve rol değişikliği A) | rol değişikliği erişimi kaldırabildiği için yıkıcıdır; rol kuralları rotada: sahiplik yalnız sahipten, sahip olunmayan izin verilemez, son sahip korunur |
+| | davet yeniden gönder/iptal | `invitations.resend`, `invitations.revoke` | ✓ (iptal A) | iptal yıkıcı |
 | | üye çıkarma, rol tanımı düzenleme | — | — | hesap erişimini keser; adım yükseltmeli panel akışı |
 | channels | kanal listele/oluştur/test, REST API | `channels.*` | A/✓ | imza anahtarı olanlar MCP'de yok (§1.3) |
 | widget | oluştur/güncelle/kurulum kodu | `widget.*` | A/✓ | CF-189 |
@@ -350,7 +350,7 @@ Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:
 
 1. **Niyete göre yükleme.** `capability.ModuleKeywords`, Türkçe ve İngilizce kök sözcükleri modüllere eşler. Eşleme katlanmış metin üzerinde yapılır: küçük harf, aksansız (`kanalları` → `kanal`). `Registry.Select` her turda şunları yükler: sayfanın yetenekleri, son iki kullanıcı mesajının işaret ettiği modüller ve `navigation.open_route`. Üst sınır 14'tür. Kalan yetenekler `find_tools(query)` ile bulunur. Bu araç ad, tür, tek satır açıklama ve kısa parametre imzası (`conversation_uuid*, limit:integer`) döner. Bulunan yetenek `use_tool(name, params)` ile çalışır: okuma doğrudan çalışır, yazma kart üretir. İkisi de yükleme dışındaki yetkileri aşamaz (`reachable` yalnız kullanıcının yetkili olduklarıdır).
 2. **Kısa açıklamalar.** "PROPOSES" kuralı her araçta tekrarlanmaz, sistem isteminde bir kez anlatılır; araçta yalnız `PROPOSES:` öneki kalır. Form etiketleri (`title`) model şemasından çıkarılır. Yeni araç açıklamaları tek cümledir.
-3. **Sonuç özeti ve sayfalama.** `capability.Compact` boş değerleri ve gürültülü anahtarları atar (`avatar_url`, `html`, …) ve uzun metni 400 karakterde keser. Sonuç bütçeyi aşarsa en uzun listeyi yarıya indirir, sonuca `note` ekler ("items: first 12 of 50; ask for the next page"). Eskiden büyük sonuç tümüyle atılıyordu ("too large"). Liste araçları `limit/offset` alır.
+3. **Sonuç özeti ve sayfalama.** `capability.Compact` boş değerleri ve gürültülü anahtarları atar (`avatar_url`, `embedding`, …) ve liste okumalarında uzun metni 400 karakterde keser. Tek kayıt okumaları (`FullText`: makale, konuşma, mesajlar, kişi, firma) metni bütün döndürür; ancak kayıt bütçeye sığmazsa keser. Kesilen her metnin sonunda `[TRUNCATED: n of m chars shown; …]` işareti olur. Yazma araçları bu işareti taşıyan parametreyi reddeder (`Capability.Check`), böylece kısaltılmış bir gövde aslının üstüne yazılamaz. Sonuç bütçeyi aşarsa en uzun listeyi yarıya indirir, sonuca `note` ekler ("items: first 12 of 50; ask for the next page"). Eskiden büyük sonuç tümüyle atılıyordu ("too large"). Liste araçları `limit/offset` alır.
 4. **Uzun geçmiş.** Son 6 mesaj olduğu gibi gider (her biri en fazla 1500 karakter). Daha eskileri tek bir veri turunda mesaj başına 160 karakterlik satırlara indirilir (`history.go`).
 5. **Önbelleklenebilir önek.** Sistem isteminin sabit kısmı sayfadan bağımsızdır (araç grubu listesi dahil). Değişen bağlam (sayfa, kurulum durumu, sayfa araçları) ayrı veri turunda gider. Sabit araçlar (`search_docs`, `get_setup_state`, `propose_action`, `escalate_to_support`, `suggest_replies`, `find_tools`, `use_tool`) listenin başındadır. Anthropic'te bunlara ayrı bir `cache_control` kırılma noktası konur (`ai.Request.CacheTools`), böylece sayfa değişince de bu kısım önbellekten okunur. Sayfa araçları adlarına göre sıralanır; aynı sayfada art arda turlarda liste birebir aynıdır.
 

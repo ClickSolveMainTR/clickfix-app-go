@@ -65,6 +65,11 @@ func (r *Registry) add(c *Capability) error {
 		// MCP filters tools by permission; without one every member could call it.
 		return fmt.Errorf("capability %s: capabilities on the MCP surface need a permission", c.Name)
 	}
+	if c.OnSurface(SurfaceMCP) && c.Kind == Destructive {
+		// MCP has no confirmation card: the client confirms writes itself,
+		// so deletes, revokes and role changes stay in the assistant (CF-211).
+		return fmt.Errorf("capability %s: destructive capabilities cannot be on the MCP surface", c.Name)
+	}
 	if c.OnSurface(SurfaceMCP) && len(c.Secrets) > 0 {
 		// A generated secret is shown once in the confirmation card; MCP
 		// has no such card, so these capabilities stay off it.
@@ -107,6 +112,8 @@ func (r *Registry) AllowOn(surface string, allow func(*Capability) bool) *Regist
 			switch old, dup := r.mcpNames[c.MCPToolName()]; {
 			case len(c.Secrets) > 0:
 				panic(fmt.Errorf("capability %s: capabilities with secrets cannot be on the MCP surface", c.Name))
+			case c.Kind == Destructive:
+				panic(fmt.Errorf("capability %s: destructive capabilities cannot be on the MCP surface", c.Name))
 			case c.Permission == "":
 				panic(fmt.Errorf("capability %s: capabilities on the MCP surface need a permission", c.Name))
 			case dup && old != c:

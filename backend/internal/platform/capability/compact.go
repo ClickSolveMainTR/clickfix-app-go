@@ -20,7 +20,60 @@ const (
 // droppedKeys never help the model and cost tokens.
 var droppedKeys = map[string]bool{
 	"avatar_url": true, "avatar": true, "logo_url": true, "icon_url": true, "thumbnail_url": true,
-	"etag": true, "version_hash": true, "search_vector": true, "embedding": true, "html": true, "body_html": true,
+	"etag": true, "version_hash": true, "search_vector": true, "embedding": true,
+}
+
+// TruncatedMarker ends every text the compaction clipped. A write
+// capability refuses params that carry it (Check), so a clipped article or
+// message is never written back over the full one.
+const TruncatedMarker = "[TRUNCATED"
+
+func clipText(r []rune, n, total int) string {
+	return string(r[:n]) + fmt.Sprintf("…%s: %d of %d chars shown; read-only, never send this text to a write tool]", TruncatedMarker, n, total)
+}
+
+// clipString clips s to n runes; a string clipped before is clipped again
+// from its kept text, keeping the original length in the marker.
+func clipString(s string, n int) string {
+	if i := strings.Index(s, "…"+TruncatedMarker); i >= 0 {
+		var shown, total int
+		if _, err := fmt.Sscanf(s[i+len("…"+TruncatedMarker):], ": %d of %d", &shown, &total); err != nil {
+			total = utf8.RuneCountInString(s)
+		}
+		kept := []rune(s[:i])
+		if len(kept) <= n {
+			return s
+		}
+		return clipText(kept, n, total)
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return clipText(r, n, len(r))
+}
+
+// HasTruncated reports whether a param value (at any depth) holds clipped text.
+func HasTruncated(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return strings.Contains(x, TruncatedMarker)
+	case map[string]any:
+		for _, e := range x {
+			if HasTruncated(e) {
+				return true
+			}
+		}
+	case Params:
+		return HasTruncated(map[string]any(x))
+	case []any:
+		for _, e := range x {
+			if HasTruncated(e) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Compacted is a read result shrunk to fit the model's budget.
@@ -36,6 +89,17 @@ type Compacted struct {
 // limit/offset or narrower filters). ok is false when even that does not
 // fit.
 func Compact(data any, budget int) (Compacted, bool) {
+	return compact(data, budget, compactStringRunes)
+}
+
+// CompactFull is Compact for single-record reads (an article, a
+// conversation's messages): text is kept whole and only clipped, with
+// TruncatedMarker, when the record does not fit the budget otherwise.
+func CompactFull(data any, budget int) (Compacted, bool) {
+	return compact(data, budget, 0)
+}
+
+func compact(data any, budget, clip int) (Compacted, bool) {
 	var v any
 	switch x := data.(type) {
 	case json.RawMessage:
@@ -52,7 +116,7 @@ func Compact(data any, budget int) (Compacted, bool) {
 			return Compacted{}, false
 		}
 	}
-	v = clean(v, compactStringRunes)
+	v = clean(v, clip)
 	out := Compacted{Data: v}
 	if size(out) <= budget {
 		return out, true
@@ -75,8 +139,13 @@ func Compact(data any, budget int) (Compacted, bool) {
 		out.Data = shortenList(out.Data, path, "", keep)
 		out.Note = listNote(shortened)
 	}
-	if size(out) > budget {
-		out.Data = clean(out.Data, compactMinStringRunes)
+	for _, n := range []int{2000, 1000, compactStringRunes, compactMinStringRunes} {
+		if size(out) <= budget {
+			break
+		}
+		if clip == 0 || n < clip {
+			out.Data = clean(out.Data, n)
+		}
 	}
 	return out, size(out) <= budget
 }
@@ -128,9 +197,8 @@ func clean(v any, maxRunes int) any {
 		}
 		return out
 	case string:
-		if utf8.RuneCountInString(x) > maxRunes {
-			r := []rune(x)
-			return string(r[:maxRunes]) + "…"
+		if maxRunes > 0 {
+			return clipString(x, maxRunes)
 		}
 		return x
 	}

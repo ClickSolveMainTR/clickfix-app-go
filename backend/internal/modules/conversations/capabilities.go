@@ -89,7 +89,7 @@ func Capabilities() []*capability.Capability {
 		{
 			Name: "conversations.get", MCPName: "get_conversation", Module: "conversations", Kind: capability.Read,
 			Permission: rbac.PermTenantConversationsRead, Surfaces: surfaces, Routes: inboxRoutes,
-			Title:       title("Konuşmayı getir", "Get a conversation"),
+			Title: title("Konuşmayı getir", "Get a conversation"), FullText: true,
 			Description: "One conversation: contact, status, assignee, tags, SLA times.",
 			Input:       object([]string{"conversation_uuid"}, map[string]any{"conversation_uuid": conv}),
 			Run:         capability.Endpoint{Method: http.MethodGet, Path: conversationsPath + "/{conversation_uuid}", Route: "/inbox"}.Do(),
@@ -97,7 +97,7 @@ func Capabilities() []*capability.Capability {
 		{
 			Name: "conversations.messages", Module: "conversations", Kind: capability.Read,
 			Permission: rbac.PermTenantConversationsRead, Surfaces: surfaces, Routes: inboxRoutes,
-			Title:       title("Konuşma mesajları", "Conversation messages"),
+			Title: title("Konuşma mesajları", "Conversation messages"), FullText: true,
 			Description: "Messages of a conversation, oldest first (notes are private). Page back with before=<before from the result>.",
 			Input: object([]string{"conversation_uuid"}, map[string]any{"conversation_uuid": conv, "before": capability.UUID("message uuid cursor"),
 				"limit": capability.Int(1, 50)}),

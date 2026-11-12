@@ -95,7 +95,7 @@ var cf211Cases = map[string]cf211Case{
 	"knowledge.collections.list": {`{}`, "GET /v1/tenant/knowledge/collections", nil},
 	"knowledge.reviews.list":     {`{}`, "GET /v1/tenant/knowledge/reviews", nil},
 	"knowledge.articles.create":  {`{"title":"İade","slug":"iade","locale":"tr","visibility":"public","body":"14 gün"}`, "POST /v1/tenant/knowledge/articles", map[string]any{"slug": "iade"}},
-	"knowledge.articles.update":  {`{"article_uuid":"` + u1 + `","version":2,"title":"İade","slug":"iade","locale":"tr","visibility":"public"}`, "PUT /v1/tenant/knowledge/articles/" + u1, map[string]any{"version": float64(2)}},
+	"knowledge.articles.update":  {`{"article_uuid":"` + u1 + `","version":2,"title":"İade","slug":"iade","locale":"tr","visibility":"public","body":"14 gün"}`, "PUT /v1/tenant/knowledge/articles/" + u1, map[string]any{"version": float64(2)}},
 	"knowledge.articles.publish": {`{"article_uuid":"` + u1 + `","version":2,"publish":true}`, "POST /v1/tenant/knowledge/articles/" + u1 + "/publish", map[string]any{"publish": true}},
 	// Appointments.
 	"appointments.upcoming":   {`{"scope":"all"}`, "GET /v1/tenant/appointments/upcoming?scope=all", nil},
@@ -226,9 +226,12 @@ func TestCF211ToolsAreGuarded(t *testing.T) {
 	}
 }
 
-// Billing stays read only; destructive tools are the deletes and revokes.
+// Billing stays read only; destructive tools are the deletes, revokes and
+// role changes. MCP has no confirmation card, so destructive tools and the
+// organization profile stay in the assistant; every other tool is on both.
 func TestCF211Kinds(t *testing.T) {
 	reg := capability.NewRegistry().Register(cf211Capabilities()...)
+	assistantOnly := []string{"organization.update"}
 	destructive := []string{}
 	for _, cp := range reg.All() {
 		if cp.Module == "billing" && cp.Writes() {
@@ -240,14 +243,63 @@ func TestCF211Kinds(t *testing.T) {
 		if strings.HasPrefix(tcMethod(cf211Cases[cp.Name].call), "DELETE") && cp.Kind == capability.Read {
 			t.Errorf("%s deletes as a read", cp.Name)
 		}
-		if !cp.OnSurface(capability.SurfaceMCP) || !cp.OnSurface(capability.SurfaceWeb) {
-			t.Errorf("%s is not on both the assistant and MCP", cp.Name)
+		if !cp.OnSurface(capability.SurfaceWeb) {
+			t.Errorf("%s is not in the assistant", cp.Name)
+		}
+		offMCP := cp.Kind == capability.Destructive || slices.Contains(assistantOnly, cp.Name)
+		if cp.OnSurface(capability.SurfaceMCP) == offMCP {
+			t.Errorf("%s: on MCP = %v, want %v", cp.Name, cp.OnSurface(capability.SurfaceMCP), !offMCP)
 		}
 	}
 	slices.Sort(destructive)
-	want := []string{"contacts.delete", "invitations.revoke", "macros.delete"}
+	want := []string{"contacts.delete", "invitations.revoke", "macros.delete", "members.set_roles"}
 	if !slices.Equal(destructive, want) {
 		t.Fatalf("destructive %v, want %v", destructive, want)
+	}
+	// The registry refuses a destructive capability on MCP outright.
+	defer func() {
+		if recover() == nil {
+			t.Fatal("a destructive capability was registered on MCP")
+		}
+	}()
+	bad := *reg.All()[0]
+	bad.Name, bad.Kind, bad.Surfaces = "things.wipe", capability.Destructive, capability.ReadSurfaces
+	bad.Apply = func(context.Context, capability.Exec, capability.Params) (capability.Result, error) {
+		return capability.Result{}, nil
+	}
+	capability.NewRegistry().Register(&bad)
+}
+
+// A write never takes text a read clipped: an article read in full is
+// clipped only when it does not fit, and then cannot be written back.
+func TestCF211TruncatedTextIsNotWrittenBack(t *testing.T) {
+	reg := capability.NewRegistry().Register(cf211Capabilities()...)
+	get, _ := reg.Get("knowledge.articles.get")
+	upd, _ := reg.Get("knowledge.articles.update")
+	if !get.FullText {
+		t.Fatal("articles.get is not a full-text read")
+	}
+	short, _ := capability.CompactFull(map[string]any{"body": strings.Repeat("a", 1500)}, 3000)
+	if strings.Contains(short.Data.(map[string]any)["body"].(string), capability.TruncatedMarker) {
+		t.Fatal("a body that fits was clipped")
+	}
+	long, ok := capability.CompactFull(map[string]any{"body": strings.Repeat("ç", 5000), "title": "İade"}, 3000)
+	body := long.Data.(map[string]any)["body"].(string)
+	if !ok || !strings.Contains(body, capability.TruncatedMarker) {
+		t.Fatalf("long body: %v %q", ok, body[len(body)-80:])
+	}
+	p := params(t, cf211Cases["knowledge.articles.update"].params)
+	p["body"] = body
+	if err := upd.Check(p); err == nil || !strings.Contains(err.Error(), "shortened") {
+		t.Fatalf("clipped body accepted: %v", err)
+	}
+	delete(p, "body")
+	if err := upd.Check(p); err == nil {
+		t.Fatal("a full-replace update without body was accepted")
+	}
+	reply, _ := reg.Get("conversations.reply")
+	if reply.Check(capability.Params{"conversation_uuid": u1, "content": "x " + capability.TruncatedMarker + ": 400 of 900]"}) == nil {
+		t.Fatal("reply took clipped text")
 	}
 }
 

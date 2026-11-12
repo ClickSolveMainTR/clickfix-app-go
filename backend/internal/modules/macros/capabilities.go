@@ -61,7 +61,7 @@ func Capabilities() []*capability.Capability {
 			Apply: capability.Endpoint{Method: http.MethodPatch, Path: "/v1/tenant/macros/{macro_uuid}", Route: "/inbox"}.Do(),
 		},
 		{
-			Name: "macros.delete", Module: "macros", Kind: capability.Destructive, Permission: rbac.PermTenantMacrosRead, Surfaces: s, Routes: routes,
+			Name: "macros.delete", Module: "macros", Kind: capability.Destructive, Permission: rbac.PermTenantMacrosRead, Surfaces: capability.DefaultSurfaces, Routes: routes,
 			Title: capability.T("Makroyu sil", "Delete a macro"), Description: "Delete a macro.",
 			Input: capability.Object([]string{"macro_uuid"}, map[string]any{"macro_uuid": id}),
 			Apply: capability.Endpoint{Method: http.MethodDelete, Path: "/v1/tenant/macros/{macro_uuid}", Route: "/inbox"}.Do(),

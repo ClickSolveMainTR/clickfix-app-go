@@ -159,6 +159,9 @@ type Capability struct {
 	Routes []string
 	// Undo tells the user how to revert (human text or a capability name).
 	Undo string
+	// FullText marks a single-record read (an article, messages): its text
+	// is not clipped unless the record does not fit (CF-211).
+	FullText bool
 	// Simulations are dry-run endpoints ("POST /v1/tenant/workflows/{uuid}/test")
 	// that change no data; only they may pass the read-only API besides GET.
 	Simulations []string
@@ -301,9 +304,12 @@ func (c *Capability) Check(p Params) error {
 	if p == nil {
 		p = Params{}
 	}
-	for k := range p {
+	for k, v := range p {
 		if c.IsSecret(k) {
 			return Invalid("%s is a secret: it is never accepted from the chat; the user fills it in the confirmation card", k)
+		}
+		if c.Writes() && HasTruncated(v) {
+			return Invalid("%s holds text a read shortened (%s): writing it back would cut the original. Ask the user for the full text, or edit it on its page", k, TruncatedMarker)
 		}
 	}
 	for _, k := range c.required() {

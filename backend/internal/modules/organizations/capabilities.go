@@ -8,7 +8,9 @@ import (
 )
 
 // Capabilities of the organization profile, member roles and invitations
-// (CF-211). Role changes follow the route's rules: only owners grant or
+// (CF-211). Role changes can remove access, so members.set_roles is
+// destructive; it, invitations.revoke and organization.update stay off MCP
+// (no confirmation card there) and run only from the assistant's card. Role changes follow the route's rules: only owners grant or
 // revoke owner, nobody grants a permission they lack, the last owner stays.
 
 // Capabilities are the organization capabilities.
@@ -23,7 +25,7 @@ func Capabilities() []*capability.Capability {
 			Run: capability.Get("/v1/tenant/organization"),
 		},
 		{
-			Name: "organization.update", Module: "organization", Kind: capability.Write, Permission: rbac.PermTenantSettingsWrite, Surfaces: s, Routes: org,
+			Name: "organization.update", Module: "organization", Kind: capability.Write, Permission: rbac.PermTenantSettingsWrite, Surfaces: capability.DefaultSurfaces, Routes: org,
 			Title: capability.T("Organizasyonu güncelle", "Update the organization"), Description: "Change name, time zone (IANA), locale, currency or country; omitted fields stay.",
 			Input: capability.Object(nil, map[string]any{"name": capability.Titled("Ad", capability.Text(255, "")), "timezone": capability.Text(64, "IANA"),
 				"locale": capability.Enum("tr", "en"), "currency": capability.Text(3, "ISO 4217"), "country_code": capability.Text(2, "ISO 3166")}),
@@ -41,7 +43,7 @@ func Capabilities() []*capability.Capability {
 			Run: capability.Get("/v1/tenant/roles"),
 		},
 		{
-			Name: "members.set_roles", Module: "members", Kind: capability.Write, Permission: rbac.PermTenantMembersWrite, Surfaces: s, Routes: members,
+			Name: "members.set_roles", Module: "members", Kind: capability.Destructive, Permission: rbac.PermTenantMembersWrite, Surfaces: capability.DefaultSurfaces, Routes: members,
 			Title: capability.T("Üyenin rollerini değiştir", "Change a member's roles"), Description: "Replace a member's roles (role uuids from roles_list).",
 			Input: capability.Object([]string{"user_uuid", "role_uuids"}, map[string]any{"user_uuid": capability.UUID("member uuid"),
 				"role_uuids": map[string]any{"type": "array", "minItems": 1, "maxItems": 10, "items": capability.UUID("")}}),
@@ -54,7 +56,7 @@ func Capabilities() []*capability.Capability {
 			Apply: capability.Endpoint{Method: http.MethodPost, Path: "/v1/tenant/invitations/{invitation_uuid}/resend", Body: []string{}, Route: "/settings/members"}.Do(),
 		},
 		{
-			Name: "invitations.revoke", Module: "members", Kind: capability.Destructive, Permission: rbac.PermTenantMembersWrite, Surfaces: s, Routes: members,
+			Name: "invitations.revoke", Module: "members", Kind: capability.Destructive, Permission: rbac.PermTenantMembersWrite, Surfaces: capability.DefaultSurfaces, Routes: members,
 			Title: capability.T("Daveti iptal et", "Revoke an invitation"), Description: "Revoke an open invitation; its link stops working.",
 			Input: capability.Object([]string{"invitation_uuid"}, map[string]any{"invitation_uuid": inv}),
 			Apply: capability.Endpoint{Method: http.MethodPost, Path: "/v1/tenant/invitations/{invitation_uuid}/revoke", Body: []string{}, Route: "/settings/members"}.Do(),
