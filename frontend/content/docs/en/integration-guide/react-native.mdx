@@ -1,0 +1,157 @@
+---
+title: "React Native"
+description: "@getclickfix/react-native: native support screens and hooks for a bare React Native app, the mobile app key, user_hash from your server, the webview bridge and common questions."
+---
+
+`@getclickfix/react-native` brings ClickFix support into a bare React Native app (0.81+, Hermes, New Architecture): a provider, hooks for everything the web widget does (identity, conversations, messages, files, typing, read receipts, realtime, help search, rating) and optional, themeable screens. It calls the widget API natively with a **mobile app key**; no webview is needed. Using Expo? Read the [Expo page](/docs/integration-guide/expo?lang=en): `@getclickfix/expo` is this package with the Expo modules wired in.
+
+<include>../../../generated/packages-mobile.en.mdx</include>
+
+## Install [#install]
+
+```sh
+npm install @getclickfix/react-native
+# optional: keep the visitor token in the Keychain / Keystore
+npm install react-native-keychain && npx pod-install
+```
+
+Peers are only `react` and `react-native`. The package is ESM compiled for Hermes and never touches the DOM.
+
+In the panel open **Web widget → Advanced → Mobile apps** and create an **app key** for each platform with your bundle id (iOS) or application id (Android). The key is a public identifier bound to that package name: the API accepts it only from native code (a request that carries an `Origin` is rejected), so it is safe to ship in the app. It is shown once and can be revoked.
+
+## Minimal example [#minimal]
+
+```tsx
+import { useEffect, useState } from "react";
+import {
+  ClickFixProvider,
+  keychainStorage,
+  useVisitor,
+} from "@getclickfix/react-native";
+import {
+  ConversationListScreen,
+  ChatScreen,
+} from "@getclickfix/react-native/ui";
+import * as Keychain from "react-native-keychain";
+
+export default function App() {
+  return (
+    <ClickFixProvider
+      appKey="cf_app_…" // Web widget → Advanced → Mobile apps
+      packageName="com.example.shop" // as registered with the key
+      widgetId="WIDGET_ID"
+      baseUrl="https://getclickfix.com" // the ClickFix app; /api is added
+      storage={keychainStorage(Keychain)} // default: memory
+      getUserHash={(userId, companyId) => api.supportSession(userId, companyId)} // your server
+      language="en"
+    >
+      <Support />
+    </ClickFixProvider>
+  );
+}
+
+function Support() {
+  const user = useSignedInUser(); // your app's session
+  const visitor = useVisitor();
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (user)
+      void visitor.identify({
+        userId: user.id,
+        name: user.name,
+        company: { id: user.companyId },
+      });
+  }, [user?.id]);
+  if (open === undefined)
+    return (
+      <ConversationListScreen
+        onOpen={(c) => setOpen(c.uuid)}
+        onNew={() => setOpen(null)}
+      />
+    );
+  return <ChatScreen conversation={open} onCreated={setOpen} />;
+}
+```
+
+The provider bootstraps the visitor on mount, restores the token from `storage`, renews an expired token on its own and follows the realtime channel over React Native's `WebSocket` (it polls while the socket is down and refreshes when the app returns to the foreground). Your own screens can use the hooks instead of the ready-made ones: `useConversations()` (`items`, `create`), `useConversation(uuid)` (`messages`, `send(text, file)`, `loadMore`, `setTyping`, `markRead`, `agentTyping`), `useHelpSearch(query)` and `useRating(uuid)`. `ClickFixThemeProvider`, `lightTheme` / `darkTheme` and `labelsEn` / `labelsTr` theme the screens.
+
+**Which host:** `baseUrl` is the ClickFix **app** origin, the one that serves `widget.js` (`https://getclickfix.com`, or your own URL when self-hosted). `https://api.getclickfix.com` is the server API for API keys; it does not serve visitor routes, and an API key never goes into an app.
+
+## Identity: `user_hash` [#identity]
+
+`identify` links the visitor to the user signed in to your app and is verified with `user_hash`, which **only your server** computes with the widget's identity secret (Web widget → Security → Identity verification):
+
+- user only: `hex(HMAC-SHA256(identity_secret, user_id))`
+- with a company: `hex(HMAC-SHA256(identity_secret, user_id + "\n" + company_id))`, sent together with `company: { id: company_id }`; the visitor then reports `company_verified: true`.
+
+`getUserHash(userId, companyId)` on the provider asks your server for it (for example a `GET /support-session` route that signs the signed-in user with `identityHash` from [`@getclickfix/node`](/docs/integration-guide/sdks?lang=en#node), Go, PHP or Laravel), so `identify({ userId })` can omit it. The secret never ships in the app. On logout call `visitor.reset()`: the next visitor is a stranger. Details and the other languages: [Identity verification](/docs/integration-guide/identity?lang=en).
+
+## Webview bridge [#webview-bridge]
+
+The native screens and the hosted widget page are two ways to show the same conversations. If you prefer the ready-made widget UI, load `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` in `react-native-webview` and talk to it over the [bridge contract](/docs/integration-guide/mobile?lang=en#bridge-contract). The package re-exports the bridge helpers of `@getclickfix/visitor-core`, and the provider's session can be handed to the webview so the visitor stays the same:
+
+```tsx
+import { useRef } from "react";
+import { Linking } from "react-native";
+import { WebView } from "react-native-webview";
+import {
+  commandScript,
+  isSafeLink,
+  parseMessage,
+  useClickFix,
+} from "@getclickfix/react-native";
+
+export function SupportWebView({
+  onUnread,
+}: {
+  onUnread: (count: number) => void;
+}) {
+  const ref = useRef<WebView>(null);
+  const { client } = useClickFix();
+  return (
+    <WebView
+      ref={ref}
+      source={{
+        uri: "https://getclickfix.com/widget-embed.html?widget=WIDGET_ID&locale=en",
+      }}
+      originWhitelist={["https://getclickfix.com"]}
+      onMessage={(e) => {
+        const m = parseMessage(e.nativeEvent.data); // null for anything that is not a widget message
+        if (m?.type === "clickfix:ready")
+          ref.current?.injectJavaScript(
+            commandScript({
+              type: "clickfix:session",
+              token: client.getToken(),
+            }),
+          );
+        if (m?.type === "clickfix:event" && m.event === "unread")
+          onUnread(m.payload.count); // typed payload
+        if (m?.type === "clickfix:link" && isSafeLink(m.url))
+          void Linking.openURL(m.url); // https only
+      }}
+    />
+  );
+}
+```
+
+The app key stays in the native HTTP headers and never reaches the page. Without the native provider, send `clickfix:identify` with a `user_hash` from your server after `clickfix:ready` instead of handing over a session; a complete app of that kind is [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
+
+## Deep links [#deep-links]
+
+`parseConversationLink(url)` reads `?conversation=<id>`, `/conversation/<id>` and `/conversations/<id>`; `useDeepLinkConversation()` returns the conversation of the launch URL or of a URL received while the app runs (call `clear()` after navigating). Put `myapp://conversation/<uuid>` in push payloads and e-mails.
+
+## Example app [#example]
+
+[`clickfix-examples/react-native`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native) is a complete bare React Native app with the provider, the screens, a small `user_hash` server and deep links; its CI type-checks it and builds the JavaScript bundle.
+
+## Common questions [#faq]
+
+**Is the app key a secret?** No. It identifies your app and is bound to its package name; the API refuses it when a request carries a page origin. Revoke it in the panel if you rotate apps. Your identity secret and API keys are secrets and stay on your server.
+
+**Why is `identify` rejected with `WIDGET_IDENTITY_INVALID`?** The hash does not match what the API computes: check that the server signs the same `user_id` string the app sends, and when you send `company.id` that the hash includes `"\n" + company_id`. The visitor stays anonymous until a valid hash arrives.
+
+**Where is the visitor token stored?** In `storage`: memory by default (a new visitor per launch), `keychainStorage(Keychain)` for the Keychain / Keystore, or any `SecureStorage` (`get`, `set`, `remove`). Clear it with `visitor.reset()` on logout.
+
+**Does it work without realtime?** Yes. When the socket is down or the widget has realtime off, the hooks poll an open conversation and refresh lists on foreground.
+
+**Native screens or the webview?** Native screens follow your app's navigation and theme; the webview shows the full hosted widget (help center, triggers, forms) with no UI work. Both use the same visitor and conversations.

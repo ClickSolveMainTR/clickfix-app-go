@@ -1,0 +1,129 @@
+---
+title: "Expo"
+description: "@getclickfix/expo: expo-secure-store, expo-file-system, expo-linking ve expo-constants bağlanmış haliyle Expo uygulamasında ClickFix desteği; Expo Go, user_hash, webview köprüsü ve sık sorulanlar."
+---
+
+`@getclickfix/expo`, Expo (SDK 54+, 58 ile derlenir) için [`@getclickfix/react-native`](/docs/integration-guide/react-native) paketidir. Paketin tamamını (provider, hook'lar, ekranlar, köprü yardımcıları) yeniden dışa aktarır ve Expo bağdaştırıcılarını ekler: ziyaretçi belirteci `expo-secure-store`'da, dosya ekleme `expo-file-system` ile, derin bağlantı `expo-linking` ile, paket adı `expo-constants`'tan.
+
+<include>../../../generated/packages-mobile.tr.mdx</include>
+
+## Kurulum [#install]
+
+```sh
+npx expo install @getclickfix/expo expo-secure-store expo-file-system expo-linking expo-constants
+```
+
+`app.json`'a `expo-secure-store` eklentisini ve derin bağlantı için bir `scheme` ekleyin:
+
+```json
+{
+  "expo": {
+    "scheme": "myshop",
+    "ios": { "bundleIdentifier": "com.example.shop" },
+    "android": { "package": "com.example.shop" },
+    "plugins": ["expo-secure-store"]
+  }
+}
+```
+
+Panelde **Web widget → Gelişmiş → Mobil uygulamalar** bölümünde `com.example.shop` için bir **uygulama anahtarı** oluşturun (kimlikler platforma göre farklıysa her biri için ayrı).
+
+## En küçük örnek [#minimal]
+
+```tsx
+import { useState } from "react";
+import {
+  ClickFixExpoProvider,
+  pickAttachment,
+  useExpoDeepLinkConversation,
+} from "@getclickfix/expo";
+import {
+  ChatScreen,
+  ConversationListScreen,
+  ClickFixThemeProvider,
+  labelsTr,
+} from "@getclickfix/react-native/ui";
+
+export default function App() {
+  return (
+    <ClickFixExpoProvider
+      appKey={process.env.EXPO_PUBLIC_CLICKFIX_APP_KEY!} // Web widget → Gelişmiş → Mobil uygulamalar
+      widgetId={process.env.EXPO_PUBLIC_CLICKFIX_WIDGET_ID!}
+      baseUrl="https://getclickfix.com" // ClickFix uygulaması; /api eklenir
+      getUserHash={(userId, companyId) => api.supportSession(userId, companyId)} // sizin sunucunuz
+      language="tr"
+    >
+      <ClickFixThemeProvider labels={labelsTr}>
+        <Support />
+      </ClickFixThemeProvider>
+    </ClickFixExpoProvider>
+  );
+}
+
+function Support() {
+  const link = useExpoDeepLinkConversation(); // myshop://conversation/<uuid>
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
+  const conversation = link.conversation ?? open;
+  if (conversation === undefined)
+    return (
+      <ConversationListScreen
+        onOpen={(c) => setOpen(c.uuid)}
+        onNew={() => setOpen(null)}
+      />
+    );
+  return (
+    <ChatScreen
+      conversation={conversation}
+      onCreated={setOpen}
+      pickFile={() =>
+        pickAttachment({
+          mimeTypes: ["image/*", "application/pdf"],
+          maxBytes: 10 * 1024 * 1024,
+        })
+      }
+    />
+  );
+}
+```
+
+Uygulama anahtarının bağlı olduğu paket adı `app.json`'dan (`ios.bundleIdentifier` / `android.package`) gelir; belirteç açılışlar arasında SecureStore'da tutulur. Giriş yapmış kullanıcıyı [React Native sayfasındaki](/docs/integration-guide/react-native#minimal) gibi `useVisitor().identify({ userId, company: { id } })` ile tanıtın.
+
+`EXPO_PUBLIC_*` değerleri pakete gömülür; uygulama anahtarı ve widget kimliği için bu sorun değildir. Kimlik anahtarını ya da bir API anahtarını asla buraya koymayın.
+
+## Expo Go ve geliştirme derlemeleri [#expo-go]
+
+Paketteki her şey **Expo Go**'da çalışır: SecureStore, dosya seçici, bağlantılar, sabitler, gerçek zamanlı ve ekranlar. Tek fark paket adıdır: Expo Go içinde çalışan bundle id Expo Go'nunkidir, `appPackageName()` null döner ve provider açık bir ad ister. İstediğiniz bir ad için (örneğin `com.example.shop.dev`) bir **geliştirme uygulama anahtarı** oluşturun ve `isExpoGo()` doğruyken `packageName="com.example.shop.dev"` verin; geliştirme derlemeleri (`npx expo run:ios`, `eas build`) ve mağaza derlemeleri gerçek bundle id'nin anahtarını kullanır.
+
+```tsx
+<ClickFixExpoProvider
+  packageName={isExpoGo() ? "com.example.shop.dev" : undefined} /* … */
+/>
+```
+
+## Kimlik: `user_hash` [#identity]
+
+`user_hash`, widget'ın kimlik anahtarıyla **sizin sunucunuzda** hesaplanır: `hex(HMAC-SHA256(kimlik_anahtarı, user_id))`, firmayla `hex(HMAC-SHA256(kimlik_anahtarı, user_id + "\n" + company_id))` ve `company: { id }` ile gönderilir (ziyaretçi bu durumda `company_verified: true` döner). `getUserHash` değeri sunucunuzdan ister; `@getclickfix/node` (`identityHash`), Go, PHP ve Laravel aynı baytları üretir. Çıkışta `useVisitor().reset()` çağırın; SecureStore'daki belirteci de siler. Daha fazlası: [Kimlik doğrulama](/docs/integration-guide/identity).
+
+## Webview köprüsü [#webview-bridge]
+
+Yerel ekranlar yerine barındırılan widget'ı göstermek için `react-native-webview` kurun (`npx expo install react-native-webview`) ve `@getclickfix/expo`'nun yeniden dışa aktardığı köprü yardımcılarını (`commandScript`, `parseMessage`, `isSafeLink`) kullanın; `clickfix:ready`'den sonra provider'ın oturumunu `{ type: "clickfix:session", token: client.getToken() }` ile sayfaya devredin. Bileşen [React Native sayfasındakiyle](/docs/integration-guide/react-native#webview-bridge) aynıdır, sözleşmenin tamamı [Mobil](/docs/integration-guide/mobile#bridge-contract) sayfasındadır. `react-native-webview` Expo Go'da hazır gelir; geliştirme derlemesi olmadan da çalışır.
+
+## Derin bağlantı [#deep-links]
+
+`conversationURL(uuid)`, bildirim ve e-postalar için `scheme`'inizden `myshop://conversation/<uuid>` (Expo Go'da `exp://…/--/conversation/<uuid>`) üretir; `useExpoDeepLinkConversation()` `expo-linking`'i izler ve konuşma kimliğini döner, gittikten sonra `clear()` çağırın.
+
+## Örnek uygulama [#example]
+
+[`clickfix-examples/expo`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo) eksiksiz bir Expo uygulamasıdır (giriş simülasyonu, `user_hash` sunucusu, firmayla identify, ekranlar, derin bağlantı); CI'ı tipleri denetler ve Android paketini dışa aktarır.
+
+## Sık sorulanlar [#faq]
+
+**Hangi Expo SDK?** 54'ten 58'e (paket 58 ile derlenir ve 54'ten beri bulunan `expo-file-system` `File` API'sini kullanır).
+
+**`identify` yalnız Expo Go'da başarısız.** Provider Expo Go'nun paket adını ya da hiç ad göndermedi: geliştirme anahtarıyla `packageName` verin, bkz. [Expo Go](#expo-go).
+
+**Bunun yerine bare paketi kullanabilir miyim?** Evet, `@getclickfix/react-native` Expo'da da çalışır; o zaman `packageName` ve `storage`'ı siz verirsiniz. `@getclickfix/expo` yalnız bu bağlantıyı hazır getirir.
+
+**Kendi yerel kodu ya da config eklentisi gerekir mi?** Hayır. Yalnız yukarıdaki standart Expo modülleri; `expo-secure-store` kendi eklentisini getirir.
+
+**Temel adres ve anahtarlar nereden gelir?** `baseUrl` ClickFix uygulamasının kökenidir (`https://getclickfix.com`, `api.getclickfix.com` değil); uygulama anahtarı ve widget kimliği panelden gelir; kimlik anahtarı ve API anahtarları sunucunuzda kalır.

@@ -11,6 +11,8 @@
     "api-channel",
     "webhooks",
     "mobile",
+    "react-native",
+    "expo",
     "sdks"
   ]
 }

@@ -1,9 +1,9 @@
 ---
 title: SDKs
-description: "The Node.js, visitor-core, React, Go, PHP, Laravel and Flutter packages: installation, the smallest example, the example app; creating a client, pagination, webhook signatures and requests without an SDK."
+description: "The Node.js, visitor-core, React, React Native, Expo, Go, PHP, Laravel and Flutter packages: installation, the smallest example, the example app; creating a client, pagination, webhook signatures and requests without an SDK."
 ---
 
-ClickFix has server SDKs for Node.js, Go and PHP; a DOM-free visitor client for React Native, Node and browsers (`@getclickfix/visitor-core`); UI-free widget hooks for React; a full Laravel package and a webview package for Flutter. The server SDKs provide authentication, bounded retries (including `Retry-After`), pagination, `user_hash` and webhook signature verification. All are MIT licensed; the source lives in the public [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) and [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) repositories, and every package has a runnable example app in [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples). Everything is published under [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR).
+ClickFix has server SDKs for Node.js, Go and PHP; a DOM-free visitor client for React Native, Node and browsers (`@getclickfix/visitor-core`); UI-free widget hooks for React; native support screens and hooks for [React Native](/docs/integration-guide/react-native?lang=en) and [Expo](/docs/integration-guide/expo?lang=en); a full Laravel package and a webview package for Flutter. The server SDKs provide authentication, bounded retries (including `Retry-After`), pagination, `user_hash` and webhook signature verification. All are MIT licensed; the source lives in the public [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks), [`clickfix-php`](https://github.com/ClickSolveMainTR/clickfix-php) and [`clickfix-laravel`](https://github.com/ClickSolveMainTR/clickfix-laravel) repositories, and every package has a runnable example app in [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples). Everything is published under [github.com/ClickSolveMainTR](https://github.com/ClickSolveMainTR).
 
 <include>../../../generated/packages.en.mdx</include>
 
@@ -51,7 +51,7 @@ GETs and writes with an `idempotencyKey` are attempted at most three times (expo
 
 ## Visitor client: `@getclickfix/visitor-core` [#visitor-core]
 
-Calls the widget endpoints (`/v1/widget/{public_id}/*`) without a DOM: through the same-origin proxy in the browser (`mode: "browser"`), with an [app key](/docs/integration-guide/mobile?lang=en#mobile-session) in a mobile app (`mode: "app"`). Includes retries, session renewal, a realtime abstraction and the [webview bridge](/docs/integration-guide/mobile?lang=en#bridge-contract) types (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`). Example app: [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
+Calls the widget endpoints (`/v1/widget/{public_id}/*`) without a DOM: with the page origin in the browser (`mode: "browser"`; `/api` behind a same-origin proxy or the absolute `https://getclickfix.com/api` from your own domain), with an [app key](/docs/integration-guide/mobile?lang=en#mobile-session) in a mobile app (`mode: "app"`). Includes retries, session renewal, a realtime abstraction and the [webview bridge](/docs/integration-guide/mobile?lang=en#bridge-contract) types (`BridgeCommand`, `BridgeMessage`, `commandScript`, `parseMessage`, `isSafeLink`; `clickfix:event` payloads are typed per event). `baseURL` is always the ClickFix app origin plus `/api` (the origin that serves `widget-embed.html`); `api.getclickfix.com` is the server API for API keys and does not serve visitor routes. Example app: [`clickfix-examples/react-native-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native-webview).
 
 ```sh
 npm install @getclickfix/visitor-core
@@ -126,7 +126,7 @@ export function Support() {
   const [client] = useState(() =>
     createWidgetClient({
       publicId: "WIDGET_ID",
-      baseURL: "/api", // same-origin proxy on your own site
+      appOrigin: "https://getclickfix.com", // add your site to the widget's allowed domains
       onToken: (token) => sessionStorage.setItem("support-token", token),
     }),
   );
@@ -159,7 +159,11 @@ await client.sendMessage(
 await client.markRead(conversationUUID);
 ```
 
-`user_hash` is produced on your server; never send the identity secret to the browser. Widget commands and events: [Web widget](/docs/web-widget?lang=en#javascript-api).
+`appOrigin` calls the widget API across origins (CORS, cookies are never sent); with a same-origin proxy of the widget API use `baseURL: "/api"` instead. The hooks render on the server too (Next.js SSR and prerendering): they never read `window` while rendering. `user_hash` is produced on your server; never send the identity secret to the browser. Widget commands and events: [Web widget](/docs/web-widget?lang=en#javascript-api).
+
+## React Native and Expo [#react-native]
+
+`@getclickfix/react-native` (bare React Native 0.81+) and `@getclickfix/expo` (Expo SDK 54+) bring the conversations into the app as native screens and hooks over `visitor-core` in app mode (mobile app key), with `user_hash` from your server; both re-export the webview bridge helpers for hosting the ready-made widget instead. Guides: [React Native](/docs/integration-guide/react-native?lang=en), [Expo](/docs/integration-guide/expo?lang=en). Example apps: [`clickfix-examples/react-native`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/react-native), [`clickfix-examples/expo`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/expo).
 
 ## Go: `github.com/ClickSolveMainTR/clickfix-sdks/go` [#go]
 

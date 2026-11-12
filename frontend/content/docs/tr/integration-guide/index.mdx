@@ -3,7 +3,7 @@ title: Entegrasyon kılavuzu
 description: ClickFix'i kendi ürününüze baştan sona bağlayın; kimlik doğrulama, dış kimlik, özel alanlar, olaylar, sistem bağlama, API kanalı, webhook'lar, mobil webview ve SDK'lar. Her adımda widget, Node.js, Go, PHP ve curl örneği.
 ---
 
-Bu kılavuz, panelde **Kurulum** sihirbazının izlediği sırayla, kendi ürününüzü ClickFix'e bağlamak için yazmanız gereken her şeyi adım adım anlatır. Her adım kendi sayfasındadır ve her adımda beş örnek vardır: tarayıcıdaki **widget** (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) ve **curl**. Örnekler herkese açık [`clickfix-sdks`](https://github.com/ClickSolveMainTR/clickfix-sdks/tree/main/examples) deposundaki `examples` klasöründen gelir ve her sürümde çalıştırılarak doğrulanır; burada gördüğünüz kod, testten geçen koddur. Çalışan tam uygulamalar (Express, Next.js, React Native, Flutter, Go, PHP, Laravel, curl) için [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposuna bakın.
+Bu kılavuz, panelde **Kurulum** sihirbazının izlediği sırayla, kendi ürününüzü ClickFix'e bağlamak için yazmanız gereken her şeyi adım adım anlatır. Her adım kendi sayfasındadır ve her adımda beş örnek vardır: tarayıcıdaki **widget** (JavaScript), **Node.js** (`@getclickfix/node`), **Go** (`github.com/ClickSolveMainTR/clickfix-sdks/go`), **PHP** (`clickfix/sdk`) ve **curl**. Örnekler her sürümde bir test API'sine karşı çalıştırılarak doğrulanır; burada gördüğünüz kod, testten geçen koddur. Çalışan tam uygulamalar (Express, Next.js, React Native, Expo, Flutter, Go, PHP, Laravel, curl) için [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) deposuna bakın.
 
 ## Adımlar [#steps]
 
@@ -15,17 +15,18 @@ Bu kılavuz, panelde **Kurulum** sihirbazının izlediği sırayla, kendi ürün
 6. [API kanalı](/docs/integration-guide/api-channel)
 7. [Webhook'lar](/docs/integration-guide/webhooks)
 8. [Mobil: webview ve Flutter](/docs/integration-guide/mobile)
-9. [SDK'lar](/docs/integration-guide/sdks)
+9. [React Native](/docs/integration-guide/react-native) ve [Expo](/docs/integration-guide/expo)
+10. [SDK'lar](/docs/integration-guide/sdks)
 
 ## Başlamadan önce [#before-you-start]
 
-| Gereken                                 | Nereden                                              | Nerede kullanılır                                                                         |
-| --------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **API anahtarı** (`cf_sk_…`)            | Organizasyon → API ve otomasyonlar → API anahtarları | Sunucunuzdan yapılan tüm çağrılar (`Authorization: Bearer`)                               |
-| **Widget kimlik anahtarı**              | Web widget → Güvenlik → Kimlik doğrulama             | `user_hash` hesaplamak için (kullanıcı + firma kimliği), yalnız sunucuda                  |
-| **Widget kimliği** (`WIDGET_ID`)        | Web widget → Kurulum                                 | `widget.js` ve mobil webview adresi                                                       |
-| **API kanalı kimliği ve imza anahtarı** | Kanallar → Kanal ekle → API                          | Yalnız kendi sohbet uygulamanızı kanal olarak bağlıyorsanız                               |
-| **Uygulama anahtarı** (mobil)           | Web widget → Gelişmiş → Mobil uygulamalar            | Yalnız yerel çekirdekle (`@getclickfix/visitor-core`) webview'siz çağrı yapan uygulamalar |
+| Gereken                                 | Nereden                                              | Nerede kullanılır                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **API anahtarı** (`cf_sk_…`)            | Organizasyon → API ve otomasyonlar → API anahtarları | Sunucunuzdan yapılan tüm çağrılar (`Authorization: Bearer`)                                                                     |
+| **Widget kimlik anahtarı**              | Web widget → Güvenlik → Kimlik doğrulama             | `user_hash` hesaplamak için (kullanıcı + firma kimliği), yalnız sunucuda                                                        |
+| **Widget kimliği** (`WIDGET_ID`)        | Web widget → Kurulum                                 | `widget.js` ve mobil webview adresi                                                                                             |
+| **API kanalı kimliği ve imza anahtarı** | Kanallar → Kanal ekle → API                          | Yalnız kendi sohbet uygulamanızı kanal olarak bağlıyorsanız                                                                     |
+| **Uygulama anahtarı** (mobil)           | Web widget → Gelişmiş → Mobil uygulamalar            | Widget API'sini webview'siz çağıran uygulamalar (`@getclickfix/react-native`, `@getclickfix/expo`, `@getclickfix/visitor-core`) |
 
 Temel adres `https://api.getclickfix.com` (sonuna `/v1` eklemeyin). Yazma isteklerinde `Idempotency-Key` zorunludur. Anahtarlar tarayıcıya ve mobil uygulamaya girmez. Yanıt zarfı, hata kodları ve hız sınırları: [API](/docs/api).
 

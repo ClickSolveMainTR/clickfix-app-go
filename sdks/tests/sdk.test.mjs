@@ -48,7 +48,7 @@ test('react-widget ships the same script SDK contract as frontend/public/widget.
  const b=await readFile(new URL('../../frontend/public/widget.d.ts',import.meta.url),'utf8');
  assert.equal(a,b,'copy frontend/public/widget.d.ts to sdks/react-widget/src/clickfix.d.ts');
 });
-test('identityHash signs the user id alone or with the company id (CF-206)',()=>{
+test('identityHash signs the user id alone or with the company id',()=>{
  const secret='identity-secret-0123456789abcdef';
  assert.equal(identityHash(secret,'1001'),createHmac('sha256',secret).update('1001').digest('hex'));
  assert.equal(identityHash(secret,'1001',''),identityHash(secret,'1001'));
@@ -60,4 +60,29 @@ test('identityHash signs the user id alone or with the company id (CF-206)',()=>
  assert.throws(()=>identityHash(secret,'10\n01'));
  assert.throws(()=>identityHash(secret,'1001','F\n77'));
  assert.throws(()=>identityHash('','1001'));
+});
+
+test('react-widget hooks render on the server (no window) and queue SDK calls in the browser',async()=>{
+ const {createElement}=await import('react');
+ const {renderToString}=await import('react-dom/server');
+ const {useClickFix,clickFix}=await import('../react-widget/dist/index.js');
+ assert.equal(typeof globalThis.window,'undefined');
+ let handle;
+ const Support=()=>{const w=useClickFix({appOrigin:'https://app.example.test',widgetId:'id'});handle=w.sdk;return createElement('span',null,w.ready?'ready':'loading');};
+ assert.match(renderToString(createElement(Support)),/loading/);
+ assert.equal(typeof clickFix(),'function');
+ assert.throws(()=>handle('open'),/only available in the browser/);
+ globalThis.window={};
+ try{
+  const p=handle('reset');assert.equal(p,undefined,'queued before widget.js loads');
+  handle.reset();handle.track('signup',{plan:'pro'});
+  assert.deepEqual(globalThis.window.ClickFix.q,[['reset'],['reset'],['track','signup',{plan:'pro'}]]);
+ }finally{delete globalThis.window;}
+});
+test('createWidgetClient with appOrigin calls the ClickFix widget API across origins',async()=>{
+ const urls=[];const client=createWidgetClient({publicId:'pub',appOrigin:'https://app.example.test/',fetch:async(url,init)=>{urls.push({url,credentials:init.credentials});return response({visitor:{token:'t'},conversations:[]});}});
+ await client.init();
+ assert.equal(urls[0].url,'https://app.example.test/api/v1/widget/pub/bootstrap');assert.equal(urls[0].credentials,'omit');
+ const same=createWidgetClient({publicId:'pub',appOrigin:'https://ignored.test',baseURL:'/bff',fetch:async(url)=>{urls.push({url});return response({visitor:{token:'t'},conversations:[]});}});
+ await same.init();assert.equal(urls[1].url,'/bff/v1/widget/pub/bootstrap');
 });

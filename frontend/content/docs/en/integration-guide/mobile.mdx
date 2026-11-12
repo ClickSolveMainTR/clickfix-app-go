@@ -3,7 +3,7 @@ title: "Mobile: webview and Flutter"
 description: "The secure webview that carries the session in a mobile app: bridge contract, session handover, native core and app key, deep links, security rules, the clickfix_webview Flutter package."
 ---
 
-The path for mobile apps is not a separate native SDK but a **secure webview that carries the session**: the app opens `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` in a webview; the widget opens full screen and talks to the app over a **bridge**. Flutter, React Native, iOS, Android and every other platform connect the same way, with the same contract. The bridge contract (`bridge_version` 1: commands, messages, error codes, security rules) is in the [Bridge contract](#bridge-contract) section of this page; Flutter has the ready-made [`clickfix_webview`](#flutter) package, and complete apps for the other platforms live in the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository (`react-native-webview`, `flutter-webview`).
+Every mobile platform can use a **secure webview that carries the session** (React Native and Expo apps can also render native screens instead: see [React Native](/docs/integration-guide/react-native?lang=en) and [Expo](/docs/integration-guide/expo?lang=en)): the app opens `https://getclickfix.com/widget-embed.html?widget=WIDGET_ID` in a webview; the widget opens full screen and talks to the app over a **bridge**. Flutter, React Native, iOS, Android and every other platform connect the same way, with the same contract. The bridge contract (`bridge_version` 1: commands, messages, error codes, security rules) is in the [Bridge contract](#bridge-contract) section of this page; Flutter has the ready-made [`clickfix_webview`](#flutter) package, and complete apps for the other platforms live in the [`clickfix-examples`](https://github.com/ClickSolveMainTR/clickfix-examples) repository (`react-native-webview`, `flutter-webview`).
 
 ### Session handoff [#mobile-session]
 
@@ -14,7 +14,7 @@ The path for mobile apps is not a separate native SDK but a **secure webview tha
 
 The webview's cookies and storage carry the session across reloads; never switch accounts without sending `reset`.
 
-**Session handover with the native core (CF-201).** An app can also call the widget endpoints without a webview: create an **app key** with the platform and package name under Web widget → Advanced → **Mobile apps**; `@getclickfix/visitor-core` with `mode: "app"` sends it in the `X-ClickFix-App-Key` and `X-ClickFix-App-Package` headers, so no page origin is needed. Hand the native session to the webview with `{"type":"clickfix:session","token":client.getToken()}`; the widget answers with its own token in a `clickfix:session` message after `ready`, `identify` and `reset` (`client.adoptToken`). The key is shown only when created and can be revoked in the panel; `user_hash` verification is the same as in the browser.
+**Session handover with the native core.** An app can also call the widget endpoints without a webview: create an **app key** with the platform and package name under Web widget → Advanced → **Mobile apps**; `@getclickfix/visitor-core` with `mode: "app"` sends it in the `X-ClickFix-App-Key` and `X-ClickFix-App-Package` headers, so no page origin is needed. Hand the native session to the webview with `{"type":"clickfix:session","token":client.getToken()}`; the widget answers with its own token in a `clickfix:session` message after `ready`, `identify` and `reset` (`client.adoptToken`). The key is shown only when created and can be revoked in the panel; `user_hash` verification is the same as in the browser.
 
 ### The bridge: app to widget and widget to app [#mobile-bridge]
 
@@ -25,7 +25,7 @@ Widget → app: `clickfix:ready`, `clickfix:event` (every SDK event: `message`, 
 The host-side samples below set up the bridge, hand over the session when the widget is ready, send an app event and close the support screen on the widget's `close` event. They are not part of the guide's automated test; build and verify them in your own project.
 
 ```dart tab="Flutter"
-// Package: clickfix_webview (sdks/flutter/clickfix_webview; a git dependency until the first release). The package sets up
+// Package: clickfix_webview on pub.dev (flutter pub add clickfix_webview). The package sets up
 // the bridge, the origin lock and the ClickFixFlutter channel; you hand over the session.
 import 'package:clickfix_webview/clickfix_webview.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -233,7 +233,7 @@ The transport is picked by the widget per platform: React Native `window.ReactNa
 
 ### Flutter package: `clickfix_webview` [#flutter]
 
-[`clickfix_webview`](https://pub.dev/packages/clickfix_webview) (Flutter 3.38+, Dart 3.10+; on top of `webview_flutter`, Android `minSdk` 24, iOS 12+) implements the bridge contract as `ClickFixController` + `ClickFixWebView`: origin lock, a command queue before `ready`, deep links, `clickfix:link` validation. The Flutter tab above uses this package; the runnable app is in [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
+[`clickfix_webview`](https://pub.dev/packages/clickfix_webview) (any Flutter release with a stable Dart 3.10+; on top of `webview_flutter`, Android `minSdk` 24, iOS 12+) implements the bridge contract as `ClickFixController` + `ClickFixWebView`: origin lock, a command queue before `ready`, deep links, `clickfix:link` validation. The Flutter tab above uses this package; the runnable app is in [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
 
 ```sh
 flutter pub add clickfix_webview

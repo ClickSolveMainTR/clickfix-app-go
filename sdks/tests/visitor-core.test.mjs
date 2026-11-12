@@ -1,4 +1,4 @@
-// @getclickfix/visitor-core (CF-201): runs under plain Node 22 (no DOM). The
+// @getclickfix/visitor-core: runs under plain Node 22 (no DOM). The
 // same checks hold on React Native (Hermes): the core only touches
 // globalThis.fetch/FormData/WebSocket/timers, which these tests inject.
 import {test} from 'node:test';
@@ -114,4 +114,21 @@ test('core bridge types mirror the widget contract (frontend/public/widget.d.ts 
  assert.deepEqual(new Set(types(dts)),all,'widget.d.ts');
  assert.deepEqual(new Set(types(widget)),all,'shared/bridge.ts');
  assert.deepEqual(new Set(types(core.replace(/'/g,'"'))),all,'core bridge.ts');
+});
+
+test('bridge events: known names with an object payload pass, others are ignored; names match the widget',async()=>{
+ const {EVENT_NAMES}=await import('../visitor-core/dist/index.js');
+ const ok=parseMessage('{"type":"clickfix:event","event":"unread","payload":{"count":3}}');
+ assert.equal(ok.payload.count,3);
+ assert.equal(parseMessage({type:'clickfix:event',event:'nope',payload:{}}),null,'unknown event name');
+ assert.equal(parseMessage({type:'clickfix:event',event:'unread'}),null,'missing payload');
+ const widget=await readFile(new URL('../../frontend/widget-sdk/src/shared/bridge.ts',import.meta.url),'utf8');
+ const block=/FORWARDED_EVENTS[^=]*=\s*\[([^\]]*)\]/.exec(widget)[1];
+ const forwarded=[...block.matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+ assert.deepEqual([...EVENT_NAMES].sort(),[...forwarded].sort(),'EVENT_NAMES must equal FORWARDED_EVENTS in frontend/widget-sdk/src/shared/bridge.ts');
+});
+
+test('CORE_VERSION (sent as sdk_version) follows the package version',async()=>{
+ const pkg=JSON.parse(await readFile(new URL('../visitor-core/package.json',import.meta.url),'utf8'));
+ assert.equal(CORE_VERSION,`core-${pkg.version}`);
 });
