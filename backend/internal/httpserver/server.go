@@ -731,8 +731,22 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		RegisterPages(automationmodule.Pages()...).
 		RegisterPages(slamodule.Pages()...).
 		Register(conversationsmodule.Capabilities()...).
+		// CF-211: the agent's and admin's daily work, one definition for the
+		// assistant and MCP.
+		Register(contactsmodule.Capabilities()...).
+		Register(macrosmodule.Capabilities()...).
+		Register(kbmodule.Capabilities()...).
+		Register(appointmentsmodule.Capabilities()...).
+		Register(reportsmodule.Capabilities()...).
+		Register(billingmodule.Capabilities()...).
+		Register(organizationsmodule.Capabilities()...).
+		Register(auditmodule.Capabilities()...).
+		Register(customfieldsmodule.Capabilities()...).
+		Register(statusmodule.Capabilities()...).
+		Register(agentmodule.Capabilities()...).
 		RegisterPages(webhooksmodule.Pages()...).
 		AllowOn(capability.SurfaceWidget, assistantmodule.WidgetAllowed)
+	assistantSvc.Activity = activityRec
 	assistantSvc.Instances = inboxCore.Channels
 	assistantSvc.Setup = onboardingSvc
 	assistantSvc.API = func(user, org uuid.UUID) capability.API {

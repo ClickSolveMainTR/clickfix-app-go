@@ -54,6 +54,10 @@ type Request struct {
 	MaxTokens    int64
 	Effort       string
 	CachePrefix  bool
+	// CacheTools is the number of leading tools that are the same on every
+	// turn; with CachePrefix the provider caches them separately, so a
+	// page change (different trailing tools) still reuses them (CF-211).
+	CacheTools int
 	// ToolChoice "none" keeps the tools defined (earlier tool_use turns need
 	// them) but forbids new calls; the tool loop sets it for its last turn.
 	ToolChoice string

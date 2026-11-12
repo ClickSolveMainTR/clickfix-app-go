@@ -250,6 +250,7 @@ func (c *Capability) IsSecret(key string) bool {
 }
 
 // ToolSchema is the schema the model sees: the input without "required"
+// and without form labels ("title", CF-211)
 // (a missing field reaches Check, which tells the model to ask the user
 // instead of failing the whole turn) and never with secret fields.
 func (c *Capability) ToolSchema() map[string]any {
@@ -257,9 +258,20 @@ func (c *Capability) ToolSchema() map[string]any {
 	if props, ok := c.Input["properties"].(map[string]any); ok {
 		clean := map[string]any{}
 		for k, v := range props {
-			if !c.IsSecret(k) {
-				clean[k] = v
+			if c.IsSecret(k) {
+				continue
 			}
+			// "title" is the card form label; the model does not need it.
+			if m, ok := v.(map[string]any); ok && m["title"] != nil {
+				cp := make(map[string]any, len(m))
+				for mk, mv := range m {
+					if mk != "title" {
+						cp[mk] = mv
+					}
+				}
+				v = cp
+			}
+			clean[k] = v
 		}
 		out["properties"] = clean
 	}
