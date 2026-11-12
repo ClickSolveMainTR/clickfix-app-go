@@ -123,6 +123,7 @@ export function SiteFooter() {
         <p>
           {t("landing.footer.copyright", { year: new Date().getFullYear() })}
         </p>
+        <p>Powered by EasyTrade Yazılım Teknolojileri · Oğuzhan Yılmaz</p>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event(CONSENT_OPEN_EVENT))}
