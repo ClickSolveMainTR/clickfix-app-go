@@ -191,6 +191,8 @@ export const routes = {
         create: "/settings/knowledge/new",
         detail: (uuid: string) => `/settings/knowledge/${uuid}`,
       },
+      /** Category taxonomy, review queue and label export (CF-218). */
+      categories: "/settings/categories",
     },
     objects: {
       records: (typeUuid: string) => `/objects/${typeUuid}`,

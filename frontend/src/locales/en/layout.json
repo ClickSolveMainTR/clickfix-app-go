@@ -106,5 +106,6 @@
   "nav_platform_product_feedback": "Product feedback",
   "nav_engineering": "Product requests",
   "nav_tenant_settings_mcp": "Connect with MCP",
-  "nav_tenant_settings_connect": "Connect your system"
+  "nav_tenant_settings_connect": "Connect your system",
+  "nav_categories": "Categories"
 }

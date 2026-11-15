@@ -183,5 +183,10 @@
   "labels.platform.product_feedback.read": "Ürün geri bildirimlerini görüntüle",
   "groups.tenant_assistant": "ClickFix Asistan",
   "labels.tenant.widgets.publish": "Web widget ayarlarını yayınla",
-  "groups.tenant_widgets": "Web widget"
+  "groups.tenant_widgets": "Web widget",
+  "labels.tenant.categories.read": "Kategorileri görüntüle",
+  "labels.tenant.categories.manage": "Kategori ağacını yönet",
+  "labels.tenant.categories.label": "Kayıtların kategorisini onayla veya düzelt",
+  "labels.tenant.categories.export": "Kategori etiketlerini dışa aktar",
+  "groups.tenant_categories": "Kategoriler"
 }

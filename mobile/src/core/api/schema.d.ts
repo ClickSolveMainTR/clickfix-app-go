@@ -3465,6 +3465,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/categories/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Category tree metadata
+         * @description Table contract of `GET /v1/tenant/categories` (`tenant.categories.read`, CF-218).
+         */
+        get: operations["getTenantCategoriesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the category tree
+         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; until departments land (CF-215) it answers `400 VALIDATION_ERROR` (`department`, `unavailable`). Archived nodes only with `include_archived=true`.
+         */
+        get: operations["getTenantCategories"];
+        put?: never;
+        /**
+         * Create a category
+         * @description `tenant.categories.manage` (CF-218). `slug` defaults to the slugified name. A root may be organization-wide or belong to a department; a child of a department node belongs to the same department (it inherits it when `department_uuid` is omitted); a child of an organization-wide node may open a department branch. At most 5 levels. `examples` (up to 50) are sample texts the embedding classifier compares records with. Errors: `400 VALIDATION_ERROR` (`name`, `slug`, `examples`, `parent_uuid` `not_found`/`cycle`/`too_deep`/`archived`, `department_uuid` `mismatch`/`not_found`/`unavailable`), `409 CONFLICT` when the slug is taken.
+         */
+        post: operations["postTenantCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Records waiting for a category decision
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Records whose classification stayed below the confidence bar (`needs_review`), newest first. `subject_type` narrows the kind.
+         */
+        get: operations["getTenantCategoryReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/labels/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the category labels (training set)
+         * @description `tenant.categories.read` + `tenant.categories.export` (CF-218). Every agent confirmation and correction of the organization as JSON Lines, oldest first: masked text, its vector and embedding model, the previous and the new category, the previous source and confidence, who and when. The training set of the organization's own classifier (CF-219); it never contains another organization's labels. `since` (RFC 3339) exports labels created from then on. Not wrapped in the response envelope.
+         */
+        get: operations["getTenantCategoryLabelsExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a category
+         * @description `tenant.categories.read` (CF-218).
+         */
+        get: operations["getTenantCategory"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an unused category
+         * @description `tenant.categories.manage` (CF-218). Only a node without children, records or labels; otherwise `409 CONFLICT` (archive it instead). Answers `status: deleted`.
+         */
+        delete: operations["deleteTenantCategory"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a category
+         * @description `tenant.categories.manage` (CF-218). Omitted fields keep their value; `parent_uuid: ""` makes the node a root, `department_uuid: ""` makes it organization-wide. Moving a node moves its subtree (same rules as create). `archived: true` archives the node and its subtree: archived nodes are no classification candidates but keep their labels.
+         */
+        patch: operations["patchTenantCategory"];
+        trace?: never;
+    };
+    "/v1/tenant/category-assignments/{subjectType}/{subjectUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a record's category
+         * @description `tenant.categories.read` (CF-218). The record must be visible to the caller (conversations follow the inbox visibility; suggestions need `tenant.settings.read`), else `404`. `assignment` is `null` while the record has no category.
+         */
+        get: operations["getTenantCategoryAssignment"];
+        /**
+         * Confirm or correct a record's category
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). The record takes the category with source `human` and confidence 1. The decision is stored as a label (`confirm` when the category stays, `correct` otherwise): masked text, vector, previous and new category, who and when. Errors: `400 VALIDATION_ERROR` (`category_uuid` `not_found`/`archived`/`department`).
+         */
+        put: operations["putTenantCategoryAssignment"];
+        post?: never;
+        /**
+         * Clear a record's category
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Labels already collected stay. Answers `status: deleted`.
+         */
+        delete: operations["deleteTenantCategoryAssignment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/category-assignments/{subjectType}/{subjectUuid}/classify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Classify a record
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Phase 1: embedding similarity to the category examples and labelled records; when unsure the AI (metered, `tenant.ai` policy and credits apply); when confidence stays low the record goes to the review queue (`needs_review`). An existing decision is returned unchanged; `force=true` re-runs a machine decision, never a human one. Errors: `409 CONFLICT` when the organization has no categories or the record has no text.
+         */
+        post: operations["postTenantCategoryClassify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/teams/meta": {
         parameters: {
             query?: never;
@@ -23702,6 +23862,133 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /**
+         * @description Record kinds that carry a category (CF-218). `archive_record` (CF-217) and `knowledge_unit` (CF-216) answer 404 until their modules register.
+         * @enum {string}
+         */
+        CategorySubjectType: "conversation" | "archive_record" | "knowledge_unit" | "suggestion";
+        /**
+         * @description Who decided the category. `model` is the organization's own classifier (CF-219).
+         * @enum {string}
+         */
+        CategorySource: "embedding" | "ai" | "human" | "model";
+        Category: {
+            /** Format: uuid */
+            uuid: string;
+            /**
+             * Format: uuid
+             * @description null = organization-wide
+             */
+            department_uuid: string | null;
+            /** Format: uuid */
+            parent_uuid: string | null;
+            name: string;
+            slug: string;
+            description: string;
+            examples: string[];
+            position: number;
+            depth: number;
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CategoryInput: {
+            name?: string;
+            slug?: string;
+            description?: string;
+            examples?: string[];
+            position?: number;
+            /** @description Parent uuid; empty string makes a root */
+            parent_uuid?: string;
+            /** @description Department uuid; empty string makes the node organization-wide */
+            department_uuid?: string;
+            archived?: boolean;
+        };
+        CategoryList: {
+            items: components["schemas"]["Category"][];
+        };
+        CategoryRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+        };
+        CategoryAssignment: {
+            subject_type: components["schemas"]["CategorySubjectType"];
+            /** Format: uuid */
+            subject_uuid: string;
+            category: null | components["schemas"]["CategoryRef"];
+            confidence: number;
+            source: components["schemas"]["CategorySource"];
+            /** @description Stage and version that decided (embedding/v1, ai/v1, human, none) */
+            classifier: string;
+            needs_review: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CategoryAssignmentResult: {
+            assignment: null | components["schemas"]["CategoryAssignment"];
+        };
+        CategoryAssignmentPage: {
+            items: components["schemas"]["CategoryAssignment"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CategoryLabelInput: {
+            /** Format: uuid */
+            category_uuid: string;
+        };
+        /** @description One line of the label export (CF-219 training set). */
+        CategoryLabelExport: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: date-time */
+            created_at: string;
+            subject_type: components["schemas"]["CategorySubjectType"];
+            /** Format: uuid */
+            department_uuid: string | null;
+            /** @enum {string} */
+            action: "confirm" | "correct";
+            /** @description Record text with personal data masked */
+            text: string;
+            /** @description Empty when the vector could not be built */
+            embedding_model: string;
+            embedding: number[];
+            category: components["schemas"]["CategoryRef"];
+            previous_category: null | components["schemas"]["CategoryRef"];
+            previous_source: null | components["schemas"]["CategorySource"];
+            previous_confidence: number | null;
+            /** Format: uuid */
+            labeled_by: string;
+        };
+        EnvelopeCategory: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Category"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryAssignmentResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryAssignmentResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryAssignmentPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryAssignmentPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         TeamPage: {
             items: components["schemas"]["Team"][];
             /** Format: int64 */
@@ -28728,6 +29015,8 @@ export interface components {
         InvitationUUID: string;
         /** @description Set-up run uuid (CF-140). */
         OnboardingSetupRunUUID: string;
+        CategorySubjectTypePath: components["schemas"]["CategorySubjectType"];
+        CategorySubjectUuidPath: string;
         /**
          * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
@@ -35291,6 +35580,405 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCategoriesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategories: {
+        parameters: {
+            query?: {
+                department?: string;
+                include_archived?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category tree */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description Created category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCategoryReview: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                subject_type?: components["schemas"]["CategorySubjectType"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategoryLabelsExport: {
+        parameters: {
+            query?: {
+                since?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One CategoryLabelExport object per line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["CategoryLabelExport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description Updated category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryLabelInput"];
+            };
+        };
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCategoryClassify: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTenantTeamsMeta: {

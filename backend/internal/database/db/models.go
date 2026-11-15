@@ -1418,6 +1418,69 @@ type CannedResponse struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Category struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	ParentID       pgtype.Int8        `json:"parent_id"`
+	Name           string             `json:"name"`
+	Slug           string             `json:"slug"`
+	Description    string             `json:"description"`
+	Examples       []string           `json:"examples"`
+	Position       int32              `json:"position"`
+	Depth          int16              `json:"depth"`
+	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CategoryAssignment struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	SubjectType    string             `json:"subject_type"`
+	SubjectID      int64              `json:"subject_id"`
+	SubjectUuid    uuid.UUID          `json:"subject_uuid"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	CategoryID     pgtype.Int8        `json:"category_id"`
+	Confidence     float32            `json:"confidence"`
+	Source         string             `json:"source"`
+	Classifier     string             `json:"classifier"`
+	NeedsReview    bool               `json:"needs_review"`
+	AssignedBy     pgtype.Int8        `json:"assigned_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CategoryExample struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	CategoryID     int64              `json:"category_id"`
+	Content        string             `json:"content"`
+	Embedding      []float32          `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type CategoryLabel struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	DepartmentID       pgtype.Int8        `json:"department_id"`
+	SubjectType        string             `json:"subject_type"`
+	SubjectUuid        uuid.UUID          `json:"subject_uuid"`
+	Action             string             `json:"action"`
+	Content            string             `json:"content"`
+	Embedding          []float32          `json:"embedding"`
+	EmbeddingModel     string             `json:"embedding_model"`
+	PreviousCategoryID pgtype.Int8        `json:"previous_category_id"`
+	PreviousSource     pgtype.Text        `json:"previous_source"`
+	PreviousConfidence pgtype.Float4      `json:"previous_confidence"`
+	CategoryID         int64              `json:"category_id"`
+	LabeledBy          int64              `json:"labeled_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
 type ChangelogEntry struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

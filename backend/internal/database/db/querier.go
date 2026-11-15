@@ -172,6 +172,7 @@ type Querier interface {
 	// Global minutely worker; every subsequent mutation uses the returned org.
 	AppointmentVideoDue(ctx context.Context, scheduledEndAt pgtype.Timestamptz) ([]Appointment, error)
 	AppointmentVideoFinish(ctx context.Context, arg AppointmentVideoFinishParams) (int64, error)
+	ArchiveCategoryDescendants(ctx context.Context, arg ArchiveCategoryDescendantsParams) error
 	AssignArticleBrand(ctx context.Context, arg AssignArticleBrandParams) (int64, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	AssistantDocumentCreate(ctx context.Context, arg AssistantDocumentCreateParams) (AssistantDocument, error)
@@ -493,6 +494,25 @@ type Querier interface {
 	CalibrationScore(ctx context.Context, arg CalibrationScoreParams) (CalibrationScoreRow, error)
 	CalibrationScores(ctx context.Context, arg CalibrationScoresParams) ([]CalibrationScoresRow, error)
 	CancelConversationReminder(ctx context.Context, arg CancelConversationReminderParams) (int64, error)
+	// The node itself and every ancestor (cycle checks on re-parenting).
+	CategoryAncestorIDs(ctx context.Context, arg CategoryAncestorIDsParams) ([]int64, error)
+	CategoryCategoryRef(ctx context.Context, arg CategoryCategoryRefParams) (CategoryCategoryRefRow, error)
+	// A descendant whose department differs from the given one (moving a branch
+	// to another department would orphan its department-scoped children).
+	CategoryChildDepartmentConflict(ctx context.Context, arg CategoryChildDepartmentConflictParams) (bool, error)
+	// Active categories a record may take: a department's record takes the
+	// organization-wide nodes and its branch; a record without a department
+	// (NULL) may take any node.
+	CategoryClassificationCandidates(ctx context.Context, arg CategoryClassificationCandidatesParams) ([]CategoryClassificationCandidatesRow, error)
+	// Example texts of the candidate set that have no vector for the model.
+	CategoryExamplesMissing(ctx context.Context, arg CategoryExamplesMissingParams) ([]CategoryExamplesMissingRow, error)
+	CategoryInUse(ctx context.Context, arg CategoryInUseParams) (bool, error)
+	// Best cosine score per candidate category over its example vectors and the
+	// organization's labelled texts (human labels are examples too).
+	CategorySimilarity(ctx context.Context, arg CategorySimilarityParams) ([]CategorySimilarityRow, error)
+	// Levels below the node (0 for a leaf).
+	CategorySubtreeHeight(ctx context.Context, arg CategorySubtreeHeightParams) (int32, error)
+	CategorySuggestionSubject(ctx context.Context, arg CategorySuggestionSubjectParams) (CategorySuggestionSubjectRow, error)
 	ChangelogCount(ctx context.Context, arg ChangelogCountParams) (int64, error)
 	ChangelogCreate(ctx context.Context, arg ChangelogCreateParams) (ChangelogEntry, error)
 	ChangelogList(ctx context.Context, arg ChangelogListParams) ([]ChangelogListRow, error)
@@ -632,6 +652,8 @@ type Querier interface {
 	CountAutomationRules(ctx context.Context, organizationID int64) (int64, error)
 	CountBrands(ctx context.Context, organizationID int64) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	CountCategoryLabels(ctx context.Context, organizationID int64) (int64, error)
+	CountCategoryReviewQueue(ctx context.Context, arg CountCategoryReviewQueueParams) (int64, error)
 	CountChannelInstances(ctx context.Context, organizationID int64) (int64, error)
 	CountChannelVoiceCalls(ctx context.Context, arg CountChannelVoiceCallsParams) (int64, error)
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
@@ -684,6 +706,7 @@ type Querier interface {
 	CreateAutomationRule(ctx context.Context, arg CreateAutomationRuleParams) (AutomationRule, error)
 	CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand, error)
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
+	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// A retried webhook with the same idempotency key returns no row; the
 	// caller then loads the stored event.
 	CreateCompanyEvent(ctx context.Context, arg CreateCompanyEventParams) (CompanyEvent, error)
@@ -738,6 +761,8 @@ type Querier interface {
 	DeleteBusinessHours(ctx context.Context, arg DeleteBusinessHoursParams) (int64, error)
 	DeleteCannedResponse(ctx context.Context, arg DeleteCannedResponseParams) (int64, error)
 	DeleteCapacityLimits(ctx context.Context, arg DeleteCapacityLimitsParams) error
+	DeleteCategory(ctx context.Context, arg DeleteCategoryParams) (int64, error)
+	DeleteCategoryAssignment(ctx context.Context, arg DeleteCategoryAssignmentParams) (int64, error)
 	DeleteCompanyNote(ctx context.Context, arg DeleteCompanyNoteParams) (int64, error)
 	DeleteCompanyRevenue(ctx context.Context, arg DeleteCompanyRevenueParams) (int64, error)
 	DeleteContactIdentities(ctx context.Context, arg DeleteContactIdentitiesParams) error
@@ -850,6 +875,9 @@ type Querier interface {
 	EnsureNotificationPreferencesPushDefault(ctx context.Context, userID int64) error
 	EraseConversationReplaySessions(ctx context.Context, arg EraseConversationReplaySessionsParams) error
 	ExpiredWidgetReplayChunks(ctx context.Context) ([]WidgetReplayChunk, error)
+	// Keyset page of the training set (CF-219): masked text, vector, old and
+	// new category, who and when.
+	ExportCategoryLabels(ctx context.Context, arg ExportCategoryLabelsParams) ([]ExportCategoryLabelsRow, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
 	FeedbackComment(ctx context.Context, arg FeedbackCommentParams) (uuid.UUID, error)
 	FeedbackCommentCount(ctx context.Context, arg FeedbackCommentCountParams) (int64, error)
@@ -962,6 +990,9 @@ type Querier interface {
 	GetBusinessHoursByID(ctx context.Context, arg GetBusinessHoursByIDParams) (BusinessHour, error)
 	GetBusinessHoursByUUID(ctx context.Context, arg GetBusinessHoursByUUIDParams) (BusinessHour, error)
 	GetCannedResponse(ctx context.Context, arg GetCannedResponseParams) (CannedResponse, error)
+	GetCategoryAssignment(ctx context.Context, arg GetCategoryAssignmentParams) (GetCategoryAssignmentRow, error)
+	GetCategoryByID(ctx context.Context, arg GetCategoryByIDParams) (Category, error)
+	GetCategoryByUUID(ctx context.Context, arg GetCategoryByUUIDParams) (GetCategoryByUUIDRow, error)
 	GetChannelInstanceByExternal(ctx context.Context, arg GetChannelInstanceByExternalParams) (ChannelInstance, error)
 	GetChannelInstanceByID(ctx context.Context, arg GetChannelInstanceByIDParams) (ChannelInstance, error)
 	// Webhooks address an instance by its uuid only (no organization in the
@@ -1167,6 +1198,10 @@ type Querier interface {
 	InsertBusinessHours(ctx context.Context, arg InsertBusinessHoursParams) (BusinessHour, error)
 	InsertCannedResponse(ctx context.Context, arg InsertCannedResponseParams) (CannedResponse, error)
 	InsertCapacityLimit(ctx context.Context, arg InsertCapacityLimitParams) error
+	// Automatic classification never overwrites an existing (human) decision.
+	InsertCategoryAssignmentIfAbsent(ctx context.Context, arg InsertCategoryAssignmentIfAbsentParams) (int64, error)
+	InsertCategoryExample(ctx context.Context, arg InsertCategoryExampleParams) error
+	InsertCategoryLabel(ctx context.Context, arg InsertCategoryLabelParams) (CategoryLabel, error)
 	// CF-25 / CF-8: channel instances (the inboxes of an organization).
 	// The uuid is chosen by the caller: the sealed credentials are bound to it.
 	InsertChannelInstance(ctx context.Context, arg InsertChannelInstanceParams) (ChannelInstance, error)
@@ -1333,6 +1368,11 @@ type Querier interface {
 	ListCannedResponses(ctx context.Context, arg ListCannedResponsesParams) ([]CannedResponse, error)
 	// CF-53 / CF-54: agent capacity and automatic routing.
 	ListCapacityLimits(ctx context.Context, organizationID int64) ([]ListCapacityLimitsRow, error)
+	// CF-218 category taxonomy, assignments and the label store.
+	// department_id NULL lists the whole tree; a department lists the
+	// organization-wide nodes plus that department's branches.
+	ListCategories(ctx context.Context, arg ListCategoriesParams) ([]ListCategoriesRow, error)
+	ListCategoryReviewQueue(ctx context.Context, arg ListCategoryReviewQueueParams) ([]ListCategoryReviewQueueRow, error)
 	ListChannelInstances(ctx context.Context, arg ListChannelInstancesParams) ([]ChannelInstance, error)
 	ListChannelVoiceCalls(ctx context.Context, arg ListChannelVoiceCallsParams) ([]ListChannelVoiceCallsRow, error)
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
@@ -1783,6 +1823,8 @@ type Querier interface {
 	ProductFeedbackList(ctx context.Context, arg ProductFeedbackListParams) ([]ProductFeedbackListRow, error)
 	ProductFeedbackSetStatus(ctx context.Context, arg ProductFeedbackSetStatusParams) (int64, error)
 	ProjectAnalyticsConversation(ctx context.Context, arg ProjectAnalyticsConversationParams) error
+	// Drops vectors whose text is no longer one of the category's texts.
+	PruneCategoryExamples(ctx context.Context, arg PruneCategoryExamplesParams) error
 	PurgeEventConsumptionsBefore(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// retention worker deletes expired context only, after matching attachment removal in the same organization
 	PurgeExpiredWidgetDiagnosticContext(ctx context.Context) error
@@ -1832,6 +1874,8 @@ type Querier interface {
 	RemoveConversationParticipant(ctx context.Context, arg RemoveConversationParticipantParams) (int64, error)
 	RemoveConversationTag(ctx context.Context, arg RemoveConversationTagParams) (int64, error)
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
+	// Re-classification replaces a machine decision, never a human one.
+	ReplaceAutoCategoryAssignment(ctx context.Context, arg ReplaceAutoCategoryAssignmentParams) (int64, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ReplayOutboundDelivery(ctx context.Context, arg ReplayOutboundDeliveryParams) (int64, error)
 	// Conversations merged into the source follow it to the target.
@@ -2007,6 +2051,7 @@ type Querier interface {
 	SetRolePermissions(ctx context.Context, roleID int64) error
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SetWidgetInstanceSettings(ctx context.Context, arg SetWidgetInstanceSettingsParams) (ChannelInstance, error)
+	ShiftCategoryDescendantDepth(ctx context.Context, arg ShiftCategoryDescendantDepthParams) error
 	SidebarAppCount(ctx context.Context, organizationID int64) (int64, error)
 	SidebarAppCreate(ctx context.Context, arg SidebarAppCreateParams) (SidebarApp, error)
 	SidebarAppDelete(ctx context.Context, arg SidebarAppDeleteParams) (int64, error)
@@ -2102,6 +2147,7 @@ type Querier interface {
 	UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand, error)
 	UpdateBusinessHours(ctx context.Context, arg UpdateBusinessHoursParams) (BusinessHour, error)
 	UpdateCannedResponse(ctx context.Context, arg UpdateCannedResponseParams) (CannedResponse, error)
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateChannelInstance(ctx context.Context, arg UpdateChannelInstanceParams) (ChannelInstance, error)
 	// CF-206: a changed external id was never proved; the badge goes with it.
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
@@ -2158,6 +2204,7 @@ type Querier interface {
 	UpdateWidgetSession(ctx context.Context, arg UpdateWidgetSessionParams) (WidgetSession, error)
 	UpsertAgentPresence(ctx context.Context, arg UpsertAgentPresenceParams) (AgentPresence, error)
 	UpsertAutoReplySettings(ctx context.Context, arg UpsertAutoReplySettingsParams) error
+	UpsertCategoryAssignment(ctx context.Context, arg UpsertCategoryAssignmentParams) (CategoryAssignment, error)
 	UpsertChannelVoiceCall(ctx context.Context, arg UpsertChannelVoiceCallParams) error
 	UpsertCompanyHealth(ctx context.Context, arg UpsertCompanyHealthParams) (CompanyHealth, error)
 	UpsertCompanyHealthSettings(ctx context.Context, arg UpsertCompanyHealthSettingsParams) (CompanyHealthSetting, error)

@@ -144,6 +144,11 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** Category taxonomy and the label store (CF-218). */
+  TenantCategoriesRead: "tenant.categories.read",
+  TenantCategoriesManage: "tenant.categories.manage",
+  TenantCategoriesLabel: "tenant.categories.label",
+  TenantCategoriesExport: "tenant.categories.export",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];
@@ -393,6 +398,12 @@ export const permissions = {
       read: Permission.TenantIntegrationsRead,
       manage: Permission.TenantIntegrationsManage,
       use: Permission.TenantIntegrationsUse,
+    },
+    categories: {
+      read: Permission.TenantCategoriesRead,
+      manage: Permission.TenantCategoriesManage,
+      label: Permission.TenantCategoriesLabel,
+      export: Permission.TenantCategoriesExport,
     },
   },
 } as const;

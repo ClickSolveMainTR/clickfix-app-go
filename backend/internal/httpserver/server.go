@@ -74,6 +74,9 @@ import (
 	bulkmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk/usecase"
+	categoriesmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories"
+	categorieshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/handler"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/coaching"
 	compliancemodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/compliance"
@@ -590,6 +593,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
+	categoriesSvc := categoriesusecase.New(deps.DB, deps.Queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI})
 	aiCore.KB.Fields = customFieldsSvc
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)
 	aiCore.AI.Context = agentSvc
@@ -800,6 +804,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Organization audit log (CF-12).
 	auditmodule.RegisterRoutes(mux, auditmodule.NewHandler(auditmodule.NewService(deps.Queries)), tokens, loader, tenantResolver)
 	// Teams and team membership (CF-5).
+	categoriesmodule.RegisterRoutes(mux, categorieshandler.New(categoriesSvc, activityRec), tokens, loader, tenantResolver)
 	teamsmodule.RegisterRoutes(mux, teamshandler.New(teamsusecase.New(deps.DB, deps.Queries), activityRec), tokens, loader, tenantResolver)
 
 	qrGeo, err := qrlogin.NewLocator(cfg.Auth.QRGeoIPDB, cfg.Auth.QRTrustGeoHeaders)
@@ -943,6 +948,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Knowledge:           aiCore.RAG,
 		Agents:              agentSvc,
 		LiveActivities:      mobileSvc,
+		Categories:          categoriesSvc,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: event consumers: %w", err)

@@ -174,3 +174,11 @@ const (
 	PermTenantIntegrationsManage = "tenant.integrations.manage"
 	PermTenantIntegrationsUse    = "tenant.integrations.use"
 )
+
+// Category taxonomy and the label store (CF-218).
+const (
+	PermTenantCategoriesRead   = "tenant.categories.read"
+	PermTenantCategoriesManage = "tenant.categories.manage"
+	PermTenantCategoriesLabel  = "tenant.categories.label"
+	PermTenantCategoriesExport = "tenant.categories.export"
+)
