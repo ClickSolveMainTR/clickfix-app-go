@@ -12932,6 +12932,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/ai/memory/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agent assistant: answer from knowledge units (answer cache) or similar resolved cases (CF-216) */
+        post: operations["searchAIMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/case-memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anonymized case summaries of resolved conversations (CF-216) */
+        get: operations["listAICaseMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/case-memories/{uuid}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (customer AI may use it) or reject a case summary; only anonymized summaries can be approved */
+        post: operations["reviewAICaseMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/knowledge-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Question/answer units extracted from published articles and approved suggestions (CF-216) */
+        get: operations["listAIKnowledgeUnits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/answer-cache/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Answer cache hit rate per audience (CF-216) */
+        get: operations["getAIAnswerCacheStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/knowledge-gaps/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Questions no knowledge unit, case or source answered (CF-216) */
+        get: operations["listAIKnowledgeGapQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/conversations/{uuid}/ai/knowledge-suggestion": {
         parameters: {
             query?: never;
@@ -18812,6 +18914,16 @@ export interface components {
             summary: string;
             confidence: number;
             handoff: boolean;
+            /**
+             * Format: uuid
+             * @description Knowledge unit that answered without a generation call (CF-216)
+             */
+            unit_uuid?: string;
+            /**
+             * @description Answer cache outcome when a knowledge unit answered (CF-216)
+             * @enum {string}
+             */
+            memory?: "exact" | "semantic";
             citation_ids: string[];
         };
         AISimulationResult: {
@@ -18876,6 +18988,128 @@ export interface components {
             topic: string;
             conversations: number;
             conversation_ids: number[];
+        };
+        AIMemoryUnitHit: {
+            /** Format: uuid */
+            uuid: string;
+            question: string;
+            answer: string;
+            category: string;
+            /** @enum {string} */
+            visibility: "public" | "internal";
+            /** Format: uuid */
+            article_uuid?: string;
+            score: number;
+        };
+        AIMemoryCase: {
+            /** Format: uuid */
+            uuid: string;
+            problem: string;
+            resolution: string;
+            category: string;
+            /** @enum {string} */
+            status: "pending" | "approved";
+            score: number;
+            /**
+             * Format: uuid
+             * @description Present only when the caller may open the source conversation.
+             */
+            conversation_uuid?: string;
+        };
+        AIMemoryResult: {
+            /**
+             * @description exact: cached repeat, no AI call; semantic: one embedding call; miss: no unit matched.
+             * @enum {string}
+             */
+            outcome: "exact" | "semantic" | "miss";
+            unit?: components["schemas"]["AIMemoryUnitHit"];
+            cases: components["schemas"]["AIMemoryCase"][];
+            embedding_calls: number;
+        };
+        AICaseMemory: {
+            /** Format: uuid */
+            uuid: string;
+            locale: string;
+            category: string;
+            problem: string;
+            resolution: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            anonymized: boolean;
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            reviewed_at: string | null;
+            /** Format: uuid */
+            conversation_uuid: string;
+        };
+        AICaseMemoryReview: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            status: "approved" | "rejected";
+            anonymized: boolean;
+            problem: string;
+            resolution: string;
+            category: string;
+        };
+        AIKnowledgeUnit: {
+            /** Format: uuid */
+            uuid: string;
+            question: string;
+            variants: string[];
+            answer: string;
+            category: string;
+            locale: string;
+            /** @enum {string} */
+            visibility: "public" | "internal";
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            source_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            article_uuid: string | null;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+        };
+        AIAnswerCacheAudienceStats: {
+            /** @enum {string} */
+            audience: "customer" | "agent";
+            exact_hits: number;
+            semantic_hits: number;
+            misses: number;
+            lookups: number;
+            hit_rate: number;
+        };
+        AIAnswerCacheStats: {
+            /** Format: date-time */
+            since: string;
+            audiences: components["schemas"]["AIAnswerCacheAudienceStats"][];
+            units: number;
+            cached_questions: number;
+        };
+        AIKnowledgeGapQuestion: {
+            /** @enum {string} */
+            audience: "customer" | "agent";
+            locale: string;
+            /** @description PII masked */
+            question: string;
+            category: string;
+            occurrences: number;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            /** Format: uuid */
+            conversation_uuid: string | null;
         };
         AIKnowledgeSuggestion: {
             id: number;
@@ -57520,6 +57754,309 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    searchAIMemory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    question: string;
+                    /**
+                     * @default tr
+                     * @enum {string}
+                     */
+                    locale?: "tr" | "en";
+                    /**
+                     * Format: uuid
+                     * @description Scopes the lookup to the conversation's brand and leaves it out of case results.
+                     */
+                    conversation_uuid?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIMemoryResult"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Conversation not found or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAICaseMemories: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: "pending" | "approved" | "rejected";
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AICaseMemory"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    reviewAICaseMemory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    approve: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AICaseMemoryReview"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Case summary not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Summary is not anonymized and cannot be approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAIKnowledgeUnits: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AIKnowledgeUnit"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAIAnswerCacheStats: {
+        parameters: {
+            query?: {
+                /** @description Defaults to 30 days ago; at most 366 days back. */
+                since?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIAnswerCacheStats"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAIKnowledgeGapQuestions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Defaults to 30 days ago; at most 366 days back. */
+                since?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AIKnowledgeGapQuestion"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     suggestKnowledgeFromConversation: {

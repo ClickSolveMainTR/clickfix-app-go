@@ -182,6 +182,7 @@ func main() {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
 	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
 	agentSvc.Hours = slaSvc
+	agentSvc.Memory = aiCore.Memory
 	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
 	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
@@ -194,6 +195,7 @@ func main() {
 		SLA:                 slaSvc,
 		AutoReply:           autoReplySvc,
 		Knowledge:           aiCore.RAG,
+		Memory:              aiCore.Memory,
 		Agents:              agentSvc,
 		Analytics:           analyticsSvc,
 		Surveys:             surveysSvc,

@@ -44,6 +44,8 @@ import (
 	agentusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
 	aimodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore"
 	aihandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/handler"
+	memorymodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory"
+	memoryhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/handler"
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/handler"
 	analyticsrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/repository"
@@ -596,6 +598,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
 	agentSvc.Fields = customFieldsSvc
 	agentSvc.Hours = slaSvc
+	agentSvc.Memory = aiCore.Memory
 	// Automatic customer replies (CF-198): settings here, the consumer runs
 	// in the worker; the AI agent's handoff notice posts from the API too.
 	autoReplySvc := autoreply.New(deps.Queries, inboxCore.Conversations, slaSvc, slaSvc, log)
@@ -607,6 +610,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	agentSvc.Tools = &agentusecase.ToolService{Repo: agentSvc.Repo, Core: aiCore.AI, Conversations: inboxCore.Conversations, Box: agentBox}
 	agentmodule.RegisterRoutes(mux, &agenthandler.Handler{Service: agentSvc, Activity: activityRec}, tokens, loader, tenantResolver)
+	// Knowledge units, answer cache and case memory (CF-216).
+	memorymodule.RegisterRoutes(mux, &memoryhandler.Handler{Service: aiCore.Memory, Activity: activityRec}, tokens, loader, tenantResolver)
 	// Connected system, "Sistemini bağla" (CF-197): the AI agent reads its
 	// playbooks, concept data and AI-allowed actions.
 	systemsLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
@@ -941,6 +946,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Status:              statusSvc,
 		Routing:             routingSvc,
 		Knowledge:           aiCore.RAG,
+		Memory:              aiCore.Memory,
 		Agents:              agentSvc,
 		LiveActivities:      mobileSvc,
 	})

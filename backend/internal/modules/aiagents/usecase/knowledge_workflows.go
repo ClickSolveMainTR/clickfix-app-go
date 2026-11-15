@@ -10,8 +10,10 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	coremodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	core "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
+	memmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/model"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -93,7 +95,13 @@ func (s *Service) ReviewSuggestion(ctx context.Context, org, actor int64, id uui
 			status, article = "approved", pgtype.Int8{Int64: a.ID, Valid: true}
 		}
 		out, e = r.Q.AIKnowledgeSuggestionReview(ctx, db.AIKnowledgeSuggestionReviewParams{OrganizationID: org, Uuid: id, Status: status, ReviewedBy: pgtype.Int8{Int64: actor, Valid: true}, ArticleID: article})
-		return e
+		if e != nil {
+			return e
+		}
+		// The knowledge layer turns an approved suggestion into units (CF-216).
+		ev := events.New(memmodel.SuggestionReviewed).WithTenant(org).WithActor(actor).WithPayload(map[string]any{"suggestion_uuid": id.String(), "status": status})
+		ev.EventID = uuid.NewSHA1(id, []byte("suggestion_reviewed:"+status))
+		return r.Emit(ctx, ev)
 	})
 	return
 }

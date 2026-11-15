@@ -310,3 +310,9 @@ integration_calls
 custom_field_unknown_keys
 custom_field_unknown_values
 knowledge_article_audiences
+ai_answer_cache
+ai_answer_cache_stats
+ai_case_memories
+knowledge_gap_questions
+knowledge_unit_questions
+knowledge_units

@@ -95,6 +95,50 @@ type AiAgentJob struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AiAnswerCache struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	UnitID         int64              `json:"unit_id"`
+	Audience       string             `json:"audience"`
+	Locale         string             `json:"locale"`
+	ScopeKey       string             `json:"scope_key"`
+	QuestionHash   string             `json:"question_hash"`
+	Score          float32            `json:"score"`
+	Hits           int64              `json:"hits"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LastHitAt      pgtype.Timestamptz `json:"last_hit_at"`
+}
+
+type AiAnswerCacheStat struct {
+	OrganizationID int64       `json:"organization_id"`
+	Day            pgtype.Date `json:"day"`
+	Audience       string      `json:"audience"`
+	ExactHits      int64       `json:"exact_hits"`
+	SemanticHits   int64       `json:"semantic_hits"`
+	Misses         int64       `json:"misses"`
+}
+
+type AiCaseMemory struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ConversationID int64              `json:"conversation_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Locale         string             `json:"locale"`
+	Category       string             `json:"category"`
+	Problem        string             `json:"problem"`
+	Resolution     string             `json:"resolution"`
+	Anonymized     bool               `json:"anonymized"`
+	Status         string             `json:"status"`
+	Embedding      []float32          `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AiConversationLink struct {
 	ID             int64              `json:"id"`
 	OrganizationID int64              `json:"organization_id"`
@@ -2635,6 +2679,23 @@ type KnowledgeCollection struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type KnowledgeGapQuestion struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	Audience       string             `json:"audience"`
+	Locale         string             `json:"locale"`
+	ScopeKey       string             `json:"scope_key"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	QuestionHash   string             `json:"question_hash"`
+	Question       string             `json:"question"`
+	Category       string             `json:"category"`
+	ConversationID pgtype.Int8        `json:"conversation_id"`
+	Occurrences    int64              `json:"occurrences"`
+	FirstSeenAt    pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
+}
+
 type KnowledgeIndexState struct {
 	OrganizationID int64              `json:"organization_id"`
 	ArticleID      int64              `json:"article_id"`
@@ -2715,6 +2776,37 @@ type KnowledgeTranslation struct {
 	SourceVersion   int32              `json:"source_version"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KnowledgeUnit struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	ArticleID      pgtype.Int8        `json:"article_id"`
+	SuggestionID   pgtype.Int8        `json:"suggestion_id"`
+	SourceVersion  int32              `json:"source_version"`
+	SourceHash     string             `json:"source_hash"`
+	Ordinal        int32              `json:"ordinal"`
+	Locale         string             `json:"locale"`
+	Visibility     string             `json:"visibility"`
+	Category       string             `json:"category"`
+	Question       string             `json:"question"`
+	Variants       []string           `json:"variants"`
+	Answer         string             `json:"answer"`
+	EmbeddingModel string             `json:"embedding_model"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KnowledgeUnitQuestion struct {
+	ID             int64     `json:"id"`
+	OrganizationID int64     `json:"organization_id"`
+	UnitID         int64     `json:"unit_id"`
+	Ordinal        int32     `json:"ordinal"`
+	Content        string    `json:"content"`
+	Embedding      []float32 `json:"embedding"`
 }
 
 type LiveActivityToken struct {
