@@ -22,6 +22,43 @@ type MeteredEmbedder struct {
 }
 
 func (e *MeteredEmbedder) Model() string { return e.Raw.Model() }
+
+// EmbeddingCostMicros prices tokens of embedding input (CF-228 estimates).
+func (e *MeteredEmbedder) EmbeddingCostMicros(tokens int64) int64 {
+	return ai.Route{InputPrice: e.InputPrice}.Cost(tokens, 0)
+}
+
+// BatchAllowance is the batch share of the daily limits and what is left of
+// it today: the lower of the batch share and the total limit (CF-228).
+func (e *MeteredEmbedder) BatchAllowance(ctx context.Context, org int64) (ai.BatchAllowance, error) {
+	p, err := e.Repo.Policy(ctx, org)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	limits, err := e.Repo.Limits(ctx, p)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	used, err := e.Repo.Billing.Q.AIUsageToday(ctx, org)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	out := ai.BatchAllowance{Enabled: p.Enabled}
+	out.CallsPerDay, out.CallsLeft = left(limits.Batch.DailyCalls, used.BatchCalls, limits.Effective.DailyCalls, used.Calls)
+	out.BudgetMicrosPerDay, out.BudgetMicrosLeft = left(limits.Batch.DailyBudgetMicros, used.BatchCost, limits.Effective.DailyBudgetMicros, used.Cost)
+	return out, nil
+}
+
+// left is a batch cap per day and what remains today under both caps. The
+// batch share is unlimited exactly when the total is (BatchShare).
+func left(batch repository.Cap, batchUsed int64, total repository.Cap, totalUsed int64) (*int64, *int64) {
+	if batch.Unlimited || batch.Limit == nil || total.Limit == nil {
+		return nil, nil
+	}
+	perDay := *batch.Limit
+	rest := max(min(perDay-batchUsed, *total.Limit-totalUsed), 0)
+	return &perDay, &rest
+}
 func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddings, error) {
 	return e.EmbedModel(ctx, e.Raw.Model(), input)
 }

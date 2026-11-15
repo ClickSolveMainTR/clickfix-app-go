@@ -70,7 +70,7 @@ func TestSearchScopedBrandFallbackAndTenantIsolation(t *testing.T) {
 		if withLexical {
 			rag.Lexical = nil
 		}
-		hits, err := rag.SearchScoped(ctx, vectorstore.Conversation(org, brandA, pgtype.UUID{}), "İade", "tr", true)
+		hits, err := rag.SearchScoped(ctx, vectorstore.Conversation(org, brandA, pgtype.Int8{}), "İade", "tr", true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestSearchScopedBrandFallbackAndTenantIsolation(t *testing.T) {
 		if !hits[0].Specific || hits[len(hits)-1].Specific {
 			t.Fatalf("specific flags %+v", hits)
 		}
-		hits, err = rag.SearchScoped(ctx, vectorstore.Conversation(org, pgtype.UUID{}, pgtype.UUID{}), "İade", "tr", true)
+		hits, err = rag.SearchScoped(ctx, vectorstore.Conversation(org, pgtype.UUID{}, pgtype.Int8{}), "İade", "tr", true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,7 +95,7 @@ func TestSearchScopedBrandFallbackAndTenantIsolation(t *testing.T) {
 		if got = articles(hits); len(got) != 3 || !slices.Contains(got, onlyB) {
 			t.Fatalf("organization scope: %v", got)
 		}
-		for _, scope := range []vectorstore.Scope{vectorstore.Organization(other), vectorstore.Conversation(other, brandA, pgtype.UUID{})} {
+		for _, scope := range []vectorstore.Scope{vectorstore.Organization(other), vectorstore.Conversation(other, brandA, pgtype.Int8{})} {
 			hits, err = rag.SearchScoped(ctx, scope, "İade", "tr", true)
 			if err != nil || len(hits) != 0 {
 				t.Fatalf("cross tenant %+v %v", hits, err)
@@ -107,7 +107,7 @@ func TestSearchScopedBrandFallbackAndTenantIsolation(t *testing.T) {
 	if _, err := rag.KB.Repo.Pool.Exec(ctx, "UPDATE knowledge_articles SET brand_id=$1 WHERE organization_id=$2 AND uuid=$3", brandA, org, onlyB); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := rag.SearchScoped(ctx, vectorstore.Conversation(org, brandA, pgtype.UUID{}), "İade", "tr", true)
+	hits, err := rag.SearchScoped(ctx, vectorstore.Conversation(org, brandA, pgtype.Int8{}), "İade", "tr", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestReembedKeepsOldVectorsUntilSwitch(t *testing.T) {
 		t.Fatalf("new article during transition not pending: %d %v", pending, err)
 	}
 
-	job := &vectorstore.Reembedder{Pool: rag.KB.Repo.Pool, Embedder: next, Sources: []vectorstore.Source{ChunkSource}, Batch: 1}
+	job := &vectorstore.Reembedder{Pool: rag.KB.Repo.Pool, Embedder: next, Sources: []vectorstore.Source{ChunkSource}, Batch: 1, Organizations: []int64{org}}
 	if err = job.Run(ctx); err != nil {
 		t.Fatal(err)
 	}

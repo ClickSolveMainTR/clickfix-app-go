@@ -88,7 +88,7 @@ type Service struct {
 }
 
 func New(pool *pgxpool.Pool, q *db.Queries, store Store, embedder ai.Embedder, drafter Drafter) *Service {
-	return &Service{Pool: pool, Q: q, Store: store, Embedder: embedder, Drafter: drafter, Taxonomy: SourceTaxonomy{}, Directory: OrganizationWide{}, Connectors: map[string]Source{}, Log: slog.Default(), Now: time.Now, BatchSize: 32}
+	return &Service{Pool: pool, Q: q, Store: store, Embedder: embedder, Drafter: drafter, Taxonomy: SourceTaxonomy{}, Directory: OrganizationWide{}, Connectors: map[string]Source{}, Log: slog.Default(), Now: time.Now, BatchSize: model.MaxBatchRecords}
 }
 
 func (s *Service) now() time.Time { return s.Now().UTC() }

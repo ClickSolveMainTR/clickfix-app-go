@@ -3494,7 +3494,7 @@ export interface paths {
         };
         /**
          * List the category tree
-         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; until departments land (CF-215) it answers `400 VALIDATION_ERROR` (`department`, `unavailable`). Archived nodes only with `include_archived=true`.
+         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; a department of another organization answers `400 VALIDATION_ERROR` (`department_uuid`, `not_found`). Archived nodes only with `include_archived=true`.
          */
         get: operations["getTenantCategories"];
         put?: never;
@@ -13275,7 +13275,7 @@ export interface paths {
         };
         /**
          * AI knowledge panel of the organization or a department
-         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days.
+         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days. `departments` lists the organization's departments for the filter; categories come from the category store (CF-218) and fall back to the latest triage results while nothing is classified in the window.
          */
         get: operations["getAIKnowledgePanel"];
         put?: never;
@@ -17641,6 +17641,28 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/history/imports/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate the AI use of a history export
+         * @description Multipart form: `file`, as for the upload. The file is parsed and dropped, never stored. Returns the
+         *     embedding calls and cost the run needs and whether today's batch share of the daily AI limits covers them
+         *     (CF-228), so the panel can warn before the upload. Requires `tenant.history.manage`.
+         */
+        post: operations["estimateTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/history/imports/{uuid}": {
         parameters: {
             query?: never;
@@ -19461,6 +19483,20 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AILimit: {
+            /**
+             * Format: int64
+             * @description null when unlimited
+             */
+            limit: number | null;
+            unlimited: boolean;
+        };
+        AILimits: {
+            daily_calls: components["schemas"]["AILimit"];
+            concurrency: components["schemas"]["AILimit"];
+            daily_budget_micros: components["schemas"]["AILimit"];
+        };
+        /** @description Tenant AI policy (CF-229). platform_limits are the plan grant or organization override set by the platform; effective_limits are the lower of the platform and tenant limits and are what reservations enforce. */
         AIPolicy: {
             /** Format: int64 */
             organization_id: number;
@@ -19470,10 +19506,24 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
+            /**
+             * @description Share of the effective daily call and budget limits that batch jobs (history pipeline, re-embedding, evaluations) may use (CF-228). Live AI keeps the rest and may also use what batch jobs leave unused.
+             * @default 50
+             */
+            batch_share_percent: number;
+            platform_limits: components["schemas"]["AILimits"];
+            effective_limits: components["schemas"]["AILimits"];
+            /** @description batch_share_percent of effective_limits (concurrency is shared): what batch jobs may use per day. */
+            batch_limits: components["schemas"]["AILimits"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -19486,10 +19536,17 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
+            /** @description Share of the daily limits batch jobs may use (CF-228). Omit to keep the current share. */
+            batch_share_percent?: number;
         };
         AIRun: {
             /** Format: int64 */
@@ -30429,8 +30486,11 @@ export interface components {
             source: "upload" | "nightly" | "connector";
             connector: string;
             file_name: string;
-            /** @enum {string} */
-            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "rolled_back";
+            /**
+             * @description paused means an AI limit stopped the run; the worker continues it at resume_at from where it stopped (CF-228).
+             * @enum {string}
+             */
+            status: "pending" | "running" | "paused" | "completed" | "failed" | "cancelled" | "rolled_back";
             /** @enum {string} */
             stage: "queued" | "reading" | "anonymizing" | "embedding" | "clustering" | "suggesting" | "done";
             total_records: number;
@@ -30457,13 +30517,67 @@ export interface components {
             /** Format: date-time */
             window_end: string | null;
             cancel_requested: boolean;
+            /** @description English message; the panel shows error_code in the user's language. */
             error: string;
+            /**
+             * @description Why the run paused or failed (CF-228); empty otherwise.
+             * @enum {string}
+             */
+            error_code: "" | "daily_limit" | "budget" | "concurrency" | "credits" | "quota" | "ai_disabled" | "not_configured" | "provider" | "invalid" | "unavailable" | "unsafe_record" | "raw_expired" | "unknown";
+            /**
+             * Format: date-time
+             * @description When a paused run continues (the daily limits reset at midnight Europe/Istanbul).
+             */
+            resume_at: string | null;
             /** Format: date-time */
             started_at: string | null;
             /** Format: date-time */
             finished_at: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description Expected AI use of an export before it is uploaded (CF-228). Embedding calls are exact for the file;
+         *     each suggestion adds calls_per_suggestion calls. Batch allowances are null when unlimited.
+         */
+        HistoryEstimate: {
+            /** @description Solved tickets the run would process. */
+            records: number;
+            embedding_calls: number;
+            calls_per_suggestion: number;
+            /** Format: int64 */
+            estimated_tokens: number;
+            /**
+             * Format: int64
+             * @description Estimated embedding cost in micro USD.
+             */
+            cost_micros: number;
+            ai_enabled: boolean;
+            /** Format: int64 */
+            batch_calls_per_day: number | null;
+            /** Format: int64 */
+            batch_calls_left: number | null;
+            /** Format: int64 */
+            batch_budget_micros_per_day: number | null;
+            /** Format: int64 */
+            batch_budget_micros_left: number | null;
+            /** @description The run will pause at today's batch limit and continue after the reset. */
+            exceeds_today: boolean;
+            /** @description Days (today included) the embeddings need; 0 when the batch share is too small to ever run. */
+            days_needed: number;
+            /** Format: date-time */
+            limit_resets_at: string;
+            raw_retention_hours: number;
+            /** @description The raw file's retention ends before the run would finish. */
+            exceeds_retention: boolean;
+            /** Format: date-time */
+            finishes_by: string | null;
+        };
+        EnvelopeHistoryEstimate: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryEstimate"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         HistoryCase: {
             /** Format: uuid */
@@ -59629,7 +59743,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                /** @description Department of the organization (CF-215). A department of another organization answers 404. */
                 department_uuid?: string;
             };
             header: {
@@ -60053,7 +60167,7 @@ export interface operations {
                 from?: string;
                 /** @description Exclusive end; at most 366 days after from. */
                 until?: string;
-                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                /** @description Department of the organization (CF-215). An unknown department, or one of another organization, answers 400 VALIDATION_ERROR. Sections whose source carries a department (AI runs, reply and triage jobs by their conversation's current department, suggestions, answer cache counters, categories, evaluation runs) are narrowed to it (CF-225). */
                 department_uuid?: string;
             };
             header: {
@@ -71625,6 +71739,43 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    estimateTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryEstimate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
         };
     };
     getTenantHistoryImport: {

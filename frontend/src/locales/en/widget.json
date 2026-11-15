@@ -544,7 +544,7 @@
   "app_keys.revoked": "Revoked",
   "app_keys.active": "Active",
   "app_keys.empty": "No mobile app added yet.",
-  "app_keys.last_used": "Last used: {at}",
+  "app_keys.last_used": "Last used: {{at}}",
   "app_keys.never_used": "Not used yet",
   "app_keys.limit": "A widget may have at most 20 active keys.",
   "app_keys.headers": "The app adds these headers to every widget request (the visitor token and user_hash work exactly as in the browser):",

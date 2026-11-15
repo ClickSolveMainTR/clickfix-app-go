@@ -20,6 +20,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
 	"strings"
@@ -84,7 +85,7 @@ func agentCoreFixture(t *testing.T) (*core.Service, *agentFakeAI, int64, int64) 
 	}
 	ent := entitlements.New(repo, nil, "ai-test")
 	store := airepo.New(repo, ent)
-	_, err = store.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, AllowUnmask: true, DailyCalls: 100, Concurrency: 1, DailyBudgetMicros: 10000000})
+	_, err = store.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, AllowUnmask: true, DailyCalls: pgtype.Int4{Int32: 100, Valid: true}, Concurrency: pgtype.Int4{Int32: 1, Valid: true}, DailyBudgetMicros: pgtype.Int8{Int64: 10000000, Valid: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

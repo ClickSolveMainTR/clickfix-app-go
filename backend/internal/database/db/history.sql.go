@@ -823,7 +823,7 @@ func (q *Queries) HistoryDecisionList(ctx context.Context, arg HistoryDecisionLi
 }
 
 const historyImportActive = `-- name: HistoryImportActive :one
-SELECT count(*) FROM history_imports WHERE organization_id=$1 AND status IN ('pending','running')
+SELECT count(*) FROM history_imports WHERE organization_id=$1 AND status IN ('pending','running','paused')
 `
 
 func (q *Queries) HistoryImportActive(ctx context.Context, organizationID int64) (int64, error) {
@@ -834,8 +834,9 @@ func (q *Queries) HistoryImportActive(ctx context.Context, organizationID int64)
 }
 
 const historyImportClaim = `-- name: HistoryImportClaim :one
-UPDATE history_imports SET status='running',lease_until=now()+interval '10 minutes',started_at=coalesce(started_at,now()),stage='reading'
-WHERE organization_id=$1 AND uuid=$2 AND (status='pending' OR (status='running' AND lease_until<now())) RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at
+UPDATE history_imports SET status='running',lease_until=now()+interval '10 minutes',started_at=coalesce(started_at,now()),stage='reading',
+ error='',error_code='',resume_at=NULL
+WHERE organization_id=$1 AND uuid=$2 AND (status='pending' OR (status='running' AND lease_until<now()) OR (status='paused' AND resume_at<=now())) RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset
 `
 
 type HistoryImportClaimParams struct {
@@ -881,6 +882,9 @@ func (q *Queries) HistoryImportClaim(ctx context.Context, arg HistoryImportClaim
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
 }
@@ -899,7 +903,7 @@ func (q *Queries) HistoryImportCount(ctx context.Context, organizationID int64) 
 const historyImportCreate = `-- name: HistoryImportCreate :one
 INSERT INTO history_imports(organization_id,brand_id,department_id,source,connector,file_name,consent_analysis,consent_training,
  consent_by,raw_key,raw_retain_until,window_start,window_end,created_by,total_records)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset
 `
 
 type HistoryImportCreateParams struct {
@@ -974,13 +978,16 @@ func (q *Queries) HistoryImportCreate(ctx context.Context, arg HistoryImportCrea
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
 }
 
 const historyImportDue = `-- name: HistoryImportDue :many
 SELECT organization_id,uuid FROM history_imports
-WHERE (status='pending' OR (status='running' AND lease_until<now())) ORDER BY id LIMIT $1
+WHERE (status='pending' OR (status='running' AND lease_until<now()) OR (status='paused' AND resume_at<=now())) ORDER BY id LIMIT $1
 `
 
 type HistoryImportDueRow struct {
@@ -1009,10 +1016,10 @@ func (q *Queries) HistoryImportDue(ctx context.Context, limit int32) ([]HistoryI
 }
 
 const historyImportExpireStale = `-- name: HistoryImportExpireStale :execrows
-UPDATE history_imports SET status='failed',finished_at=now(),lease_until=NULL,
+UPDATE history_imports SET status='failed',finished_at=now(),lease_until=NULL,resume_at=NULL,error_code='raw_expired',
  error='the raw file passed its retention before the run finished; upload it again'
 WHERE raw_key<>'' AND raw_retain_until<now()
- AND (status='pending' OR (status='running' AND lease_until<now()))
+ AND (status IN ('pending','paused') OR (status='running' AND lease_until<now()))
 `
 
 func (q *Queries) HistoryImportExpireStale(ctx context.Context) (int64, error) {
@@ -1024,7 +1031,7 @@ func (q *Queries) HistoryImportExpireStale(ctx context.Context) (int64, error) {
 }
 
 const historyImportFinish = `-- name: HistoryImportFinish :exec
-UPDATE history_imports SET status=$3,stage=$4,error=$5,finished_at=now(),lease_until=NULL WHERE organization_id=$1 AND id=$2
+UPDATE history_imports SET status=$3,stage=$4,error=$5,error_code=$6,finished_at=now(),lease_until=NULL WHERE organization_id=$1 AND id=$2
 `
 
 type HistoryImportFinishParams struct {
@@ -1033,6 +1040,7 @@ type HistoryImportFinishParams struct {
 	Status         string `json:"status"`
 	Stage          string `json:"stage"`
 	Error          string `json:"error"`
+	ErrorCode      string `json:"error_code"`
 }
 
 func (q *Queries) HistoryImportFinish(ctx context.Context, arg HistoryImportFinishParams) error {
@@ -1042,12 +1050,13 @@ func (q *Queries) HistoryImportFinish(ctx context.Context, arg HistoryImportFini
 		arg.Status,
 		arg.Stage,
 		arg.Error,
+		arg.ErrorCode,
 	)
 	return err
 }
 
 const historyImportGet = `-- name: HistoryImportGet :one
-SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at FROM history_imports WHERE organization_id=$1 AND uuid=$2
+SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset FROM history_imports WHERE organization_id=$1 AND uuid=$2
 `
 
 type HistoryImportGetParams struct {
@@ -1093,12 +1102,15 @@ func (q *Queries) HistoryImportGet(ctx context.Context, arg HistoryImportGetPara
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
 }
 
 const historyImportList = `-- name: HistoryImportList :many
-SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at FROM history_imports WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset FROM history_imports WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
 `
 
 type HistoryImportListParams struct {
@@ -1151,6 +1163,9 @@ func (q *Queries) HistoryImportList(ctx context.Context, arg HistoryImportListPa
 			&i.FinishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ErrorCode,
+			&i.ResumeAt,
+			&i.ResumeOffset,
 		); err != nil {
 			return nil, err
 		}
@@ -1163,7 +1178,7 @@ func (q *Queries) HistoryImportList(ctx context.Context, arg HistoryImportListPa
 }
 
 const historyImportLock = `-- name: HistoryImportLock :one
-SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at FROM history_imports WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset FROM history_imports WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type HistoryImportLockParams struct {
@@ -1209,8 +1224,54 @@ func (q *Queries) HistoryImportLock(ctx context.Context, arg HistoryImportLockPa
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
+}
+
+const historyImportPause = `-- name: HistoryImportPause :exec
+UPDATE history_imports SET status='paused',stage=$1,error=$2,error_code=$3,
+ resume_at=$4,resume_offset=$5,processed_records=$6,
+ skipped_records=$7,clusters_touched=$8,suggestions_created=$9,
+ suggestions_suppressed=$10,lease_until=NULL
+WHERE organization_id=$11 AND id=$12 AND status='running'
+`
+
+type HistoryImportPauseParams struct {
+	Stage                 string             `json:"stage"`
+	Error                 string             `json:"error"`
+	ErrorCode             string             `json:"error_code"`
+	ResumeAt              pgtype.Timestamptz `json:"resume_at"`
+	ResumeOffset          int32              `json:"resume_offset"`
+	ProcessedRecords      int32              `json:"processed_records"`
+	SkippedRecords        int32              `json:"skipped_records"`
+	ClustersTouched       int32              `json:"clusters_touched"`
+	SuggestionsCreated    int32              `json:"suggestions_created"`
+	SuggestionsSuppressed int32              `json:"suggestions_suppressed"`
+	OrganizationID        int64              `json:"organization_id"`
+	ID                    int64              `json:"id"`
+}
+
+// CF-228: an AI limit stops the run until resume_at; the sweep continues it
+// from resume_offset with the counters saved here.
+func (q *Queries) HistoryImportPause(ctx context.Context, arg HistoryImportPauseParams) error {
+	_, err := q.db.Exec(ctx, historyImportPause,
+		arg.Stage,
+		arg.Error,
+		arg.ErrorCode,
+		arg.ResumeAt,
+		arg.ResumeOffset,
+		arg.ProcessedRecords,
+		arg.SkippedRecords,
+		arg.ClustersTouched,
+		arg.SuggestionsCreated,
+		arg.SuggestionsSuppressed,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	return err
 }
 
 const historyImportProgress = `-- name: HistoryImportProgress :one
@@ -1296,9 +1357,10 @@ func (q *Queries) HistoryImportRawExpired(ctx context.Context, limit int32) ([]H
 
 const historyImportRequestCancel = `-- name: HistoryImportRequestCancel :one
 UPDATE history_imports SET cancel_requested=true,
- status=CASE WHEN status='pending' THEN 'cancelled' ELSE status END,
- finished_at=CASE WHEN status='pending' THEN now() ELSE finished_at END
-WHERE organization_id=$1 AND uuid=$2 AND status IN ('pending','running') RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at
+ status=CASE WHEN status IN ('pending','paused') THEN 'cancelled' ELSE status END,
+ resume_at=CASE WHEN status='paused' THEN NULL ELSE resume_at END,
+ finished_at=CASE WHEN status IN ('pending','paused') THEN now() ELSE finished_at END
+WHERE organization_id=$1 AND uuid=$2 AND status IN ('pending','running','paused') RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset
 `
 
 type HistoryImportRequestCancelParams struct {
@@ -1344,12 +1406,15 @@ func (q *Queries) HistoryImportRequestCancel(ctx context.Context, arg HistoryImp
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
 }
 
 const historyImportRolledBack = `-- name: HistoryImportRolledBack :one
-UPDATE history_imports SET status='rolled_back',finished_at=now() WHERE organization_id=$1 AND id=$2 RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at
+UPDATE history_imports SET status='rolled_back',finished_at=now() WHERE organization_id=$1 AND id=$2 RETURNING id, uuid, organization_id, brand_id, department_id, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_by, consent_at, consent_version, raw_key, raw_retain_until, raw_deleted_at, window_start, window_end, cancel_requested, lease_until, error, created_by, started_at, finished_at, created_at, updated_at, error_code, resume_at, resume_offset
 `
 
 type HistoryImportRolledBackParams struct {
@@ -1395,6 +1460,9 @@ func (q *Queries) HistoryImportRolledBack(ctx context.Context, arg HistoryImport
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ErrorCode,
+		&i.ResumeAt,
+		&i.ResumeOffset,
 	)
 	return i, err
 }

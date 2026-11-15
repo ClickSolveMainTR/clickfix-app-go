@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func (c *captureSender) Send(_ context.Context, m mail.Message) error {
 
 func TestEmailProviderSendsBrandedMultipart(t *testing.T) {
 	sender := &captureSender{}
-	p := EmailProvider{Mail: sender, AppURL: "https://app.example.com/"}
+	p := EmailProvider{Mail: sender, AppURL: "https://app.example.com/", DeliverReserved: true}
 	_, err := p.Deliver(context.Background(), db.Notification{
 		Title:        "You're invited",
 		Body:         "Join Acme.",
@@ -54,7 +55,7 @@ func TestEmailProviderSendsBrandedMultipart(t *testing.T) {
 
 func TestEmailProviderDefaultsToTurkish(t *testing.T) {
 	sender := &captureSender{}
-	_, err := EmailProvider{Mail: sender}.Deliver(context.Background(), db.Notification{
+	_, err := EmailProvider{Mail: sender, DeliverReserved: true}.Deliver(context.Background(), db.Notification{
 		Title: "Ödeme alındı", Body: "Ödemeniz alındı.",
 		Recipient:   pgtype.Text{String: "a@example.com", Valid: true},
 		SourceEvent: pgtype.Text{String: "billing.payment_received", Valid: true},
@@ -75,7 +76,7 @@ func TestEmailProviderDefaultsToTurkish(t *testing.T) {
 // names its button; the detail rows become the layout's details table.
 func TestEmailProviderUsesEnrichedActionLabel(t *testing.T) {
 	sender := &captureSender{}
-	_, err := EmailProvider{Mail: sender, AppURL: "https://app.example.com"}.Deliver(context.Background(), db.Notification{
+	_, err := EmailProvider{Mail: sender, AppURL: "https://app.example.com", DeliverReserved: true}.Deliver(context.Background(), db.Notification{
 		Title:       "Konuşma size atandı · #42 · Deniz Kaya",
 		Body:        "Ali Veli, Deniz Kaya ile olan #42 numaralı konuşmayı size atadı.\n\nMüşteri: Deniz Kaya\nKanal: WhatsApp\nKonuşma: #42",
 		Recipient:   pgtype.Text{String: "a@example.com", Valid: true},
@@ -95,5 +96,19 @@ func TestEmailProviderUsesEnrichedActionLabel(t *testing.T) {
 	}
 	if !strings.Contains(m.Body, "Konuşmayı aç: https://app.example.com/inbox?c=1") {
 		t.Fatalf("plain text lacks the action: %q", m.Body)
+	}
+}
+
+func TestEmailProviderSkipsReservedDomain(t *testing.T) {
+	sender := &captureSender{}
+	_, err := EmailProvider{Mail: sender}.Deliver(context.Background(), db.Notification{
+		Title: "Hi", Body: "x", Recipient: pgtype.Text{String: "demo@example.com", Valid: true},
+	}, nil)
+	var skip *SkipError
+	if !errors.As(err, &skip) || skip.Reason != SkipReservedDomain {
+		t.Fatalf("want SkipError(reserved_domain), got %v", err)
+	}
+	if len(sender.msgs) != 0 {
+		t.Fatalf("sent %d, want 0", len(sender.msgs))
 	}
 }

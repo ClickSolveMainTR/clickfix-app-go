@@ -72,6 +72,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/workforce"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/observability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
@@ -145,7 +146,7 @@ func main() {
 	mailer := mail.NewSMTPSender(cfg.SMTP)
 	provs := []providers.Provider{
 		providers.InappProvider{},
-		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL},
+		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL, DeliverReserved: cfg.App.Env == "development"},
 		providers.RealtimeProvider{Pub: publisher},
 		providers.NoopProvider{Name: "sms", Log: log},
 		providers.NoopProvider{Name: "push", Log: log},
@@ -204,7 +205,7 @@ func main() {
 		Surveys:             surveysSvc,
 		Status:              statusSvc,
 		LiveActivities:      mobileextmodule.NewService(cfg.APNs, pool, queries, log),
-		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
+		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Departments: departmentsusecase.NewDirectory(queries), Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
 	})
 	if err != nil {
 		log.Error("event_consumers_init_failed", "error", err)
@@ -294,6 +295,9 @@ func main() {
 	departmentsSvc := departmentsusecase.New(pool, queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
 	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
+	// Measurement set (CF-220) of the evaluation sweep: department sets and
+	// cache hit rate (CF-225).
+	agentusecase.WireMeasurement(agentSvc, departmentsusecase.NewDirectory(queries), aiCore.Memory)
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
@@ -351,7 +355,7 @@ func main() {
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
-		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
+		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ai.WithBatch(ctx)) }).
 		Handle(eventdispatch.TaskConsume, eventProcessor.ProcessTask).
 		Handle(eventdispatch.TaskPurgeConsumptions, eventProcessor.PurgeConsumptions).
 		Handle(queue.TaskSLASweep, queue.SLASweepHandler(slaSvc.Sweep)).

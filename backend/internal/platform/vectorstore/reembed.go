@@ -20,13 +20,31 @@ import (
 type Reembedder struct {
 	Pool     *pgxpool.Pool
 	Embedder ai.Embedder
-	Sources  []Source
+	// Sources use pending_* columns and switch an organization at once
+	// (knowledge chunks); Tables are re-embedded row by row in place. Both
+	// run in registry order, so a centroid table listed after its members
+	// sees them done.
+	Sources []Source
+	Tables  []Table
 	// Skip reports product states (AI off, no credits) that postpone an
 	// organization instead of failing the run.
 	Skip func(error) bool
 	// Batch is the rows per embedding call (default 64); MaxBatches bounds one
 	// run per organization and source (default 20).
 	Batch, MaxBatches int
+	// Organizations, when set, limits a run to these organizations (tests
+	// and manual runs); empty means every organization.
+	Organizations []int64
+}
+
+// orgFilter is the organization predicate of the discovery queries.
+const orgFilter = `(cardinality(@orgs::bigint[])=0 OR organization_id=ANY(@orgs::bigint[]))`
+
+func (r *Reembedder) orgs() []int64 {
+	if r.Organizations == nil {
+		return []int64{}
+	}
+	return r.Organizations
 }
 
 // stale selects rows that still need a target-model vector.
@@ -44,6 +62,15 @@ func (r *Reembedder) Run(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", src.Name, err))
 		}
 	}
+	for _, t := range r.Tables {
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, err)
+			break
+		}
+		if err := r.table(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", t.Name, err))
+		}
+	}
 	return errors.Join(errs...)
 }
 
@@ -52,10 +79,10 @@ func (r *Reembedder) source(ctx context.Context, src Source) error {
 		return err
 	}
 	target := r.Embedder.Model()
-	args := pgx.NamedArgs{"target": target}
+	args := pgx.NamedArgs{"target": target, "orgs": r.orgs()}
 	// #nosec G201 -- table name is a validated code constant.
-	rows, err := r.Pool.Query(ctx, fmt.Sprintf(`SELECT DISTINCT organization_id FROM %s WHERE %s
- UNION SELECT DISTINCT organization_id FROM %s WHERE pending_model=@target LIMIT 100`, src.Table, stale, src.Table), args)
+	rows, err := r.Pool.Query(ctx, fmt.Sprintf(`SELECT DISTINCT organization_id FROM %[1]s WHERE %[2]s AND %[3]s
+ UNION SELECT DISTINCT organization_id FROM %[1]s WHERE pending_model=@target AND %[3]s LIMIT 100`, src.Table, stale, orgFilter), args)
 	if err != nil {
 		return err
 	}
@@ -79,13 +106,7 @@ func (r *Reembedder) source(ctx context.Context, src Source) error {
 }
 
 func (r *Reembedder) organization(ctx context.Context, src Source, org int64, target string) error {
-	batch, maxBatches := r.Batch, r.MaxBatches
-	if batch <= 0 || batch > 256 {
-		batch = 64
-	}
-	if maxBatches <= 0 {
-		maxBatches = 20
-	}
+	batch, maxBatches := r.limits()
 	args := pgx.NamedArgs{"target": target, "org": org, "batch": batch}
 	for range maxBatches {
 		// #nosec G201 -- table and column names are validated code constants.
@@ -139,6 +160,19 @@ func (r *Reembedder) organization(ctx context.Context, src Source, org int64, ta
 		}
 	}
 	return r.swap(ctx, src, org, target)
+}
+
+// limits are the rows per embedding call and the calls per organization and
+// table in one run; the next run resumes with the rows still stale.
+func (r *Reembedder) limits() (int, int) {
+	batch, maxBatches := r.Batch, r.MaxBatches
+	if batch <= 0 || batch > 256 {
+		batch = 64
+	}
+	if maxBatches <= 0 {
+		maxBatches = 20
+	}
+	return batch, maxBatches
 }
 
 // swap switches the organization to the target model once nothing is left.

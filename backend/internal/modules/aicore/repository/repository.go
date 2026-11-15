@@ -13,11 +13,13 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/outbox"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Store struct {
@@ -32,14 +34,19 @@ func New(b *billingrepo.Repository, e *entitlements.Service) *Store {
 func (s *Store) Policy(ctx context.Context, org int64) (db.AiPolicy, error) {
 	p, err := s.Billing.Q.AIPolicy(ctx, org)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return db.AiPolicy{OrganizationID: org, MaskPii: true, DailyCalls: 100, Concurrency: 3, DailyBudgetMicros: 10000000}, nil
+		// No row: AI is off and every daily limit follows the platform.
+		return db.AiPolicy{OrganizationID: org, MaskPii: true, BatchSharePercent: DefaultBatchSharePercent}, nil
 	}
 	return p, err
 }
 
 func (s *Store) SavePolicy(ctx context.Context, in db.AISavePolicyParams) (db.AiPolicy, error) {
 	out := db.AiPolicy{}
-	if in.DailyCalls < 1 || in.DailyCalls > 100000 || in.Concurrency < 1 || in.Concurrency > 20 || in.DailyBudgetMicros < 1 || in.DailyBudgetMicros > 1000000000000 {
+	// NULL follows the platform limit; a value can only lower it (Effective).
+	if in.DailyCalls.Valid && (in.DailyCalls.Int32 < 1 || in.DailyCalls.Int32 > 100000) ||
+		in.Concurrency.Valid && (in.Concurrency.Int32 < 1 || in.Concurrency.Int32 > 20) ||
+		in.DailyBudgetMicros.Valid && (in.DailyBudgetMicros.Int64 < 1 || in.DailyBudgetMicros.Int64 > 1000000000000) ||
+		in.BatchSharePercent.Valid && (in.BatchSharePercent.Int16 < 10 || in.BatchSharePercent.Int16 > 90) {
 		return out, model.ErrInvalid
 	}
 	err := s.Billing.Within(ctx, func(r *billingrepo.Repository) error {
@@ -98,17 +105,33 @@ func (s *Store) Reserve(ctx context.Context, in db.AIInsertRunParams) (db.AiRun,
 		if err != nil {
 			return err
 		}
-		if daily.Calls >= int64(p.DailyCalls) {
+		// CF-229: the platform entitlement (unlimited included) governs; the
+		// tenant policy can only lower it.
+		limits := Effective(values, p)
+		if !limits.DailyCalls.Allows(daily.Calls, 1) {
 			return model.ErrDaily
 		}
-		if in.ReservedCostMicros > p.DailyBudgetMicros-daily.Cost {
+		if !limits.DailyBudgetMicros.Allows(daily.Cost, in.ReservedCostMicros) {
 			return model.ErrBudget
+		}
+		// CF-228: batch jobs stay within their share, so live AI keeps the
+		// rest of the day's calls and budget.
+		lane := ai.LaneOf(ctx)
+		in.Lane = pgtype.Text{String: lane, Valid: true}
+		if lane == ai.LaneBatch {
+			batch := BatchShare(limits, p)
+			if !batch.DailyCalls.Allows(daily.BatchCalls, 1) {
+				return fmt.Errorf("%w: batch share used", model.ErrDaily)
+			}
+			if !batch.DailyBudgetMicros.Allows(daily.BatchCost, in.ReservedCostMicros) {
+				return fmt.Errorf("%w: batch share used", model.ErrBudget)
+			}
 		}
 		active, err := q.AIActive(ctx, in.OrganizationID)
 		if err != nil {
 			return err
 		}
-		if active >= int64(p.Concurrency) {
+		if !limits.Concurrency.Allows(active, 1) {
 			return model.ErrConcurrency
 		}
 		month, err := q.AIQuotaMonth(ctx, in.OrganizationID)
@@ -198,6 +221,7 @@ func (s *Store) Finish(ctx context.Context, in db.AIFinishRunParams) error {
 // Block records a masked, pre-provider rejection without consuming a wallet reservation.
 func (s *Store) Block(ctx context.Context, in db.AIInsertRunParams) error {
 	in.Status = "blocked"
+	in.Lane = pgtype.Text{String: ai.LaneOf(ctx), Valid: true}
 	in.ReservedCredits = 0
 	in.ReservedCostMicros = 0
 	in.ReservedTokens = 0

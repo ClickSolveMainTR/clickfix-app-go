@@ -117,6 +117,7 @@ type AiAnswerCacheStat struct {
 	ExactHits      int64       `json:"exact_hits"`
 	SemanticHits   int64       `json:"semantic_hits"`
 	Misses         int64       `json:"misses"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
 }
 
 type AiCaseMemory struct {
@@ -241,11 +242,12 @@ type AiPolicy struct {
 	Enabled           bool               `json:"enabled"`
 	MaskPii           bool               `json:"mask_pii"`
 	AllowUnmask       bool               `json:"allow_unmask"`
-	DailyCalls        int32              `json:"daily_calls"`
-	Concurrency       int32              `json:"concurrency"`
-	DailyBudgetMicros int64              `json:"daily_budget_micros"`
+	DailyCalls        pgtype.Int4        `json:"daily_calls"`
+	Concurrency       pgtype.Int4        `json:"concurrency"`
+	DailyBudgetMicros pgtype.Int8        `json:"daily_budget_micros"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	BatchSharePercent int16              `json:"batch_share_percent"`
 }
 
 type AiProcedure struct {
@@ -296,6 +298,7 @@ type AiRun struct {
 	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
 	ConversationID     pgtype.Int8        `json:"conversation_id"`
 	PiiErasedAt        pgtype.Timestamptz `json:"pii_erased_at"`
+	Lane               string             `json:"lane"`
 }
 
 type AiTool struct {
@@ -2711,6 +2714,9 @@ type HistoryImport struct {
 	FinishedAt            pgtype.Timestamptz `json:"finished_at"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ErrorCode             string             `json:"error_code"`
+	ResumeAt              pgtype.Timestamptz `json:"resume_at"`
+	ResumeOffset          int32              `json:"resume_offset"`
 }
 
 type HistorySetting struct {
@@ -2953,7 +2959,7 @@ type KnowledgeChunk struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Embedding        vectorstore.Vector `json:"embedding"`
 	BrandID          pgtype.UUID        `json:"brand_id"`
-	DepartmentID     pgtype.UUID        `json:"department_id"`
+	DepartmentID     pgtype.Int8        `json:"department_id"`
 	PendingEmbedding vectorstore.Vector `json:"pending_embedding"`
 	PendingModel     pgtype.Text        `json:"pending_model"`
 }

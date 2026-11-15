@@ -322,7 +322,9 @@ func metricsOf(e db.AiEvaluation) *EvaluationMetrics {
 }
 
 func (s *Service) evaluate(ctx context.Context, org, actor int64, in EvaluationInput, trigger string, fp Fingerprint) (out db.AiEvaluation, err error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// CF-228: evaluations are batch work and use only the batch share of the
+	// daily AI limits.
+	ctx, cancel := context.WithTimeout(ai.WithBatch(ctx), 2*time.Minute)
 	defer cancel()
 	department, err := s.ResolveDepartment(ctx, org, in.Department)
 	if err != nil {

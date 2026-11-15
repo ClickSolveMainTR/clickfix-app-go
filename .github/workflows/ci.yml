@@ -894,13 +894,32 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Sentry source maps (CF-227): with the SENTRY_AUTH_TOKEN secret and the
+      # SENTRY_ORG / SENTRY_PROJECT variables set, the frontend build injects
+      # debug IDs and uploads its source maps. The token reaches only that
+      # `pnpm build` step as a BuildKit secret, never a build arg or image
+      # layer, and the maps are deleted before the runtime stage. Without the
+      # secret the image builds as before and a summary note says so.
       - name: Build and push backend and frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           short="${GITHUB_SHA::7}"
+          sentry_args=()
+          if [ -n "$SENTRY_AUTH_TOKEN" ] && [ -n "$SENTRY_ORG" ] && [ -n "$SENTRY_PROJECT" ]; then
+            sentry_args=(--secret id=sentry_auth_token,env=SENTRY_AUTH_TOKEN
+              --build-arg "SENTRY_ORG=$SENTRY_ORG" --build-arg "SENTRY_PROJECT=$SENTRY_PROJECT")
+          else
+            echo "Sentry source maps not uploaded: SENTRY_AUTH_TOKEN secret or SENTRY_ORG / SENTRY_PROJECT variables missing" >> "$GITHUB_STEP_SUMMARY"
+          fi
           for svc in backend frontend; do
             image="ghcr.io/$owner/clickfix-$svc"
-            docker buildx build "./$svc" --push \
+            extra=()
+            [ "$svc" = frontend ] && extra=("${sentry_args[@]}")
+            docker buildx build "./$svc" --push "${extra[@]}" \
               --platform linux/amd64 \
               --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
               --label "org.opencontainers.image.revision=$GITHUB_SHA" \

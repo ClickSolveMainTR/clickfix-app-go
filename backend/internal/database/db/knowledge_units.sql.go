@@ -30,7 +30,7 @@ FROM ai_answer_cache c
 JOIN knowledge_units u ON u.organization_id=c.organization_id AND u.id=c.unit_id
 LEFT JOIN knowledge_articles a ON a.organization_id=u.organization_id AND a.id=u.article_id
 WHERE c.organization_id=$1 AND c.audience=$2 AND c.locale=$3 AND c.scope_key=$4 AND c.question_hash=$5
- AND (c.audience='agent' OR u.visibility='public')
+ AND (c.audience='agent' OR u.visibility='public') AND u.embedding_model=$6
 `
 
 type AnswerCacheGetParams struct {
@@ -39,6 +39,7 @@ type AnswerCacheGetParams struct {
 	Locale         string `json:"locale"`
 	ScopeKey       string `json:"scope_key"`
 	QuestionHash   string `json:"question_hash"`
+	EmbeddingModel string `json:"embedding_model"`
 }
 
 type AnswerCacheGetRow struct {
@@ -53,7 +54,8 @@ type AnswerCacheGetRow struct {
 }
 
 // A cached row is valid only while its unit exists (source changes delete it)
-// and still passes the audience's visibility rule.
+// and still passes the audience's visibility rule. While re-embedding runs
+// (CF-223) a unit still on the old model is not served.
 func (q *Queries) AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error) {
 	row := q.db.QueryRow(ctx, answerCacheGet,
 		arg.OrganizationID,
@@ -61,6 +63,7 @@ func (q *Queries) AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) 
 		arg.Locale,
 		arg.ScopeKey,
 		arg.QuestionHash,
+		arg.EmbeddingModel,
 	)
 	var i AnswerCacheGetRow
 	err := row.Scan(
@@ -105,24 +108,27 @@ func (q *Queries) AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) 
 }
 
 const answerCacheStat = `-- name: AnswerCacheStat :exec
-INSERT INTO ai_answer_cache_stats(organization_id,day,audience,exact_hits,semantic_hits,misses)
-VALUES($1,current_date,$2,$3::bigint,$4::bigint,$5::bigint)
-ON CONFLICT(organization_id,day,audience) DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
+INSERT INTO ai_answer_cache_stats(organization_id,day,audience,department_id,exact_hits,semantic_hits,misses)
+VALUES($1,current_date,$2,$3::bigint,$4::bigint,$5::bigint,$6::bigint)
+ON CONFLICT ON CONSTRAINT uq_ai_answer_cache_stats_day DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
  semantic_hits=ai_answer_cache_stats.semantic_hits+excluded.semantic_hits,misses=ai_answer_cache_stats.misses+excluded.misses
 `
 
 type AnswerCacheStatParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Audience       string `json:"audience"`
-	Exact          int64  `json:"exact"`
-	Semantic       int64  `json:"semantic"`
-	Miss           int64  `json:"miss"`
+	OrganizationID int64       `json:"organization_id"`
+	Audience       string      `json:"audience"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
+	Exact          int64       `json:"exact"`
+	Semantic       int64       `json:"semantic"`
+	Miss           int64       `json:"miss"`
 }
 
+// One row per day, audience and department (NULL = organization wide, CF-225).
 func (q *Queries) AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error {
 	_, err := q.db.Exec(ctx, answerCacheStat,
 		arg.OrganizationID,
 		arg.Audience,
+		arg.DepartmentID,
 		arg.Exact,
 		arg.Semantic,
 		arg.Miss,
