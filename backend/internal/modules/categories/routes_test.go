@@ -36,7 +36,8 @@ func (l loader) LoadPrincipal(_ *http.Request, c jwt.Claims) (authctx.Principal,
 	return authctx.Principal{UserID: id, UserInternal: l[id]}, nil
 }
 
-// departments stands in for CF-215: two departments of organization A.
+// departments resolves the two real departments of organization A that the
+// test creates (department_id is a foreign key since CF-224).
 type departments map[uuid.UUID]int64
 
 func (d departments) ID(_ context.Context, _ int64, id uuid.UUID) (int64, error) {
@@ -143,9 +144,20 @@ func TestCategoryRoutes(t *testing.T) {
 	if _, err := orgSvc.AddMember(ctx, orgA.UUID, users["agent"].Uuid, "agent"); err != nil {
 		t.Fatal(err)
 	}
-	support, sales := uuid.New(), uuid.New()
+	depts := departments{}
+	var support, sales uuid.UUID
+	for _, d := range []struct {
+		name string
+		out  *uuid.UUID
+	}{{"Destek", &support}, {"Satış", &sales}} {
+		var id int64
+		if err := pool.QueryRow(ctx, "INSERT INTO departments(organization_id,name) VALUES($1,$2) RETURNING id, uuid", orgA.ID, d.name).Scan(&id, d.out); err != nil {
+			t.Fatal(err)
+		}
+		depts[*d.out] = id
+	}
 	classifier := &guess{q: q, slug: "iade", conf: 0.45}
-	svc := usecase.New(pool, q, usecase.Options{Departments: departments{support: 9000001, sales: 9000002}, Classifier: classifier, Embedder: embedder{}})
+	svc := usecase.New(pool, q, usecase.Options{Departments: depts, Classifier: classifier, Embedder: embedder{}})
 	tokens, err := jwt.NewManager("test-access-secret-0123456789abcdef", time.Minute, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +400,7 @@ func TestCategoryRoutes(t *testing.T) {
 
 	// The phase-1 chain over the real vector store: example vectors are
 	// built lazily and the embedding stage decides without the AI.
-	phase1 := usecase.New(pool, q, usecase.Options{Departments: departments{support: 9000001, sales: 9000002}, Embedder: keywords{}})
+	phase1 := usecase.New(pool, q, usecase.Options{Departments: depts, Embedder: keywords{}})
 	conv2UUID := uuid.UUID{}
 	if err := pool.QueryRow(ctx, "SELECT uuid FROM conversations WHERE id=$1", conv2).Scan(&conv2UUID); err != nil {
 		t.Fatal(err)
