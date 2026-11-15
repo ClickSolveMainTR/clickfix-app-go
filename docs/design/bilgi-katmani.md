@@ -160,7 +160,7 @@ CF-215 bu bölüme departman tablosunu, görünürlük kurallarını ve devir ak
 
 ### 3.1 Departmanlar (CF-215)
 
-Not (birleştirme): departman kimlikleri iç `BIGINT` anahtardır. Bilgi aramasında departman görünürlüğü makale düzeyinde `department_visible` ile uygulanır (vektör araması `deptscope` süzgecini hidrasyon sorgusunda kullanır). `knowledge_chunks.department_id` (UUID, CF-214) şimdilik boş kalır; vektör tablolarının departman sütununu `BIGINT`'e çevirmek ayrı bir iştir.
+Not: departman kimlikleri iç `BIGINT` anahtardır. `knowledge_chunks.department_id` CF-222 ile (`000233_vector_department_bigint`) `BIGINT` olur ve bileşik yabancı anahtar alır; parça, makalesinin departmanını tetikleyiciyle kopyalar. Vektör aramasında departman süzgeci parça düzeyinde çalışır, makale düzeyindeki `department_visible` görünürlük kuralı olarak kalır (ayrıntı: 4. bölüm, Kapsam süzgeci).
 
 Departman bir iş birimidir (teknik destek, satış, faturalama); ekip değildir. Ekipler bir departmana bağlanır, insanlar ekiplere. Kapsam sırası **organizasyon → marka → departman → ekip**.
 
@@ -175,7 +175,7 @@ Departman bir iş birimidir (teknik destek, satış, faturalama); ekip değildir
 | `department_knowledge_shares` | Bir departmanın tek bir bilgisinin (`article`, `source`, `context`) başka bir departmanla paylaşımı. |
 | `conversation_department_transfers` | Departman değişiklikleri: kimden, kime, kim (`customer`, `ai`, `agent`), güven puanı, neden ve devralan ekibe bağlam özeti. |
 
-**Sütun tipi.** `department_id` her tabloda `BIGINT` ve `(organization_id, department_id) → departments(organization_id, id)` bileşik yabancı anahtarıdır (ekipler ve konuşma ekibiyle aynı kalıp). Paralel dallarda NULL olarak eklenen `department_id` sütunları bu tipe uyar ve birleşmeden sonra aynı yabancı anahtarı alır; `UUID` tipiyle eklenmiş olanlar (`000225_pgvector`) `BIGINT`'e çevrilir.
+**Sütun tipi.** `department_id` her tabloda `BIGINT` ve `(organization_id, department_id) → departments(organization_id, id)` bileşik yabancı anahtarıdır (ekipler ve konuşma ekibiyle aynı kalıp). Paralel dallarda NULL olarak eklenen `department_id` sütunları bu tipe uyar ve birleşmeden sonra aynı yabancı anahtarı alır. `UUID` tipiyle eklenmiş tek sütun (`knowledge_chunks.department_id`, `000225_pgvector`) `000233_vector_department_bigint` ile `BIGINT`'e çevrildi ve `fk_knowledge_chunks_department` aldı (CF-222); migration sütunun boş olduğunu doğrular, değilse durur.
 
 #### Görünürlük kuralı
 
@@ -197,7 +197,7 @@ Sorgular iki argüman alır: `dept_restrict` (false = süzgeçsiz) ve `viewer_de
 
 Yazma: `read_all` olmayan üye bilgiyi yalnız kendi departmanlarına (ya da organizasyon geneline) kaydeder, aksi 403. Lexical (Meilisearch) adayları Postgres'te yeniden doğrulanır, departman süzgeci orada uygulanır.
 
-pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: paylaşımı olmayan tablolar için `department_id IS NULL OR department_id = ANY(viewer_departments)`, paylaşılan türler için `department_visible(...)`. Kapsam `deptscope.Effective(ctx).Args()` ile okunur.
+pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: paylaşımı olmayan tablolar için `department_id IS NULL OR department_id = ANY(viewer_departments)`, paylaşılan türler için `department_visible(...)`. Kapsam `deptscope.Effective(ctx).Args()` ile okunur. Bilgi parçalarında (`knowledge_chunks`) kural vektör sorgusunun içinde parçanın kendi `department_id`'sine uygulanır (`department_visible(org, 'article', article_id, department_id, viewer)`); hidrasyon sorgusu (`KnowledgeChunksByIDs`) aynı kuralı makaleye yeniden uygular.
 
 #### Departman belirleme
 
@@ -221,7 +221,7 @@ pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: pa
 
 - Postgres imajı `pgvector/pgvector:0.8.7-pg18-trixie` (PostgreSQL 18.7 + pgvector 0.8.7). Yerel, prod ve CI aynı imajı kullanır.
 - Migration `000225_pgvector`: `vector` eklentisi; `knowledge_chunks.embedding` artık `vector(1536)` ve HNSW (`vector_cosine_ops`) indeksli. Eski `REAL[]` vektörler 1536 boyutluysa olduğu gibi taşınır; başka boyuttakiler `NULL` kalır ve arka plan işi saklı (maskelenmiş) metinden yeniden üretir. `ai_cosine` kaldırıldı.
-- `knowledge_chunks` kapsam sütunları: `brand_id` (makaleden tetikleyiciyle kopyalanır, makalenin markası değişince parçalar da değişir), `department_id` (CF-215 gelene kadar `NULL`).
+- `knowledge_chunks` kapsam sütunları: `brand_id` (makaleden tetikleyiciyle kopyalanır, makalenin markası değişince parçalar da değişir), `department_id BIGINT` (CF-222: makaleden tetikleyiciyle kopyalanır, makalenin departmanı değişince parçalar da değişir; `(organization_id, department_id) → departments(organization_id, id)`, NO ACTION).
 
 ### Vektör tablosu sözleşmesi
 
@@ -230,7 +230,7 @@ Vektör tutan her tablo aynı sütunları taşır; böylece arama, yerleştirme 
 | Sütun | Anlamı |
 |-------|--------|
 | `id BIGINT`, `organization_id BIGINT` | Satır ve kiracı |
-| `brand_id UUID NULL`, `department_id UUID NULL` | Kapsam; `NULL` = organizasyon geneli |
+| `brand_id UUID NULL`, `department_id BIGINT NULL` | Kapsam; `NULL` = organizasyon geneli. `department_id` bileşik yabancı anahtarla `departments(organization_id, id)`'ye bağlanır |
 | `embedding vector(1536) NULL`, `embedding_model TEXT NOT NULL` | Aranan vektör ve modeli |
 | `pending_embedding vector(1536) NULL`, `pending_model TEXT NULL` | Model değişiminde hazırlanan yeni vektör |
 | metin sütunu | Vektörün üretildiği maskelenmiş metin (`Source.TextColumn`) |
@@ -250,7 +250,9 @@ Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosi
 - Markalı konuşma: o markanın bilgisi + markasız (organizasyon geneli) bilgi; markanın kendi bilgisi önce gelir, organizasyon geneli yedektir. Başka markanın bilgisi hiç gelmez.
 - Markasız konuşma: sadece organizasyon geneli bilgi.
 - `vectorstore.Organization(org)`: süzgeçsiz; sadece konuşmaya bağlı olmayan iç aramalar (yönetim araması, ekip sohbeti, yardım merkezi).
-- Departman aynı kuralla çalışır (CF-215 doldurur).
+- Departman (CF-222): `Scope.DepartmentID` (`pgtype.Int8`) konuşmanın departmanıdır, o departmanın parçaları önce gelir. `Scope.Departments` görünür departmanlardır; organizasyon geneli parçalar (`department_id IS NULL`) her zaman yedektir. `vectorstore.Conversation(org, brand, department)` ikisini konuşmanın departmanıyla doldurur; departmansız konuşma yalnız organizasyon geneli bilgiyi görür. Süzgeç vektör sorgusunun içinde, parçanın `department_id`'sine uygulanır; böylece başka departmanın parçaları aday sınırını (40) doldurmaz. Kaynak kendi kuralını `Source.DepartmentVisible` ile verir; bilgi parçaları paylaşımlar için `department_visible(...)` kullanır, verilmezse `department_id IS NULL OR department_id = ANY(@scope_departments)`.
+- RAG (`SearchScoped`) görünürlüğü bağlamdaki `deptscope`'tan alır (`Scope.WithDepartments`): yönetim araması üyenin departmanlarını, `read_all` sahibi tümünü görür. Bağlamda kapsam yoksa konuşma kapsamının departmanı kullanılır (yine kapalı: departman + organizasyon geneli). Makale düzeyindeki `department_visible` hidrasyonda ve lexical sorgularda görünürlük kuralı olarak kalır; parçadaki kopya eskimişse bile makalenin departmanı geçerlidir.
+- Testler: `TestSearchScopedDepartmentFallbackAndTenantIsolation` (departman kapsamı, paylaşım, organizasyon geneli yedek, kiracı ayrımı, departman taşıma, bileşik anahtar).
 
 `vectorstore.Search(ctx, pool, source, scope, Query{Vector, Model, MinSimilarity, Limit, Args})` kosinüs benzerliği eşiği geçen satırları döner (`Hit{ID, Similarity, Specific}`); çağıran satırları kendi sorgusuyla doldurur ve yeniden doğrular. HNSW `iterative_scan=relaxed_order` ile taranır, böylece kapsam süzgeci sonucu boş bırakmaz. Bilgi parçaları için eşik `KnowledgeMinSimilarity = 0.2`.
 
