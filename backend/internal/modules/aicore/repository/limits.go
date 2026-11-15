@@ -38,6 +38,36 @@ type Limits struct {
 type PolicyLimits struct {
 	Platform  Limits `json:"platform_limits"`
 	Effective Limits `json:"effective_limits"`
+	// Batch is the share of Effective that batch jobs may use (CF-228).
+	Batch Limits `json:"batch_limits"`
+}
+
+// DefaultBatchSharePercent is the batch share of a policy that never set one.
+const DefaultBatchSharePercent = 50
+
+// share is percent of a cap, rounded down; unlimited stays unlimited.
+func share(c Cap, percent int64) Cap {
+	if c.Unlimited || c.Limit == nil {
+		return c
+	}
+	n := *c.Limit * percent / 100
+	return Cap{Limit: &n}
+}
+
+// BatchShare is what batch jobs (history pipeline, re-embedding,
+// evaluations) may use of the effective daily limits (CF-228). Live AI keeps
+// the rest and may also use what batch jobs leave unused; the total limit
+// still applies to both lanes. Concurrency is shared as before.
+func BatchShare(effective Limits, p db.AiPolicy) Limits {
+	percent := int64(p.BatchSharePercent)
+	if percent < 1 || percent > 100 {
+		percent = DefaultBatchSharePercent
+	}
+	return Limits{
+		DailyCalls:        share(effective.DailyCalls, percent),
+		Concurrency:       effective.Concurrency,
+		DailyBudgetMicros: share(effective.DailyBudgetMicros, percent),
+	}
 }
 
 // platformCap reads a resolved entitlement. A soft limit only warns, so it
@@ -110,5 +140,6 @@ func (s *Store) Limits(ctx context.Context, p db.AiPolicy) (PolicyLimits, error)
 	if err != nil {
 		return PolicyLimits{}, err
 	}
-	return PolicyLimits{Platform: Platform(snap.Values), Effective: Effective(snap.Values, p)}, nil
+	effective := Effective(snap.Values, p)
+	return PolicyLimits{Platform: Platform(snap.Values), Effective: effective, Batch: BatchShare(effective, p)}, nil
 }

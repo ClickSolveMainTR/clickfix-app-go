@@ -72,6 +72,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/workforce"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/observability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
@@ -354,7 +355,7 @@ func main() {
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
-		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
+		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ai.WithBatch(ctx)) }).
 		Handle(eventdispatch.TaskConsume, eventProcessor.ProcessTask).
 		Handle(eventdispatch.TaskPurgeConsumptions, eventProcessor.PurgeConsumptions).
 		Handle(queue.TaskSLASweep, queue.SLASweepHandler(slaSvc.Sweep)).

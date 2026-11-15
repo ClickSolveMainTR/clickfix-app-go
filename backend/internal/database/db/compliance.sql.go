@@ -13,10 +13,10 @@ import (
 )
 
 const complianceAIRuns = `-- name: ComplianceAIRuns :many
-SELECT DISTINCT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at FROM ai_runs a JOIN ai_agent_jobs j ON j.organization_id=a.organization_id AND j.run_uuid=a.uuid
+SELECT DISTINCT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at, a.lane FROM ai_runs a JOIN ai_agent_jobs j ON j.organization_id=a.organization_id AND j.run_uuid=a.uuid
 JOIN conversations c ON c.organization_id=j.organization_id AND c.id=j.conversation_id
 WHERE a.organization_id=$1 AND c.contact_id=$2
-UNION SELECT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at FROM ai_runs a JOIN conversations c ON c.organization_id=a.organization_id AND c.id=a.conversation_id WHERE a.organization_id=$1 AND c.contact_id=$2 ORDER BY id
+UNION SELECT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at, a.lane FROM ai_runs a JOIN conversations c ON c.organization_id=a.organization_id AND c.id=a.conversation_id WHERE a.organization_id=$1 AND c.contact_id=$2 ORDER BY id
 `
 
 type ComplianceAIRunsParams struct {
@@ -59,6 +59,7 @@ func (q *Queries) ComplianceAIRuns(ctx context.Context, arg ComplianceAIRunsPara
 			&i.FinishedAt,
 			&i.ConversationID,
 			&i.PiiErasedAt,
+			&i.Lane,
 		); err != nil {
 			return nil, err
 		}

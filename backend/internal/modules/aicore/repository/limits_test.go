@@ -70,3 +70,20 @@ func TestEffectiveLimits(t *testing.T) {
 		}
 	})
 }
+
+// CF-228: batch jobs get a share of the effective daily limits.
+func TestBatchShare(t *testing.T) {
+	n := func(v int64) *int64 { return &v }
+	eff := Limits{DailyCalls: Cap{Limit: n(100)}, Concurrency: Cap{Limit: n(3)}, DailyBudgetMicros: Cap{Limit: n(10_000_000)}}
+	got := BatchShare(eff, db.AiPolicy{BatchSharePercent: 30})
+	if *got.DailyCalls.Limit != 30 || *got.DailyBudgetMicros.Limit != 3_000_000 || *got.Concurrency.Limit != 3 {
+		t.Fatalf("%+v", got)
+	}
+	// A policy that never stored a share uses the default.
+	if got := BatchShare(eff, db.AiPolicy{}); *got.DailyCalls.Limit != DefaultBatchSharePercent {
+		t.Fatalf("default share %+v", got.DailyCalls)
+	}
+	if got := BatchShare(Limits{DailyCalls: Cap{Unlimited: true}, DailyBudgetMicros: Cap{Unlimited: true}}, db.AiPolicy{BatchSharePercent: 10}); !got.DailyCalls.Unlimited || !got.DailyBudgetMicros.Unlimited {
+		t.Fatalf("unlimited lost: %+v", got)
+	}
+}

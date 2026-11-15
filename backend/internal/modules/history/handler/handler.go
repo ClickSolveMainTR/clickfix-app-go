@@ -59,6 +59,8 @@ type ImportView struct {
 	WindowEnd             pgtype.Timestamptz `json:"window_end"`
 	CancelRequested       bool               `json:"cancel_requested"`
 	Error                 string             `json:"error"`
+	ErrorCode             string             `json:"error_code"`
+	ResumeAt              pgtype.Timestamptz `json:"resume_at"`
 	StartedAt             pgtype.Timestamptz `json:"started_at"`
 	FinishedAt            pgtype.Timestamptz `json:"finished_at"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
@@ -69,7 +71,7 @@ func importView(r db.HistoryImport) ImportView {
 		ProcessedRecords: r.ProcessedRecords, SkippedRecords: r.SkippedRecords, ClustersTouched: r.ClustersTouched, SuggestionsCreated: r.SuggestionsCreated,
 		SuggestionsSuppressed: r.SuggestionsSuppressed, ConsentAnalysis: r.ConsentAnalysis, ConsentTraining: r.ConsentTraining, ConsentAt: r.ConsentAt,
 		ConsentVersion: r.ConsentVersion, RawDeleted: r.RawKey == "", RawRetainUntil: r.RawRetainUntil, BrandUUID: r.BrandID, DepartmentID: r.DepartmentID,
-		WindowStart: r.WindowStart, WindowEnd: r.WindowEnd, CancelRequested: r.CancelRequested, Error: r.Error, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, CreatedAt: r.CreatedAt}
+		WindowStart: r.WindowStart, WindowEnd: r.WindowEnd, CancelRequested: r.CancelRequested, Error: r.Error, ErrorCode: r.ErrorCode, ResumeAt: r.ResumeAt, StartedAt: r.StartedAt, FinishedAt: r.FinishedAt, CreatedAt: r.CreatedAt}
 }
 
 type SuggestionView struct {
@@ -152,28 +154,65 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, importView(row))
 }
 
-func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
-	org, ok := scope(w, r)
-	if !ok {
-		return
-	}
+// readFile reads the multipart "file" field of an upload or estimate. The
+// caller removes the parsed form.
+func readFile(w http.ResponseWriter, r *http.Request) (string, []byte, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, model.MaxUploadBytes+(1<<20))
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		response.BadRequest(w, r, response.CodeValidationError, "Send the file as multipart/form-data (max 50 MB)")
-		return
+		return "", nil, false
 	}
-	defer func() { _ = r.MultipartForm.RemoveAll() }()
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		response.BadRequest(w, r, response.CodeValidationError, "file is required")
-		return
+		return "", nil, false
 	}
 	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, model.MaxUploadBytes+1))
 	if err != nil {
 		response.BadRequest(w, r, response.CodeValidationError, "file could not be read")
+		return "", nil, false
+	}
+	return header.Filename, data, true
+}
+
+func removeForm(r *http.Request) {
+	if r.MultipartForm != nil {
+		_ = r.MultipartForm.RemoveAll()
+	}
+}
+
+// Estimate returns the expected AI calls and cost of a file before it is
+// uploaded (CF-228). The file is parsed and dropped, never stored.
+func (h *Handler) Estimate(w http.ResponseWriter, r *http.Request) {
+	org, ok := scope(w, r)
+	if !ok {
 		return
 	}
+	defer removeForm(r)
+	name, data, ok := readFile(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.Svc.Estimate(r.Context(), org, name, data)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
+	org, ok := scope(w, r)
+	if !ok {
+		return
+	}
+	defer removeForm(r)
+	name, data, ok := readFile(w, r)
+	if !ok {
+		return
+	}
+	var err error
 	in := model.UploadInput{ConsentAnalysis: r.FormValue("consent_analysis") == "true", ConsentTraining: r.FormValue("consent_training") == "true", BrandUUID: r.FormValue("brand_uuid")}
 	if v := r.FormValue("department_id"); v != "" {
 		if in.DepartmentID, err = strconv.ParseInt(v, 10, 64); err != nil || in.DepartmentID < 1 {
@@ -182,7 +221,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	actor := authctx.MustPrincipal(r.Context()).UserInternal
-	row, err := h.Svc.Upload(r.Context(), org, actor, in, header.Filename, data)
+	row, err := h.Svc.Upload(r.Context(), org, actor, in, name, data)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -247,6 +247,7 @@ type AiPolicy struct {
 	DailyBudgetMicros pgtype.Int8        `json:"daily_budget_micros"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	BatchSharePercent int16              `json:"batch_share_percent"`
 }
 
 type AiProcedure struct {
@@ -297,6 +298,7 @@ type AiRun struct {
 	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
 	ConversationID     pgtype.Int8        `json:"conversation_id"`
 	PiiErasedAt        pgtype.Timestamptz `json:"pii_erased_at"`
+	Lane               string             `json:"lane"`
 }
 
 type AiTool struct {
@@ -2712,6 +2714,9 @@ type HistoryImport struct {
 	FinishedAt            pgtype.Timestamptz `json:"finished_at"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ErrorCode             string             `json:"error_code"`
+	ResumeAt              pgtype.Timestamptz `json:"resume_at"`
+	ResumeOffset          int32              `json:"resume_offset"`
 }
 
 type HistorySetting struct {

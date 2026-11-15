@@ -9,6 +9,7 @@ export type HistoryImport = components["schemas"]["HistoryImport"];
 export type HistorySuggestion = components["schemas"]["HistorySuggestion"];
 export type HistoryCluster = components["schemas"]["HistoryCluster"];
 export type HistorySettings = components["schemas"]["HistorySettings"];
+export type HistoryEstimate = components["schemas"]["HistoryEstimate"];
 export type HistorySettingsInput =
   components["schemas"]["HistorySettingsInput"];
 export type HistoryDecisionInput =
@@ -18,8 +19,17 @@ type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
 const BASE = "/v1/tenant/history";
 
-/** A run that is still moving: the panel polls while one exists. */
+/** A run that has not ended: it can be cancelled and shows progress. */
 export function isActive(run: HistoryImport) {
+  return (
+    run.status === "pending" ||
+    run.status === "running" ||
+    run.status === "paused"
+  );
+}
+
+/** A run the worker is moving now: the panel polls quickly while one exists. */
+export function isMoving(run: HistoryImport) {
   return run.status === "pending" || run.status === "running";
 }
 
@@ -43,6 +53,17 @@ export const historyService = {
       slug,
       "POST",
       `${BASE}/imports`,
+      form,
+    );
+  },
+  /** Expected AI calls and cost of a file, before it is uploaded (CF-228). */
+  estimate(slug: string, file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return tenantFormRequest<HistoryEstimate>(
+      slug,
+      "POST",
+      `${BASE}/imports/estimate`,
       form,
     );
   },

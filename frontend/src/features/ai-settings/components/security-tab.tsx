@@ -63,6 +63,7 @@ function toInput(policy: AIPolicy): AIPolicyInput {
     daily_calls: policy.daily_calls,
     concurrency: policy.concurrency,
     daily_budget_micros: policy.daily_budget_micros,
+    batch_share_percent: policy.batch_share_percent,
   };
 }
 
@@ -135,12 +136,14 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
   const [calls, setCalls] = useState("");
   const [concurrency, setConcurrency] = useState("");
   const [budget, setBudget] = useState("");
+  const [share, setShare] = useState("");
   const [saving, setSaving] = useState(false);
   const reset = (policy: AIPolicy) => {
     setForm(toInput(policy));
     setCalls(fieldText(policy.daily_calls));
     setConcurrency(fieldText(policy.concurrency));
     setBudget(fieldText(policy.daily_budget_micros, 1_000_000));
+    setShare(String(policy.batch_share_percent));
   };
   if (query.data && form === null) {
     reset(query.data);
@@ -182,17 +185,24 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
         budgetMicros < 1 ||
         budgetMicros > MAX_BUDGET_MICROS),
   };
-  const invalid = errors.calls || errors.concurrency || errors.budget;
+  // CF-228: batch jobs may use this share of the daily limits.
+  const shareValue = Number(share.trim());
+  const shareInvalid =
+    !Number.isInteger(shareValue) || shareValue < 10 || shareValue > 90;
+  const invalid =
+    errors.calls || errors.concurrency || errors.budget || shareInvalid;
   const next: AIPolicyInput = {
     ...form,
     daily_calls: callsValue,
     concurrency: concurrencyValue,
     daily_budget_micros: budgetMicros,
+    batch_share_percent: shareValue,
   };
   const dirty =
     JSON.stringify(next) !== JSON.stringify(toInput(query.data)) && !invalid;
   const platform = query.data.platform_limits;
   const effective = query.data.effective_limits;
+  const batch = query.data.batch_limits;
   const limitText = (limit: Limit, format?: (n: number) => string) =>
     limit.unlimited || limit.limit == null
       ? t("ai_settings.security.unlimited")
@@ -364,6 +374,42 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
                   aria-invalid={errors.budget}
                   onChange={(e) => setBudget(e.target.value)}
                 />
+              </div>
+            </SettingRow>
+            <SettingRow
+              label={t("ai_settings.security.batch_share")}
+              hint={
+                <>
+                  <span className="block">
+                    {shareInvalid
+                      ? t("ai_settings.security.batch_share_invalid")
+                      : t("ai_settings.security.batch_share_hint")}
+                  </span>
+                  <span className="block">
+                    {t("ai_settings.security.batch_limits", {
+                      calls: limitText(batch.daily_calls),
+                      budget: limitText(batch.daily_budget_micros, money),
+                    })}
+                  </span>
+                </>
+              }
+              htmlFor="ai-batch-share"
+            >
+              <div className="relative">
+                <Input
+                  id="ai-batch-share"
+                  type="number"
+                  min={10}
+                  max={90}
+                  className="pe-7"
+                  value={share}
+                  disabled={readOnly}
+                  aria-invalid={shareInvalid}
+                  onChange={(e) => setShare(e.target.value)}
+                />
+                <span className="text-muted-foreground pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm">
+                  %
+                </span>
               </div>
             </SettingRow>
           </CardContent>

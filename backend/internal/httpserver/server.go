@@ -206,6 +206,7 @@ import (
 	widgetusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/workforce"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/appleauth"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine/adapters"
@@ -911,7 +912,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 			Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 			Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
-			Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
+			Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ai.WithBatch(ctx)) }).
 			Handle(queue.TaskCustomerHealthSweep, queue.CustomerHealthSweepHandler(healthusecase.New(deps.DB, deps.Queries, activityRec, log).Sweep)).
 			Handle(queue.TaskNotificationDigest, func(ctx context.Context, _ *asynq.Task) error { _, err := notifSvc.ProcessDigests(ctx); return err }).
 			Handle(queue.TaskPresenceSweep, func(ctx context.Context, _ *asynq.Task) error { _, err := presenceSvc.SweepIdle(ctx); return err }).

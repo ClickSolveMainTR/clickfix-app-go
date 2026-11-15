@@ -43765,6 +43765,38 @@ webhooks:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/estimate:
+    post:
+      tags: [Tenant]
+      operationId: estimateTenantHistoryImport
+      summary: Estimate the AI use of a history export
+      description: |
+        Multipart form: `file`, as for the upload. The file is parsed and dropped, never stored. Returns the
+        embedding calls and cost the run needs and whether today's batch share of the daily AI limits covers them
+        (CF-228), so the panel can warn before the upload. Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryEstimate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/history/imports/{uuid}:
     get:
       tags: [Tenant]
@@ -46453,11 +46485,22 @@ components:
           "minimum": 1,
           "maximum": 1000000000000
         },
+        "batch_share_percent": {
+          "type": "integer",
+          "description": "Share of the effective daily call and budget limits that batch jobs (history pipeline, re-embedding, evaluations) may use (CF-228). Live AI keeps the rest and may also use what batch jobs leave unused.",
+          "minimum": 10,
+          "maximum": 90,
+          "default": 50
+        },
         "platform_limits": {
           "$ref": "#/components/schemas/AILimits"
         },
         "effective_limits": {
           "$ref": "#/components/schemas/AILimits"
+        },
+        "batch_limits": {
+          "$ref": "#/components/schemas/AILimits",
+          "description": "batch_share_percent of effective_limits (concurrency is shared): what batch jobs may use per day."
         },
         "created_at": {
           "type": "string",
@@ -46476,8 +46519,10 @@ components:
         "daily_calls",
         "concurrency",
         "daily_budget_micros",
+        "batch_share_percent",
         "platform_limits",
         "effective_limits",
+        "batch_limits",
         "created_at",
         "updated_at"
       ]
@@ -46515,6 +46560,12 @@ components:
           "format": "int64",
           "minimum": 1,
           "maximum": 1000000000000
+        },
+        "batch_share_percent": {
+          "type": "integer",
+          "description": "Share of the daily limits batch jobs may use (CF-228). Omit to keep the current share.",
+          "minimum": 10,
+          "maximum": 90
         }
       },
       "required": [
@@ -65237,13 +65288,16 @@ components:
         meta: { $ref: "#/components/schemas/ResponseMeta" }
     HistoryImport:
       type: object
-      required: [uuid, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_at, consent_version, raw_deleted, raw_retain_until, brand_uuid, department_id, window_start, window_end, cancel_requested, error, started_at, finished_at, created_at]
+      required: [uuid, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_at, consent_version, raw_deleted, raw_retain_until, brand_uuid, department_id, window_start, window_end, cancel_requested, error, error_code, resume_at, started_at, finished_at, created_at]
       properties:
         uuid: { type: string, format: uuid }
         source: { type: string, enum: [upload, nightly, connector] }
         connector: { type: string }
         file_name: { type: string }
-        status: { type: string, enum: [pending, running, completed, failed, cancelled, rolled_back] }
+        status:
+          type: string
+          enum: [pending, running, paused, completed, failed, cancelled, rolled_back]
+          description: paused means an AI limit stopped the run; the worker continues it at resume_at from where it stopped (CF-228).
         stage: { type: string, enum: [queued, reading, anonymizing, embedding, clustering, suggesting, done] }
         total_records: { type: integer }
         processed_records: { type: integer }
@@ -65262,10 +65316,45 @@ components:
         window_start: { type: [string, "null"], format: date-time }
         window_end: { type: [string, "null"], format: date-time }
         cancel_requested: { type: boolean }
-        error: { type: string }
+        error: { type: string, description: English message; the panel shows error_code in the user's language. }
+        error_code:
+          type: string
+          description: Why the run paused or failed (CF-228); empty otherwise.
+          enum: ["", daily_limit, budget, concurrency, credits, quota, ai_disabled, not_configured, provider, invalid, unavailable, unsafe_record, raw_expired, unknown]
+        resume_at: { type: [string, "null"], format: date-time, description: When a paused run continues (the daily limits reset at midnight Europe/Istanbul). }
         started_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+    HistoryEstimate:
+      type: object
+      description: |
+        Expected AI use of an export before it is uploaded (CF-228). Embedding calls are exact for the file;
+        each suggestion adds calls_per_suggestion calls. Batch allowances are null when unlimited.
+      required: [records, embedding_calls, calls_per_suggestion, estimated_tokens, cost_micros, ai_enabled, batch_calls_per_day, batch_calls_left, batch_budget_micros_per_day, batch_budget_micros_left, exceeds_today, days_needed, limit_resets_at, raw_retention_hours, exceeds_retention, finishes_by]
+      properties:
+        records: { type: integer, description: Solved tickets the run would process. }
+        embedding_calls: { type: integer }
+        calls_per_suggestion: { type: integer }
+        estimated_tokens: { type: integer, format: int64 }
+        cost_micros: { type: integer, format: int64, description: Estimated embedding cost in micro USD. }
+        ai_enabled: { type: boolean }
+        batch_calls_per_day: { type: [integer, "null"], format: int64 }
+        batch_calls_left: { type: [integer, "null"], format: int64 }
+        batch_budget_micros_per_day: { type: [integer, "null"], format: int64 }
+        batch_budget_micros_left: { type: [integer, "null"], format: int64 }
+        exceeds_today: { type: boolean, description: The run will pause at today's batch limit and continue after the reset. }
+        days_needed: { type: integer, description: Days (today included) the embeddings need; 0 when the batch share is too small to ever run. }
+        limit_resets_at: { type: string, format: date-time }
+        raw_retention_hours: { type: integer }
+        exceeds_retention: { type: boolean, description: The raw file's retention ends before the run would finish. }
+        finishes_by: { type: [string, "null"], format: date-time }
+    EnvelopeHistoryEstimate:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryEstimate" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
     HistoryCase:
       type: object
       required: [uuid, source, subject, problem, resolution, message_count, locale, category, training_allowed, brand_id, department_id, opened_at, closed_at, created_at, import_uuid, cluster_uuid]
