@@ -72,4 +72,7 @@ type Citation struct {
 	Slug        string    `json:"slug"`
 	Locale      string    `json:"locale"`
 	Score       float64   `json:"score"`
+	// Specific: the chunk belongs to the conversation's brand/department (not
+	// an organization-wide fallback). Ranking only; never serialized.
+	Specific bool `json:"-"`
 }

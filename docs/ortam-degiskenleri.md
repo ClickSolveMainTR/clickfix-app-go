@@ -48,7 +48,7 @@ Kurallar:
 | `ANTHROPIC_API_KEY` | En az biri | Evet | console.anthropic.com → API Keys |
 | `OPENAI_API_KEY` | En az biri | Evet | platform.openai.com → API keys |
 | `OPENAI_BASE_URL` | Hayır | Hayır | Boş = `https://api.openai.com/v1` |
-| `AI_EMBEDDING_MODEL` | Hayır | Hayır | Boş = kod varsayılanı |
+| `AI_EMBEDDING_MODEL` | Hayır | Hayır | Boş = `text-embedding-3-small`. 1536 boyutlu olmalı; değiştirmek tüm vektörleri arka planda yeniden üretir (CF-214, [bilgi-katmani.md](./design/bilgi-katmani.md)) |
 | **Meta (WhatsApp, Instagram, Messenger)**: ayrıntı [meta-kurulum.md](./meta-kurulum.md) | | | |
 | `META_APP_ID`, `META_INSTAGRAM_APP_ID`, `META_WHATSAPP_CONFIG_ID` | Meta için | Hayır | meta-kurulum.md "Kimlikler" tablosu |
 | `META_APP_SECRET`, `META_INSTAGRAM_APP_SECRET` | Meta için | Evet | developers.facebook.com → ClickFix → App settings → Basic / Instagram API setup |

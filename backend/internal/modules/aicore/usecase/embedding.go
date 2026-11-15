@@ -23,6 +23,22 @@ type MeteredEmbedder struct {
 
 func (e *MeteredEmbedder) Model() string { return e.Raw.Model() }
 func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddings, error) {
+	return e.EmbedModel(ctx, e.Raw.Model(), input)
+}
+
+// EmbedModel meters an embedding with a named model (an organization whose
+// stored vectors are still from the previous model, CF-214).
+func (e *MeteredEmbedder) EmbedModel(ctx context.Context, model string, input []string) (ai.Embeddings, error) {
+	raw := e.Raw.Embed
+	if model != e.Raw.Model() {
+		named, ok := e.Raw.(ai.ModelEmbedder)
+		if !ok || model == "" {
+			return ai.Embeddings{}, ai.ErrNotConfigured
+		}
+		raw = func(ctx context.Context, input []string) (ai.Embeddings, error) {
+			return named.EmbedModel(ctx, model, input)
+		}
+	}
 	org, ok := orgctx.OrganizationID(ctx)
 	if !ok || e.InputPrice < 1 {
 		return ai.Embeddings{}, ai.ErrNotConfigured
@@ -48,12 +64,12 @@ func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddi
 	id := uuid.New()
 	reservedCredits := (maxTokens + 999) / 1000
 	reservedCost := route.Cost(maxTokens, 0)
-	_, _, err := e.Repo.Reserve(ctx, db.AIInsertRunParams{OrganizationID: org, Uuid: id, Task: "embedding", Provider: ai.ProviderOpenAI, Model: e.Model(), Status: "running", Input: strings.Join(texts, "\n\n"), RetrievedChunks: []byte(`[]`), ReservedTokens: maxTokens, ReservedCredits: reservedCredits, ReservedCostMicros: reservedCost})
+	_, _, err := e.Repo.Reserve(ctx, db.AIInsertRunParams{OrganizationID: org, Uuid: id, Task: "embedding", Provider: ai.ProviderOpenAI, Model: model, Status: "running", Input: strings.Join(texts, "\n\n"), RetrievedChunks: []byte(`[]`), ReservedTokens: maxTokens, ReservedCredits: reservedCredits, ReservedCostMicros: reservedCost})
 	if err != nil {
 		return ai.Embeddings{}, err
 	}
 	started := time.Now()
-	out, err := e.Raw.Embed(ctx, texts)
+	out, err := raw(ctx, texts)
 	status := "completed"
 	code := ""
 	charged := (out.InputTokens + 999) / 1000
@@ -83,7 +99,7 @@ func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddi
 	}
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	finishErr := e.Repo.Finish(finishCtx, db.AIFinishRunParams{OrganizationID: org, Uuid: id, Provider: ai.ProviderOpenAI, Model: e.Model(), Status: status, Output: fmt.Sprintf("%d embedding vectors", len(out.Vectors)), ToolCalls: []byte(`[]`), InputTokens: out.InputTokens, CostMicros: cost, ReservedCostMicros: remaining, ChargedCredits: charged, LatencyMs: time.Since(started).Milliseconds(), ErrorCode: code})
+	finishErr := e.Repo.Finish(finishCtx, db.AIFinishRunParams{OrganizationID: org, Uuid: id, Provider: ai.ProviderOpenAI, Model: model, Status: status, Output: fmt.Sprintf("%d embedding vectors", len(out.Vectors)), ToolCalls: []byte(`[]`), InputTokens: out.InputTokens, CostMicros: cost, ReservedCostMicros: remaining, ChargedCredits: charged, LatencyMs: time.Since(started).Milliseconds(), ErrorCode: code})
 	if finishErr != nil {
 		return ai.Embeddings{}, finishErr
 	}

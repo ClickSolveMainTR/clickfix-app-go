@@ -462,10 +462,20 @@ func (p *HTTPProvider) Stream(ctx context.Context, req Request, emit Delta) (res
 }
 func (p *HTTPProvider) Model() string { return p.EmbeddingModel }
 func (p *HTTPProvider) Embed(ctx context.Context, input []string) (Embeddings, error) {
-	if p.Kind != ProviderOpenAI || p.EmbeddingModel == "" {
+	return p.EmbedModel(ctx, p.EmbeddingModel, input)
+}
+
+// EmbedModel embeds with the named model. text-embedding-3 models are asked
+// for the fixed EmbeddingDimensions (CF-214).
+func (p *HTTPProvider) EmbedModel(ctx context.Context, model string, input []string) (Embeddings, error) {
+	if p.Kind != ProviderOpenAI || model == "" {
 		return Embeddings{}, ErrUnavailable
 	}
-	resp, err := p.post(ctx, "/embeddings", map[string]any{"model": p.EmbeddingModel, "input": input, "encoding_format": "float"})
+	body := map[string]any{"model": model, "input": input, "encoding_format": "float"}
+	if strings.HasPrefix(model, "text-embedding-3") {
+		body["dimensions"] = EmbeddingDimensions
+	}
+	resp, err := p.post(ctx, "/embeddings", body)
 	if err != nil {
 		return Embeddings{}, err
 	}

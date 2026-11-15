@@ -7,6 +7,7 @@ package db
 import (
 	"net/netip"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -2611,16 +2612,20 @@ type KnowledgeArticleVersion struct {
 }
 
 type KnowledgeChunk struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	ArticleID      int64              `json:"article_id"`
-	Version        int32              `json:"version"`
-	Ordinal        int32              `json:"ordinal"`
-	Content        string             `json:"content"`
-	Embedding      []float32          `json:"embedding"`
-	EmbeddingModel string             `json:"embedding_model"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	ArticleID        int64              `json:"article_id"`
+	Version          int32              `json:"version"`
+	Ordinal          int32              `json:"ordinal"`
+	Content          string             `json:"content"`
+	EmbeddingModel   string             `json:"embedding_model"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Embedding        vectorstore.Vector `json:"embedding"`
+	BrandID          pgtype.UUID        `json:"brand_id"`
+	DepartmentID     pgtype.UUID        `json:"department_id"`
+	PendingEmbedding vectorstore.Vector `json:"pending_embedding"`
+	PendingModel     pgtype.Text        `json:"pending_model"`
 }
 
 type KnowledgeCollection struct {

@@ -77,6 +77,9 @@ type Querier interface {
 	AIQuotaMonth(ctx context.Context, organizationID int64) (AIQuotaMonthRow, error)
 	AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiPolicy, error)
 	AISaveSimilarLink(ctx context.Context, arg AISaveSimilarLinkParams) error
+	// CF-214: same brand first, then brandless (organization-wide) conversations;
+	// another brand's conversations never match. A brandless conversation only
+	// matches brandless ones.
 	AISimilarConversations(ctx context.Context, arg AISimilarConversationsParams) ([]AISimilarConversationsRow, error)
 	AIStaleRuns(ctx context.Context) ([]AiRun, error)
 	AIToolByName(ctx context.Context, arg AIToolByNameParams) (AiTool, error)
@@ -1258,6 +1261,8 @@ type Querier interface {
 	// Admin list (CF-73): current drafts with filters and help center votes (CF-74).
 	KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesParams) ([]KnowledgeArticlesRow, error)
 	KnowledgeAudiencesByUUID(ctx context.Context, arg KnowledgeAudiencesByUUIDParams) ([]KnowledgeAudiencesByUUIDRow, error)
+	// Hydrates vector hits (vectorstore.Search) with the published, visible article data.
+	KnowledgeChunksByIDs(ctx context.Context, arg KnowledgeChunksByIDsParams) ([]KnowledgeChunksByIDsRow, error)
 	KnowledgeClearIndexState(ctx context.Context, arg KnowledgeClearIndexStateParams) error
 	KnowledgeCollection(ctx context.Context, arg KnowledgeCollectionParams) (KnowledgeCollection, error)
 	KnowledgeCollections(ctx context.Context, arg KnowledgeCollectionsParams) ([]KnowledgeCollection, error)
@@ -1267,7 +1272,9 @@ type Querier interface {
 	KnowledgeDeleteChunks(ctx context.Context, arg KnowledgeDeleteChunksParams) error
 	KnowledgeDeleteCollection(ctx context.Context, arg KnowledgeDeleteCollectionParams) (int64, error)
 	KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInsertArticleParams) (KnowledgeArticle, error)
-	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (KnowledgeChunk, error)
+	// brand_id comes from the article (trigger). While the organization is being
+	// re-embedded the vector goes to pending_* (CF-214).
+	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error)
 	KnowledgeInsertVersion(ctx context.Context, arg KnowledgeInsertVersionParams) error
 	KnowledgeLockArticle(ctx context.Context, arg KnowledgeLockArticleParams) (KnowledgeArticle, error)
 	KnowledgePublished(ctx context.Context, arg KnowledgePublishedParams) (KnowledgePublishedRow, error)
@@ -1277,8 +1284,8 @@ type Querier interface {
 	KnowledgeReviewDueOrganizations(ctx context.Context) ([]int64, error)
 	KnowledgeReviews(ctx context.Context, arg KnowledgeReviewsParams) ([]KnowledgeReviewsRow, error)
 	KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSaveCollectionParams) (KnowledgeCollection, error)
+	// Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
 	KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error)
-	KnowledgeSearchVector(ctx context.Context, arg KnowledgeSearchVectorParams) ([]KnowledgeSearchVectorRow, error)
 	KnowledgeSetIndexState(ctx context.Context, arg KnowledgeSetIndexStateParams) error
 	KnowledgeSetPublished(ctx context.Context, arg KnowledgeSetPublishedParams) (int64, error)
 	// Published articles whose indexing was skipped (AI unavailable), oldest first.
