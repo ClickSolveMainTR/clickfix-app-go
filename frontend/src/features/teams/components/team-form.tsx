@@ -7,6 +7,7 @@ import {
   AppCombobox,
   AppForm,
   AppInput,
+  AppSelect,
   AppSwitch,
   AppTextarea,
   FormActions,
@@ -14,6 +15,8 @@ import {
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { permissions } from "@/config/permissions";
+import { useDepartmentOptions } from "@/features/departments/hooks/use-departments";
 import { SkillsInput } from "@/features/teams/components/skills-input";
 import { useSkillCatalog } from "@/features/teams/hooks/use-teams";
 import {
@@ -26,6 +29,7 @@ import type { Team, TeamInput } from "@/features/teams/types";
 import { WeekHoursEditor } from "@/features/tenant-settings/components/week-hours-editor";
 import { timeZones } from "@/features/tenant-settings/constants";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
 
 function SkillsField({ disabled }: { disabled?: boolean }) {
   const { t } = useLocale();
@@ -57,6 +61,26 @@ function SkillsField({ disabled }: { disabled?: boolean }) {
       </p>
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
     </div>
+  );
+}
+
+/** Department of the team (CF-215); hidden without departments.read. */
+function DepartmentField({ disabled }: { disabled?: boolean }) {
+  const { t } = useLocale();
+  const { can } = usePermission();
+  const { options } = useDepartmentOptions();
+  if (!can(permissions.tenant.departments.read)) return null;
+  return (
+    <AppSelect
+      name="department_uuid"
+      label={t("teams.fields.department")}
+      description={t("teams.fields.department_hint")}
+      options={[
+        { value: "none", label: t("teams.fields.no_department") },
+        ...options,
+      ]}
+      disabled={disabled}
+    />
   );
 }
 
@@ -174,6 +198,7 @@ export function TeamForm({
               disabled={disabled}
             />
             <ColorField disabled={disabled} />
+            <DepartmentField disabled={disabled} />
             <AppTextarea
               name="description"
               label={t("teams.fields.description")}

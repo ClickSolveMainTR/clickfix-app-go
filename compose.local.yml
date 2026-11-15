@@ -5,7 +5,7 @@ name: ${COMPOSE_PROJECT_NAME:-${NAME_PREFIX:-app}}
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     container_name: ${NAME_PREFIX:-app}-postgres
     restart: unless-stopped
     environment:

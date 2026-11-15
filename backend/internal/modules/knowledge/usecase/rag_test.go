@@ -18,14 +18,35 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type fakeEmbedding struct{ input []string }
+// fakeEmbedding returns the same unit vector of the fixed dimension for every
+// text; model selects the configured model name (default fake-vector-v1).
+type fakeEmbedding struct {
+	input  []string
+	model  string
+	models []string
+}
 
-func (f *fakeEmbedding) Model() string { return "fake-vector-v1" }
-func (f *fakeEmbedding) Embed(_ context.Context, input []string) (ai.Embeddings, error) {
+func unitVector(axis int) []float32 {
+	v := make([]float32, ai.EmbeddingDimensions)
+	v[axis] = 1
+	return v
+}
+
+func (f *fakeEmbedding) Model() string {
+	if f.model == "" {
+		return "fake-vector-v1"
+	}
+	return f.model
+}
+func (f *fakeEmbedding) Embed(ctx context.Context, input []string) (ai.Embeddings, error) {
+	return f.EmbedModel(ctx, f.Model(), input)
+}
+func (f *fakeEmbedding) EmbedModel(_ context.Context, model string, input []string) (ai.Embeddings, error) {
 	f.input = append(f.input, input...)
+	f.models = append(f.models, model)
 	out := [][]float32{}
 	for range input {
-		out = append(out, []float32{1, 0})
+		out = append(out, unitVector(0))
 	}
 	return ai.Embeddings{Vectors: out, InputTokens: int64(len(input))}, nil
 }

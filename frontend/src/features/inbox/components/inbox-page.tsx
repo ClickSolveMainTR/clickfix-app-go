@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { routes } from "@/config/routes";
 import { useIsXl } from "@/hooks/use-mobile";
 import { useApplyMacro, useMacros } from "@/features/macros/hooks/use-macros";
 import {
@@ -353,7 +354,8 @@ export function InboxPage() {
       }),
       group: cg,
       icon: BookUser,
-      run: () => router.push(`/contacts?c=${conversation.contact.uuid}`),
+      run: () =>
+        router.push(routes.cms.contacts.detail(conversation.contact.uuid)),
     });
     return out;
   }, [

@@ -216,7 +216,7 @@ func (q *Queries) GetWidgetCompanyByID(ctx context.Context, arg GetWidgetCompany
 }
 
 const getWidgetConversation = `-- name: GetWidgetConversation :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations
 WHERE organization_id = $1
   AND uuid = $2
   AND contact_id = $3
@@ -281,6 +281,10 @@ func (q *Queries) GetWidgetConversation(ctx context.Context, arg GetWidgetConver
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }

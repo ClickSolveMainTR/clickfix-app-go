@@ -437,6 +437,21 @@ function TimelineEvent({ message: m }: { message: OptimisticMessage }) {
     case "subject_changed":
       text = t("inbox.events.subject_changed", { actor });
       break;
+    case "department_transferred": {
+      const to = a.to || t("inbox.events.department_organization_wide");
+      const base =
+        a.source === "customer"
+          ? t("inbox.events.department_picked", { department: to })
+          : a.source === "ai" && !a.from
+            ? t("inbox.events.department_predicted", { department: to })
+            : t("inbox.events.department_transferred", {
+                actor:
+                  a.source === "ai" ? t("inbox.events.department_ai") : actor,
+                department: to,
+              });
+      text = a.reason ? `${base}: ${a.reason}` : base;
+      break;
+    }
     case "merged_from":
     case "merged_into":
     case "split_to":

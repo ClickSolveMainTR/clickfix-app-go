@@ -149,7 +149,7 @@ function useLinkedContact(): [Picked | null, (v: Picked | null) => void] {
   return [null, setPicked];
 }
 
-function ErasureDialog({
+export function ErasureDialog({
   contact,
   open,
   onOpenChange,

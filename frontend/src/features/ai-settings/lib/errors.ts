@@ -33,6 +33,8 @@ export function aiErrorMessage(error: unknown, t: Translate) {
       return t("ai_settings.errors.not_configured");
     case "AI_NOT_ENTITLED":
       return t("ai_settings.errors.not_entitled");
+    case "DEPARTMENTS_UNAVAILABLE":
+      return t("ai_settings.errors.departments_unavailable");
     case "VALIDATION_ERROR":
       return t("ai_settings.errors.validation");
   }

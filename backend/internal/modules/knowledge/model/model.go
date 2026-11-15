@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -43,6 +45,10 @@ type ArticleInput struct {
 	Visibility string     `json:"visibility"`
 	// Required on update: optimistic locking prevents silently overwriting another editor.
 	Version int32 `json:"version"`
+	// Department (CF-215): omitted keeps it, null is organization-wide.
+	Department deptscope.Optional `json:"department_uuid"`
+	// DepartmentID is the resolved Department (handler).
+	DepartmentID pgtype.Int8 `json:"-"`
 }
 
 func (in ArticleInput) Validate() error {
@@ -72,4 +78,7 @@ type Citation struct {
 	Slug        string    `json:"slug"`
 	Locale      string    `json:"locale"`
 	Score       float64   `json:"score"`
+	// Specific: the chunk belongs to the conversation's brand/department (not
+	// an organization-wide fallback). Ranking only; never serialized.
+	Specific bool `json:"-"`
 }

@@ -137,3 +137,7 @@ AssistantDocumentsPurgeExpired retention: deletes only expired rows of every org
 # the organization) before using it.
 GetWidgetAppKeyByHash      lookup by the key's sha256; OpenApp rejects rows of another widget
 TouchWidgetAppKey          last_used_at of a row GetWidgetAppKeyByHash already resolved
+
+# History pipeline (CF-217): platform-wide worker sweep over every
+# organization; it only fails runs whose raw-file retention passed.
+HistoryImportExpireStale     sweep fails runs whose raw-file retention passed, in every organization
