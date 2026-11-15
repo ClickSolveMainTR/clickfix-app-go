@@ -383,6 +383,28 @@ Ayrıntılı şema ve akış: [docs/gecmis-kayitlar.md](../gecmis-kayitlar.md).
 
 **İş.** Worker'da dakikalık `app:history:sweep` (ham dosya ve arşiv saklama, sıradaki işler) ve her gece 01:17 UTC `app:history:nightly`. İşler kaldığı yerden devam eder: arşivlenmiş vakalar (aynı özet) atlanır.
 
+### 8.1 Toplu AI işleri ve günlük sınır (CF-228)
+
+**Sorun.** Prod'da 5531 kayıtlık bir yükleme `ai: daily calls exceeded` ile yarıda kaldı. Toplu iş günlük çağrı sınırının tamamını harcadığı için aynı organizasyonda canlı AI (müşteri AI'ı, temsilci asistanı) gün sonuna kadar durdu; ekranda yalnız genel "processing failed" görünüyordu.
+
+**Şerit (lane).** Her AI çağrısı `live` ya da `batch` şeridindedir (`ai_runs.lane`, migration `000236`). Arka plan işleri bağlamı `ai.WithBatch(ctx)` ile işaretler: geçmiş hattı (`history.Process`), yeniden vektörleştirme (worker'daki `app:ai:vector_reembed` görevi) ve ölçüm (`aiagents.evaluate`, elle ve otomatik). İşaret, embedding ve üretim çağrılarının ikisinde de `aicore/repository.Store.Reserve` içinde okunur.
+
+**Pay.** `ai_policies.batch_share_percent` (%10–90, varsayılan %50) toplu işlerin günlük çağrı ve bütçe sınırından kullanabileceği paydır. Sınırlar CF-229'daki gibi `Effective` = min(platform, kiracı) ile bulunur, pay bunun üstüne uygulanır (`BatchShare`):
+
+- Toplu çağrı: toplam sınır **ve** `batch_calls < pay` (bütçe için de aynı).
+- Canlı çağrı: yalnız toplam sınır. Canlı AI, toplu işlerin kullanmadığı payı da kullanabilir; toplu işler canlıya ayrılan kısmı (%100 − pay) hiçbir zaman tüketemez.
+- Sınırsız platform limiti sınırsız kalır. Eşzamanlılık iki şeritte ortaktır.
+- Hata türleri aynıdır (`ErrDaily`, `ErrBudget`); toplu payın dolması `"…: batch share used"` ile sarılır.
+- Pay AI ayarları → Güvenlik sekmesinden değiştirilir; `GET /v1/tenant/ai/policy` yanıtı `batch_share_percent` ve `batch_limits` döndürür.
+
+**Duraklat ve devam et.** `ErrDaily` ve `ErrBudget` işi bitirmez: iş `paused` olur, `error_code` (`daily_limit`/`budget`), `resume_at` (İstanbul'da bir sonraki gece yarısı + 1 dk; `AIUsageToday` günü bu sınırla sayar) ve `resume_offset` kaydedilir. `ErrConcurrency` iki dakikalık duraklamadır. Dakikalık sweep `resume_at` geçince işi yeniden alır. `resume_offset` önce kayıt dizinidir (yarıda kalan paket baştan tekrarlanır, sayaçları geri alınır), sonra `len(kayıtlar) + i` ile id sırasındaki i. küme değerlendirmesidir. Devam eden iş sayaçlarını ve dokunduğu kümeleri (`HistoryClustersOfImport`) yükler. Duraklayan işin ham dosyası saklama süresi boyunca kalır; süre dolarsa iş `raw_expired` ile başarısız olur. Duraklayan iş beklerken anında iptal edilebilir.
+
+**Paket boyutu.** Paket 100 kayıttır (200 metin). Embedding çağrısı en çok 256 metin ve 250.000 bayt taşır (`model.MaxEmbedInputs`, `MaxEmbedBytes`). Bayt token sayısının üst sınırıdır; sağlayıcının istek başına 300.000 token sınırının altında kalır. Büyük paket gerekirse birden çok çağrıya bölünür (`embedChunks`). 32 kayıtlık eski pakete göre çağrı sayısı yaklaşık üçte birine iner.
+
+**Görünür neden.** `history_imports.error_code` sınıflandırılır: `daily_limit`, `budget`, `concurrency`, `credits`, `quota`, `ai_disabled`, `not_configured`, `provider`, `invalid`, `unavailable`, `unsafe_record`, `raw_expired`, `unknown`. Panel kodu TR/EN gösterir, duraklayan işte "sınır yenilenince devam edecek" ve tahmini saat yazar. `error` İngilizce mesaj olarak kalır. Başarısız iş Sentry'ye `warning` düzeyinde gider (`history_error_code` etiketi, kod başına parmak izi). Duraklama beklenen durumdur, yalnız INFO loglanır.
+
+**Ön tahmin.** `POST /v1/tenant/history/imports/estimate` dosyayı saklamadan ayrıştırır. Yanıt şunları verir: embedding çağrı sayısı (dosya için kesin), öneri başına ek çağrı (2: taslak ve karşılaştırma embedding'i), tahmini token (bayt/4) ve maliyet, bugün kalan toplu pay, gereken gün sayısı ve ham dosya saklama süresinin yetip yetmediği. Panel dosya seçilince tahmini gösterir; bugünkü payı veya saklama süresini aşacaksa yüklemeden önce uyarır.
+
 **Sonraki adımlar.** Vektörler `vector(1536)` ve `<=>` sorgularıyla çalışır (birleştirmede taşındı). Geçmiş tablolarındaki `department_id` için departman FK'si; CF-218 ile `Taxonomy`; CF-215 ile `Directory` (departman lideri) bağlanır.
 
 ## 9. Kategorizasyon (CF-218)

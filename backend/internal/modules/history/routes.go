@@ -28,6 +28,7 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	read, manage, review := rbac.PermTenantHistoryRead, rbac.PermTenantHistoryManage, rbac.PermTenantHistoryReview
 	route("GET "+Base+"/imports", h.Imports, read)
 	route("POST "+Base+"/imports", h.Upload, manage)
+	route("POST "+Base+"/imports/estimate", h.Estimate, manage)
 	route("GET "+Base+"/imports/{uuid}", h.Import, read)
 	route("POST "+Base+"/imports/{uuid}/cancel", h.Cancel, manage)
 	route("POST "+Base+"/imports/{uuid}/rollback", h.Rollback, manage)

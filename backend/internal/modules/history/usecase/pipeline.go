@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/observability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -28,11 +33,20 @@ func pgCode(err error) string {
 // errCancelled stops a run between batches.
 var errCancelled = errors.New("history: run cancelled")
 
-type progress struct {
-	run                               db.HistoryImport
-	stage                             string
-	total, processed, skipped         int32
+// counts are the run's counters; a paused run saves them and continues.
+type counts struct {
+	processed, skipped                int32
 	clusters, suggestions, suppressed int32
+}
+
+type progress struct {
+	run   db.HistoryImport
+	stage string
+	total int32
+	counts
+	// offset is where a paused run continues: an index into the records,
+	// then len(records)+i for the i-th cluster to evaluate (CF-228).
+	offset int32
 	// watermark is where the next nightly run starts; set when the window
 	// held more conversations than one run reads.
 	watermark pgtype.Timestamptz
@@ -77,18 +91,34 @@ func (s *Service) Process(ctx context.Context, org int64, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	ctx = orgctx.WithOrganizationID(ctx, org)
+	// CF-228: the pipeline is batch work; its AI calls use only the batch
+	// share of the daily limits, so live AI keeps working.
+	ctx = ai.WithBatch(orgctx.WithOrganizationID(ctx, org))
 	p := &progress{run: run}
 	runErr := s.process(ctx, p)
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	status, stage, message := "completed", "done", ""
+	if resume, ok := s.resumeAt(runErr); ok && !errors.Is(runErr, errCancelled) {
+		// A limit is not a failure: keep the raw file and continue later
+		// from the batch that hit it.
+		code := failureCode(runErr)
+		s.Log.InfoContext(ctx, "history_run_paused", "organization_id", org, "run_uuid", id, "code", code, "resume_at", resume, "offset", p.offset)
+		return s.Q.HistoryImportPause(finishCtx, db.HistoryImportPauseParams{OrganizationID: org, ID: run.ID, Stage: p.stage, Error: truncate(publicError(runErr), 500),
+			ErrorCode: code, ResumeAt: pgtype.Timestamptz{Time: resume, Valid: true}, ResumeOffset: p.offset, ProcessedRecords: p.processed,
+			SkippedRecords: p.skipped, ClustersTouched: p.clusters, SuggestionsCreated: p.suggestions, SuggestionsSuppressed: p.suppressed})
+	}
+	status, stage, message, code := "completed", "done", "", ""
 	switch {
 	case errors.Is(runErr, errCancelled):
 		status, stage = "cancelled", p.stage
 	case runErr != nil:
+		code = failureCode(runErr)
 		status, stage, message = "failed", p.stage, truncate(publicError(runErr), 500)
-		s.Log.WarnContext(ctx, "history_run_failed", "organization_id", org, "run_uuid", id, "error", runErr)
+		s.Log.WarnContext(ctx, "history_run_failed", "organization_id", org, "run_uuid", id, "code", code, "error", runErr)
+		// The worker log alone hid the reason of a production failure.
+		observability.CaptureError(ctx, runErr, observability.Options{Level: sentry.LevelWarning,
+			Tags:        map[string]string{"module": "history", "history_error_code": code, "history_stage": p.stage},
+			Fingerprint: []string{"history_run_failed", code}, Transaction: "history.Process"})
 	}
 	if status == "completed" && run.Source == "nightly" && run.WindowEnd.Valid {
 		mark := run.WindowEnd
@@ -99,7 +129,7 @@ func (s *Service) Process(ctx context.Context, org int64, id uuid.UUID) error {
 			return err
 		}
 	}
-	if err := s.Q.HistoryImportFinish(finishCtx, db.HistoryImportFinishParams{OrganizationID: org, ID: run.ID, Status: status, Stage: stage, Error: message}); err != nil {
+	if err := s.Q.HistoryImportFinish(finishCtx, db.HistoryImportFinishParams{OrganizationID: org, ID: run.ID, Status: status, Stage: stage, Error: message, ErrorCode: code}); err != nil {
 		return err
 	}
 	// The raw file goes as soon as the run ends, however it ended.
@@ -107,14 +137,105 @@ func (s *Service) Process(ctx context.Context, org int64, id uuid.UUID) error {
 	return nil
 }
 
-func publicError(err error) string {
+// Reasons a run paused or failed (history_imports.error_code, CF-228). The
+// panel shows them in the user's language; error keeps an English message.
+const (
+	CodeDailyLimit    = "daily_limit"
+	CodeBudget        = "budget"
+	CodeConcurrency   = "concurrency"
+	CodeCredits       = "credits"
+	CodeQuota         = "quota"
+	CodeAIDisabled    = "ai_disabled"
+	CodeNotConfigured = "not_configured"
+	CodeProvider      = "provider"
+	CodeInvalid       = "invalid"
+	CodeUnavailable   = "unavailable"
+	CodeUnsafe        = "unsafe_record"
+	CodeUnknown       = "unknown"
+)
+
+// failureCode classifies why a run stopped.
+func failureCode(err error) string {
+	var ent *entitlement.Error
 	switch {
-	case errors.Is(err, model.ErrInvalid), errors.Is(err, model.ErrUnavailable):
-		return err.Error()
+	case errors.Is(err, aimodel.ErrDaily):
+		return CodeDailyLimit
+	case errors.Is(err, aimodel.ErrBudget):
+		return CodeBudget
+	case errors.Is(err, aimodel.ErrConcurrency):
+		return CodeConcurrency
+	case errors.Is(err, aimodel.ErrCredits):
+		return CodeCredits
+	case errors.As(err, &ent):
+		return CodeQuota
+	case errors.Is(err, aimodel.ErrDisabled):
+		return CodeAIDisabled
 	case errors.Is(err, ai.ErrNotConfigured):
-		return "AI embedding is not configured for this platform"
+		return CodeNotConfigured
 	case errors.Is(err, ai.ErrInjection):
+		return CodeUnsafe
+	case errors.Is(err, model.ErrInvalid):
+		return CodeInvalid
+	case errors.Is(err, model.ErrUnavailable):
+		return CodeUnavailable
+	case errors.Is(err, ai.ErrUnavailable), errors.Is(err, ai.ErrRefused), errors.Is(err, ai.ErrTruncated),
+		errors.Is(err, ai.ErrInvalidOutput), errors.Is(err, ai.ErrTooManyRounds):
+		return CodeProvider
+	}
+	return CodeUnknown
+}
+
+// resumeAt reports whether err is a limit the run waits out, and until when:
+// daily calls and budget reset at midnight in Istanbul (AIUsageToday), a
+// concurrency slot frees within minutes.
+func (s *Service) resumeAt(err error) (time.Time, bool) {
+	now := s.now()
+	switch failureCode(err) {
+	case CodeDailyLimit, CodeBudget:
+		return NextLimitReset(now).Add(time.Minute), true
+	case CodeConcurrency:
+		return now.Add(2 * time.Minute), true
+	}
+	return time.Time{}, false
+}
+
+// istanbul is the day boundary of the daily AI limits. Turkey has kept
+// UTC+3 all year since 2016, so the fixed zone is the fallback without tzdata.
+var istanbul = func() *time.Location {
+	if loc, err := time.LoadLocation("Europe/Istanbul"); err == nil {
+		return loc
+	}
+	return time.FixedZone("+03", 3*60*60)
+}()
+
+// NextLimitReset is the next midnight in Istanbul after t.
+func NextLimitReset(t time.Time) time.Time {
+	l := t.In(istanbul)
+	return time.Date(l.Year(), l.Month(), l.Day()+1, 0, 0, 0, 0, istanbul).UTC()
+}
+
+func publicError(err error) string {
+	switch failureCode(err) {
+	case CodeInvalid, CodeUnavailable:
+		return err.Error()
+	case CodeNotConfigured:
+		return "AI embedding is not configured for this platform"
+	case CodeUnsafe:
 		return "a record looks like an instruction to the AI and was refused"
+	case CodeDailyLimit:
+		return "the daily AI call limit for batch jobs is used up; the run continues when the limit resets"
+	case CodeBudget:
+		return "the daily AI budget for batch jobs is used up; the run continues when the limit resets"
+	case CodeConcurrency:
+		return "too many AI calls are running; the run continues in a few minutes"
+	case CodeCredits:
+		return "the organization has no AI credits left; add credits and upload again"
+	case CodeQuota:
+		return "the monthly AI allowance of the plan is used up"
+	case CodeAIDisabled:
+		return "AI is turned off for this organization"
+	case CodeProvider:
+		return "the AI provider returned an error; roll the run back and upload it again"
 	}
 	return "processing failed; the run can be rolled back and uploaded again"
 }
@@ -158,16 +279,34 @@ func (s *Service) process(ctx context.Context, p *progress) error {
 			p.watermark = pgtype.Timestamptz{Time: *last, Valid: true}
 		}
 	}
+	touched := map[int64]bool{}
+	offset := int(run.ResumeOffset)
+	if offset > 0 {
+		// A paused run continues where it stopped, with its saved counters
+		// and the clusters its archived cases already touched.
+		p.counts = counts{processed: run.ProcessedRecords, skipped: run.SkippedRecords, suggestions: run.SuggestionsCreated, suppressed: run.SuggestionsSuppressed}
+		ids, err := s.Q.HistoryClustersOfImport(ctx, db.HistoryClustersOfImportParams{OrganizationID: run.OrganizationID, ImportID: run.ID})
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			touched[id] = true
+		}
+		p.clusters = int32(len(touched)) // #nosec G115 -- at most one run's records (MaxTickets)
+	}
 	if err := s.report(ctx, p, "anonymizing"); err != nil {
 		return err
 	}
-	touched := map[int64]bool{}
 	clusters := map[string][]candidate{}
-	size := max(1, min(s.BatchSize, 100))
-	for start := 0; start < len(records); start += size {
+	size := max(1, min(s.BatchSize, model.MaxBatchRecords))
+	for start := min(offset, len(records)); start < len(records); start += size {
 		batch := records[start:min(start+size, len(records))]
+		p.offset = int32(start) // #nosec G115 -- bounded by MaxTickets
+		saved := p.counts
 		ids, err := s.archiveBatch(ctx, p, settings, batch, clusters)
 		if err != nil {
+			// Nothing of this batch was archived: a resume repeats it whole.
+			p.counts = saved
 			return err
 		}
 		for _, id := range ids {
@@ -176,6 +315,7 @@ func (s *Service) process(ctx context.Context, p *progress) error {
 				p.clusters++
 			}
 		}
+		p.offset = int32(start + len(batch)) // #nosec G115 -- bounded by MaxTickets
 		if err := s.report(ctx, p, "clustering"); err != nil {
 			return err
 		}
@@ -183,8 +323,18 @@ func (s *Service) process(ctx context.Context, p *progress) error {
 	if err := s.report(ctx, p, "suggesting"); err != nil {
 		return err
 	}
+	// Clusters are evaluated in id order so a resumed run skips the ones
+	// already evaluated.
+	order := make([]int64, 0, len(touched))
 	for id := range touched {
-		if err := s.evaluate(ctx, p, settings, id); err != nil {
+		order = append(order, id)
+	}
+	slices.Sort(order)
+	for i := max(0, offset-len(records)); i < len(order); i++ {
+		p.offset = int32(len(records) + i) // #nosec G115 -- bounded by MaxTickets
+		saved := p.counts
+		if err := s.evaluate(ctx, p, settings, order[i]); err != nil {
+			p.counts = saved
 			return err
 		}
 		if err := s.report(ctx, p, "suggesting"); err != nil {
@@ -252,18 +402,15 @@ func (s *Service) archiveBatch(ctx context.Context, p *progress, settings db.His
 	for _, it := range items {
 		texts = append(texts, it.c.EmbedText(), it.c.Resolution)
 	}
-	vectors, err := s.Embedder.Embed(ctx, texts)
+	vectors, err := s.embedAll(ctx, texts)
 	if err != nil {
 		return nil, err
-	}
-	if len(vectors.Vectors) != len(texts) {
-		return nil, ai.ErrInvalidOutput
 	}
 	embeddingModel := s.Embedder.Model()
 	var touched []int64
 	err = s.tx(ctx, func(q *db.Queries) error {
 		for i, it := range items {
-			problemVec, resolutionVec := vectors.Vectors[2*i], vectors.Vectors[2*i+1]
+			problemVec, resolutionVec := vectors[2*i], vectors[2*i+1]
 			opened, closed := ts(it.rec.OpenedAt), ts(it.rec.ClosedAt)
 			brand := it.rec.BrandID
 			if !brand.Valid {
@@ -329,6 +476,30 @@ func (s *Service) archiveBatch(ctx context.Context, p *progress, settings db.His
 		return nil, err
 	}
 	return touched, nil
+}
+
+// embedAll embeds texts in as few calls as the provider allows: at most
+// model.MaxEmbedInputs texts and model.MaxEmbedBytes bytes per call (bytes
+// bound tokens from above, CF-228).
+func (s *Service) embedAll(ctx context.Context, texts []string) ([][]float32, error) {
+	sizes := make([]int, len(texts))
+	for i, t := range texts {
+		sizes[i] = len(t)
+	}
+	out := make([][]float32, 0, len(texts))
+	start := 0
+	for _, n := range embedChunks(sizes, model.MaxEmbedInputs, model.MaxEmbedBytes) {
+		res, err := s.Embedder.Embed(ctx, texts[start:start+n])
+		if err != nil {
+			return nil, err
+		}
+		if len(res.Vectors) != n {
+			return nil, ai.ErrInvalidOutput
+		}
+		out = append(out, res.Vectors...)
+		start += n
+	}
+	return out, nil
 }
 
 func ts(t *time.Time) pgtype.Timestamptz {

@@ -36,15 +36,16 @@ SELECT * FROM history_imports WHERE organization_id=$1 ORDER BY id DESC LIMIT $2
 SELECT count(*) FROM history_imports WHERE organization_id=$1;
 
 -- name: HistoryImportActive :one
-SELECT count(*) FROM history_imports WHERE organization_id=$1 AND status IN ('pending','running');
+SELECT count(*) FROM history_imports WHERE organization_id=$1 AND status IN ('pending','running','paused');
 
 -- name: HistoryImportDue :many
 SELECT organization_id,uuid FROM history_imports
-WHERE (status='pending' OR (status='running' AND lease_until<now())) ORDER BY id LIMIT $1;
+WHERE (status='pending' OR (status='running' AND lease_until<now()) OR (status='paused' AND resume_at<=now())) ORDER BY id LIMIT $1;
 
 -- name: HistoryImportClaim :one
-UPDATE history_imports SET status='running',lease_until=now()+interval '10 minutes',started_at=coalesce(started_at,now()),stage='reading'
-WHERE organization_id=$1 AND uuid=$2 AND (status='pending' OR (status='running' AND lease_until<now())) RETURNING *;
+UPDATE history_imports SET status='running',lease_until=now()+interval '10 minutes',started_at=coalesce(started_at,now()),stage='reading',
+ error='',error_code='',resume_at=NULL
+WHERE organization_id=$1 AND uuid=$2 AND (status='pending' OR (status='running' AND lease_until<now()) OR (status='paused' AND resume_at<=now())) RETURNING *;
 
 -- name: HistoryImportProgress :one
 UPDATE history_imports SET stage=$3,total_records=$4,processed_records=$5,skipped_records=$6,clusters_touched=$7,
@@ -52,13 +53,23 @@ UPDATE history_imports SET stage=$3,total_records=$4,processed_records=$5,skippe
 WHERE organization_id=$1 AND id=$2 RETURNING cancel_requested;
 
 -- name: HistoryImportFinish :exec
-UPDATE history_imports SET status=$3,stage=$4,error=$5,finished_at=now(),lease_until=NULL WHERE organization_id=$1 AND id=$2;
+UPDATE history_imports SET status=$3,stage=$4,error=$5,error_code=sqlc.arg(error_code),finished_at=now(),lease_until=NULL WHERE organization_id=$1 AND id=$2;
+
+-- name: HistoryImportPause :exec
+-- CF-228: an AI limit stops the run until resume_at; the sweep continues it
+-- from resume_offset with the counters saved here.
+UPDATE history_imports SET status='paused',stage=sqlc.arg(stage),error=sqlc.arg(error),error_code=sqlc.arg(error_code),
+ resume_at=sqlc.arg(resume_at),resume_offset=sqlc.arg(resume_offset),processed_records=sqlc.arg(processed_records),
+ skipped_records=sqlc.arg(skipped_records),clusters_touched=sqlc.arg(clusters_touched),suggestions_created=sqlc.arg(suggestions_created),
+ suggestions_suppressed=sqlc.arg(suggestions_suppressed),lease_until=NULL
+WHERE organization_id=sqlc.arg(organization_id) AND id=sqlc.arg(id) AND status='running';
 
 -- name: HistoryImportRequestCancel :one
 UPDATE history_imports SET cancel_requested=true,
- status=CASE WHEN status='pending' THEN 'cancelled' ELSE status END,
- finished_at=CASE WHEN status='pending' THEN now() ELSE finished_at END
-WHERE organization_id=$1 AND uuid=$2 AND status IN ('pending','running') RETURNING *;
+ status=CASE WHEN status IN ('pending','paused') THEN 'cancelled' ELSE status END,
+ resume_at=CASE WHEN status='paused' THEN NULL ELSE resume_at END,
+ finished_at=CASE WHEN status IN ('pending','paused') THEN now() ELSE finished_at END
+WHERE organization_id=$1 AND uuid=$2 AND status IN ('pending','running','paused') RETURNING *;
 
 -- name: HistoryImportLock :one
 SELECT * FROM history_imports WHERE organization_id=$1 AND uuid=$2 FOR UPDATE;
@@ -75,10 +86,10 @@ WHERE raw_key<>'' AND raw_deleted_at IS NULL AND status IN ('completed','failed'
 ORDER BY id LIMIT $1;
 
 -- name: HistoryImportExpireStale :execrows
-UPDATE history_imports SET status='failed',finished_at=now(),lease_until=NULL,
+UPDATE history_imports SET status='failed',finished_at=now(),lease_until=NULL,resume_at=NULL,error_code='raw_expired',
  error='the raw file passed its retention before the run finished; upload it again'
 WHERE raw_key<>'' AND raw_retain_until<now()
- AND (status='pending' OR (status='running' AND lease_until<now()));
+ AND (status IN ('pending','paused') OR (status='running' AND lease_until<now()));
 
 -- name: HistoryCaseInsert :one
 INSERT INTO history_cases(organization_id,import_id,brand_id,department_id,source,external_ref,conversation_id,subject,problem,resolution,

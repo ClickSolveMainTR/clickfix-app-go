@@ -36,6 +36,16 @@ const (
 	ConflictThreshold = 0.80
 )
 
+// Embedding batches (CF-228): records per pipeline batch (two texts each)
+// and the per-call bounds of the metered embedder (256 inputs) and the
+// provider (300k tokens). Texts are measured in bytes, an upper bound of
+// their tokens.
+const (
+	MaxBatchRecords = 100
+	MaxEmbedInputs  = 256
+	MaxEmbedBytes   = 250000
+)
+
 // Bundle is one export in the documented schema: contacts, tickets and the
 // messages of those tickets. Every field except the ids, ticket subject or
 // message body is optional.

@@ -76,11 +76,13 @@ func (h *Handler) Policy(w http.ResponseWriter, r *http.Request) {
 		DailyCalls        *int32 `json:"daily_calls"`
 		Concurrency       *int32 `json:"concurrency"`
 		DailyBudgetMicros *int64 `json:"daily_budget_micros"`
+		// CF-228: share of the daily limits batch jobs may use; absent keeps it.
+		BatchSharePercent *int16 `json:"batch_share_percent"`
 	}
 	if !kbhandler.Decode(w, r, &in) {
 		return
 	}
-	policy, err := h.Service.Repo.SavePolicy(r.Context(), db.AISavePolicyParams{OrganizationID: org, Enabled: in.Enabled, MaskPii: in.MaskPii, AllowUnmask: in.AllowUnmask, DailyCalls: int4(in.DailyCalls), Concurrency: int4(in.Concurrency), DailyBudgetMicros: int8(in.DailyBudgetMicros)})
+	policy, err := h.Service.Repo.SavePolicy(r.Context(), db.AISavePolicyParams{OrganizationID: org, Enabled: in.Enabled, MaskPii: in.MaskPii, AllowUnmask: in.AllowUnmask, DailyCalls: int4(in.DailyCalls), Concurrency: int4(in.Concurrency), DailyBudgetMicros: int8(in.DailyBudgetMicros), BatchSharePercent: int2(in.BatchSharePercent)})
 	if err != nil {
 		fail(w, r, err)
 		return
@@ -103,8 +105,10 @@ type policyView struct {
 	DailyCalls        *int32             `json:"daily_calls"`
 	Concurrency       *int32             `json:"concurrency"`
 	DailyBudgetMicros *int64             `json:"daily_budget_micros"`
+	BatchSharePercent int16              `json:"batch_share_percent"`
 	PlatformLimits    airepo.Limits      `json:"platform_limits"`
 	EffectiveLimits   airepo.Limits      `json:"effective_limits"`
+	BatchLimits       airepo.Limits      `json:"batch_limits"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
@@ -116,7 +120,7 @@ func (h *Handler) writePolicy(w http.ResponseWriter, r *http.Request, p db.AiPol
 		return
 	}
 	v := policyView{OrganizationID: p.OrganizationID, Enabled: p.Enabled, MaskPii: p.MaskPii, AllowUnmask: p.AllowUnmask,
-		PlatformLimits: limits.Platform, EffectiveLimits: limits.Effective, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
+		BatchSharePercent: p.BatchSharePercent, PlatformLimits: limits.Platform, EffectiveLimits: limits.Effective, BatchLimits: limits.Batch, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
 	if p.DailyCalls.Valid {
 		v.DailyCalls = &p.DailyCalls.Int32
 	}
@@ -134,6 +138,13 @@ func int4(v *int32) pgtype.Int4 {
 		return pgtype.Int4{}
 	}
 	return pgtype.Int4{Int32: *v, Valid: true}
+}
+
+func int2(v *int16) pgtype.Int2 {
+	if v == nil {
+		return pgtype.Int2{}
+	}
+	return pgtype.Int2{Int16: *v, Valid: true}
 }
 
 func int8(v *int64) pgtype.Int8 {

@@ -99,6 +99,7 @@ type Querier interface {
 	AIProcedureUpdate(ctx context.Context, arg AIProcedureUpdateParams) (AiProcedure, error)
 	AIProcedures(ctx context.Context, arg AIProceduresParams) ([]AiProcedure, error)
 	AIQuotaMonth(ctx context.Context, organizationID int64) (AIQuotaMonthRow, error)
+	// batch_share_percent NULL keeps the stored share (50 on a new row).
 	AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiPolicy, error)
 	AISaveSimilarLink(ctx context.Context, arg AISaveSimilarLinkParams) error
 	// CF-214: same brand first, then brandless (organization-wide) conversations;
@@ -1308,6 +1309,9 @@ type Querier interface {
 	HistoryImportGet(ctx context.Context, arg HistoryImportGetParams) (HistoryImport, error)
 	HistoryImportList(ctx context.Context, arg HistoryImportListParams) ([]HistoryImport, error)
 	HistoryImportLock(ctx context.Context, arg HistoryImportLockParams) (HistoryImport, error)
+	// CF-228: an AI limit stops the run until resume_at; the sweep continues it
+	// from resume_offset with the counters saved here.
+	HistoryImportPause(ctx context.Context, arg HistoryImportPauseParams) error
 	HistoryImportProgress(ctx context.Context, arg HistoryImportProgressParams) (bool, error)
 	HistoryImportRawDeleted(ctx context.Context, arg HistoryImportRawDeletedParams) error
 	HistoryImportRawExpired(ctx context.Context, limit int32) ([]HistoryImportRawExpiredRow, error)

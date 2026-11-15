@@ -9,6 +9,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
 	billingmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -106,5 +107,61 @@ func TestDailyLimitsAreTenantIsolated(t *testing.T) {
 	}
 	if _, err := b.Run(ctx, orgB, actorB, model.RunInput{Task: "reply", Input: "b"}); !errors.Is(err, model.ErrDaily) || fakeB.calls.Load() != 0 {
 		t.Fatalf("org B got org A's unlimited: %v", err)
+	}
+}
+
+// CF-228: batch work stops at its share of the daily limit while live AI of
+// the same organization keeps answering; batch calls are logged as such.
+func TestBatchShareKeepsLiveAIWorking(t *testing.T) {
+	svc, fake, org, actor := aiFixture(t)
+	ctx := context.Background()
+	override(t, svc, org, actor, airepo.FeatureDailyCalls, 10, false)
+	if _, err := svc.Repo.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, AllowUnmask: true, BatchSharePercent: pgtype.Int2{Int16: 40, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	batch := ai.WithBatch(ctx)
+	for i := 0; i < 4; i++ {
+		if _, err := svc.Run(batch, org, actor, model.RunInput{Task: "reply", Input: "toplu"}); err != nil {
+			t.Fatalf("batch call %d within the share: %v", i, err)
+		}
+	}
+	if _, err := svc.Run(batch, org, actor, model.RunInput{Task: "reply", Input: "toplu"}); !errors.Is(err, model.ErrDaily) || fake.calls.Load() != 4 {
+		t.Fatalf("batch exceeded its share: %v", err)
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "canlı"}); err != nil {
+			t.Fatalf("live call %d blocked by batch work: %v", i, err)
+		}
+	}
+	// The total limit still applies to live calls.
+	if _, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "canlı"}); !errors.Is(err, model.ErrDaily) {
+		t.Fatalf("total limit ignored: %v", err)
+	}
+	var lanes map[string]int
+	rows, err := svc.Repo.Billing.Pool.Query(ctx, "SELECT lane,count(*) FROM ai_runs WHERE organization_id=$1 AND status='completed' GROUP BY lane", org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lanes = map[string]int{}
+	for rows.Next() {
+		var lane string
+		var n int
+		if err := rows.Scan(&lane, &n); err != nil {
+			t.Fatal(err)
+		}
+		lanes[lane] = n
+	}
+	rows.Close()
+	if lanes[ai.LaneBatch] != 4 || lanes[ai.LaneLive] != 6 {
+		t.Fatalf("lanes %v", lanes)
+	}
+	// The policy shows the batch share; an omitted share keeps it.
+	followPlatform(t, svc, org)
+	p, err := svc.Repo.Policy(ctx, org)
+	if err != nil || p.BatchSharePercent != 40 {
+		t.Fatalf("share not kept: %d %v", p.BatchSharePercent, err)
+	}
+	if _, err := svc.Repo.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, BatchSharePercent: pgtype.Int2{Int16: 95, Valid: true}}); !errors.Is(err, model.ErrInvalid) {
+		t.Fatalf("share above 90 accepted: %v", err)
 	}
 }
