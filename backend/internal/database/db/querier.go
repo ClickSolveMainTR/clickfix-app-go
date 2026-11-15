@@ -141,7 +141,8 @@ type Querier interface {
 	AnalyticsTimezone(ctx context.Context, id int64) (string, error)
 	AnswerCacheCount(ctx context.Context, organizationID int64) (int64, error)
 	// A cached row is valid only while its unit exists (source changes delete it)
-	// and still passes the audience's visibility rule.
+	// and still passes the audience's visibility rule. While re-embedding runs
+	// (CF-223) a unit still on the old model is not served.
 	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
 	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
 	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error

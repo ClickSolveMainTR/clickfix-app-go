@@ -145,7 +145,7 @@ func TestReembedKeepsOldVectorsUntilSwitch(t *testing.T) {
 		t.Fatalf("new article during transition not pending: %d %v", pending, err)
 	}
 
-	job := &vectorstore.Reembedder{Pool: rag.KB.Repo.Pool, Embedder: next, Sources: []vectorstore.Source{ChunkSource}, Batch: 1}
+	job := &vectorstore.Reembedder{Pool: rag.KB.Repo.Pool, Embedder: next, Sources: []vectorstore.Source{ChunkSource}, Batch: 1, Organizations: []int64{org}}
 	if err = job.Run(ctx); err != nil {
 		t.Fatal(err)
 	}

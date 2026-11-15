@@ -235,13 +235,37 @@ Vektör tutan her tablo aynı sütunları taşır; böylece arama, yerleştirme 
 | `pending_embedding vector(1536) NULL`, `pending_model TEXT NULL` | Model değişiminde hazırlanan yeni vektör |
 | metin sütunu | Vektörün üretildiği maskelenmiş metin (`Source.TextColumn`) |
 
-Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosine_ops)` indeksi; kodda bir `vectorstore.Source` tanımı ve `aisystem` içindeki `Reembedder.Sources` listesine ekleme.
+Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosine_ops)` indeksi; kodda bir `vectorstore.Source` tanımı ve `aisystem` içindeki `Reembedder.Sources` listesine ekleme. `pending_*` taşımayan tablolar `VectorTables` kaydına girer (aşağıda, CF-223).
 
 ### Tek model
 
 - Model ve boyut tek yerde: `platform/ai/embedding.go` (`DefaultEmbeddingModel = text-embedding-3-small`, `EmbeddingDimensions = 1536`). `AI_EMBEDDING_MODEL` başka bir 1536 boyutlu modeli seçebilir; `text-embedding-3-*` modellerinden 1536 boyut istenir.
 - Sağlayıcı çağrıları `platform/ai` arayüzünden geçer (`Embedder`, ek olarak `ModelEmbedder.EmbedModel`).
 - Model değişince `app:ai:vector_reembed` (5 dakikada bir, maintenance kuyruğu) eski modeldeki satırları organizasyon organizasyon `pending_*` sütunlarına yeniden vektörler. Bu sırada arama eski vektörlerle sürer: sorgu vektörü de eski modelle üretilir (`vectorstore.SearchModel`). Organizasyonun bütün satırları hazır olunca tek `UPDATE` ile yeni modele geçilir. Geçiş sırasında yayımlanan makalelerin vektörleri de `pending_*`'e yazılır (`vectorstore.Place`), geçişle birlikte aranır hale gelir. Embedding çağrıları ölçülü embedder'dan geçer (organizasyonun AI kredisi ve politikası); AI'ı kapalı organizasyon bekletilir.
+
+### Yeniden gömme kaydı: bütün vektör tabloları (CF-223)
+
+`knowledge_chunks` dışındaki vektör tabloları `pending_*` sütunu taşımaz; her satır kendi `embedding_model` değerini taşır ve bu tablolara giden her sorgu yalnız sorgu modelindeki satırları karşılaştırır (`embedding_model=@model`, sorgu modeli hedef model). Bu yüzden bu tablolar yerinde, satır satır yeniden gömülür: yeniden gömülen satır hemen aranır hale gelir, eski modelde kalan satır hedef model sorgusunda hiç dönmez. Karışık model karşılaştırması olmaz; geçiş bitene kadar bu katmanlar eksik sonuç verebilir (ör. bellek katmanı ıska döner, normal yol devam eder).
+
+Kayıt listesi `backend/internal/aisystem/vectors.go` (`VectorTables`), kod `vectorstore.Table`. Her kayıt tablosunu, vektör sütununu ve vektörün üretildiği metni (SQL ifadesi, yazan kodla aynı) bildirir:
+
+| Tablo | Vektör | Metin kaynağı |
+|-------|--------|---------------|
+| `knowledge_units` (model) + `knowledge_unit_questions` (vektör) | `embedding` | `content` (soru ve varyantları); birimin bütün soruları ve modeli tek işlemde güncellenir |
+| `ai_answer_cache` | vektörü yok | önbellek satırı birime bağlıdır; birim yeniden gömülünce satırları silinir (skor eski modelden), ilk eşleşmede yeniden dolar. `AnswerCacheGet` eski modeldeki birimi döndürmez |
+| `ai_case_memories` | `embedding` | `problem + '\n' + resolution` |
+| `category_examples` | `embedding` | `content`; hedef modelde aynı metin zaten yazılmışsa (tembel üretim) eski satır silinir |
+| `category_labels` | `embedding` | `left(btrim(content), 6000)`; vektörsüz kaydedilmiş etiket (`embedding_model=''`) de vektörlenir. Etiketler değişmez kalır; 000234 tetikleyicisi yalnız vektör ve model değişimine izin verir |
+| `history_cases` | `embedding`, `resolution_embedding` | `left(btrim(subject + '\n' + problem), 4000)` ve `resolution` (boş çözümün vektörü `NULL`) |
+| `history_clusters` | `centroid` | metni yok: **üyelerinden yeniden hesaplanır** (aşağıda) |
+| `history_decisions` | `embedding` | `left(btrim(title + '\n' + body), 6000)` |
+
+- **Sıra ve parça:** iş önce `knowledge_chunks`, sonra listeyi sırayla işler. Her tablo için organizasyon başına `Batch` satırlık (varsayılan 64) en fazla `MaxBatches` (varsayılan 20) embedding çağrısı yapılır. Seçim "hedef modelde olmayan satırlar, `id` sırasıyla" olduğundan bir sonraki çalışma kaldığı yerden devam eder; ayrı ilerleme kaydı gerekmez. Yazma eski modeli koşul olarak kullanır, arada sahibi tarafından yeniden yazılmış satır ezilmez.
+- **Maliyet:** embedding çağrıları ölçülü embedder'dan geçer, organizasyonun AI kredisine yazılır; AI'ı kapalı ya da kredisi bitmiş organizasyon bekletilir.
+- **Metni saklanmayan vektörler (küme merkezleri):** seçilen yol **üyelerden yeniden hesaplamadır**. Merkez, üye vakaların problem vektörlerinin ortalamasıdır (kümeleme kodu da artımlı ortalama tutar). Organizasyonun bütün `history_cases` satırları yeni modele geçince merkez `avg(embedding)` ile yeniden yazılır ve küme yeni modele geçer. Hiç üyesi kalmamış küme **geçersiz işaretlenir** (`embedding_model=''`): hiçbir sorgu onu eşleştirmez, yeni vakalar yeni kümeler açar. Bu iş AI çağrısı yapmaz.
+- Bilgi birimlerinin `source_hash` değeri modeli de içerir; makale bir sonraki yayımlanışında birimler yeniden çıkarılır (bu, yeni sürümde zaten olur).
+- Yeni vektör tablosu eklerken: tabloyu bu listeye ekle, metin ifadesini vektörü yazan kodla aynı tut, sorgularda `embedding_model` süzgecini koru.
+
 
 ### Kapsam süzgeci
 
