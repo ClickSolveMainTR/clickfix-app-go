@@ -362,9 +362,17 @@ func (s *Service) checkWatch(ctx context.Context, w db.AiEvaluationWatch) (err e
 	if err != nil {
 		return err
 	}
+	// store is what the next check compares with. A failed run keeps the
+	// previous fingerprint so the change is retried on the next check.
 	store := cur
 	defer func() {
 		raw, e := json.Marshal(store)
+		if err != nil {
+			raw, e = w.LastFingerprint, nil
+			if len(raw) == 0 {
+				raw = []byte("{}")
+			}
+		}
 		if e == nil {
 			finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()

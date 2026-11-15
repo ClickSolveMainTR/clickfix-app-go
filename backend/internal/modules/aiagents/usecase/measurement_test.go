@@ -281,6 +281,28 @@ func TestEvaluationWatchRerunsOnChange(t *testing.T) {
 	if r := runs(); len(r) != 2 || r[0].TriggerKind != "config_change" {
 		t.Fatalf("config change run %+v", r)
 	}
+	// A run that fails keeps the old fingerprint, so the change is retried.
+	before, err := svc.Repo.Q.AIEvaluationWatchGet(ctx, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Confidence = 0.95
+	if _, err = svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err = svc.checkWatch(cancelled, before); err == nil {
+		t.Fatal("cancelled check succeeded")
+	}
+	after, err := svc.Repo.Q.AIEvaluationWatchGet(ctx, org)
+	if err != nil || string(after.LastFingerprint) != string(before.LastFingerprint) {
+		t.Fatalf("failed run advanced the fingerprint: %s -> %s (%v)", before.LastFingerprint, after.LastFingerprint, err)
+	}
+	check()
+	if r := runs(); r[0].TriggerKind != "config_change" || r[0].Status != "completed" {
+		t.Fatalf("retried run %+v", r[0])
+	}
 	w, err := svc.EvaluationWatch(ctx, org)
 	if err != nil || !w.Enabled || w.LastCheckedAt == nil || w.LastFingerprint == nil || w.LastFingerprint.ConfigRevision == 0 {
 		t.Fatalf("watch %+v %v", w, err)
