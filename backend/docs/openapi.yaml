@@ -6272,6 +6272,601 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/tenant/categories/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoriesMeta
+      summary: Category tree metadata
+      description: "Table contract of `GET /v1/tenant/categories` (`tenant.categories.read`, CF-218)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategories
+      summary: List the category tree
+      description: "`tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; until departments land (CF-215) it answers `400 VALIDATION_ERROR` (`department`, `unavailable`). Archived nodes only with `include_archived=true`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: department
+          in: query
+          schema: { type: string, format: uuid }
+        - name: include_archived
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Category tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCategory
+      summary: Create a category
+      description: "`tenant.categories.manage` (CF-218). `slug` defaults to the slugified name. A root may be organization-wide or belong to a department; a child of a department node belongs to the same department (it inherits it when `department_uuid` is omitted); a child of an organization-wide node may open a department branch. At most 5 levels. `examples` (up to 50) are sample texts the embedding classifier compares records with. Errors: `400 VALIDATION_ERROR` (`name`, `slug`, `examples`, `parent_uuid` `not_found`/`cycle`/`too_deep`/`archived`, `department_uuid` `mismatch`/`not_found`/`unavailable`), `409 CONFLICT` when the slug is taken."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/categories/review:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryReview
+      summary: Records waiting for a category decision
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Records whose classification stayed below the confidence bar (`needs_review`), newest first. `subject_type` narrows the kind."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: subject_type
+          in: query
+          schema: { $ref: "#/components/schemas/CategorySubjectType" }
+      responses:
+        "200":
+          description: Review page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories/labels/export:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryLabelsExport
+      summary: Export the category labels (training set)
+      description: "`tenant.categories.read` + `tenant.categories.export` (CF-218). Every agent confirmation and correction of the organization as JSON Lines, oldest first: masked text, its vector and embedding model, the previous and the new category, the previous source and confidence, who and when. The training set of the organization's own classifier (CF-219); it never contains another organization's labels. `since` (RFC 3339) exports labels created from then on. Not wrapped in the response envelope."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: One CategoryLabelExport object per line
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/CategoryLabelExport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategory
+      summary: Get a category
+      description: "`tenant.categories.read` (CF-218)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantCategory
+      summary: Update a category
+      description: "`tenant.categories.manage` (CF-218). Omitted fields keep their value; `parent_uuid: \"\"` makes the node a root, `department_uuid: \"\"` makes it organization-wide. Moving a node moves its subtree (same rules as create). `archived: true` archives the node and its subtree: archived nodes are no classification candidates but keep their labels."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCategory
+      summary: Delete an unused category
+      description: "`tenant.categories.manage` (CF-218). Only a node without children, records or labels; otherwise `409 CONFLICT` (archive it instead). Answers `status: deleted`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/category-assignments/{subjectType}/{subjectUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryAssignment
+      summary: Get a record's category
+      description: "`tenant.categories.read` (CF-218). The record must be visible to the caller (conversations follow the inbox visibility; suggestions need `tenant.settings.read`), else `404`. `assignment` is `null` while the record has no category."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantCategoryAssignment
+      summary: Confirm or correct a record's category
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). The record takes the category with source `human` and confidence 1. The decision is stored as a label (`confirm` when the category stays, `correct` otherwise): masked text, vector, previous and new category, who and when. Errors: `400 VALIDATION_ERROR` (`category_uuid` `not_found`/`archived`/`department`)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryLabelInput"
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCategoryAssignment
+      summary: Clear a record's category
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Labels already collected stay. Answers `status: deleted`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      responses:
+        "200":
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/category-assignments/{subjectType}/{subjectUuid}/classify:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCategoryClassify
+      summary: Classify a record
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Phase 1: embedding similarity to the category examples and labelled records; when unsure the AI (metered, `tenant.ai` policy and credits apply); when confidence stays low the record goes to the review queue (`needs_review`). An existing decision is returned unchanged; `force=true` re-runs a machine decision, never a human one. Errors: `409 CONFLICT` when the organization has no categories or the record has no text."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+        - name: force
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/departments/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartmentsMeta
+      summary: Departments list metadata
+      description: "Table contract of `GET /v1/tenant/departments` (`tenant.departments.read`, CF-215)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/departments:
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartments
+      summary: List departments
+      description: "`tenant.departments.read` (CF-215). A department is a business unit (technical support, sales ...), optionally under a brand; teams belong to it. Listed in `sort_order`. `q` searches name and description, `brand` filters by brand uuid, `mine=true` lists the caller's departments (through their teams)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: brand
+          in: query
+          schema: { type: string, format: uuid }
+        - name: mine
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Department page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentPage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantDepartment
+      summary: Create a department
+      description: "`tenant.departments.write`. `name` is required and unique in the organization. `team_uuids` sets the department's teams."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "201":
+          description: Created department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/XOrganization"
+      - name: uuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartment
+      summary: Get a department
+      description: "`tenant.departments.read`. Includes teams and leads (the leads of its teams)."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantDepartment
+      summary: Update a department
+      description: "`tenant.departments.write`. Any subset of the fields; `brand_uuid` / `sla_policy_uuid` take null to clear, `inherit_hours: true` drops the department's own hours, `team_uuids` replaces the team list."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantDepartment
+      summary: Delete a department
+      description: "`tenant.departments.write`. Teams and conversations lose the department. Knowledge the department still owns blocks the delete with `409 DEPARTMENT_IN_USE` (details carry the counts) unless `move_to` is `none` (organization-wide) or another department's uuid."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: move_to
+          in: query
+          schema: { type: string, description: "`none` or a department uuid" }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}/shares:
+    parameters:
+      - $ref: "#/components/parameters/XOrganization"
+      - name: uuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartmentShares
+      summary: Knowledge shared with or by a department
+      description: "`tenant.departments.read`. Items shared with this department and this department's items shared with others."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Shares
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentShares"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantDepartmentShare
+      summary: Share a knowledge item with a department
+      description: "`tenant.departments.read`; the caller must lead the item's department (a lead of one of its teams) or hold `tenant.departments.write`, else `403`. Knowledge is closed by default: a department sees its own items, organization-wide items and items shared with it. Organization-wide items need no share (`422 organization_wide`)."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentShareInput"
+      responses:
+        "201":
+          description: Share
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentShare"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}/shares/{shareUuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantDepartmentShare
+      summary: Stop sharing a knowledge item
+      description: "`tenant.departments.read`; a lead of the receiving or the owning department, or `tenant.departments.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: shareUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/conversations/{uuid}/department:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConversationDepartment
+      summary: Department of a conversation
+      description: "`tenant.conversations.read` + `tenant.departments.read` (CF-215). The department, who set it (`customer` widget pick, `ai` prediction with its confidence, `agent` transfer) and the transfer history with the handed-over context."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Conversation department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConversationDepartment"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/conversations/{uuid}/department-transfer:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConversationDepartmentTransfer
+      summary: Transfer a conversation to another department
+      description: "`tenant.conversations.assign` (CF-215). Moves the conversation with its context: `reason` and `context_summary` land in the timeline and the transfer history. A team of another department is unassigned so the receiving department's routing picks it up; `release_assignee` unassigns the agent too. `department_uuid: null` makes it organization-wide."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentTransferInput"
+      responses:
+        "200":
+          description: Conversation department after the transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConversationDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
   /v1/tenant/teams/meta:
     get:
       tags: [Tenant]
@@ -27543,7 +28138,7 @@ paths:
       ],
       "operationId": "knowledgeArticles",
       "summary": "List current draft articles",
-      "description": "Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server.",
+      "description": "Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server. Department visibility (CF-215): members see organization-wide articles, their departments' articles and articles shared with their departments; `tenant.departments.read_all` sees all. Other departments' articles answer 404 on the item routes.",
       "security": [
         {
           "bearerAuth": []
@@ -27587,6 +28182,13 @@ paths:
           "in": "query",
           "required": false,
           "schema": { "type": "string", "enum": ["tr", "en"] }
+        },
+        {
+          "name": "department",
+          "in": "query",
+          "required": false,
+          "description": "`none` = organization-wide only, or a department uuid (CF-215).",
+          "schema": { "type": "string" }
         },
         {
           "name": "visibility",
@@ -31828,6 +32430,611 @@ paths:
       }
     }
   }
+  "/v1/tenant/ai/memory/search": {
+    "post": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "searchAIMemory",
+      "summary": "Agent assistant: answer from knowledge units (answer cache) or similar resolved cases (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "locale": {
+                  "type": "string",
+                  "enum": [
+                    "tr",
+                    "en"
+                  ],
+                  "default": "tr"
+                },
+                "conversation_uuid": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Scopes the lookup to the conversation's brand and leaves it out of case results."
+                }
+              },
+              "required": [
+                "question"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIMemoryResult"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "description": "Conversation not found or not visible"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/case-memories": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAICaseMemories",
+      "summary": "Anonymized case summaries of resolved conversations (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AICaseMemory"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/case-memories/{uuid}/review": {
+    "post": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "reviewAICaseMemory",
+      "summary": "Approve (customer AI may use it) or reject a case summary; only anonymized summaries can be approved",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "approve": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approve"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AICaseMemoryReview"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "description": "Case summary not found"
+        },
+        "409": {
+          "description": "Summary is not anonymized and cannot be approved"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/knowledge-units": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAIKnowledgeUnits",
+      "summary": "Question/answer units extracted from published articles and approved suggestions (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AIKnowledgeUnit"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/answer-cache/stats": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "getAIAnswerCacheStats",
+      "summary": "Answer cache hit rate per audience (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "since",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": "Defaults to 30 days ago; at most 366 days back."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIAnswerCacheStats"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/knowledge-gaps/questions": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAIKnowledgeGapQuestions",
+      "summary": "Questions no knowledge unit, case or source answered (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        {
+          "name": "since",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": "Defaults to 30 days ago; at most 366 days back."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AIKnowledgeGapQuestion"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
   "/v1/tenant/conversations/{uuid}/ai/knowledge-suggestion": {
     "post": {
       "tags": [
@@ -32558,6 +33765,7 @@ paths:
       ],
       "operationId": "uploadKnowledgeSource",
       "summary": "Store and queue PDF DOCX Markdown or text import; max 8 MiB",
+      "description": "Multipart `file`, `title`, `locale` and optional `department_uuid` (CF-215).",
       "security": [
         {
           "bearerAuth": []
@@ -42338,6 +43546,378 @@ webhooks:
         "429": { description: "Rate limit, retried with backoff" }
         "500": { description: "Temporary receiver failure, retried with backoff" }
 
+  /v1/tenant/history/imports:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryImports
+      summary: List history runs
+      description: |
+        Runs of the history pipeline (CF-217), newest first: uploads, nightly runs over closed conversations and
+        future connectors, with progress counters, consent and whether the raw file is gone.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImportPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: uploadTenantHistoryImport
+      summary: Upload a history export
+      description: |
+        Multipart form: `file` (.json or .zip in the documented schema, see docs/gecmis-kayitlar.md; at most 50 MB),
+        `consent_analysis` (must be `true`: the data owner's consent to analysis), `consent_training` (optional,
+        recorded separately), optional `brand_uuid` and `department_id`. The file is validated now, kept in private
+        storage and deleted when the run ends or its retention passes. Processing happens in the worker.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, consent_analysis]
+              properties:
+                file: { type: string, format: binary }
+                consent_analysis: { type: string, enum: ["true"] }
+                consent_training: { type: string, enum: ["true", "false"] }
+                brand_uuid: { type: string, format: uuid }
+                department_id: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "202":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Storage or AI embedding is not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistoryImport
+      summary: Get a history run
+      description: |
+        One run with its progress.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}/cancel:
+    post:
+      tags: [Tenant]
+      operationId: cancelTenantHistoryImport
+      summary: Cancel a history run
+      description: |
+        A waiting run is cancelled at once, a running one at its next batch. What was archived before the stop stays
+        until the run is rolled back.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}/rollback:
+    post:
+      tags: [Tenant]
+      operationId: rollbackTenantHistoryImport
+      summary: Roll back a history run
+      description: |
+        Removes the run's archived cases, the pending suggestions only its cases supported and clusters left empty.
+        Approved suggestions (article drafts) and the decision memory stay. Cancel a running run first.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/cases:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryCases
+      summary: List the history archive
+      description: |
+        The read-only archive: anonymized cases, never inbox conversations. Filter by run or cluster.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: import
+          in: query
+          required: false
+          description: Run uuid
+          schema: { type: string, format: uuid }
+        - name: cluster
+          in: query
+          required: false
+          description: Cluster uuid
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryCasePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/clusters:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryClusters
+      summary: List case clusters
+      description: |
+        Groups of similar cases, strongest evidence first. Evidence is how many cases share one resolution.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryClusterPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/suggestions:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistorySuggestions
+      summary: List suggestions from history
+      description: |
+        knowledge_suggestions rows the pipeline produced once a cluster reached the evidence threshold. A suggestion
+        close to a published article carries it as `conflict_article_*`.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: status
+          in: query
+          required: false
+          description: Review status
+          schema: { type: string, enum: [pending, approved, rejected] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySuggestionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/suggestions/{uuid}/decision:
+    post:
+      tags: [Tenant]
+      operationId: decideTenantHistorySuggestion
+      summary: Review a suggestion
+      description: |
+        Approve, reject or correct a pending suggestion; a reason is required. Approve and correct create an internal
+        article draft (publishing stays a separate step). Every decision is kept with its reason and an embedding, so
+        a rejected idea is not suggested again. Department leads review their department's suggestions.
+        Requires `tenant.history.review`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HistoryDecisionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryDecisionResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Storage or AI embedding is not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/decisions:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryDecisions
+      summary: List the decision memory
+      description: |
+        Approvals, rejections and corrections with their reasons, newest first.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryDecisionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/settings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistorySettings
+      summary: Get history settings
+      description: |
+        Evidence threshold, similarity thresholds, retention and the nightly run.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantHistorySettings
+      summary: Save history settings
+      description: |
+        The nightly run needs the organization's analysis consent; training consent is recorded separately.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HistorySettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistorySample
+      summary: Download the sample export
+      description: |
+        The documented example file (docs/examples/gecmis-ornek.json). Every value in it is invented.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryBundle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
   securitySchemes:
     scimBearer: {"type":"http","scheme":"bearer","description":"Organization-scoped SCIM provisioning token"}
@@ -42424,6 +44004,16 @@ components:
       in: path
       required: true
       description: Set-up run uuid (CF-140).
+      schema: { type: string, format: uuid }
+    CategorySubjectTypePath:
+      name: subjectType
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/CategorySubjectType" }
+    CategorySubjectUuidPath:
+      name: subjectUuid
+      in: path
+      required: true
       schema: { type: string, format: uuid }
     XOrganization:
       name: X-Organization
@@ -44043,6 +45633,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/PublicRequestForm"
             - type: "null"
+        departments:
+          type: array
+          description: Departments the visitor may pick for a new conversation (CF-215); empty hides the picker and the AI routes the first message.
+          items: { $ref: "#/components/schemas/WidgetDepartment" }
     WidgetIdentifyInput:
       type: object
       required: [user_id, user_hash]
@@ -44085,6 +45679,7 @@ components:
         phone: { type: string, description: Visitor phone (older SDKs) }
         consent: { type: boolean, description: GDPR/KVKK checkbox of the pre-chat form }
         intent: { type: string, enum: ["", human, callback, video], description: "human asks for a person (the AI agent hands off)" }
+        department_uuid: { type: string, format: uuid, description: "Department the visitor picked for a new conversation (CF-215); one of bootstrap `departments`" }
         attributes: { type: object, additionalProperties: true, description: SDK attributes set before the contact existed }
         events:
           type: array
@@ -44103,6 +45698,7 @@ components:
         attributes: { type: string, description: Attributes as JSON }
         consent: { type: string, enum: ["true", "false"] }
         intent: { type: string }
+        department_uuid: { type: string, format: uuid }
         phone: { type: string }
         text: { type: string }
         client_id: { type: string, format: uuid }
@@ -44252,6 +45848,13 @@ components:
     "KnowledgeArticle": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department of the article (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer",
           "format": "int64"
@@ -44370,6 +45973,11 @@ components:
     "KnowledgeArticleInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "slug": {
           "type": "string"
         },
@@ -45076,6 +46684,11 @@ components:
     "AIBusinessContextInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -45120,6 +46733,13 @@ components:
     "AIBusinessContextSection": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -45516,6 +47136,16 @@ components:
         },
         "handoff": {
           "type": "boolean"
+        },
+        "unit_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Knowledge unit that answered without a generation call (CF-216)"
+        },
+        "memory": {
+          "type": "string",
+          "enum": ["exact", "semantic"],
+          "description": "Answer cache outcome when a knowledge unit answered (CF-216)"
         },
         "citation_ids": {
           "type": "array",
@@ -46589,9 +48219,450 @@ components:
         "conversation_ids"
       ]
     }
+    "AIMemoryUnitHit": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal"
+          ]
+        },
+        "article_uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "uuid",
+        "question",
+        "answer",
+        "category",
+        "visibility",
+        "score"
+      ]
+    }
+    "AIMemoryCase": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved"
+          ]
+        },
+        "score": {
+          "type": "number"
+        },
+        "conversation_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Present only when the caller may open the source conversation."
+        }
+      },
+      "required": [
+        "uuid",
+        "problem",
+        "resolution",
+        "category",
+        "status",
+        "score"
+      ]
+    }
+    "AIMemoryResult": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "semantic",
+            "miss"
+          ],
+          "description": "exact: cached repeat, no AI call; semantic: one embedding call; miss: no unit matched."
+        },
+        "unit": {
+          "$ref": "#/components/schemas/AIMemoryUnitHit"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AIMemoryCase"
+          }
+        },
+        "embedding_calls": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "outcome",
+        "cases",
+        "embedding_calls"
+      ]
+    }
+    "AICaseMemory": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "anonymized": {
+          "type": "boolean"
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "conversation_uuid": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "locale",
+        "category",
+        "problem",
+        "resolution",
+        "status",
+        "anonymized",
+        "brand_id",
+        "department_id",
+        "created_at",
+        "reviewed_at",
+        "conversation_uuid"
+      ]
+    }
+    "AICaseMemoryReview": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "anonymized": {
+          "type": "boolean"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "status",
+        "anonymized",
+        "problem",
+        "resolution",
+        "category"
+      ]
+    }
+    "AIKnowledgeUnit": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "answer": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal"
+          ]
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_version": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "article_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "suggestion_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "question",
+        "variants",
+        "answer",
+        "category",
+        "locale",
+        "visibility",
+        "brand_id",
+        "department_id",
+        "source_version",
+        "created_at",
+        "article_uuid",
+        "suggestion_uuid"
+      ]
+    }
+    "AIAnswerCacheAudienceStats": {
+      "type": "object",
+      "properties": {
+        "audience": {
+          "type": "string",
+          "enum": [
+            "customer",
+            "agent"
+          ]
+        },
+        "exact_hits": {
+          "type": "integer"
+        },
+        "semantic_hits": {
+          "type": "integer"
+        },
+        "misses": {
+          "type": "integer"
+        },
+        "lookups": {
+          "type": "integer"
+        },
+        "hit_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "audience",
+        "exact_hits",
+        "semantic_hits",
+        "misses",
+        "lookups",
+        "hit_rate"
+      ]
+    }
+    "AIAnswerCacheStats": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AIAnswerCacheAudienceStats"
+          }
+        },
+        "units": {
+          "type": "integer"
+        },
+        "cached_questions": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "since",
+        "audiences",
+        "units",
+        "cached_questions"
+      ]
+    }
+    "AIKnowledgeGapQuestion": {
+      "type": "object",
+      "properties": {
+        "audience": {
+          "type": "string",
+          "enum": [
+            "customer",
+            "agent"
+          ]
+        },
+        "locale": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string",
+          "description": "PII masked"
+        },
+        "category": {
+          "type": "string"
+        },
+        "occurrences": {
+          "type": "integer"
+        },
+        "first_seen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_seen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "conversation_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "audience",
+        "locale",
+        "question",
+        "category",
+        "occurrences",
+        "first_seen_at",
+        "last_seen_at",
+        "brand_id",
+        "department_id",
+        "conversation_uuid"
+      ]
+    }
     "AIKnowledgeSuggestion": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -46606,7 +48677,14 @@ components:
           "type": "string"
         },
         "conversation_id": {
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "article_id": {
           "anyOf": [
@@ -46641,6 +48719,60 @@ components:
               "type": "null"
             }
           ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "conversation",
+            "history"
+          ],
+          "description": "history: produced by the history pipeline (CF-217); conversation_id is then null."
+        },
+        "cluster_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "import_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "department_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_count": {
+          "type": "integer"
+        },
+        "conflict_article_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conflict_score": {
+          "type": "number"
         },
         "created_at": {
           "type": "string",
@@ -46814,6 +48946,11 @@ components:
     "AIKnowledgeSourceInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "url": {
           "type": "string",
           "format": "uri",
@@ -46853,6 +48990,13 @@ components:
     "AIKnowledgeSource": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -49866,6 +52010,11 @@ components:
         author_id: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        department_uuid:
+          description: Department of the article (CF-215); null = organization-wide
+          type: [string, "null"]
+          format: uuid
+        department_name: { type: [string, "null"] }
         collection_uuid:
           anyOf:
             - { type: string, format: uuid }
@@ -55248,6 +57397,236 @@ components:
           items: { type: string }
         joined_at: { type: string, format: date-time }
 
+    DepartmentRef:
+      type: object
+      required: [uuid, name, color]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+
+    DepartmentWorkingHours:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items:
+            type: object
+            required: [day, open, start, end]
+            properties:
+              day: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+              open: { type: boolean }
+              start: { type: string, example: "09:00" }
+              end: { type: string, example: "18:00" }
+
+    DepartmentAISettings:
+      type: object
+      required: [enabled, instructions, routing_hint]
+      properties:
+        enabled: { type: boolean, description: The customer AI may answer conversations of the department }
+        instructions: { type: string, maxLength: 4000, description: Added to the AI's reply instructions }
+        routing_hint: { type: string, maxLength: 1000, description: Tells the AI which first messages belong here }
+
+    Department:
+      type: object
+      required: [uuid, name, description, color, brand_uuid, widget_visible, sort_order, sla_policy_uuid, timezone, working_hours, ai, team_count, teams, leads, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string, description: "`#RRGGBB` or empty" }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        widget_visible: { type: boolean, description: Offered in the web widget's department picker }
+        sort_order: { type: integer, format: int32 }
+        sla_policy_uuid: { type: [string, "null"], format: uuid, description: "SLA policy of the department's conversations (before brand and company policies)" }
+        timezone: { type: [string, "null"] }
+        working_hours:
+          description: Own hours; null = the organization's. Teams without their own hours inherit them.
+          oneOf:
+            - $ref: "#/components/schemas/DepartmentWorkingHours"
+            - type: "null"
+        ai: { $ref: "#/components/schemas/DepartmentAISettings" }
+        team_count: { type: integer, format: int64 }
+        teams:
+          type: array
+          items: { $ref: "#/components/schemas/DepartmentRef" }
+        leads:
+          type: array
+          items:
+            type: object
+            required: [uuid, email, name, surname]
+            properties:
+              uuid: { type: string, format: uuid }
+              email: { type: string }
+              name: { type: string }
+              surname: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DepartmentInput:
+      type: object
+      additionalProperties: false
+      description: "Create: `name` required. Patch: any subset."
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        color: { type: string, example: "#2563EB" }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        widget_visible: { type: boolean }
+        sort_order: { type: integer, format: int32 }
+        sla_policy_uuid: { type: [string, "null"], format: uuid }
+        timezone: { type: string, example: Europe/Istanbul }
+        working_hours: { $ref: "#/components/schemas/DepartmentWorkingHours" }
+        inherit_hours: { type: boolean, description: Drop the department's own hours and timezone }
+        ai:
+          type: object
+          additionalProperties: false
+          properties:
+            enabled: { type: boolean }
+            instructions: { type: string, maxLength: 4000 }
+            routing_hint: { type: string, maxLength: 1000 }
+        team_uuids:
+          type: array
+          description: Complete team list of the department
+          items: { type: string, format: uuid }
+
+    DepartmentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Department" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    DepartmentShareInput:
+      type: object
+      required: [resource_kind, resource_uuid]
+      additionalProperties: false
+      properties:
+        resource_kind: { type: string, enum: [article, source, context] }
+        resource_uuid: { type: string, format: uuid }
+
+    DepartmentShare:
+      type: object
+      required: [uuid, resource_kind, resource_uuid, resource_title, department, owner, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        resource_kind: { type: string, enum: [article, source, context] }
+        resource_uuid: { type: string, format: uuid }
+        resource_title: { type: string }
+        department: { $ref: "#/components/schemas/DepartmentRef" }
+        owner:
+          description: Department the item belongs to
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    DepartmentTransfer:
+      type: object
+      required: [uuid, from, to, actor_kind, actor_uuid, actor_name, confidence, reason, context_summary, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        from:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        to:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        actor_kind: { type: string, enum: [customer, ai, agent, rule] }
+        actor_uuid: { type: [string, "null"], format: uuid }
+        actor_name: { type: string }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        reason: { type: string }
+        context_summary: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ConversationDepartment:
+      type: object
+      required: [department, source, confidence, routed_at, transfers]
+      properties:
+        department:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        source: { type: [string, "null"], enum: [customer, ai, agent, rule, null] }
+        confidence: { type: [number, "null"], description: "The AI's confidence when it routed the first message (threshold 0.6)" }
+        routed_at: { type: [string, "null"], format: date-time }
+        transfers:
+          type: array
+          items: { $ref: "#/components/schemas/DepartmentTransfer" }
+
+    DepartmentTransferInput:
+      type: object
+      additionalProperties: false
+      required: [department_uuid]
+      properties:
+        department_uuid: { type: [string, "null"], format: uuid }
+        reason: { type: string, maxLength: 1000 }
+        context_summary: { type: string, maxLength: 4000, description: What the receiving department needs to know }
+        release_assignee: { type: boolean }
+
+    WidgetDepartment:
+      type: object
+      required: [uuid, name, description, color]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+
+    EnvelopeDepartment:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Department" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/DepartmentPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentShare:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/DepartmentShare" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentShares:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/DepartmentShare" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeConversationDepartment:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConversationDepartment" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     Team:
       type: object
       required: [uuid, name, description, color, timezone, working_hours, skills, member_count, leads, created_at, updated_at]
@@ -55275,8 +57654,169 @@ components:
           type: array
           description: Only on get, create, patch and the member routes
           items: { $ref: "#/components/schemas/TeamMember" }
+        department:
+          description: Department of the team (CF-215); null = none
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    CategorySubjectType:
+      type: string
+      description: Record kinds that carry a category (CF-218). `archive_record` (CF-217) and `knowledge_unit` (CF-216) answer 404 until their modules register.
+      enum: [conversation, archive_record, knowledge_unit, suggestion]
+
+    CategorySource:
+      type: string
+      description: Who decided the category. `model` is the organization's own classifier (CF-219).
+      enum: [embedding, ai, human, model]
+
+    Category:
+      type: object
+      required: [uuid, department_uuid, parent_uuid, name, slug, description, examples, position, depth, archived, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        department_uuid: { type: [string, "null"], format: uuid, description: "null = organization-wide" }
+        parent_uuid: { type: [string, "null"], format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        examples: { type: array, items: { type: string } }
+        position: { type: integer }
+        depth: { type: integer, minimum: 0, maximum: 4 }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CategoryInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, maxLength: 80, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" }
+        description: { type: string, maxLength: 1000 }
+        examples: { type: array, maxItems: 50, items: { type: string, maxLength: 500 } }
+        position: { type: integer }
+        parent_uuid: { type: string, description: "Parent uuid; empty string makes a root" }
+        department_uuid: { type: string, description: "Department uuid; empty string makes the node organization-wide" }
+        archived: { type: boolean }
+
+    CategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+
+    CategoryRef:
+      type: object
+      required: [uuid, name, slug]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+
+    CategoryAssignment:
+      type: object
+      required: [subject_type, subject_uuid, category, confidence, source, classifier, needs_review, updated_at]
+      properties:
+        subject_type: { $ref: "#/components/schemas/CategorySubjectType" }
+        subject_uuid: { type: string, format: uuid }
+        category:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryRef"
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source: { $ref: "#/components/schemas/CategorySource" }
+        classifier: { type: string, description: "Stage and version that decided (embedding/v1, ai/v1, human, none)" }
+        needs_review: { type: boolean }
+        updated_at: { type: string, format: date-time }
+
+    CategoryAssignmentResult:
+      type: object
+      required: [assignment]
+      properties:
+        assignment:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryAssignment"
+
+    CategoryAssignmentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryAssignment" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CategoryLabelInput:
+      type: object
+      required: [category_uuid]
+      additionalProperties: false
+      properties:
+        category_uuid: { type: string, format: uuid }
+
+    CategoryLabelExport:
+      type: object
+      description: One line of the label export (CF-219 training set).
+      required: [uuid, created_at, subject_type, department_uuid, action, text, embedding_model, embedding, category, previous_category, previous_source, previous_confidence, labeled_by]
+      properties:
+        uuid: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        subject_type: { $ref: "#/components/schemas/CategorySubjectType" }
+        department_uuid: { type: [string, "null"], format: uuid }
+        action: { type: string, enum: [confirm, correct] }
+        text: { type: string, description: "Record text with personal data masked" }
+        embedding_model: { type: string, description: "Empty when the vector could not be built" }
+        embedding: { type: array, items: { type: number } }
+        category: { $ref: "#/components/schemas/CategoryRef" }
+        previous_category:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryRef"
+        previous_source:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategorySource"
+        previous_confidence: { type: [number, "null"] }
+        labeled_by: { type: string, format: uuid }
+
+    EnvelopeCategory:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Category" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryAssignmentResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryAssignmentResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryAssignmentPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryAssignmentPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     TeamPage:
       type: object
@@ -55324,6 +57864,10 @@ components:
         members:
           type: array
           items: { $ref: "#/components/schemas/TeamInitialMember" }
+        department_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: Department of the team (CF-215); null takes it out, omitted keeps it
 
     SkillsInput:
       type: object
@@ -62247,4 +64791,303 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/SystemPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    HistoryImport:
+      type: object
+      required: [uuid, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_at, consent_version, raw_deleted, raw_retain_until, brand_uuid, department_id, window_start, window_end, cancel_requested, error, started_at, finished_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        source: { type: string, enum: [upload, nightly, connector] }
+        connector: { type: string }
+        file_name: { type: string }
+        status: { type: string, enum: [pending, running, completed, failed, cancelled, rolled_back] }
+        stage: { type: string, enum: [queued, reading, anonymizing, embedding, clustering, suggesting, done] }
+        total_records: { type: integer }
+        processed_records: { type: integer }
+        skipped_records: { type: integer }
+        clusters_touched: { type: integer }
+        suggestions_created: { type: integer }
+        suggestions_suppressed: { type: integer, description: Candidates not suggested because a reviewer rejected the same idea. }
+        consent_analysis: { type: boolean }
+        consent_training: { type: boolean }
+        consent_at: { type: string, format: date-time }
+        consent_version: { type: string }
+        raw_deleted: { type: boolean }
+        raw_retain_until: { type: [string, "null"], format: date-time }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        window_start: { type: [string, "null"], format: date-time }
+        window_end: { type: [string, "null"], format: date-time }
+        cancel_requested: { type: boolean }
+        error: { type: string }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    HistoryCase:
+      type: object
+      required: [uuid, source, subject, problem, resolution, message_count, locale, category, training_allowed, brand_id, department_id, opened_at, closed_at, created_at, import_uuid, cluster_uuid]
+      properties:
+        uuid: { type: string, format: uuid }
+        source: { type: string, enum: [upload, nightly, connector] }
+        subject: { type: string }
+        problem: { type: string, description: Anonymized customer messages. }
+        resolution: { type: string, description: Anonymized resolution. }
+        message_count: { type: integer }
+        locale: { type: string, enum: [tr, en] }
+        category: { type: string }
+        training_allowed: { type: boolean }
+        brand_id: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        opened_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        import_uuid: { type: string, format: uuid }
+        cluster_uuid: { type: [string, "null"], format: uuid }
+    HistoryCluster:
+      type: object
+      required: [uuid, category, label, size, evidence, brand_id, department_id, created_at, updated_at, suggestion_uuid, suggestion_status]
+      properties:
+        uuid: { type: string, format: uuid }
+        category: { type: string }
+        label: { type: string }
+        size: { type: integer }
+        evidence: { type: integer }
+        brand_id: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        suggestion_uuid: { type: [string, "null"], format: uuid }
+        suggestion_status: { type: [string, "null"], enum: [pending, approved, rejected, null] }
+    HistorySuggestion:
+      type: object
+      required: [uuid, topic, title, body, status, source, evidence_count, cluster_uuid, cluster_size, department_id, conflict_article_uuid, conflict_article_title, conflict_score, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        topic: { type: string }
+        title: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        source: { type: string, enum: [conversation, history] }
+        evidence_count: { type: integer }
+        cluster_uuid: { type: [string, "null"], format: uuid }
+        cluster_size: { type: [integer, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        conflict_article_uuid: { type: [string, "null"], format: uuid }
+        conflict_article_title: { type: [string, "null"] }
+        conflict_score: { type: number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    HistoryDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision, reason, locale]
+      properties:
+        decision: { type: string, enum: [approve, reject, correct] }
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+        title: { type: string, maxLength: 300, description: Required for correct. }
+        body: { type: string, maxLength: 30000, description: Required for correct. }
+        locale: { type: string, enum: [tr, en], description: Locale of the article draft. }
+    HistoryDecisionResult:
+      type: object
+      required: [suggestion_uuid, status, decision, decision_uuid]
+      properties:
+        suggestion_uuid: { type: string, format: uuid }
+        status: { type: string, enum: [approved, rejected] }
+        decision: { type: string, enum: [approved, rejected, corrected] }
+        decision_uuid: { type: string, format: uuid }
+    HistoryDecision:
+      type: object
+      required: [uuid, decision, reason, title, correction, department_id, created_at, suggestion_uuid, decided_by_name]
+      properties:
+        uuid: { type: string, format: uuid }
+        decision: { type: string, enum: [approved, rejected, corrected] }
+        reason: { type: string }
+        title: { type: string }
+        correction: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        created_at: { type: string, format: date-time }
+        suggestion_uuid: { type: [string, "null"], format: uuid }
+        decided_by_name: { type: [string, "null"] }
+    HistorySettingsInput:
+      type: object
+      additionalProperties: false
+      required: [evidence_threshold, cluster_similarity, resolution_similarity, rejection_similarity, raw_retention_hours, archive_retention_days, nightly_enabled, nightly_consent_analysis, nightly_consent_training]
+      properties:
+        evidence_threshold: { type: integer, minimum: 2, maximum: 100, description: Cases that must share one resolution before a suggestion. }
+        cluster_similarity: { type: number, minimum: 0.5, maximum: 0.99 }
+        resolution_similarity: { type: number, minimum: 0.5, maximum: 0.99 }
+        rejection_similarity: { type: number, minimum: 0.5, maximum: 0.99, description: A draft this close to a rejected one is not suggested. }
+        raw_retention_hours: { type: integer, minimum: 1, maximum: 720, description: The raw file is deleted when the run ends or after this many hours. }
+        archive_retention_days: { type: integer, minimum: 0, maximum: 3650, description: 0 keeps the archive. }
+        nightly_enabled: { type: boolean }
+        nightly_consent_analysis: { type: boolean }
+        nightly_consent_training: { type: boolean }
+    HistorySettings:
+      allOf:
+        - $ref: "#/components/schemas/HistorySettingsInput"
+        - type: object
+          required: [nightly_watermark, updated_at]
+          properties:
+            nightly_watermark: { type: [string, "null"], format: date-time }
+            updated_at: { type: [string, "null"], format: date-time }
+    HistoryBundle:
+      type: object
+      description: The history export schema clickfix.history/v1 (docs/gecmis-kayitlar.md).
+      required: [tickets]
+      properties:
+        schema: { type: string, enum: [clickfix.history/v1] }
+        source_system: { type: string }
+        locale: { type: string, enum: [tr, en] }
+        agents:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
+              name: { type: string }
+        contacts:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              email: { type: string }
+              phone: { type: string }
+              company: { type: string }
+              tax_number: { type: string }
+              address: { type: string }
+        tickets:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string, maxLength: 200 }
+              contact_id: { type: string }
+              subject: { type: string }
+              status: { type: string, description: "solved, closed or resolved are processed; anything else is skipped." }
+              category: { type: string }
+              resolution: { type: string }
+              locale: { type: string, enum: [tr, en] }
+              created_at: { type: string, format: date-time }
+              closed_at: { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            type: object
+            required: [ticket_id, body]
+            properties:
+              ticket_id: { type: string }
+              author: { type: string, enum: [customer, agent, system] }
+              agent_id: { type: string }
+              body: { type: string }
+              created_at: { type: string, format: date-time }
+    HistoryImportPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryImport" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryCasePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryCase" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryClusterPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryCluster" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistorySuggestionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistorySuggestion" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryDecisionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryDecision" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    EnvelopeHistoryImport:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryImport" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryImportPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryImportPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryCasePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryCasePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryClusterPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryClusterPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistorySuggestionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistorySuggestionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryDecisionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryDecisionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryDecisionResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryDecisionResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistorySettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistorySettings" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }

@@ -141,7 +141,7 @@ func TestEvaluationMetricsBeforeAfterAndDepartments(t *testing.T) {
 	if _, err := svc.SaveEvaluationCase(ctx, org, actor, EvaluationCaseInput{Name: "Refund", Question: "When can I return?", Locale: "en", Department: &billingDept, ExpectedAnswer: "refund 14 days"}); !errors.Is(err, ErrDepartmentsUnavailable) {
 		t.Fatalf("department before CF-215: %v", err)
 	}
-	svc.Departments = fakeDepartments{org: org, ids: map[uuid.UUID]int64{billingDept: 7}}
+	svc.DepartmentSets = fakeDepartments{org: org, ids: map[uuid.UUID]int64{billingDept: 7}}
 	svc.Cache = fakeCache{hit: map[string]bool{"Customer: When can I return?": true}}
 	refund, err := svc.SaveEvaluationCase(ctx, org, actor, EvaluationCaseInput{Name: "Refund", Question: "When can I return?", Category: "billing", Locale: "en", Department: &billingDept, ExpectedAnswer: "refund 14 days", ExpectedArticles: []uuid.UUID{article}})
 	if err != nil {

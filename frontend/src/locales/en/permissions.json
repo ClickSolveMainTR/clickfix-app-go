@@ -52,6 +52,9 @@
   "labels.tenant.integrations.use": "Use connected system data and run its actions",
   "labels.tenant.ai_insights.read": "View the AI knowledge panel and evaluation results",
   "labels.tenant.ai_insights.manage": "Manage AI evaluation sets and run evaluations",
+  "labels.tenant.history.read": "View the history archive and its runs",
+  "labels.tenant.history.manage": "Upload history files, cancel and roll back runs, change settings",
+  "labels.tenant.history.review": "Approve, reject or correct suggestions from history",
   "labels.tenant.onboarding.manage": "Run the smart setup (AI or template) and undo it",
   "labels.platform.storage.read": "View file storage",
   "labels.platform.storage.write": "Manage file storage",
@@ -185,5 +188,14 @@
   "labels.platform.product_feedback.read": "Read product feedback",
   "groups.tenant_assistant": "ClickFix assistant",
   "labels.tenant.widgets.publish": "Publish web widget settings",
-  "groups.tenant_widgets": "Web widget"
+  "groups.tenant_widgets": "Web widget",
+  "labels.tenant.categories.read": "View categories",
+  "labels.tenant.categories.manage": "Manage the category tree",
+  "labels.tenant.categories.label": "Confirm or correct record categories",
+  "labels.tenant.categories.export": "Export category labels",
+  "groups.tenant_categories": "Categories",
+  "labels.tenant.departments.read": "View departments",
+  "labels.tenant.departments.write": "Manage departments",
+  "labels.tenant.departments.read_all": "See every department's knowledge",
+  "groups.tenant_departments": "Departments"
 }

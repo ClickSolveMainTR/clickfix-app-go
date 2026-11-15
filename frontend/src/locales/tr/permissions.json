@@ -52,6 +52,9 @@
   "labels.tenant.integrations.use": "Bağlı sistem verisini kullan ve işlerini çalıştır",
   "labels.tenant.ai_insights.read": "AI bilgi panelini ve ölçüm sonuçlarını görüntüle",
   "labels.tenant.ai_insights.manage": "AI ölçüm setlerini yönet ve ölçüm çalıştır",
+  "labels.tenant.history.read": "Geçmiş kayıt arşivini ve işlerini görüntüle",
+  "labels.tenant.history.manage": "Geçmiş kayıt yükle, işleri iptal et ve geri al, ayarları değiştir",
+  "labels.tenant.history.review": "Geçmiş kayıtlardan gelen önerileri onayla, reddet veya düzelt",
   "labels.tenant.onboarding.manage": "Akıllı kurulumu (yapay zekâ veya şablon) uygula ve geri al",
   "labels.platform.storage.read": "Dosya deposunu görüntüle",
   "labels.platform.storage.write": "Dosya deposunu yönet",
@@ -185,5 +188,14 @@
   "labels.platform.product_feedback.read": "Ürün geri bildirimlerini görüntüle",
   "groups.tenant_assistant": "ClickFix Asistan",
   "labels.tenant.widgets.publish": "Web widget ayarlarını yayınla",
-  "groups.tenant_widgets": "Web widget"
+  "groups.tenant_widgets": "Web widget",
+  "labels.tenant.categories.read": "Kategorileri görüntüle",
+  "labels.tenant.categories.manage": "Kategori ağacını yönet",
+  "labels.tenant.categories.label": "Kayıtların kategorisini onayla veya düzelt",
+  "labels.tenant.categories.export": "Kategori etiketlerini dışa aktar",
+  "groups.tenant_categories": "Kategoriler",
+  "labels.tenant.departments.read": "Departmanları görüntüle",
+  "labels.tenant.departments.write": "Departmanları yönet",
+  "labels.tenant.departments.read_all": "Tüm departmanların bilgisini gör",
+  "groups.tenant_departments": "Departmanlar"
 }

@@ -5,9 +5,11 @@ package eventconsumers
 
 import (
 	agentusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
+	memusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/usecase"
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 	kbusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	mobileextusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mobileext/usecase"
 	notifmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications"
@@ -32,6 +34,8 @@ type Deps struct {
 	Reports   *reportsuc.Service
 	Agents    *agentusecase.Service
 	Knowledge *kbusecase.RAG
+	// Memory builds knowledge units and case memory (CF-216).
+	Memory    *memusecase.Service
 	Status    *statususecase.Service
 	Surveys   *surveysusecase.Service
 	Analytics *analyticsusecase.Service
@@ -50,6 +54,8 @@ type Deps struct {
 	// LiveActivities sends iOS Live Activity pushes (CF-152); registered
 	// only when APNs is configured.
 	LiveActivities *mobileextusecase.Service
+	// Categories classifies new conversations (CF-218).
+	Categories *categoriesusecase.Service
 }
 
 // New builds the consumer registry.
@@ -66,6 +72,9 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 	}
 	if deps.Knowledge != nil {
 		consumers = append(consumers, deps.Knowledge.Consumer())
+	}
+	if deps.Memory != nil {
+		consumers = append(consumers, deps.Memory.Consumer())
 	}
 	if deps.Status != nil {
 		consumers = append(consumers, statusmodule.EventConsumer(deps.Status))
@@ -87,6 +96,9 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 	}
 	if deps.Routing != nil {
 		consumers = append(consumers, routingmodule.EventConsumer(deps.Routing))
+	}
+	if deps.Categories != nil {
+		consumers = append(consumers, deps.Categories.Consumer())
 	}
 	if deps.LiveActivities.PushConfigured() {
 		consumers = append(consumers, deps.LiveActivities.Consumer())

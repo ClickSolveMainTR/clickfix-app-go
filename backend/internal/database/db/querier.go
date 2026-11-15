@@ -68,9 +68,11 @@ type Querier interface {
 	AIInsightSuggestions(ctx context.Context, arg AIInsightSuggestionsParams) ([]AIInsightSuggestionsRow, error)
 	AIInsightUsage(ctx context.Context, arg AIInsightUsageParams) ([]AIInsightUsageRow, error)
 	AIKnowledgeGapTopicCount(ctx context.Context, arg AIKnowledgeGapTopicCountParams) (int64, error)
+	// CF-216: questions the agent assistant could not answer from a unit, case or
+	// source (knowledge_gap_questions) count as gaps too, under the triage topic.
 	AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTopicsParams) ([]AIKnowledgeGapTopicsRow, error)
 	AIKnowledgeSourceClaim(ctx context.Context, arg AIKnowledgeSourceClaimParams) (KnowledgeSource, error)
-	AIKnowledgeSourceCount(ctx context.Context, organizationID int64) (int64, error)
+	AIKnowledgeSourceCount(ctx context.Context, arg AIKnowledgeSourceCountParams) (int64, error)
 	AIKnowledgeSourceCreate(ctx context.Context, arg AIKnowledgeSourceCreateParams) (KnowledgeSource, error)
 	AIKnowledgeSourceDocument(ctx context.Context, arg AIKnowledgeSourceDocumentParams) (KnowledgeSourceDocument, error)
 	AIKnowledgeSourceDocumentSave(ctx context.Context, arg AIKnowledgeSourceDocumentSaveParams) error
@@ -80,7 +82,7 @@ type Querier interface {
 	AIKnowledgeSourceLock(ctx context.Context, arg AIKnowledgeSourceLockParams) (KnowledgeSource, error)
 	AIKnowledgeSourceToggle(ctx context.Context, arg AIKnowledgeSourceToggleParams) (uuid.UUID, error)
 	AIKnowledgeSources(ctx context.Context, arg AIKnowledgeSourcesParams) ([]AIKnowledgeSourcesRow, error)
-	AIKnowledgeSuggestionCount(ctx context.Context, organizationID int64) (int64, error)
+	AIKnowledgeSuggestionCount(ctx context.Context, arg AIKnowledgeSuggestionCountParams) (int64, error)
 	AIKnowledgeSuggestionCreate(ctx context.Context, arg AIKnowledgeSuggestionCreateParams) (KnowledgeSuggestion, error)
 	AIKnowledgeSuggestionLock(ctx context.Context, arg AIKnowledgeSuggestionLockParams) (KnowledgeSuggestion, error)
 	AIKnowledgeSuggestionReview(ctx context.Context, arg AIKnowledgeSuggestionReviewParams) (KnowledgeSuggestion, error)
@@ -99,6 +101,9 @@ type Querier interface {
 	AIQuotaMonth(ctx context.Context, organizationID int64) (AIQuotaMonthRow, error)
 	AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiPolicy, error)
 	AISaveSimilarLink(ctx context.Context, arg AISaveSimilarLinkParams) error
+	// CF-214: same brand first, then brandless (organization-wide) conversations;
+	// another brand's conversations never match. A brandless conversation only
+	// matches brandless ones.
 	AISimilarConversations(ctx context.Context, arg AISimilarConversationsParams) ([]AISimilarConversationsRow, error)
 	AIStaleRuns(ctx context.Context) ([]AiRun, error)
 	AIToolByName(ctx context.Context, arg AIToolByNameParams) (AiTool, error)
@@ -134,6 +139,14 @@ type Querier interface {
 	AnalyticsBackfillIDs(ctx context.Context, arg AnalyticsBackfillIDsParams) ([]int64, error)
 	AnalyticsDashboard(ctx context.Context, arg AnalyticsDashboardParams) ([]byte, error)
 	AnalyticsTimezone(ctx context.Context, id int64) (string, error)
+	AnswerCacheCount(ctx context.Context, organizationID int64) (int64, error)
+	// A cached row is valid only while its unit exists (source changes delete it)
+	// and still passes the audience's visibility rule.
+	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
+	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
+	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error
+	AnswerCacheStats(ctx context.Context, arg AnswerCacheStatsParams) ([]AnswerCacheStatsRow, error)
+	AnswerCacheTouch(ctx context.Context, arg AnswerCacheTouchParams) error
 	// A contact wrote: activity moves up, the conversation waits for an answer
 	// and a snoozed or resolved conversation wakes up.
 	ApplyInboundToConversation(ctx context.Context, arg ApplyInboundToConversationParams) (Conversation, error)
@@ -194,6 +207,7 @@ type Querier interface {
 	// Global minutely worker; every subsequent mutation uses the returned org.
 	AppointmentVideoDue(ctx context.Context, scheduledEndAt pgtype.Timestamptz) ([]Appointment, error)
 	AppointmentVideoFinish(ctx context.Context, arg AppointmentVideoFinishParams) (int64, error)
+	ArchiveCategoryDescendants(ctx context.Context, arg ArchiveCategoryDescendantsParams) error
 	AssignArticleBrand(ctx context.Context, arg AssignArticleBrandParams) (int64, error)
 	AssignUserRoleBySlug(ctx context.Context, arg AssignUserRoleBySlugParams) error
 	AssistantDocumentCreate(ctx context.Context, arg AssistantDocumentCreateParams) (AssistantDocument, error)
@@ -499,8 +513,9 @@ type Querier interface {
 	BillingWebhookReceipt(ctx context.Context, arg BillingWebhookReceiptParams) (int64, error)
 	BrandPublicArticle(ctx context.Context, arg BrandPublicArticleParams) (BrandPublicArticleRow, error)
 	BrandPublicArticles(ctx context.Context, arg BrandPublicArticlesParams) ([]BrandPublicArticlesRow, error)
-	BusinessContextCount(ctx context.Context, organizationID int64) (int64, error)
+	BusinessContextCount(ctx context.Context, arg BusinessContextCountParams) (int64, error)
 	BusinessContextCreate(ctx context.Context, arg BusinessContextCreateParams) (BusinessContextSection, error)
+	BusinessContextDepartment(ctx context.Context, arg BusinessContextDepartmentParams) (BusinessContextDepartmentRow, error)
 	BusinessContextList(ctx context.Context, arg BusinessContextListParams) ([]BusinessContextSection, error)
 	BusinessContextSnapshot(ctx context.Context, arg BusinessContextSnapshotParams) error
 	BusinessContextUpdate(ctx context.Context, arg BusinessContextUpdateParams) (BusinessContextSection, error)
@@ -515,6 +530,37 @@ type Querier interface {
 	CalibrationScore(ctx context.Context, arg CalibrationScoreParams) (CalibrationScoreRow, error)
 	CalibrationScores(ctx context.Context, arg CalibrationScoresParams) ([]CalibrationScoresRow, error)
 	CancelConversationReminder(ctx context.Context, arg CancelConversationReminderParams) (int64, error)
+	CaseMemoryConversation(ctx context.Context, arg CaseMemoryConversationParams) (CaseMemoryConversationRow, error)
+	CaseMemoryCount(ctx context.Context, arg CaseMemoryCountParams) (int64, error)
+	CaseMemoryExists(ctx context.Context, arg CaseMemoryExistsParams) (bool, error)
+	CaseMemoryList(ctx context.Context, arg CaseMemoryListParams) ([]CaseMemoryListRow, error)
+	// approved_only is true for the customer AI. The source contact and company
+	// names come back only so the caller can scrub them once more; they are never
+	// returned to a customer.
+	CaseMemoryMatch(ctx context.Context, arg CaseMemoryMatchParams) ([]CaseMemoryMatchRow, error)
+	CaseMemoryMessages(ctx context.Context, arg CaseMemoryMessagesParams) ([]CaseMemoryMessagesRow, error)
+	CaseMemoryReview(ctx context.Context, arg CaseMemoryReviewParams) (AiCaseMemory, error)
+	// A re-summarized conversation goes back to pending review.
+	CaseMemoryUpsert(ctx context.Context, arg CaseMemoryUpsertParams) (AiCaseMemory, error)
+	// The node itself and every ancestor (cycle checks on re-parenting).
+	CategoryAncestorIDs(ctx context.Context, arg CategoryAncestorIDsParams) ([]int64, error)
+	CategoryCategoryRef(ctx context.Context, arg CategoryCategoryRefParams) (CategoryCategoryRefRow, error)
+	// A descendant whose department differs from the given one (moving a branch
+	// to another department would orphan its department-scoped children).
+	CategoryChildDepartmentConflict(ctx context.Context, arg CategoryChildDepartmentConflictParams) (bool, error)
+	// Active categories a record may take: a department's record takes the
+	// organization-wide nodes and its branch; a record without a department
+	// (NULL) may take any node.
+	CategoryClassificationCandidates(ctx context.Context, arg CategoryClassificationCandidatesParams) ([]CategoryClassificationCandidatesRow, error)
+	// Example texts of the candidate set that have no vector for the model.
+	CategoryExamplesMissing(ctx context.Context, arg CategoryExamplesMissingParams) ([]CategoryExamplesMissingRow, error)
+	CategoryInUse(ctx context.Context, arg CategoryInUseParams) (bool, error)
+	// Best cosine score per candidate category over its example vectors and the
+	// organization's labelled texts (human labels are examples too).
+	CategorySimilarity(ctx context.Context, arg CategorySimilarityParams) ([]CategorySimilarityRow, error)
+	// Levels below the node (0 for a leaf).
+	CategorySubtreeHeight(ctx context.Context, arg CategorySubtreeHeightParams) (int32, error)
+	CategorySuggestionSubject(ctx context.Context, arg CategorySuggestionSubjectParams) (CategorySuggestionSubjectRow, error)
 	ChangelogCount(ctx context.Context, arg ChangelogCountParams) (int64, error)
 	ChangelogCreate(ctx context.Context, arg ChangelogCreateParams) (ChangelogEntry, error)
 	ChangelogList(ctx context.Context, arg ChangelogListParams) ([]ChangelogListRow, error)
@@ -654,6 +700,8 @@ type Querier interface {
 	CountAutomationRules(ctx context.Context, organizationID int64) (int64, error)
 	CountBrands(ctx context.Context, organizationID int64) (int64, error)
 	CountBulkJobsForActor(ctx context.Context, actorID int64) (int64, error)
+	CountCategoryLabels(ctx context.Context, organizationID int64) (int64, error)
+	CountCategoryReviewQueue(ctx context.Context, arg CountCategoryReviewQueueParams) (int64, error)
 	CountChannelInstances(ctx context.Context, organizationID int64) (int64, error)
 	CountChannelVoiceCalls(ctx context.Context, arg CountChannelVoiceCallsParams) (int64, error)
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
@@ -665,6 +713,7 @@ type Querier interface {
 	CountConversations(ctx context.Context, arg CountConversationsParams) (int64, error)
 	CountCustomFieldDefinitions(ctx context.Context, arg CountCustomFieldDefinitionsParams) (int64, error)
 	CountCustomObjectTypes(ctx context.Context, organizationID int64) (int64, error)
+	CountDepartments(ctx context.Context, arg CountDepartmentsParams) (int64, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountIntegrationCompanies(ctx context.Context, arg CountIntegrationCompaniesParams) (int64, error)
@@ -706,6 +755,7 @@ type Querier interface {
 	CreateAutomationRule(ctx context.Context, arg CreateAutomationRuleParams) (AutomationRule, error)
 	CreateBrand(ctx context.Context, arg CreateBrandParams) (Brand, error)
 	CreateBulkJob(ctx context.Context, arg CreateBulkJobParams) (BulkJob, error)
+	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// A retried webhook with the same idempotency key returns no row; the
 	// caller then loads the stored event.
 	CreateCompanyEvent(ctx context.Context, arg CreateCompanyEventParams) (CompanyEvent, error)
@@ -714,6 +764,9 @@ type Querier interface {
 	CreateCustomFieldDefinition(ctx context.Context, arg CreateCustomFieldDefinitionParams) (CustomFieldDefinition, error)
 	CreateCustomObjectRecord(ctx context.Context, arg CreateCustomObjectRecordParams) (CustomObjectRecord, error)
 	CreateCustomObjectType(ctx context.Context, arg CreateCustomObjectTypeParams) (CustomObjectType, error)
+	// Departments (CF-215). Every query is scoped by organization_id.
+	CreateDepartment(ctx context.Context, arg CreateDepartmentParams) (Department, error)
+	CreateDepartmentShare(ctx context.Context, arg CreateDepartmentShareParams) (DepartmentKnowledgeShare, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
 	CreateIntegrationKey(ctx context.Context, arg CreateIntegrationKeyParams) (PublicApiKey, error)
@@ -760,6 +813,8 @@ type Querier interface {
 	DeleteBusinessHours(ctx context.Context, arg DeleteBusinessHoursParams) (int64, error)
 	DeleteCannedResponse(ctx context.Context, arg DeleteCannedResponseParams) (int64, error)
 	DeleteCapacityLimits(ctx context.Context, arg DeleteCapacityLimitsParams) error
+	DeleteCategory(ctx context.Context, arg DeleteCategoryParams) (int64, error)
+	DeleteCategoryAssignment(ctx context.Context, arg DeleteCategoryAssignmentParams) (int64, error)
 	DeleteCompanyNote(ctx context.Context, arg DeleteCompanyNoteParams) (int64, error)
 	DeleteCompanyRevenue(ctx context.Context, arg DeleteCompanyRevenueParams) (int64, error)
 	DeleteContactIdentities(ctx context.Context, arg DeleteContactIdentitiesParams) error
@@ -769,6 +824,8 @@ type Querier interface {
 	DeleteConversationSLAMetric(ctx context.Context, arg DeleteConversationSLAMetricParams) error
 	DeleteConversationView(ctx context.Context, arg DeleteConversationViewParams) (int64, error)
 	DeleteCustomObjectRecord(ctx context.Context, arg DeleteCustomObjectRecordParams) (int64, error)
+	DeleteDepartment(ctx context.Context, arg DeleteDepartmentParams) (int64, error)
+	DeleteDepartmentShare(ctx context.Context, arg DeleteDepartmentShareParams) (int64, error)
 	DeleteExpiredWidgetDiagnostic(ctx context.Context, arg DeleteExpiredWidgetDiagnosticParams) error
 	DeleteLiveActivityToken(ctx context.Context, arg DeleteLiveActivityTokenParams) (int64, error)
 	DeleteLiveActivityTokensForUser(ctx context.Context, userID int64) (int64, error)
@@ -801,6 +858,10 @@ type Querier interface {
 	DeleteWebAuthnCredentialByUUID(ctx context.Context, arg DeleteWebAuthnCredentialByUUIDParams) error
 	DeleteWidgetDraft(ctx context.Context, arg DeleteWidgetDraftParams) error
 	DeleteWidgetReplayChunk(ctx context.Context, arg DeleteWidgetReplayChunkParams) error
+	DepartmentNameTaken(ctx context.Context, arg DepartmentNameTakenParams) (bool, error)
+	// Knowledge a department still owns (it cannot be deleted while it does).
+	DepartmentUsage(ctx context.Context, arg DepartmentUsageParams) (DepartmentUsageRow, error)
+	DepartmentVisible(ctx context.Context, arg DepartmentVisibleParams) (bool, error)
 	DisableLiveActivityToken(ctx context.Context, arg DisableLiveActivityTokenParams) error
 	DisablePushDevice(ctx context.Context, arg DisablePushDeviceParams) error
 	// iOS hands out one push-to-start token per activity type and device; a new
@@ -872,6 +933,9 @@ type Querier interface {
 	EnsureNotificationPreferencesPushDefault(ctx context.Context, userID int64) error
 	EraseConversationReplaySessions(ctx context.Context, arg EraseConversationReplaySessionsParams) error
 	ExpiredWidgetReplayChunks(ctx context.Context) ([]WidgetReplayChunk, error)
+	// Keyset page of the training set (CF-219): masked text, vector, old and
+	// new category, who and when.
+	ExportCategoryLabels(ctx context.Context, arg ExportCategoryLabelsParams) ([]ExportCategoryLabelsRow, error)
 	ExtensionExists(ctx context.Context, extname string) (bool, error)
 	FeedbackComment(ctx context.Context, arg FeedbackCommentParams) (uuid.UUID, error)
 	FeedbackCommentCount(ctx context.Context, arg FeedbackCommentCountParams) (int64, error)
@@ -984,6 +1048,9 @@ type Querier interface {
 	GetBusinessHoursByID(ctx context.Context, arg GetBusinessHoursByIDParams) (BusinessHour, error)
 	GetBusinessHoursByUUID(ctx context.Context, arg GetBusinessHoursByUUIDParams) (BusinessHour, error)
 	GetCannedResponse(ctx context.Context, arg GetCannedResponseParams) (CannedResponse, error)
+	GetCategoryAssignment(ctx context.Context, arg GetCategoryAssignmentParams) (GetCategoryAssignmentRow, error)
+	GetCategoryByID(ctx context.Context, arg GetCategoryByIDParams) (Category, error)
+	GetCategoryByUUID(ctx context.Context, arg GetCategoryByUUIDParams) (GetCategoryByUUIDRow, error)
 	GetChannelInstanceByExternal(ctx context.Context, arg GetChannelInstanceByExternalParams) (ChannelInstance, error)
 	GetChannelInstanceByID(ctx context.Context, arg GetChannelInstanceByIDParams) (ChannelInstance, error)
 	// Webhooks address an instance by its uuid only (no organization in the
@@ -1019,6 +1086,8 @@ type Querier interface {
 	GetConversationBulkOp(ctx context.Context, arg GetConversationBulkOpParams) (ConversationBulkOp, error)
 	GetConversationByID(ctx context.Context, arg GetConversationByIDParams) (Conversation, error)
 	GetConversationByUUID(ctx context.Context, arg GetConversationByUUIDParams) (Conversation, error)
+	GetConversationDepartment(ctx context.Context, arg GetConversationDepartmentParams) (GetConversationDepartmentRow, error)
+	GetConversationDepartmentByID(ctx context.Context, arg GetConversationDepartmentByIDParams) (GetConversationDepartmentByIDRow, error)
 	// CF-195: the contact's and company's external ids for event payloads
 	// (webhooks, integrations).
 	GetConversationExternalRefs(ctx context.Context, arg GetConversationExternalRefsParams) (GetConversationExternalRefsRow, error)
@@ -1034,6 +1103,12 @@ type Querier interface {
 	GetCustomObjectRecord(ctx context.Context, arg GetCustomObjectRecordParams) (CustomObjectRecord, error)
 	GetCustomObjectType(ctx context.Context, arg GetCustomObjectTypeParams) (CustomObjectType, error)
 	GetDefaultBusinessHours(ctx context.Context, organizationID int64) (BusinessHour, error)
+	GetDepartmentAI(ctx context.Context, arg GetDepartmentAIParams) (GetDepartmentAIRow, error)
+	GetDepartmentByID(ctx context.Context, arg GetDepartmentByIDParams) (Department, error)
+	GetDepartmentByUUID(ctx context.Context, arg GetDepartmentByUUIDParams) (Department, error)
+	GetDepartmentShare(ctx context.Context, arg GetDepartmentShareParams) (DepartmentKnowledgeShare, error)
+	// A department's own hours (CF-215); NULL working_hours means the organization's.
+	GetDepartmentWorkingHours(ctx context.Context, arg GetDepartmentWorkingHoursParams) (GetDepartmentWorkingHoursRow, error)
 	GetEmailDomain(ctx context.Context, arg GetEmailDomainParams) (ChannelEmailDomain, error)
 	GetEmailIMAPState(ctx context.Context, arg GetEmailIMAPStateParams) (ChannelEmailImapState, error)
 	GetEventDeadLetter(ctx context.Context, id int64) (EventDeadLetter, error)
@@ -1107,6 +1182,7 @@ type Querier interface {
 	GetTeamRefByID(ctx context.Context, arg GetTeamRefByIDParams) (GetTeamRefByIDRow, error)
 	GetTeamRefByUUID(ctx context.Context, arg GetTeamRefByUUIDParams) (GetTeamRefByUUIDRow, error)
 	// A team's own hours (CF-5); NULL working_hours means the organization's.
+	// A team without its own hours inherits its department's (CF-215).
 	GetTeamWorkingHours(ctx context.Context, arg GetTeamWorkingHoursParams) (GetTeamWorkingHoursRow, error)
 	GetTemplateByCodeChannelLang(ctx context.Context, arg GetTemplateByCodeChannelLangParams) (NotificationTemplate, error)
 	GetTenantMemberByUserUUID(ctx context.Context, arg GetTenantMemberByUserUUIDParams) (GetTenantMemberByUserUUIDRow, error)
@@ -1178,6 +1254,60 @@ type Querier interface {
 	HelpSearchArticles(ctx context.Context, arg HelpSearchArticlesParams) ([]HelpSearchArticlesRow, error)
 	HelpSitemap(ctx context.Context, organizationID int64) ([]HelpSitemapRow, error)
 	HelpUpsertFeedback(ctx context.Context, arg HelpUpsertFeedbackParams) error
+	HistoryCaseAssign(ctx context.Context, arg HistoryCaseAssignParams) error
+	HistoryCaseCount(ctx context.Context, arg HistoryCaseCountParams) (int64, error)
+	HistoryCaseDeleteByImport(ctx context.Context, arg HistoryCaseDeleteByImportParams) (int64, error)
+	HistoryCaseExpire(ctx context.Context) (int64, error)
+	HistoryCaseInsert(ctx context.Context, arg HistoryCaseInsertParams) (int64, error)
+	HistoryCaseList(ctx context.Context, arg HistoryCaseListParams) ([]HistoryCaseListRow, error)
+	HistoryCaseRefsExisting(ctx context.Context, arg HistoryCaseRefsExistingParams) ([]string, error)
+	HistoryClosedConversations(ctx context.Context, arg HistoryClosedConversationsParams) ([]HistoryClosedConversationsRow, error)
+	HistoryClusterCandidates(ctx context.Context, arg HistoryClusterCandidatesParams) ([]HistoryClusterCandidatesRow, error)
+	HistoryClusterCases(ctx context.Context, arg HistoryClusterCasesParams) ([]HistoryClusterCasesRow, error)
+	HistoryClusterCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryClusterCreate(ctx context.Context, arg HistoryClusterCreateParams) (int64, error)
+	HistoryClusterDeleteEmpty(ctx context.Context, organizationID int64) error
+	HistoryClusterEvidence(ctx context.Context, arg HistoryClusterEvidenceParams) error
+	HistoryClusterGet(ctx context.Context, arg HistoryClusterGetParams) (HistoryCluster, error)
+	HistoryClusterGrow(ctx context.Context, arg HistoryClusterGrowParams) error
+	HistoryClusterList(ctx context.Context, arg HistoryClusterListParams) ([]HistoryClusterListRow, error)
+	HistoryClusterRecount(ctx context.Context, arg HistoryClusterRecountParams) error
+	HistoryClusterRejected(ctx context.Context, arg HistoryClusterRejectedParams) (int64, error)
+	HistoryClusterSuggestionState(ctx context.Context, arg HistoryClusterSuggestionStateParams) (HistoryClusterSuggestionStateRow, error)
+	HistoryClustersOfImport(ctx context.Context, arg HistoryClustersOfImportParams) ([]int64, error)
+	HistoryConversationMessages(ctx context.Context, arg HistoryConversationMessagesParams) ([]HistoryConversationMessagesRow, error)
+	HistoryDecisionCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryDecisionCreate(ctx context.Context, arg HistoryDecisionCreateParams) (HistoryDecision, error)
+	HistoryDecisionList(ctx context.Context, arg HistoryDecisionListParams) ([]HistoryDecisionListRow, error)
+	HistoryImportActive(ctx context.Context, organizationID int64) (int64, error)
+	HistoryImportClaim(ctx context.Context, arg HistoryImportClaimParams) (HistoryImport, error)
+	HistoryImportCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryImportCreate(ctx context.Context, arg HistoryImportCreateParams) (HistoryImport, error)
+	HistoryImportDue(ctx context.Context, limit int32) ([]HistoryImportDueRow, error)
+	HistoryImportExpireStale(ctx context.Context) (int64, error)
+	HistoryImportFinish(ctx context.Context, arg HistoryImportFinishParams) error
+	HistoryImportGet(ctx context.Context, arg HistoryImportGetParams) (HistoryImport, error)
+	HistoryImportList(ctx context.Context, arg HistoryImportListParams) ([]HistoryImport, error)
+	HistoryImportLock(ctx context.Context, arg HistoryImportLockParams) (HistoryImport, error)
+	HistoryImportProgress(ctx context.Context, arg HistoryImportProgressParams) (bool, error)
+	HistoryImportRawDeleted(ctx context.Context, arg HistoryImportRawDeletedParams) error
+	HistoryImportRawExpired(ctx context.Context, limit int32) ([]HistoryImportRawExpiredRow, error)
+	HistoryImportRequestCancel(ctx context.Context, arg HistoryImportRequestCancelParams) (HistoryImport, error)
+	HistoryImportRolledBack(ctx context.Context, arg HistoryImportRolledBackParams) (HistoryImport, error)
+	HistoryNearestArticle(ctx context.Context, arg HistoryNearestArticleParams) (HistoryNearestArticleRow, error)
+	HistoryNearestRejection(ctx context.Context, arg HistoryNearestRejectionParams) (HistoryNearestRejectionRow, error)
+	HistoryNightlyOrganizations(ctx context.Context) ([]HistorySetting, error)
+	// CF-217: history pipeline (archive, runs, clusters, decision memory).
+	HistorySettingsGet(ctx context.Context, organizationID int64) (HistorySetting, error)
+	HistorySettingsSave(ctx context.Context, arg HistorySettingsSaveParams) (HistorySetting, error)
+	HistorySettingsWatermark(ctx context.Context, arg HistorySettingsWatermarkParams) error
+	HistorySuggestionCount(ctx context.Context, arg HistorySuggestionCountParams) (int64, error)
+	HistorySuggestionCreate(ctx context.Context, arg HistorySuggestionCreateParams) (KnowledgeSuggestion, error)
+	HistorySuggestionDeletePendingByImport(ctx context.Context, arg HistorySuggestionDeletePendingByImportParams) (int64, error)
+	HistorySuggestionGet(ctx context.Context, arg HistorySuggestionGetParams) (KnowledgeSuggestion, error)
+	HistorySuggestionList(ctx context.Context, arg HistorySuggestionListParams) ([]HistorySuggestionListRow, error)
+	HistorySuggestionLock(ctx context.Context, arg HistorySuggestionLockParams) (KnowledgeSuggestion, error)
+	HistorySuggestionReview(ctx context.Context, arg HistorySuggestionReviewParams) (KnowledgeSuggestion, error)
 	IncrementOTPAttempts(ctx context.Context, id int64) (OtpCode, error)
 	// organization_id is set for events recorded inside an organization scope
 	// (CF-12 org audit log); NULL = platform event.
@@ -1189,6 +1319,10 @@ type Querier interface {
 	InsertBusinessHours(ctx context.Context, arg InsertBusinessHoursParams) (BusinessHour, error)
 	InsertCannedResponse(ctx context.Context, arg InsertCannedResponseParams) (CannedResponse, error)
 	InsertCapacityLimit(ctx context.Context, arg InsertCapacityLimitParams) error
+	// Automatic classification never overwrites an existing (human) decision.
+	InsertCategoryAssignmentIfAbsent(ctx context.Context, arg InsertCategoryAssignmentIfAbsentParams) (int64, error)
+	InsertCategoryExample(ctx context.Context, arg InsertCategoryExampleParams) error
+	InsertCategoryLabel(ctx context.Context, arg InsertCategoryLabelParams) (CategoryLabel, error)
 	// CF-25 / CF-8: channel instances (the inboxes of an organization).
 	// The uuid is chosen by the caller: the sealed credentials are bound to it.
 	InsertChannelInstance(ctx context.Context, arg InsertChannelInstanceParams) (ChannelInstance, error)
@@ -1205,6 +1339,7 @@ type Querier interface {
 	InsertConversationReminder(ctx context.Context, arg InsertConversationReminderParams) (ConversationReminder, error)
 	InsertConversationStatus(ctx context.Context, arg InsertConversationStatusParams) (ConversationStatus, error)
 	InsertConversationView(ctx context.Context, arg InsertConversationViewParams) (ConversationView, error)
+	InsertDepartmentTransfer(ctx context.Context, arg InsertDepartmentTransferParams) (ConversationDepartmentTransfer, error)
 	InsertDomainEventLog(ctx context.Context, arg InsertDomainEventLogParams) (int64, error)
 	InsertImportChange(ctx context.Context, arg InsertImportChangeParams) (ImportChange, error)
 	InsertMacro(ctx context.Context, arg InsertMacroParams) (Macro, error)
@@ -1277,9 +1412,13 @@ type Querier interface {
 	// CF-196: article audiences (catalog conditions by option id).
 	KnowledgeArticleAudience(ctx context.Context, arg KnowledgeArticleAudienceParams) (KnowledgeArticleAudienceRow, error)
 	KnowledgeArticleCount(ctx context.Context, arg KnowledgeArticleCountParams) (int64, error)
+	// Knowledge scope of a single item (sharing, visibility checks).
+	KnowledgeArticleDepartment(ctx context.Context, arg KnowledgeArticleDepartmentParams) (KnowledgeArticleDepartmentRow, error)
 	// Admin list (CF-73): current drafts with filters and help center votes (CF-74).
 	KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesParams) ([]KnowledgeArticlesRow, error)
 	KnowledgeAudiencesByUUID(ctx context.Context, arg KnowledgeAudiencesByUUIDParams) ([]KnowledgeAudiencesByUUIDRow, error)
+	// Hydrates vector hits (vectorstore.Search) with the published, visible article data.
+	KnowledgeChunksByIDs(ctx context.Context, arg KnowledgeChunksByIDsParams) ([]KnowledgeChunksByIDsRow, error)
 	KnowledgeClearIndexState(ctx context.Context, arg KnowledgeClearIndexStateParams) error
 	KnowledgeCollection(ctx context.Context, arg KnowledgeCollectionParams) (KnowledgeCollection, error)
 	KnowledgeCollections(ctx context.Context, arg KnowledgeCollectionsParams) ([]KnowledgeCollection, error)
@@ -1288,10 +1427,17 @@ type Querier interface {
 	KnowledgeDeleteArticle(ctx context.Context, arg KnowledgeDeleteArticleParams) error
 	KnowledgeDeleteChunks(ctx context.Context, arg KnowledgeDeleteChunksParams) error
 	KnowledgeDeleteCollection(ctx context.Context, arg KnowledgeDeleteCollectionParams) (int64, error)
+	KnowledgeGapQuestionCount(ctx context.Context, arg KnowledgeGapQuestionCountParams) (int64, error)
+	KnowledgeGapQuestionRecord(ctx context.Context, arg KnowledgeGapQuestionRecordParams) error
+	KnowledgeGapQuestions(ctx context.Context, arg KnowledgeGapQuestionsParams) ([]KnowledgeGapQuestionsRow, error)
 	KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInsertArticleParams) (KnowledgeArticle, error)
-	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (KnowledgeChunk, error)
+	// brand_id comes from the article (trigger). While the organization is being
+	// re-embedded the vector goes to pending_* (CF-214).
+	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error)
 	KnowledgeInsertVersion(ctx context.Context, arg KnowledgeInsertVersionParams) error
 	KnowledgeLockArticle(ctx context.Context, arg KnowledgeLockArticleParams) (KnowledgeArticle, error)
+	// The department a shared item belongs to (0 = organization-wide).
+	KnowledgeOwnerDepartment(ctx context.Context, arg KnowledgeOwnerDepartmentParams) (int64, error)
 	KnowledgePublished(ctx context.Context, arg KnowledgePublishedParams) (KnowledgePublishedRow, error)
 	KnowledgeReviewCount(ctx context.Context, organizationID int64) (int64, error)
 	KnowledgeReviewCreate(ctx context.Context, arg KnowledgeReviewCreateParams) (KnowledgeReview, error)
@@ -1299,16 +1445,32 @@ type Querier interface {
 	KnowledgeReviewDueOrganizations(ctx context.Context) ([]int64, error)
 	KnowledgeReviews(ctx context.Context, arg KnowledgeReviewsParams) ([]KnowledgeReviewsRow, error)
 	KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSaveCollectionParams) (KnowledgeCollection, error)
+	// Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
 	KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error)
-	KnowledgeSearchVector(ctx context.Context, arg KnowledgeSearchVectorParams) ([]KnowledgeSearchVectorRow, error)
 	KnowledgeSetIndexState(ctx context.Context, arg KnowledgeSetIndexStateParams) error
 	KnowledgeSetPublished(ctx context.Context, arg KnowledgeSetPublishedParams) (int64, error)
 	// Published articles whose indexing was skipped (AI unavailable), oldest first.
 	KnowledgeSkippedArticles(ctx context.Context, organizationID int64) ([]KnowledgeSkippedArticlesRow, error)
 	KnowledgeSourceArticleLock(ctx context.Context, arg KnowledgeSourceArticleLockParams) (KnowledgeArticle, error)
+	KnowledgeSourceDepartment(ctx context.Context, arg KnowledgeSourceDepartmentParams) (KnowledgeSourceDepartmentRow, error)
 	KnowledgeStaleReviewSweep(ctx context.Context, arg KnowledgeStaleReviewSweepParams) error
+	KnowledgeSuggestionDepartment(ctx context.Context, arg KnowledgeSuggestionDepartmentParams) (KnowledgeSuggestionDepartmentRow, error)
 	KnowledgeTranslationReviewSweep(ctx context.Context, organizationID int64) error
 	KnowledgeTranslationSave(ctx context.Context, arg KnowledgeTranslationSaveParams) error
+	KnowledgeUnitArticleID(ctx context.Context, arg KnowledgeUnitArticleIDParams) (int64, error)
+	// CF-216: knowledge units, answer cache, case memory, unanswered questions.
+	KnowledgeUnitArticleSource(ctx context.Context, arg KnowledgeUnitArticleSourceParams) (KnowledgeUnitArticleSourceRow, error)
+	KnowledgeUnitCount(ctx context.Context, organizationID int64) (int64, error)
+	KnowledgeUnitDeleteArticle(ctx context.Context, arg KnowledgeUnitDeleteArticleParams) (int64, error)
+	KnowledgeUnitDeleteSuggestion(ctx context.Context, arg KnowledgeUnitDeleteSuggestionParams) (int64, error)
+	KnowledgeUnitInsert(ctx context.Context, arg KnowledgeUnitInsertParams) (KnowledgeUnit, error)
+	KnowledgeUnitInsertQuestion(ctx context.Context, arg KnowledgeUnitInsertQuestionParams) error
+	KnowledgeUnitList(ctx context.Context, arg KnowledgeUnitListParams) ([]KnowledgeUnitListRow, error)
+	// Scope: org-wide rows always qualify, brand/department rows only for the same
+	// brand/department. The caller prefers the most specific match.
+	KnowledgeUnitMatch(ctx context.Context, arg KnowledgeUnitMatchParams) ([]KnowledgeUnitMatchRow, error)
+	KnowledgeUnitSourceHash(ctx context.Context, arg KnowledgeUnitSourceHashParams) (string, error)
+	KnowledgeUnitSuggestionSource(ctx context.Context, arg KnowledgeUnitSuggestionSourceParams) (KnowledgeUnitSuggestionSourceRow, error)
 	KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdateArticleParams) (KnowledgeArticle, error)
 	KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidChunksParams) ([]KnowledgeValidChunksRow, error)
 	KnowledgeVersions(ctx context.Context, arg KnowledgeVersionsParams) ([]KnowledgeArticleVersion, error)
@@ -1355,6 +1517,11 @@ type Querier interface {
 	ListCannedResponses(ctx context.Context, arg ListCannedResponsesParams) ([]CannedResponse, error)
 	// CF-53 / CF-54: agent capacity and automatic routing.
 	ListCapacityLimits(ctx context.Context, organizationID int64) ([]ListCapacityLimitsRow, error)
+	// CF-218 category taxonomy, assignments and the label store.
+	// department_id NULL lists the whole tree; a department lists the
+	// organization-wide nodes plus that department's branches.
+	ListCategories(ctx context.Context, arg ListCategoriesParams) ([]ListCategoriesRow, error)
+	ListCategoryReviewQueue(ctx context.Context, arg ListCategoryReviewQueueParams) ([]ListCategoryReviewQueueRow, error)
 	ListChannelInstances(ctx context.Context, arg ListChannelInstancesParams) ([]ChannelInstance, error)
 	ListChannelVoiceCalls(ctx context.Context, arg ListChannelVoiceCallsParams) ([]ListChannelVoiceCallsRow, error)
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
@@ -1395,6 +1562,16 @@ type Querier interface {
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]ListConversationsRow, error)
 	ListCustomFieldDefinitions(ctx context.Context, arg ListCustomFieldDefinitionsParams) ([]CustomFieldDefinition, error)
 	ListCustomObjectTypes(ctx context.Context, arg ListCustomObjectTypesParams) ([]CustomObjectType, error)
+	// Leads of a department are the leads of its teams.
+	ListDepartmentLeads(ctx context.Context, arg ListDepartmentLeadsParams) ([]ListDepartmentLeadsRow, error)
+	// Uuid and name of departments by id (DTOs of teams, knowledge, conversations).
+	ListDepartmentRefs(ctx context.Context, arg ListDepartmentRefsParams) ([]ListDepartmentRefsRow, error)
+	// Items shared with a department (received) and items of the department
+	// shared with others (given).
+	ListDepartmentShares(ctx context.Context, arg ListDepartmentSharesParams) ([]ListDepartmentSharesRow, error)
+	ListDepartmentTeams(ctx context.Context, arg ListDepartmentTeamsParams) ([]ListDepartmentTeamsRow, error)
+	ListDepartmentTransfers(ctx context.Context, arg ListDepartmentTransfersParams) ([]ListDepartmentTransfersRow, error)
+	ListDepartments(ctx context.Context, arg ListDepartmentsParams) ([]ListDepartmentsRow, error)
 	// Users with held digest items; the caller decides who is due.
 	ListDigestCandidates(ctx context.Context) ([]NotificationPreference, error)
 	ListDomainEventLogByOrganization(ctx context.Context, arg ListDomainEventLogByOrganizationParams) ([]DomainEventLog, error)
@@ -1501,6 +1678,8 @@ type Querier interface {
 	// Members who may answer customers, with presence and skills.
 	ListRoutingAgents(ctx context.Context, organizationID int64) ([]ListRoutingAgentsRow, error)
 	ListRoutingConversationTagUUIDs(ctx context.Context, arg ListRoutingConversationTagUUIDsParams) ([]uuid.UUID, error)
+	// Candidates of the AI department prediction.
+	ListRoutingDepartments(ctx context.Context, organizationID int64) ([]ListRoutingDepartmentsRow, error)
 	ListRoutingEvents(ctx context.Context, arg ListRoutingEventsParams) ([]ListRoutingEventsRow, error)
 	ListRoutingRules(ctx context.Context, organizationID int64) ([]ListRoutingRulesRow, error)
 	ListRoutingTeamMembers(ctx context.Context, organizationID int64) ([]ListRoutingTeamMembersRow, error)
@@ -1542,6 +1721,8 @@ type Querier interface {
 	// Every running activity about ref, whoever holds it (an ended conversation
 	// ends the activity on each device that shows it).
 	ListUpdateLiveActivityTokensByRef(ctx context.Context, arg ListUpdateLiveActivityTokensByRefParams) ([]LiveActivityToken, error)
+	// Departments of a member (through their teams) and whether they lead one.
+	ListUserDepartments(ctx context.Context, arg ListUserDepartmentsParams) ([]ListUserDepartmentsRow, error)
 	ListUserRoleSlugs(ctx context.Context, userID int64) ([]string, error)
 	ListUserRolesByUserID(ctx context.Context, userID int64) ([]Role, error)
 	ListUserRolesByUserUUID(ctx context.Context, argUuid uuid.UUID) ([]Role, error)
@@ -1556,6 +1737,9 @@ type Querier interface {
 	// CF-55: public web widget (visitor API). Every query is scoped to the
 	// organization and, for visitor data, to the visitor's contact and widget.
 	ListWidgetConversations(ctx context.Context, arg ListWidgetConversationsParams) ([]ListWidgetConversationsRow, error)
+	// The widget's department picker: visible departments of the widget's brand
+	// and departments without a brand.
+	ListWidgetDepartments(ctx context.Context, arg ListWidgetDepartmentsParams) ([]ListWidgetDepartmentsRow, error)
 	ListWidgetDiagnostics(ctx context.Context, arg ListWidgetDiagnosticsParams) ([]WidgetDiagnostic, error)
 	// CF-195: rejected identify calls of the last week per widget (CF-176
 	// records them); channel health turns them into a warning.
@@ -1599,6 +1783,8 @@ type Querier interface {
 	MarkConversationMerged(ctx context.Context, arg MarkConversationMergedParams) (Conversation, error)
 	// The marker only moves forward.
 	MarkConversationRead(ctx context.Context, arg MarkConversationReadParams) error
+	// Claims the one-time routing of a conversation (AI prediction).
+	MarkConversationRouted(ctx context.Context, arg MarkConversationRoutedParams) (int64, error)
 	MarkConversationSLABreached(ctx context.Context, arg MarkConversationSLABreachedParams) error
 	MarkDigestItemsSent(ctx context.Context, arg MarkDigestItemsSentParams) error
 	MarkEventDeadLetterReplayed(ctx context.Context, id int64) error
@@ -1672,6 +1858,10 @@ type Querier interface {
 	// CF-98: merge / split, linked conversations and side conversations.
 	// Moves every message of one conversation into another (merge).
 	MoveConversationMessages(ctx context.Context, arg MoveConversationMessagesParams) (int64, error)
+	MoveDepartmentArticles(ctx context.Context, arg MoveDepartmentArticlesParams) error
+	MoveDepartmentContext(ctx context.Context, arg MoveDepartmentContextParams) error
+	MoveDepartmentSources(ctx context.Context, arg MoveDepartmentSourcesParams) error
+	MoveDepartmentSuggestions(ctx context.Context, arg MoveDepartmentSuggestionsParams) error
 	// Moves the messages of a conversation from first_id on (or only first_id)
 	// into another conversation (split).
 	MoveMessagesFrom(ctx context.Context, arg MoveMessagesFromParams) (int64, error)
@@ -1805,6 +1995,8 @@ type Querier interface {
 	ProductFeedbackList(ctx context.Context, arg ProductFeedbackListParams) ([]ProductFeedbackListRow, error)
 	ProductFeedbackSetStatus(ctx context.Context, arg ProductFeedbackSetStatusParams) (int64, error)
 	ProjectAnalyticsConversation(ctx context.Context, arg ProjectAnalyticsConversationParams) error
+	// Drops vectors whose text is no longer one of the category's texts.
+	PruneCategoryExamples(ctx context.Context, arg PruneCategoryExamplesParams) error
 	PurgeEventConsumptionsBefore(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	// retention worker deletes expired context only, after matching attachment removal in the same organization
 	PurgeExpiredWidgetDiagnosticContext(ctx context.Context) error
@@ -1854,6 +2046,8 @@ type Querier interface {
 	RemoveConversationParticipant(ctx context.Context, arg RemoveConversationParticipantParams) (int64, error)
 	RemoveConversationTag(ctx context.Context, arg RemoveConversationTagParams) (int64, error)
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
+	// Re-classification replaces a machine decision, never a human one.
+	ReplaceAutoCategoryAssignment(ctx context.Context, arg ReplaceAutoCategoryAssignmentParams) (int64, error)
 	ReplaceUserRoles(ctx context.Context, userID int64) error
 	ReplayOutboundDelivery(ctx context.Context, arg ReplayOutboundDeliveryParams) (int64, error)
 	// Conversations merged into the source follow it to the target.
@@ -1993,6 +2187,7 @@ type Querier interface {
 	SelfServeSignupPriceAllowed(ctx context.Context, argUuid uuid.UUID) (bool, error)
 	SetAgentPresenceOffline(ctx context.Context, arg SetAgentPresenceOfflineParams) (int64, error)
 	SetAppSettingsLogo(ctx context.Context, logoObjectKey pgtype.Text) (AppSetting, error)
+	SetBusinessContextDepartment(ctx context.Context, arg SetBusinessContextDepartmentParams) (int64, error)
 	SetChannelBrand(ctx context.Context, arg SetChannelBrandParams) (ChannelInstance, error)
 	SetChannelInstanceError(ctx context.Context, arg SetChannelInstanceErrorParams) error
 	// A failed check moves an active inbox to error (it shows "reconnect");
@@ -2012,6 +2207,7 @@ type Querier interface {
 	SetContactCustomField(ctx context.Context, arg SetContactCustomFieldParams) error
 	SetContactFormData(ctx context.Context, arg SetContactFormDataParams) error
 	SetConversationCustomFields(ctx context.Context, arg SetConversationCustomFieldsParams) error
+	SetConversationDepartment(ctx context.Context, arg SetConversationDepartmentParams) (int64, error)
 	// Writes a form submission onto the conversation it started.
 	SetConversationFormData(ctx context.Context, arg SetConversationFormDataParams) error
 	SetConversationSLA(ctx context.Context, arg SetConversationSLAParams) error
@@ -2019,6 +2215,9 @@ type Querier interface {
 	SetCustomFieldDefinitionArchived(ctx context.Context, arg SetCustomFieldDefinitionArchivedParams) (CustomFieldDefinition, error)
 	SetCustomFieldDefinitionPosition(ctx context.Context, arg SetCustomFieldDefinitionPositionParams) error
 	SetDiagnosticAttachmentExpiry(ctx context.Context, arg SetDiagnosticAttachmentExpiryParams) error
+	SetKnowledgeArticleDepartment(ctx context.Context, arg SetKnowledgeArticleDepartmentParams) (int64, error)
+	SetKnowledgeSourceDepartment(ctx context.Context, arg SetKnowledgeSourceDepartmentParams) (int64, error)
+	SetKnowledgeSuggestionDepartment(ctx context.Context, arg SetKnowledgeSuggestionDepartmentParams) (int64, error)
 	SetMemberPrimaryRole(ctx context.Context, arg SetMemberPrimaryRoleParams) error
 	SetMemberSIP(ctx context.Context, arg SetMemberSIPParams) (int64, error)
 	SetMemberSkills(ctx context.Context, arg SetMemberSkillsParams) (int64, error)
@@ -2027,8 +2226,10 @@ type Querier interface {
 	SetOrganizationLogo(ctx context.Context, arg SetOrganizationLogoParams) (Organization, error)
 	SetOrganizationStatus(ctx context.Context, arg SetOrganizationStatusParams) (Organization, error)
 	SetRolePermissions(ctx context.Context, roleID int64) error
+	SetTeamDepartment(ctx context.Context, arg SetTeamDepartmentParams) (int64, error)
 	SetUserEmailVerified(ctx context.Context, id int64) (User, error)
 	SetWidgetInstanceSettings(ctx context.Context, arg SetWidgetInstanceSettingsParams) (ChannelInstance, error)
+	ShiftCategoryDescendantDepth(ctx context.Context, arg ShiftCategoryDescendantDepthParams) error
 	SidebarAppCount(ctx context.Context, organizationID int64) (int64, error)
 	SidebarAppCreate(ctx context.Context, arg SidebarAppCreateParams) (SidebarApp, error)
 	SidebarAppDelete(ctx context.Context, arg SidebarAppDeleteParams) (int64, error)
@@ -2079,6 +2280,7 @@ type Querier interface {
 	SurveyResults(ctx context.Context, arg SurveyResultsParams) ([]byte, error)
 	SurveyTemplates(ctx context.Context, organizationID int64) ([]SurveyTemplatesRow, error)
 	SurveyUpdateTemplate(ctx context.Context, arg SurveyUpdateTemplateParams) (SurveyTemplate, error)
+	TeamDepartmentByID(ctx context.Context, arg TeamDepartmentByIDParams) (TeamDepartmentByIDRow, error)
 	TeamNameTaken(ctx context.Context, arg TeamNameTakenParams) (bool, error)
 	TenantRoleSlugTaken(ctx context.Context, arg TenantRoleSlugTakenParams) (bool, error)
 	TouchAgentPresence(ctx context.Context, arg TouchAgentPresenceParams) error
@@ -2124,6 +2326,7 @@ type Querier interface {
 	UpdateBrand(ctx context.Context, arg UpdateBrandParams) (Brand, error)
 	UpdateBusinessHours(ctx context.Context, arg UpdateBusinessHoursParams) (BusinessHour, error)
 	UpdateCannedResponse(ctx context.Context, arg UpdateCannedResponseParams) (CannedResponse, error)
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateChannelInstance(ctx context.Context, arg UpdateChannelInstanceParams) (ChannelInstance, error)
 	// CF-206: a changed external id was never proved; the badge goes with it.
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
@@ -2136,6 +2339,7 @@ type Querier interface {
 	UpdateCustomFieldDefinition(ctx context.Context, arg UpdateCustomFieldDefinitionParams) (CustomFieldDefinition, error)
 	UpdateCustomObjectRecord(ctx context.Context, arg UpdateCustomObjectRecordParams) (CustomObjectRecord, error)
 	UpdateCustomObjectType(ctx context.Context, arg UpdateCustomObjectTypeParams) (CustomObjectType, error)
+	UpdateDepartment(ctx context.Context, arg UpdateDepartmentParams) (Department, error)
 	UpdateGitHubAppSettings(ctx context.Context, arg UpdateGitHubAppSettingsParams) (GithubAppSetting, error)
 	UpdateImportJobFileKey(ctx context.Context, arg UpdateImportJobFileKeyParams) (ImportJob, error)
 	UpdateImportJobMapping(ctx context.Context, arg UpdateImportJobMappingParams) (ImportJob, error)
@@ -2180,6 +2384,7 @@ type Querier interface {
 	UpdateWidgetSession(ctx context.Context, arg UpdateWidgetSessionParams) (WidgetSession, error)
 	UpsertAgentPresence(ctx context.Context, arg UpsertAgentPresenceParams) (AgentPresence, error)
 	UpsertAutoReplySettings(ctx context.Context, arg UpsertAutoReplySettingsParams) error
+	UpsertCategoryAssignment(ctx context.Context, arg UpsertCategoryAssignmentParams) (CategoryAssignment, error)
 	UpsertChannelVoiceCall(ctx context.Context, arg UpsertChannelVoiceCallParams) error
 	UpsertCompanyHealth(ctx context.Context, arg UpsertCompanyHealthParams) (CompanyHealth, error)
 	UpsertCompanyHealthSettings(ctx context.Context, arg UpsertCompanyHealthSettingsParams) (CompanyHealthSetting, error)

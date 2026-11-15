@@ -400,5 +400,10 @@
   "screen.title": "Screen context",
   "screen.page": "Page",
   "screen.events": "Events",
-  "filters.identity": "Identity"
+  "filters.identity": "Identity",
+  "events.department_transferred": "{{actor}} transferred the conversation to {{department}}",
+  "events.department_picked": "The customer picked {{department}}",
+  "events.department_predicted": "The AI routed the conversation to {{department}}",
+  "events.department_organization_wide": "organization-wide",
+  "events.department_ai": "The AI"
 }

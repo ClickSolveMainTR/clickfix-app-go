@@ -239,10 +239,10 @@ func (s *Service) ResolveDepartment(ctx context.Context, org int64, id *uuid.UUI
 	if id == nil {
 		return nil, nil
 	}
-	if s.Departments == nil {
+	if s.DepartmentSets == nil {
 		return nil, ErrDepartmentsUnavailable
 	}
-	v, err := s.Departments.DepartmentID(ctx, org, *id)
+	v, err := s.DepartmentSets.DepartmentID(ctx, org, *id)
 	if err != nil {
 		return nil, err
 	}
@@ -252,10 +252,10 @@ func (s *Service) ResolveDepartment(ctx context.Context, org int64, id *uuid.UUI
 // DepartmentUUIDs maps internal department ids to public UUIDs (empty
 // without a directory).
 func (s *Service) DepartmentUUIDs(ctx context.Context, org int64, ids []int64) (map[int64]uuid.UUID, error) {
-	if s.Departments == nil || len(ids) == 0 {
+	if s.DepartmentSets == nil || len(ids) == 0 {
 		return map[int64]uuid.UUID{}, nil
 	}
-	return s.Departments.DepartmentUUIDs(ctx, org, ids)
+	return s.DepartmentSets.DepartmentUUIDs(ctx, org, ids)
 }
 
 // Fingerprint is what a run was measured against. A watch reruns the set

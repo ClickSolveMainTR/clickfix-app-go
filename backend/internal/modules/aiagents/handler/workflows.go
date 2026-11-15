@@ -10,14 +10,19 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/deptweb"
+	deptmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/model"
+	deptusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	kbhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/handler"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/resourcemeta"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/apiquery"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -39,6 +44,41 @@ func writePage(w http.ResponseWriter, r *http.Request, items any, total int64, q
 	response.JSON(w, r, 200, map[string]any{"items": items, "total": total, "limit": q.Limit, "offset": q.Offset})
 }
 
+// deptArgs are the department visibility arguments of the request's member
+// (CF-215).
+func (h *Handler) deptArgs(w http.ResponseWriter, r *http.Request) (bool, []int64, bool) {
+	s, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err != nil {
+		fail(w, r, err)
+		return false, nil, false
+	}
+	restrict, viewer := s.Args()
+	return restrict, viewer, true
+}
+
+// sourceDepartment resolves the department of a new knowledge source.
+func (h *Handler) sourceDepartment(w http.ResponseWriter, r *http.Request, in *usecase.SourceInput) bool {
+	s, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err == nil {
+		in.DepartmentID, err = deptweb.Resolve(r, h.Service.Repo.Q, s, in.Department)
+	}
+	if err != nil {
+		if !deptweb.Fail(w, r, err) {
+			fail(w, r, err)
+		}
+		return false
+	}
+	return true
+}
+
+// orNoRows hides an item of another department as a missing one.
+func orNoRows(err error) error {
+	if err != nil {
+		return err
+	}
+	return pgx.ErrNoRows
+}
+
 func (h *Handler) BusinessContext(w http.ResponseWriter, r *http.Request) {
 	org, actor := scope(r)
 	if r.Method == http.MethodGet {
@@ -46,13 +86,22 @@ func (h *Handler) BusinessContext(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		rows, err := h.Service.Repo.Q.BusinessContextList(r.Context(), db.BusinessContextListParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset})
+		restrict, viewer, ok := h.deptArgs(w, r)
+		if !ok {
+			return
+		}
+		rows, err := h.Service.Repo.Q.BusinessContextList(r.Context(), db.BusinessContextListParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset, DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			fail(w, r, err)
 			return
 		}
-		total, err := h.Service.Repo.Q.BusinessContextCount(r.Context(), org)
-		writePage(w, r, rows, total, q, err)
+		items, err := deptweb.Annotate(r.Context(), h.Service.Repo.Q, org, rows, func(b db.BusinessContextSection) pgtype.Int8 { return b.DepartmentID })
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
+		total, err := h.Service.Repo.Q.BusinessContextCount(r.Context(), db.BusinessContextCountParams{OrganizationID: org, DeptRestrict: restrict, ViewerDepartments: viewer})
+		writePage(w, r, items, total, q, err)
 		return
 	}
 	var id uuid.UUID
@@ -65,6 +114,31 @@ func (h *Handler) BusinessContext(w http.ResponseWriter, r *http.Request) {
 	}
 	var in usecase.BusinessContextInput
 	if !kbhandler.Decode(w, r, &in) {
+		return
+	}
+	// CF-215: a member changes only sections they see and files them under
+	// their own departments.
+	dscope, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	if id != uuid.Nil {
+		cur, err := h.Service.Repo.Q.BusinessContextDepartment(r.Context(), db.BusinessContextDepartmentParams{OrganizationID: org, Uuid: id})
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
+		seen, err := deptusecase.Sees(r.Context(), h.Service.Repo.Q, org, dscope, deptmodel.KindContext, cur.ID, cur.DepartmentID)
+		if err != nil || !seen {
+			fail(w, r, orNoRows(err))
+			return
+		}
+	}
+	if in.DepartmentID, err = deptweb.Resolve(r, h.Service.Repo.Q, dscope, in.Department); err != nil {
+		if !deptweb.Fail(w, r, err) {
+			fail(w, r, err)
+		}
 		return
 	}
 	row, err := h.Service.SaveBusinessContext(r.Context(), org, actor, id, in)
@@ -235,13 +309,22 @@ func (h *Handler) KnowledgeSuggestions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := h.Service.Repo.Q.AIKnowledgeSuggestions(r.Context(), db.AIKnowledgeSuggestionsParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset})
+	restrict, viewer, ok := h.deptArgs(w, r)
+	if !ok {
+		return
+	}
+	rows, err := h.Service.Repo.Q.AIKnowledgeSuggestions(r.Context(), db.AIKnowledgeSuggestionsParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset, DeptRestrict: restrict, ViewerDepartments: viewer})
 	if err != nil {
 		fail(w, r, err)
 		return
 	}
-	total, err := h.Service.Repo.Q.AIKnowledgeSuggestionCount(r.Context(), org)
-	writePage(w, r, rows, total, q, err)
+	items, err := deptweb.Annotate(r.Context(), h.Service.Repo.Q, org, rows, func(k db.KnowledgeSuggestion) pgtype.Int8 { return k.DepartmentID })
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	total, err := h.Service.Repo.Q.AIKnowledgeSuggestionCount(r.Context(), db.AIKnowledgeSuggestionCountParams{OrganizationID: org, DeptRestrict: restrict, ViewerDepartments: viewer})
+	writePage(w, r, items, total, q, err)
 }
 func (h *Handler) SuggestKnowledge(w http.ResponseWriter, r *http.Request) {
 	org, actor := scope(r)
@@ -365,17 +448,29 @@ func (h *Handler) Sources(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		rows, err := h.Service.Repo.Q.AIKnowledgeSources(r.Context(), db.AIKnowledgeSourcesParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset})
+		restrict, viewer, ok := h.deptArgs(w, r)
+		if !ok {
+			return
+		}
+		rows, err := h.Service.Repo.Q.AIKnowledgeSources(r.Context(), db.AIKnowledgeSourcesParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset, DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			fail(w, r, err)
 			return
 		}
-		total, err := h.Service.Repo.Q.AIKnowledgeSourceCount(r.Context(), org)
-		writePage(w, r, rows, total, q, err)
+		items, err := deptweb.Annotate(r.Context(), h.Service.Repo.Q, org, rows, func(k db.AIKnowledgeSourcesRow) pgtype.Int8 { return k.DepartmentID })
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
+		total, err := h.Service.Repo.Q.AIKnowledgeSourceCount(r.Context(), db.AIKnowledgeSourceCountParams{OrganizationID: org, DeptRestrict: restrict, ViewerDepartments: viewer})
+		writePage(w, r, items, total, q, err)
 		return
 	}
 	var in usecase.SourceInput
 	if !kbhandler.Decode(w, r, &in) {
+		return
+	}
+	if !h.sourceDepartment(w, r, &in) {
 		return
 	}
 	row, err := h.Service.Sources.CreateURL(r.Context(), org, actor, in)
@@ -403,7 +498,19 @@ func (h *Handler) SourceUpload(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, model.ErrInvalid)
 		return
 	}
-	row, err := h.Service.Sources.Upload(r.Context(), org, actor, usecase.SourceInput{Title: r.FormValue("title"), Locale: r.FormValue("locale"), IntervalHours: 24}, header.Filename, data)
+	in := usecase.SourceInput{Title: r.FormValue("title"), Locale: r.FormValue("locale"), IntervalHours: 24}
+	if raw := strings.TrimSpace(r.FormValue("department_uuid")); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			fail(w, r, model.ErrInvalid)
+			return
+		}
+		in.Department = deptscope.Optional{Set: true, Value: &id}
+	}
+	if !h.sourceDepartment(w, r, &in) {
+		return
+	}
+	row, err := h.Service.Sources.Upload(r.Context(), org, actor, in, header.Filename, data)
 	if err == nil {
 		h.audit(r, "source.uploaded")
 	}

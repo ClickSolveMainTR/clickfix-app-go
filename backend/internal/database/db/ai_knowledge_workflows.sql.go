@@ -504,10 +504,16 @@ func (q *Queries) AIEvaluationStart(ctx context.Context, arg AIEvaluationStartPa
 }
 
 const aIKnowledgeGapTopicCount = `-- name: AIKnowledgeGapTopicCount :one
-SELECT count(DISTINCT coalesce(nullif(t.result->>'category',''),'uncategorized'))
-FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
-WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=$2::timestamptz
-AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply')
+SELECT count(*) FROM (
+ SELECT coalesce(nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=$2::timestamptz
+ AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply' AND n.created_at>=$2::timestamptz)
+ UNION
+ SELECT coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized')
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=$2::timestamptz
+) topics
 `
 
 type AIKnowledgeGapTopicCountParams struct {
@@ -527,7 +533,13 @@ WITH latest AS (
  SELECT DISTINCT ON (j.conversation_id) j.conversation_id,j.status,coalesce(nullif(t.result->>'category',''), 'uncategorized') AS topic
  FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
  WHERE j.organization_id=$1 AND j.task='reply' AND j.created_at>=$4::timestamptz ORDER BY j.conversation_id,j.id DESC
-) SELECT topic,count(*)::bigint AS conversations,(array_agg(conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM latest WHERE status IN ('handoff','unknown') GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3
+), gaps AS (
+ SELECT conversation_id,topic FROM latest WHERE status IN ('handoff','unknown')
+ UNION
+ SELECT g.conversation_id,coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=$4::timestamptz
+) SELECT topic::text AS topic,count(DISTINCT conversation_id)::bigint AS conversations,(array_agg(DISTINCT conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM gaps GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3
 `
 
 type AIKnowledgeGapTopicsParams struct {
@@ -538,11 +550,13 @@ type AIKnowledgeGapTopicsParams struct {
 }
 
 type AIKnowledgeGapTopicsRow struct {
-	Topic           interface{} `json:"topic"`
-	Conversations   int64       `json:"conversations"`
-	ConversationIds []int64     `json:"conversation_ids"`
+	Topic           string  `json:"topic"`
+	Conversations   int64   `json:"conversations"`
+	ConversationIds []int64 `json:"conversation_ids"`
 }
 
+// CF-216: questions the agent assistant could not answer from a unit, case or
+// source (knowledge_gap_questions) count as gaps too, under the triage topic.
 func (q *Queries) AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTopicsParams) ([]AIKnowledgeGapTopicsRow, error) {
 	rows, err := q.db.Query(ctx, aIKnowledgeGapTopics,
 		arg.OrganizationID,
@@ -570,7 +584,7 @@ func (q *Queries) AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTo
 
 const aIKnowledgeSourceClaim = `-- name: AIKnowledgeSourceClaim :one
 UPDATE knowledge_sources SET lease_until=now()+interval '5 minutes',status='running'
-WHERE organization_id=$1 AND uuid=$2 AND enabled AND (lease_until IS NULL OR lease_until<now()) RETURNING id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at
+WHERE organization_id=$1 AND uuid=$2 AND enabled AND (lease_until IS NULL OR lease_until<now()) RETURNING id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at, department_id
 `
 
 type AIKnowledgeSourceClaimParams struct {
@@ -600,23 +614,31 @@ func (q *Queries) AIKnowledgeSourceClaim(ctx context.Context, arg AIKnowledgeSou
 		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const aIKnowledgeSourceCount = `-- name: AIKnowledgeSourceCount :one
 SELECT count(*) FROM knowledge_sources WHERE organization_id=$1
+ AND (NOT $2::boolean OR department_visible(organization_id,'source',id,department_id,$3::bigint[]))
 `
 
-func (q *Queries) AIKnowledgeSourceCount(ctx context.Context, organizationID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, aIKnowledgeSourceCount, organizationID)
+type AIKnowledgeSourceCountParams struct {
+	OrganizationID    int64   `json:"organization_id"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
+}
+
+func (q *Queries) AIKnowledgeSourceCount(ctx context.Context, arg AIKnowledgeSourceCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, aIKnowledgeSourceCount, arg.OrganizationID, arg.DeptRestrict, arg.ViewerDepartments)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const aIKnowledgeSourceCreate = `-- name: AIKnowledgeSourceCreate :one
-INSERT INTO knowledge_sources(organization_id,kind,location,title,locale,author_id,max_depth,interval_hours) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at
+INSERT INTO knowledge_sources(organization_id,kind,location,title,locale,author_id,max_depth,interval_hours) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at, department_id
 `
 
 type AIKnowledgeSourceCreateParams struct {
@@ -661,6 +683,7 @@ func (q *Queries) AIKnowledgeSourceCreate(ctx context.Context, arg AIKnowledgeSo
 		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -770,7 +793,7 @@ func (q *Queries) AIKnowledgeSourceFinish(ctx context.Context, arg AIKnowledgeSo
 }
 
 const aIKnowledgeSourceGet = `-- name: AIKnowledgeSourceGet :one
-SELECT id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at FROM knowledge_sources WHERE organization_id=$1 AND uuid=$2
+SELECT id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at, department_id FROM knowledge_sources WHERE organization_id=$1 AND uuid=$2
 `
 
 type AIKnowledgeSourceGetParams struct {
@@ -800,12 +823,13 @@ func (q *Queries) AIKnowledgeSourceGet(ctx context.Context, arg AIKnowledgeSourc
 		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const aIKnowledgeSourceLock = `-- name: AIKnowledgeSourceLock :one
-SELECT id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at FROM knowledge_sources WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, kind, location, title, locale, author_id, enabled, max_depth, interval_hours, next_sync_at, lease_until, status, last_error, last_synced_at, created_at, updated_at, department_id FROM knowledge_sources WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type AIKnowledgeSourceLockParams struct {
@@ -835,6 +859,7 @@ func (q *Queries) AIKnowledgeSourceLock(ctx context.Context, arg AIKnowledgeSour
 		&i.LastSyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -857,13 +882,17 @@ func (q *Queries) AIKnowledgeSourceToggle(ctx context.Context, arg AIKnowledgeSo
 }
 
 const aIKnowledgeSources = `-- name: AIKnowledgeSources :many
-SELECT id,uuid,organization_id,kind,title,locale,enabled,max_depth,interval_hours,next_sync_at,status,last_error,last_synced_at,created_at,updated_at FROM knowledge_sources WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT id,uuid,organization_id,kind,title,locale,enabled,max_depth,interval_hours,next_sync_at,status,last_error,last_synced_at,created_at,updated_at,department_id FROM knowledge_sources WHERE organization_id=$1
+ AND (NOT $4::boolean OR department_visible(organization_id,'source',id,department_id,$5::bigint[]))
+ ORDER BY id DESC LIMIT $2 OFFSET $3
 `
 
 type AIKnowledgeSourcesParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	Limit          int32 `json:"limit"`
-	Offset         int32 `json:"offset"`
+	OrganizationID    int64   `json:"organization_id"`
+	Limit             int32   `json:"limit"`
+	Offset            int32   `json:"offset"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
 }
 
 type AIKnowledgeSourcesRow struct {
@@ -882,10 +911,17 @@ type AIKnowledgeSourcesRow struct {
 	LastSyncedAt   pgtype.Timestamptz `json:"last_synced_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 func (q *Queries) AIKnowledgeSources(ctx context.Context, arg AIKnowledgeSourcesParams) ([]AIKnowledgeSourcesRow, error) {
-	rows, err := q.db.Query(ctx, aIKnowledgeSources, arg.OrganizationID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, aIKnowledgeSources,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -909,6 +945,7 @@ func (q *Queries) AIKnowledgeSources(ctx context.Context, arg AIKnowledgeSources
 			&i.LastSyncedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -922,10 +959,17 @@ func (q *Queries) AIKnowledgeSources(ctx context.Context, arg AIKnowledgeSources
 
 const aIKnowledgeSuggestionCount = `-- name: AIKnowledgeSuggestionCount :one
 SELECT count(*) FROM knowledge_suggestions WHERE organization_id=$1
+ AND (NOT $2::boolean OR department_id IS NULL OR department_id=ANY($3::bigint[]))
 `
 
-func (q *Queries) AIKnowledgeSuggestionCount(ctx context.Context, organizationID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, aIKnowledgeSuggestionCount, organizationID)
+type AIKnowledgeSuggestionCountParams struct {
+	OrganizationID    int64   `json:"organization_id"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
+}
+
+func (q *Queries) AIKnowledgeSuggestionCount(ctx context.Context, arg AIKnowledgeSuggestionCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, aIKnowledgeSuggestionCount, arg.OrganizationID, arg.DeptRestrict, arg.ViewerDepartments)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -933,15 +977,15 @@ func (q *Queries) AIKnowledgeSuggestionCount(ctx context.Context, organizationID
 
 const aIKnowledgeSuggestionCreate = `-- name: AIKnowledgeSuggestionCreate :one
 INSERT INTO knowledge_suggestions(organization_id,topic,conversation_id,title,body) VALUES($1,$2,$3,$4,$5)
-ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at
+ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type AIKnowledgeSuggestionCreateParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Topic          string `json:"topic"`
-	ConversationID int64  `json:"conversation_id"`
-	Title          string `json:"title"`
-	Body           string `json:"body"`
+	OrganizationID int64       `json:"organization_id"`
+	Topic          string      `json:"topic"`
+	ConversationID pgtype.Int8 `json:"conversation_id"`
+	Title          string      `json:"title"`
+	Body           string      `json:"body"`
 }
 
 func (q *Queries) AIKnowledgeSuggestionCreate(ctx context.Context, arg AIKnowledgeSuggestionCreateParams) (KnowledgeSuggestion, error) {
@@ -966,12 +1010,19 @@ func (q *Queries) AIKnowledgeSuggestionCreate(ctx context.Context, arg AIKnowled
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestionLock = `-- name: AIKnowledgeSuggestionLock :one
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type AIKnowledgeSuggestionLockParams struct {
@@ -995,12 +1046,19 @@ func (q *Queries) AIKnowledgeSuggestionLock(ctx context.Context, arg AIKnowledge
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestionReview = `-- name: AIKnowledgeSuggestionReview :one
-UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at
+UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' AND source='conversation' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type AIKnowledgeSuggestionReviewParams struct {
@@ -1033,22 +1091,39 @@ func (q *Queries) AIKnowledgeSuggestionReview(ctx context.Context, arg AIKnowled
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestions = `-- name: AIKnowledgeSuggestions :many
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at FROM knowledge_suggestions WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1
+ AND (NOT $4::boolean OR department_id IS NULL OR department_id=ANY($5::bigint[]))
+ ORDER BY id DESC LIMIT $2 OFFSET $3
 `
 
 type AIKnowledgeSuggestionsParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	Limit          int32 `json:"limit"`
-	Offset         int32 `json:"offset"`
+	OrganizationID    int64   `json:"organization_id"`
+	Limit             int32   `json:"limit"`
+	Offset            int32   `json:"offset"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
 }
 
 func (q *Queries) AIKnowledgeSuggestions(ctx context.Context, arg AIKnowledgeSuggestionsParams) ([]KnowledgeSuggestion, error) {
-	rows, err := q.db.Query(ctx, aIKnowledgeSuggestions, arg.OrganizationID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, aIKnowledgeSuggestions,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1069,6 +1144,13 @@ func (q *Queries) AIKnowledgeSuggestions(ctx context.Context, arg AIKnowledgeSug
 			&i.ReviewedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
+			&i.Source,
+			&i.ClusterID,
+			&i.ImportID,
+			&i.EvidenceCount,
+			&i.ConflictArticleID,
+			&i.ConflictScore,
 		); err != nil {
 			return nil, err
 		}
@@ -1209,14 +1291,16 @@ func (q *Queries) AISaveSimilarLink(ctx context.Context, arg AISaveSimilarLinkPa
 const aISimilarConversations = `-- name: AISimilarConversations :many
 SELECT c.id,c.uuid,c.subject,c.status,ts_rank_cd(to_tsvector('simple',c.subject||' '||c.last_message_preview),plainto_tsquery('simple',$2::text))::real AS score
 FROM conversations c WHERE c.organization_id=$1 AND c.id<>$3 AND c.deleted_at IS NULL
+AND (c.brand_id IS NULL OR c.brand_id=$4::uuid)
 AND to_tsvector('simple',c.subject||' '||c.last_message_preview) @@ plainto_tsquery('simple',$2::text)
-ORDER BY score DESC,c.id DESC LIMIT 10
+ORDER BY (c.brand_id IS NOT NULL) DESC,score DESC,c.id DESC LIMIT 10
 `
 
 type AISimilarConversationsParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Q              string `json:"q"`
-	CurrentID      int64  `json:"current_id"`
+	OrganizationID int64       `json:"organization_id"`
+	Q              string      `json:"q"`
+	CurrentID      int64       `json:"current_id"`
+	BrandID        pgtype.UUID `json:"brand_id"`
 }
 
 type AISimilarConversationsRow struct {
@@ -1227,8 +1311,16 @@ type AISimilarConversationsRow struct {
 	Score   float32   `json:"score"`
 }
 
+// CF-214: same brand first, then brandless (organization-wide) conversations;
+// another brand's conversations never match. A brandless conversation only
+// matches brandless ones.
 func (q *Queries) AISimilarConversations(ctx context.Context, arg AISimilarConversationsParams) ([]AISimilarConversationsRow, error) {
-	rows, err := q.db.Query(ctx, aISimilarConversations, arg.OrganizationID, arg.Q, arg.CurrentID)
+	rows, err := q.db.Query(ctx, aISimilarConversations,
+		arg.OrganizationID,
+		arg.Q,
+		arg.CurrentID,
+		arg.BrandID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1255,17 +1347,24 @@ func (q *Queries) AISimilarConversations(ctx context.Context, arg AISimilarConve
 
 const businessContextCount = `-- name: BusinessContextCount :one
 SELECT count(*) FROM business_context_sections WHERE organization_id=$1
+ AND (NOT $2::boolean OR department_visible(organization_id,'context',id,department_id,$3::bigint[]))
 `
 
-func (q *Queries) BusinessContextCount(ctx context.Context, organizationID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, businessContextCount, organizationID)
+type BusinessContextCountParams struct {
+	OrganizationID    int64   `json:"organization_id"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
+}
+
+func (q *Queries) BusinessContextCount(ctx context.Context, arg BusinessContextCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, businessContextCount, arg.OrganizationID, arg.DeptRestrict, arg.ViewerDepartments)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const businessContextCreate = `-- name: BusinessContextCreate :one
-INSERT INTO business_context_sections(organization_id,kind,title,body,active,sort_order,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at
+INSERT INTO business_context_sections(organization_id,kind,title,body,active,sort_order,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at, department_id
 `
 
 type BusinessContextCreateParams struct {
@@ -1302,22 +1401,33 @@ func (q *Queries) BusinessContextCreate(ctx context.Context, arg BusinessContext
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
 
 const businessContextList = `-- name: BusinessContextList :many
-SELECT id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at FROM business_context_sections WHERE organization_id=$1 ORDER BY sort_order,id LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at, department_id FROM business_context_sections WHERE organization_id=$1
+ AND (NOT $4::boolean OR department_visible(organization_id,'context',id,department_id,$5::bigint[]))
+ ORDER BY sort_order,id LIMIT $2 OFFSET $3
 `
 
 type BusinessContextListParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	Limit          int32 `json:"limit"`
-	Offset         int32 `json:"offset"`
+	OrganizationID    int64   `json:"organization_id"`
+	Limit             int32   `json:"limit"`
+	Offset            int32   `json:"offset"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
 }
 
 func (q *Queries) BusinessContextList(ctx context.Context, arg BusinessContextListParams) ([]BusinessContextSection, error) {
-	rows, err := q.db.Query(ctx, businessContextList, arg.OrganizationID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, businessContextList,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1338,6 +1448,7 @@ func (q *Queries) BusinessContextList(ctx context.Context, arg BusinessContextLi
 			&i.UpdatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -1366,7 +1477,7 @@ func (q *Queries) BusinessContextSnapshot(ctx context.Context, arg BusinessConte
 
 const businessContextUpdate = `-- name: BusinessContextUpdate :one
 UPDATE business_context_sections SET kind=$3,title=$4,body=$5,active=$6,sort_order=$7,updated_by=$8,revision=revision+1
-WHERE organization_id=$1 AND uuid=$2 AND revision=$9 RETURNING id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at
+WHERE organization_id=$1 AND uuid=$2 AND revision=$9 RETURNING id, uuid, organization_id, kind, title, body, active, sort_order, revision, updated_by, created_at, updated_at, department_id
 `
 
 type BusinessContextUpdateParams struct {
@@ -1407,6 +1518,7 @@ func (q *Queries) BusinessContextUpdate(ctx context.Context, arg BusinessContext
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -1652,7 +1764,7 @@ func (q *Queries) KnowledgeReviews(ctx context.Context, arg KnowledgeReviewsPara
 }
 
 const knowledgeSourceArticleLock = `-- name: KnowledgeSourceArticleLock :one
-SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id FROM knowledge_articles WHERE organization_id=$1 AND id=$2 FOR UPDATE
+SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id, department_id FROM knowledge_articles WHERE organization_id=$1 AND id=$2 FOR UPDATE
 `
 
 type KnowledgeSourceArticleLockParams struct {
@@ -1682,6 +1794,7 @@ func (q *Queries) KnowledgeSourceArticleLock(ctx context.Context, arg KnowledgeS
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BrandID,
+		&i.DepartmentID,
 	)
 	return i, err
 }

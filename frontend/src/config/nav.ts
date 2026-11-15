@@ -5,6 +5,7 @@ import {
   Workflow,
   BarChart3,
   BookOpen,
+  FolderTree,
   CalendarCog,
   CalendarDays,
   BookUser,
@@ -458,6 +459,13 @@ export const cmsNav = defineNav({
       defaultOpen: true,
       items: [
         {
+          id: "departments",
+          titleKey: "layout.nav_departments",
+          href: routes.cms.departments.root,
+          icon: Building2,
+          permission: permissions.tenant.departments.read,
+        },
+        {
           id: "teams",
           titleKey: "layout.nav_teams",
           href: routes.cms.teams.root,
@@ -660,6 +668,13 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.knowledge.root,
           icon: BookOpen,
           permission: permissions.tenant.settings.read,
+        },
+        {
+          id: "settings-categories",
+          titleKey: "layout.nav_categories",
+          href: routes.cms.settings.categories,
+          icon: FolderTree,
+          permission: permissions.tenant.categories.read,
         },
         {
           id: "settings-billing",

@@ -14,7 +14,8 @@ import (
 
 func TestAnthropicStructuredAndToolWire(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/messages" || r.Header.Get("x-api-key") != "fake-key" {
+		// CF-213: BaseURL is the API root; the SDK adds /v1.
+		if r.URL.Path != "/v1/messages" || r.Header.Get("x-api-key") != "fake-key" || r.Header.Get("anthropic-version") == "" {
 			t.Error("incorrect provider headers/path")
 		}
 		var body map[string]json.RawMessage

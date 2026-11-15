@@ -16,6 +16,10 @@ onboarding_setup_runs
 onboarding_setup_items
 teams
 team_members
+# Departments (CF-215)
+departments
+department_knowledge_shares
+conversation_department_transfers
 support_access_grants
 agent_presence
 attachments
@@ -311,3 +315,22 @@ integration_calls
 custom_field_unknown_keys
 custom_field_unknown_values
 knowledge_article_audiences
+ai_answer_cache
+ai_answer_cache_stats
+ai_case_memories
+knowledge_gap_questions
+knowledge_unit_questions
+knowledge_units
+
+# Categories (CF-218)
+categories
+category_examples
+category_assignments
+category_labels
+
+# CF-217 history pipeline
+history_settings
+history_imports
+history_clusters
+history_cases
+history_decisions
