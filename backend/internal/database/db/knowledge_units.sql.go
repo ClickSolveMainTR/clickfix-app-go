@@ -30,7 +30,7 @@ FROM ai_answer_cache c
 JOIN knowledge_units u ON u.organization_id=c.organization_id AND u.id=c.unit_id
 LEFT JOIN knowledge_articles a ON a.organization_id=u.organization_id AND a.id=u.article_id
 WHERE c.organization_id=$1 AND c.audience=$2 AND c.locale=$3 AND c.scope_key=$4 AND c.question_hash=$5
- AND (c.audience='agent' OR u.visibility='public')
+ AND (c.audience='agent' OR u.visibility='public') AND u.embedding_model=$6
 `
 
 type AnswerCacheGetParams struct {
@@ -39,6 +39,7 @@ type AnswerCacheGetParams struct {
 	Locale         string `json:"locale"`
 	ScopeKey       string `json:"scope_key"`
 	QuestionHash   string `json:"question_hash"`
+	EmbeddingModel string `json:"embedding_model"`
 }
 
 type AnswerCacheGetRow struct {
@@ -53,7 +54,8 @@ type AnswerCacheGetRow struct {
 }
 
 // A cached row is valid only while its unit exists (source changes delete it)
-// and still passes the audience's visibility rule.
+// and still passes the audience's visibility rule. While re-embedding runs
+// (CF-223) a unit still on the old model is not served.
 func (q *Queries) AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error) {
 	row := q.db.QueryRow(ctx, answerCacheGet,
 		arg.OrganizationID,
@@ -61,6 +63,7 @@ func (q *Queries) AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) 
 		arg.Locale,
 		arg.ScopeKey,
 		arg.QuestionHash,
+		arg.EmbeddingModel,
 	)
 	var i AnswerCacheGetRow
 	err := row.Scan(

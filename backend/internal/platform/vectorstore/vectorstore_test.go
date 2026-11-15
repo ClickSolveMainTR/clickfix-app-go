@@ -103,3 +103,25 @@ func TestSourceValidation(t *testing.T) {
 		t.Fatal("unsafe table accepted")
 	}
 }
+
+func TestTableValidation(t *testing.T) {
+	good := Table{Name: "x", Table: "history_cases", Vectors: []Column{{Column: "embedding", Text: "v.problem"}}}
+	if good.valid() != nil {
+		t.Fatal("valid table rejected")
+	}
+	for name, bad := range map[string]Table{
+		"no vectors":   {Name: "x", Table: "t"},
+		"two kinds":    {Name: "x", Table: "t", Vectors: good.Vectors, Centroid: &Centroid{Column: "c", Members: "m", Key: "k", Vector: "e"}},
+		"unsafe table": {Name: "x", Table: "t; DROP", Vectors: good.Vectors},
+		"unsafe child": {Name: "x", Table: "t", Child: &Child{Table: "c", Key: "k;", Column: "e", Text: "c.content"}},
+		"no text":      {Name: "x", Table: "t", Vectors: []Column{{Column: "embedding"}}},
+	} {
+		if bad.valid() == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+	centroid := Table{Name: "c", Table: "history_clusters", Centroid: &Centroid{Column: "centroid", Members: "history_cases", Key: "cluster_id", Vector: "embedding"}}
+	if centroid.valid() != nil || !strings.Contains(centroid.staleRow(), "<>''") {
+		t.Fatal("centroid table: invalid rows must wait for members")
+	}
+}

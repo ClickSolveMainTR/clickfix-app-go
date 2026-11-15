@@ -52,13 +52,14 @@ SELECT count(*) FROM knowledge_units WHERE organization_id=$1;
 
 -- name: AnswerCacheGet :one
 -- A cached row is valid only while its unit exists (source changes delete it)
--- and still passes the audience's visibility rule.
+-- and still passes the audience's visibility rule. While re-embedding runs
+-- (CF-223) a unit still on the old model is not served.
 SELECT c.id,c.score,u.uuid AS unit_uuid,u.question,u.answer,u.category,u.visibility,a.uuid AS article_uuid
 FROM ai_answer_cache c
 JOIN knowledge_units u ON u.organization_id=c.organization_id AND u.id=c.unit_id
 LEFT JOIN knowledge_articles a ON a.organization_id=u.organization_id AND a.id=u.article_id
 WHERE c.organization_id=$1 AND c.audience=$2 AND c.locale=$3 AND c.scope_key=$4 AND c.question_hash=$5
- AND (c.audience='agent' OR u.visibility='public');
+ AND (c.audience='agent' OR u.visibility='public') AND u.embedding_model=sqlc.arg(embedding_model);
 -- name: AnswerCacheTouch :exec
 UPDATE ai_answer_cache SET hits=hits+1,last_hit_at=now() WHERE organization_id=$1 AND id=$2;
 -- name: AnswerCachePut :exec

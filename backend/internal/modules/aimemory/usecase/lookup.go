@@ -106,7 +106,7 @@ func (s *Service) Lookup(ctx context.Context, q model.Query) (model.Result, erro
 		slog.InfoContext(ctx, "ai_stage", "stage", "memory_lookup", "organization_id", q.Organization, "audience", q.Audience, "outcome", out.Outcome, "duration_ms", time.Since(started).Milliseconds())
 	}()
 
-	cached, err := s.Q.AnswerCacheGet(ctx, db.AnswerCacheGetParams{OrganizationID: q.Organization, Audience: q.Audience, Locale: q.Locale, ScopeKey: scopeKey, QuestionHash: hash})
+	cached, err := s.Q.AnswerCacheGet(ctx, db.AnswerCacheGetParams{OrganizationID: q.Organization, Audience: q.Audience, Locale: q.Locale, ScopeKey: scopeKey, QuestionHash: hash, EmbeddingModel: s.Embedder.Model()})
 	switch err = normalize(err); {
 	case err == nil:
 		if err = s.Q.AnswerCacheTouch(ctx, db.AnswerCacheTouchParams{OrganizationID: q.Organization, ID: cached.ID}); err != nil {
