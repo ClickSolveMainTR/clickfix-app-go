@@ -117,6 +117,7 @@ type AiAnswerCacheStat struct {
 	ExactHits      int64       `json:"exact_hits"`
 	SemanticHits   int64       `json:"semantic_hits"`
 	Misses         int64       `json:"misses"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
 }
 
 type AiCaseMemory struct {

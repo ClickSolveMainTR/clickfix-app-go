@@ -456,7 +456,7 @@ Bilgi katmanının işe yarayıp yaramadığını ölçer ve gösterir.
 |------|-------|
 | Doğru cevap oranı | Tamamlanan vakalarda: `expected` kontrollerinin hepsi geçer **ve** cevap, beklenen cevabın anlamlı kelimelerinin en az %60'ını içerir ve devir yoktur. Sadece kaynak verilmiş vakada: devirsiz, boş olmayan ve beklenen kaynağa atıf yapan cevap. |
 | Kaynak isabeti | Beklenen kaynağı olan vakalarda, cevabın atıf yaptığı makalelerden biri beklenenlerden biri mi. |
-| Önbellek isabeti | `AnswerCache.Lookup` (CF-216) soruyu cevaplayabilir mi. Önbellek bağlı değilse ölçülmez (null). |
+| Önbellek isabeti | `AnswerCache.Lookup` (CF-216) soruyu cevaplayabilir mi: müşteri kitlesi için tam önbellek kaydı ya da eşiği geçen bilgi birimi, vakanın departmanı kapsamında. Uyarlayıcı (`MemoryCache`) `aimemory` `Probe`'u kullanır; sayaç artmaz, önbelleğe yazılmaz, bu yüzden ölçüm çalıştırmaları paneldeki isabet oranını oynatmaz (en çok bir embedding çağrısı). Embedding modeli yoksa önbellek bağlanmaz ve ölçü null kalır. |
 | Ortalama gecikme | Tamamlanan vakalarda simülasyon süresi (ms). |
 | Soru başına maliyet | Çalıştırmanın toplam sağlayıcı maliyeti / vaka sayısı (mikro USD). |
 
@@ -479,19 +479,40 @@ Bilgi katmanının işe yarayıp yaramadığını ölçer ve gösterir.
 
 Her bölüm `available` ve gerekirse `reason` taşır:
 
-- `source_not_connected`: veriyi üreten katman henüz yok (önbellek, CF-216).
-- `department_scope_unavailable`: kaynak departman ayrımı yapamıyor. Konuşmalar, AI çalıştırmaları, triage ve öneriler henüz departman taşımadığı için yerleşik kaynaklar departman seçilince veri göstermez; organizasyon verisi departman verisi gibi gösterilmez.
+- `source_not_connected`: veriyi üreten katman bağlı değil (sağlayıcı alanı nil).
+- `department_scope_unavailable`: kaynak departman ayrımı yapamıyor; organizasyon verisi departman verisi gibi gösterilmez. CF-225'ten sonra yerleşik kaynakların hepsi departmana göre süzülür, bu neden yalnız departmansız yeni bir kaynak için kalır.
+
+Departman seçilince süzgeç (CF-225):
+
+| Bölüm | Departman nereden gelir |
+|-------|-------------------------|
+| AI çağrıları ve maliyet (`ai_runs`) | Çalıştırmanın konuşmasının **şu anki** departmanı. Konuşmasız çalıştırmalar (embedding, içe aktarma) yalnız organizasyon toplamında sayılır. |
+| Devir oranı, bilgi açıkları, triage kategorileri (`ai_agent_jobs`) | İşin konuşmasının şu anki departmanı. |
+| Öneri hattı (`knowledge_suggestions`) | Önerinin kendi `department_id`'si (konuşmasından devralınır). |
+| Kategori dağılımı (`category_assignments`) | Kaydın konuşmasının şu anki departmanı. |
+| Önbellek isabeti (`ai_answer_cache_stats`) | Aramanın kapsamındaki departman (aşağıya bakın). |
+| Son ölçüm (`ai_evaluations`) | Çalıştırmanın `department_id`'si. |
+
+Önbellek sayaçları (migration `000237`): `ai_answer_cache_stats` her gün, kitle ve departman için bir satır tutar (`department_id` NULL = departmansız arama, `UNIQUE NULLS NOT DISTINCT`). Organizasyon toplamı tüm satırların toplamıdır. Departman silinince sayaçları da silinir (`ON DELETE CASCADE`; `SET NULL` aynı günün organizasyon satırıyla çakışırdı). Sayaçlar günlük olduğu için panelde pencere tam günlere genişler.
+
+Kategori bölümü: kategori deposu (CF-218) pencerede konuşma sınıflandırmışsa ondan okunur; hiç sınıflandırma yoksa (kategori ağacı kurulmamış) son tamamlanan triage sonucu kullanılır.
 
 Sağlayıcı arayüzleri (`analytics/usecase/knowledge.go`, `aiagents/usecase/measurement.go`):
 
 | Arayüz | Kim bağlar | Yokken |
 |--------|------------|--------|
-| `DepartmentSource`, `DepartmentDirectory` | CF-215 | Departman listesi boş; `department_uuid` 400 `DEPARTMENTS_UNAVAILABLE` |
-| `CacheSource`, `AnswerCache` | CF-216 | Önbellek bölümü "veri yok", ölçümde önbellek isabeti null |
-| `ClassificationSource` | CF-218 | Kategori ve güven son tamamlanan triage sonucundan okunur |
-| `KnowledgeStore` (yerleşik) | CF-215 sonrası departman süzgeci | Departman kapsamında `ErrDepartmentScope` |
+| Arayüz | Uyarlayıcı (CF-225) | Yokken |
+|--------|---------------------|--------|
+| `DepartmentSource` (panel) | `analytics/repository.DepartmentStore` (`departments` tablosu) | Departman listesi boş; `department_uuid` 400 `DEPARTMENTS_UNAVAILABLE` |
+| `DepartmentDirectory` (ölçüm), kategoriler `Departments` | `departments/usecase.Directory` | Departmanlı vaka ve çalıştırma 400 `DEPARTMENTS_UNAVAILABLE`; kategori ağacında departman kapsamı reddedilir |
+| `CacheSource` (panel) | `analytics/repository.CacheStore` (`ai_answer_cache_stats`) | Önbellek bölümü "veri yok" |
+| `AnswerCache` (ölçüm) | `aiagents/usecase.MemoryCache` (`aimemory` `Probe`) | Ölçümde önbellek isabeti null |
+| `ClassificationSource` | `analytics/repository.CategoryStore` (`category_assignments`) | Kategori ve güven son tamamlanan triage sonucundan okunur |
+| `KnowledgeStore` (yerleşik) | `analytics/repository.KnowledgeStore` | Departman kapsamında `ErrDepartmentScope` |
 
-Birleştirme notu: CF-215 ve CF-216 `cf-toplu`'ya girdi ama bu arayüzler henüz bağlanmadı (alanlar nil). `aiagents` içinde CF-220 alanı, CF-215'in `Departments` (yönlendirici) alanıyla çakışmasın diye `DepartmentSets` adını aldı. Bağlama ayrı iş olarak izlenir.
+Bağlantı: API sunucusu (`httpserver/server.go`) paneli, ölçüm setini ve kategori servisini; worker (`cmd/worker`) otomatik ölçüm taramasının (`app:ai:evaluation_sweep`) kullandığı AI ajanı servisini ve kategori servisini aynı uyarlayıcılarla kurar (`agentusecase.WireMeasurement`).
+
+Birleştirme notu: CF-215 ve CF-216 `cf-toplu`'ya girdiğinde bu arayüzler bağlanmamıştı (alanlar nil); CF-225 bağladı. `aiagents` içinde CF-220 alanı, CF-215'in `Departments` (yönlendirici) alanıyla çakışmasın diye `DepartmentSets` adını aldı.
 
 ### Yetki
 

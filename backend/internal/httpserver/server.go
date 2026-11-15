@@ -527,9 +527,13 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		}
 		return deps.Queue.EnqueueAnalyticsBackfill(r.Context(), org)
 	}), tokens, loader, tenantResolver)
-	// AI knowledge panel (CF-220). Answer cache (CF-216), departments
-	// (CF-215) and categorization (CF-218) plug into the service fields.
-	analyticsmodule.RegisterKnowledgeRoutes(mux, &analyticshandler.KnowledgeHandler{Service: analyticsusecase.NewKnowledge(analyticsrepo.NewKnowledge(deps.Queries))}, tokens, loader, tenantResolver)
+	// AI knowledge panel (CF-220): departments (CF-215), answer cache
+	// counters (CF-216) and the category store (CF-218), wired in CF-225.
+	knowledgePanel := analyticsusecase.NewKnowledge(analyticsrepo.NewKnowledge(deps.Queries))
+	knowledgePanel.Departments = analyticsrepo.NewDepartments(deps.Queries)
+	knowledgePanel.Cache = analyticsrepo.NewCache(deps.Queries)
+	knowledgePanel.Categories = analyticsrepo.NewCategories(deps.Queries)
+	analyticsmodule.RegisterKnowledgeRoutes(mux, &analyticshandler.KnowledgeHandler{Service: knowledgePanel}, tokens, loader, tenantResolver)
 	// SLA policies, business hours and conversation clocks (CF-46).
 	slaSvc := slausecase.New(deps.DB, deps.Queries, outbox.NewStore(deps.DB, deps.Queries), log)
 	if deps.Queue != nil {
@@ -540,6 +544,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// pick, AI routing and transfers.
 	departmentsSvc := departmentsusecase.New(deps.DB, deps.Queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	departmentDirectory := departmentsusecase.NewDirectory(deps.Queries)
 	departmentsmodule.RegisterRoutes(mux, departmentshandler.New(departmentsSvc, deps.Queries, activityRec), tokens, loader, tenantResolver)
 	// The SLA schedule is the one working-hours source (CF-198): the inbox
 	// (automatic replies, AI delivery), the AI agent and the widget read it.
@@ -611,7 +616,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
-	categoriesSvc := categoriesusecase.New(deps.DB, deps.Queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI})
+	categoriesSvc := categoriesusecase.New(deps.DB, deps.Queries, categoriesusecase.Options{Departments: departmentDirectory, Embedder: aiCore.RAG.Embedder, AI: aiCore.AI})
 	aiCore.KB.Fields = customFieldsSvc
 	// CF-221: contact page AI summary runs through the AI engine.
 	contactsSvc.WithAI(aiCore.AI)
@@ -622,6 +627,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	agentSvc.Hours = slaSvc
 	agentSvc.Memory = aiCore.Memory
 	agentSvc.Departments, departmentsSvc.Classifier = departmentsSvc, agentSvc
+	agentusecase.WireMeasurement(agentSvc, departmentDirectory, aiCore.Memory)
 	// Automatic customer replies (CF-198): settings here, the consumer runs
 	// in the worker; the AI agent's handoff notice posts from the API too.
 	autoReplySvc := autoreply.New(deps.Queries, inboxCore.Conversations, slaSvc, slaSvc, log)

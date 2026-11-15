@@ -44,9 +44,11 @@ WHERE w.organization_id IN (
 UPDATE ai_evaluation_watches SET lease_until=NULL,last_checked_at=now(),last_fingerprint=$2 WHERE organization_id=$1;
 
 -- name: AIInsightUsage :many
+-- With a department: only runs of that department's conversations (CF-225).
 SELECT task,count(*)::bigint AS calls,count(*) FILTER (WHERE status IN ('failed','blocked'))::bigint AS failed,
 coalesce(sum(cost_micros),0)::bigint AS cost_micros,coalesce(avg(latency_ms) FILTER (WHERE status='completed'),0)::double precision AS avg_latency_ms
-FROM ai_runs WHERE organization_id=$1 AND created_at>=sqlc.arg(since)::timestamptz AND created_at<sqlc.arg(until)::timestamptz
+FROM ai_runs r WHERE r.organization_id=$1 AND r.created_at>=sqlc.arg(since)::timestamptz AND r.created_at<sqlc.arg(until)::timestamptz
+AND (sqlc.narg(department_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM conversations c WHERE c.organization_id=r.organization_id AND c.id=r.conversation_id AND c.department_id=sqlc.narg(department_id)::bigint))
 GROUP BY task ORDER BY task;
 
 -- name: AIInsightReplyOutcomes :one
@@ -54,6 +56,7 @@ GROUP BY task ORDER BY task;
 WITH latest AS (
  SELECT DISTINCT ON (j.conversation_id) j.status FROM ai_agent_jobs j
  WHERE j.organization_id=$1 AND j.task='reply' AND j.created_at>=sqlc.arg(since)::timestamptz AND j.created_at<sqlc.arg(until)::timestamptz
+ AND (sqlc.narg(department_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM conversations c WHERE c.organization_id=j.organization_id AND c.id=j.conversation_id AND c.department_id=sqlc.narg(department_id)::bigint))
  ORDER BY j.conversation_id,j.id DESC
 ) SELECT count(*)::bigint AS conversations,count(*) FILTER (WHERE status IN ('handoff','unknown'))::bigint AS handoffs FROM latest;
 
@@ -62,12 +65,14 @@ WITH latest AS (
  SELECT DISTINCT ON (j.conversation_id) j.conversation_id,j.status,coalesce(nullif(t.result->>'category',''),'uncategorized')::text AS topic
  FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
  WHERE j.organization_id=$1 AND j.task='reply' AND j.created_at>=sqlc.arg(since)::timestamptz AND j.created_at<sqlc.arg(until)::timestamptz
+ AND (sqlc.narg(department_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM conversations c WHERE c.organization_id=j.organization_id AND c.id=j.conversation_id AND c.department_id=sqlc.narg(department_id)::bigint))
  ORDER BY j.conversation_id,j.id DESC
 ) SELECT topic,count(*)::bigint AS conversations FROM latest WHERE status IN ('handoff','unknown') GROUP BY topic ORDER BY conversations DESC,topic LIMIT 10;
 
 -- name: AIInsightSuggestions :many
 SELECT status,count(*)::bigint AS total FROM knowledge_suggestions
-WHERE organization_id=$1 AND created_at>=sqlc.arg(since)::timestamptz AND created_at<sqlc.arg(until)::timestamptz GROUP BY status;
+WHERE organization_id=$1 AND created_at>=sqlc.arg(since)::timestamptz AND created_at<sqlc.arg(until)::timestamptz
+AND (sqlc.narg(department_id)::bigint IS NULL OR department_id=sqlc.narg(department_id)::bigint) GROUP BY status;
 
 -- name: AIInsightClassifications :many
 -- Latest completed triage per conversation in the window; confidence -1 = none.
@@ -75,7 +80,25 @@ SELECT DISTINCT ON (j.conversation_id) coalesce(nullif(j.result->>'category','')
 (CASE WHEN jsonb_typeof(j.result->'confidence')='number' THEN (j.result->>'confidence')::double precision ELSE -1 END)::double precision AS confidence
 FROM ai_agent_jobs j WHERE j.organization_id=$1 AND j.task='triage' AND j.status='completed'
 AND j.created_at>=sqlc.arg(since)::timestamptz AND j.created_at<sqlc.arg(until)::timestamptz
+AND (sqlc.narg(department_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM conversations c WHERE c.organization_id=j.organization_id AND c.id=j.conversation_id AND c.department_id=sqlc.narg(department_id)::bigint))
 ORDER BY j.conversation_id,j.id DESC LIMIT 50001;
+-- name: AIInsightCategoryAssignments :many
+-- Current category of the conversations classified in the window by the
+-- categorization layer (CF-218); with a department, that department's
+-- conversations only.
+SELECT coalesce(k.name,'uncategorized')::text AS category,a.confidence::double precision AS confidence
+FROM category_assignments a LEFT JOIN categories k ON k.organization_id=a.organization_id AND k.id=a.category_id
+WHERE a.organization_id=$1 AND a.subject_type='conversation'
+AND a.updated_at>=sqlc.arg(since)::timestamptz AND a.updated_at<sqlc.arg(until)::timestamptz
+AND (sqlc.narg(department_id)::bigint IS NULL OR EXISTS (SELECT 1 FROM conversations c WHERE c.organization_id=a.organization_id AND c.id=a.subject_id AND c.department_id=sqlc.narg(department_id)::bigint))
+ORDER BY a.id DESC LIMIT 50001;
+-- name: AIInsightCacheStats :one
+-- Answer cache lookups and hits (CF-216); the counters are daily, so the
+-- window is widened to whole days. With a department,
+-- only the lookups scoped to it.
+SELECT coalesce(sum(exact_hits+semantic_hits+misses),0)::bigint AS lookups,coalesce(sum(exact_hits+semantic_hits),0)::bigint AS hits
+FROM ai_answer_cache_stats WHERE organization_id=$1 AND day>=sqlc.arg(since)::date AND day<=sqlc.arg(until)::date
+AND (sqlc.narg(department_id)::bigint IS NULL OR department_id=sqlc.narg(department_id)::bigint);
 
 -- name: AIInsightEvaluations :many
 -- Last two completed runs of the scope: the latest and the one before it.
