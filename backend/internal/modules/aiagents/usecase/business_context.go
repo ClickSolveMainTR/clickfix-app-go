@@ -11,8 +11,10 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type BusinessContextInput struct {
@@ -22,6 +24,10 @@ type BusinessContextInput struct {
 	Active    bool   `json:"active"`
 	SortOrder int32  `json:"sort_order"`
 	Revision  int32  `json:"revision"`
+	// Department (CF-215): omitted keeps it, null is organization-wide.
+	Department deptscope.Optional `json:"department_uuid"`
+	// DepartmentID is the resolved Department (handler).
+	DepartmentID pgtype.Int8 `json:"-"`
 }
 
 func (s *Service) SaveBusinessContext(ctx context.Context, org, actor int64, id uuid.UUID, in BusinessContextInput) (out db.BusinessContextSection, err error) {
@@ -39,7 +45,7 @@ func (s *Service) SaveBusinessContext(ctx context.Context, org, actor int64, id 
 			return e
 		}
 		if id == uuid.Nil {
-			count, e := r.Q.BusinessContextCount(ctx, org)
+			count, e := r.Q.BusinessContextCount(ctx, db.BusinessContextCountParams{OrganizationID: org})
 			if e != nil {
 				return e
 			}
@@ -56,6 +62,12 @@ func (s *Service) SaveBusinessContext(ctx context.Context, org, actor int64, id 
 		if err != nil {
 			return err
 		}
+		if in.Department.Set || id == uuid.Nil {
+			if _, e := r.Q.SetBusinessContextDepartment(ctx, db.SetBusinessContextDepartmentParams{OrganizationID: org, Uuid: out.Uuid, DepartmentID: in.DepartmentID}); e != nil {
+				return e
+			}
+			out.DepartmentID = in.DepartmentID
+		}
 		return r.Q.BusinessContextSnapshot(ctx, db.BusinessContextSnapshotParams{OrganizationID: org, ID: out.ID})
 	})
 	return
@@ -64,8 +76,11 @@ func (s *Service) SaveBusinessContext(ctx context.Context, org, actor int64, id 
 // InternalContext ports BusinessContextFormatter's ordering, enabled sections and
 // bounded per-section/total budgets. It is used only for internal triage/complex
 // tasks. Public reply generation and retrieval never receive these facts.
+// Sections follow the department scope of ctx (CF-215): a conversation's
+// department sees its own sections plus organization-wide ones.
 func (s *Service) InternalContext(ctx context.Context, org int64) (string, error) {
-	rows, err := s.Repo.Q.BusinessContextList(ctx, db.BusinessContextListParams{OrganizationID: org, Limit: 20})
+	restrict, viewer := deptscope.Effective(ctx).Args()
+	rows, err := s.Repo.Q.BusinessContextList(ctx, db.BusinessContextListParams{OrganizationID: org, Limit: 20, DeptRestrict: restrict, ViewerDepartments: viewer})
 	if err != nil {
 		return "", err
 	}

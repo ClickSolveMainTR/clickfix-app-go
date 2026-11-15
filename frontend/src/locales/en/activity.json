@@ -252,5 +252,12 @@
   "actions.categories.deleted": "Category deleted",
   "actions.categories.labeled": "Record category confirmed or corrected",
   "actions.categories.labels_exported": "Category labels exported",
-  "resources.tenant.categories": "Categories"
+  "resources.tenant.categories": "Categories",
+  "actions.departments.created": "Department created",
+  "actions.departments.updated": "Department updated",
+  "actions.departments.deleted": "Department deleted",
+  "actions.departments.shared": "Department knowledge shared",
+  "actions.departments.unshared": "Department knowledge share removed",
+  "actions.departments.conversation_transferred": "Conversation transferred to another department",
+  "resources.tenant.departments": "Departments"
 }

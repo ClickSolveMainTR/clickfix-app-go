@@ -97,6 +97,9 @@ import (
 	customfieldshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/handler"
 	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
+	departmentsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments"
+	departmentshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/handler"
+	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/enterprise"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports"
@@ -524,6 +527,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		slaSvc.WithResyncer(deps.Queue)
 	}
 	slamodule.RegisterRoutes(mux, slahandler.New(slaSvc, activityRec), tokens, loader, tenantResolver)
+	// Departments (CF-215): business units, knowledge visibility, widget
+	// pick, AI routing and transfers.
+	departmentsSvc := departmentsusecase.New(deps.DB, deps.Queries)
+	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	departmentsmodule.RegisterRoutes(mux, departmentshandler.New(departmentsSvc, deps.Queries, activityRec), tokens, loader, tenantResolver)
 	// The SLA schedule is the one working-hours source (CF-198): the inbox
 	// (automatic replies, AI delivery), the AI agent and the widget read it.
 	inboxCore.Conversations.WithHours(slaSvc)
@@ -561,6 +569,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Publisher: deps.Realtime, Issuer: rtIssuer, AppOrigin: cfg.Auth.FrontendURL, Forms: formsSvc, Hours: slaSvc, Log: log,
 	})
 	widgetService.WithReplay(deps.Storage, entitlementService, cfg.Encryption.Key)
+	widgetService.WithDepartments(departmentsSvc)
 	widgetH := widgethandler.New(widgetService, func(r *http.Request, action, subject string, limit int) (bool, time.Duration) {
 		return widgetLimiter.Allow(r.Context(), action, subject, limit, time.Minute)
 	}, log)
@@ -600,6 +609,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
 	agentSvc.Fields = customFieldsSvc
 	agentSvc.Hours = slaSvc
+	agentSvc.Departments, departmentsSvc.Classifier = departmentsSvc, agentSvc
 	// Automatic customer replies (CF-198): settings here, the consumer runs
 	// in the worker; the AI agent's handoff notice posts from the API too.
 	autoReplySvc := autoreply.New(deps.Queries, inboxCore.Conversations, slaSvc, slaSvc, log)
@@ -876,6 +886,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 			Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 			Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
+			Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
 			Handle(queue.TaskCustomerHealthSweep, queue.CustomerHealthSweepHandler(healthusecase.New(deps.DB, deps.Queries, activityRec, log).Sweep)).
 			Handle(queue.TaskNotificationDigest, func(ctx context.Context, _ *asynq.Task) error { _, err := notifSvc.ProcessDigests(ctx); return err }).
 			Handle(queue.TaskPresenceSweep, func(ctx context.Context, _ *asynq.Task) error { _, err := presenceSvc.SweepIdle(ctx); return err }).

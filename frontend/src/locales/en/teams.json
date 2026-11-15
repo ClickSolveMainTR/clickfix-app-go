@@ -78,5 +78,8 @@
   "skills.description": "Skill tags of {{name}} used for routing.",
   "skills.action": "Skills",
   "skills.save": "Save skills",
-  "skills.saved": "Skills saved."
+  "skills.saved": "Skills saved.",
+  "fields.department": "Department",
+  "fields.department_hint": "The team uses this business unit's knowledge, SLA and hours.",
+  "fields.no_department": "No department"
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/teams/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -122,9 +123,14 @@ func (s *Service) List(ctx context.Context, orgID int64, f model.ListFilter) ([]
 	}
 	teams := make([]model.Team, 0, len(rows))
 	for _, r := range rows {
-		teams = append(teams, mapTeam(r.ID, r.Uuid, r.Name, r.Description, r.Color, r.Timezone, r.WorkingHours, r.Skills, r.MemberCount, r.CreatedAt, r.UpdatedAt))
+		t := mapTeam(r.ID, r.Uuid, r.Name, r.Description, r.Color, r.Timezone, r.WorkingHours, r.Skills, r.MemberCount, r.CreatedAt, r.UpdatedAt)
+		t.DepartmentID = r.DepartmentID
+		teams = append(teams, t)
 	}
 	if err := s.attachMembers(ctx, orgID, teams, false); err != nil {
+		return nil, 0, err
+	}
+	if err := s.attachDepartments(ctx, orgID, teams); err != nil {
 		return nil, 0, err
 	}
 	return teams, total, nil
@@ -140,7 +146,11 @@ func (s *Service) Get(ctx context.Context, orgID int64, id uuid.UUID) (model.Tea
 		return model.Team{}, err
 	}
 	teams := []model.Team{mapTeam(r.ID, r.Uuid, r.Name, r.Description, r.Color, r.Timezone, r.WorkingHours, r.Skills, r.MemberCount, r.CreatedAt, r.UpdatedAt)}
+	teams[0].DepartmentID = r.DepartmentID
 	if err := s.attachMembers(ctx, orgID, teams, true); err != nil {
+		return model.Team{}, err
+	}
+	if err := s.attachDepartments(ctx, orgID, teams); err != nil {
 		return model.Team{}, err
 	}
 	return teams[0], nil
@@ -165,6 +175,10 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.TeamInput) (
 	if err != nil {
 		return model.Team{}, err
 	}
+	dept, err := s.department(ctx, orgID, in.Department, ve)
+	if err != nil {
+		return model.Team{}, err
+	}
 	if err := ve.orNil(); err != nil {
 		return model.Team{}, err
 	}
@@ -178,6 +192,11 @@ func (s *Service) Create(ctx context.Context, orgID int64, in model.TeamInput) (
 			return err
 		}
 		created = row
+		if dept.Valid {
+			if _, err := q.SetTeamDepartment(ctx, db.SetTeamDepartmentParams{OrganizationID: orgID, Uuid: row.Uuid, DepartmentID: dept}); err != nil {
+				return err
+			}
+		}
 		for _, m := range members {
 			if err := q.UpsertTeamMember(ctx, db.UpsertTeamMemberParams{
 				OrganizationID: orgID, TeamID: row.ID, UserID: m.userID, Role: m.role,
@@ -231,8 +250,17 @@ func (s *Service) Update(ctx context.Context, orgID int64, id uuid.UUID, in mode
 	if err != nil {
 		return model.Team{}, err
 	}
+	dept, err := s.department(ctx, orgID, in.Department, ve)
+	if err != nil {
+		return model.Team{}, err
+	}
 	if err := ve.orNil(); err != nil {
 		return model.Team{}, err
+	}
+	if in.Department.Set {
+		if _, err := s.q.SetTeamDepartment(ctx, db.SetTeamDepartmentParams{OrganizationID: orgID, Uuid: id, DepartmentID: dept}); err != nil {
+			return model.Team{}, err
+		}
 	}
 	if _, err := s.q.UpdateTeam(ctx, db.UpdateTeamParams{
 		OrganizationID: orgID, Uuid: id, Name: params.name, Description: params.description, Color: params.color,
@@ -516,6 +544,49 @@ func normalizeSkills(in []string, field string, ve *ValidationError) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// department resolves the department of a team write (CF-215).
+func (s *Service) department(ctx context.Context, orgID int64, opt deptscope.Optional, ve *ValidationError) (pgtype.Int8, error) {
+	if !opt.Set || opt.Value == nil {
+		return pgtype.Int8{}, nil
+	}
+	d, err := s.q.GetDepartmentByUUID(ctx, db.GetDepartmentByUUIDParams{OrganizationID: orgID, Uuid: *opt.Value})
+	if errors.Is(err, pgx.ErrNoRows) {
+		ve.add("department_uuid", "not_found", "department not found")
+		return pgtype.Int8{}, nil
+	}
+	if err != nil {
+		return pgtype.Int8{}, err
+	}
+	return pgtype.Int8{Int64: d.ID, Valid: true}, nil
+}
+
+// attachDepartments fills the department reference of each team.
+func (s *Service) attachDepartments(ctx context.Context, orgID int64, teams []model.Team) error {
+	ids := []int64{}
+	for _, t := range teams {
+		if t.DepartmentID.Valid {
+			ids = append(ids, t.DepartmentID.Int64)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := s.q.ListDepartmentRefs(ctx, db.ListDepartmentRefsParams{OrganizationID: orgID, Ids: ids})
+	if err != nil {
+		return err
+	}
+	refs := map[int64]model.DepartmentRef{}
+	for _, r := range rows {
+		refs[r.ID] = model.DepartmentRef{UUID: r.Uuid, Name: r.Name, Color: r.Color}
+	}
+	for i, t := range teams {
+		if ref, ok := refs[t.DepartmentID.Int64]; ok && t.DepartmentID.Valid {
+			teams[i].Department = &ref
+		}
+	}
+	return nil
 }
 
 func mapTeam(id int64, u uuid.UUID, name, desc, color string, tz pgtype.Text, hours []byte, skills []string, members int64, created, updated pgtype.Timestamptz) model.Team {

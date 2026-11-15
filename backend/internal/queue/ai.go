@@ -14,6 +14,9 @@ const TaskRecordingTranscriptSweep = "app:recording:transcript_sweep"
 
 const TaskAIReconcile = "app:ai:reconcile"
 
+// TaskVectorReembed rebuilds vectors of an older embedding model (CF-214).
+const TaskVectorReembed = "app:ai:vector_reembed"
+
 func RegisterAISchedule(scheduler ScheduleRegistrar) error {
 	_, err := scheduler.Register("@every 1m", asynq.NewTask(TaskAIReconcile, []byte(`{}`)), asynq.Queue(QueueMaintenance), asynq.MaxRetry(3), asynq.Timeout(50*time.Second), asynq.Unique(50*time.Second))
 	if err != nil {
@@ -24,6 +27,9 @@ func RegisterAISchedule(scheduler ScheduleRegistrar) error {
 	}
 	if _, err = scheduler.Register("@every 1m", asynq.NewTask(TaskRecordingTranscriptSweep, []byte(`{}`)), asynq.Queue(QueueMaintenance), asynq.MaxRetry(3), asynq.Timeout(50*time.Second), asynq.Unique(50*time.Second)); err != nil {
 		return fmt.Errorf("queue: register transcription sweep: %w", err)
+	}
+	if _, err = scheduler.Register("@every 5m", asynq.NewTask(TaskVectorReembed, []byte(`{}`)), asynq.Queue(QueueMaintenance), asynq.MaxRetry(0), asynq.Timeout(4*time.Minute), asynq.Unique(4*time.Minute)); err != nil {
+		return fmt.Errorf("queue: register vector re-embedding: %w", err)
 	}
 	return nil
 }

@@ -139,6 +139,11 @@ export const routes = {
       create: "/teams/create",
       detail: (uuid: string) => `/teams/${uuid}`,
     },
+    departments: {
+      root: "/departments",
+      create: "/departments/create",
+      detail: (uuid: string) => `/departments/${uuid}`,
+    },
     settings: {
       organization: "/settings/organization",
       members: "/settings/members",

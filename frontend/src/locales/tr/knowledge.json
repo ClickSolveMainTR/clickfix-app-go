@@ -110,5 +110,8 @@
   "audience.targeted": "Widget makaleyi yalnız bütün koşullara uyan kişilere önerir. Kaydedince hemen geçerli olur.",
   "audience.save": "Hedeflemeyi kaydet",
   "audience.saved": "Hedefleme kaydedildi.",
-  "audience.failed": "Hedefleme kaydedilemedi."
+  "audience.failed": "Hedefleme kaydedilemedi.",
+  "fields.department": "Departman",
+  "department_organization_wide": "Organizasyon geneli",
+  "department_hint": "Departmana ait makaleyi yalnızca o departman (ve paylaşılan departmanlar) görür; organizasyon geneli her departmanda geçerlidir."
 }

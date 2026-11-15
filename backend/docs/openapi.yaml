@@ -6579,6 +6579,294 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /v1/tenant/departments/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartmentsMeta
+      summary: Departments list metadata
+      description: "Table contract of `GET /v1/tenant/departments` (`tenant.departments.read`, CF-215)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/departments:
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartments
+      summary: List departments
+      description: "`tenant.departments.read` (CF-215). A department is a business unit (technical support, sales ...), optionally under a brand; teams belong to it. Listed in `sort_order`. `q` searches name and description, `brand` filters by brand uuid, `mine=true` lists the caller's departments (through their teams)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Q"
+        - name: brand
+          in: query
+          schema: { type: string, format: uuid }
+        - name: mine
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Department page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentPage"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantDepartment
+      summary: Create a department
+      description: "`tenant.departments.write`. `name` is required and unique in the organization. `team_uuids` sets the department's teams."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "201":
+          description: Created department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}:
+    parameters:
+      - $ref: "#/components/parameters/XOrganization"
+      - name: uuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartment
+      summary: Get a department
+      description: "`tenant.departments.read`. Includes teams and leads (the leads of its teams)."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantDepartment
+      summary: Update a department
+      description: "`tenant.departments.write`. Any subset of the fields; `brand_uuid` / `sla_policy_uuid` take null to clear, `inherit_hours: true` drops the department's own hours, `team_uuids` replaces the team list."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "200":
+          description: Department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantDepartment
+      summary: Delete a department
+      description: "`tenant.departments.write`. Teams and conversations lose the department. Knowledge the department still owns blocks the delete with `409 DEPARTMENT_IN_USE` (details carry the counts) unless `move_to` is `none` (organization-wide) or another department's uuid."
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: move_to
+          in: query
+          schema: { type: string, description: "`none` or a department uuid" }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}/shares:
+    parameters:
+      - $ref: "#/components/parameters/XOrganization"
+      - name: uuid
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tenant]
+      operationId: getTenantDepartmentShares
+      summary: Knowledge shared with or by a department
+      description: "`tenant.departments.read`. Items shared with this department and this department's items shared with others."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Shares
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentShares"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantDepartmentShare
+      summary: Share a knowledge item with a department
+      description: "`tenant.departments.read`; the caller must lead the item's department (a lead of one of its teams) or hold `tenant.departments.write`, else `403`. Knowledge is closed by default: a department sees its own items, organization-wide items and items shared with it. Organization-wide items need no share (`422 organization_wide`)."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentShareInput"
+      responses:
+        "201":
+          description: Share
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeDepartmentShare"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /v1/tenant/departments/{uuid}/shares/{shareUuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantDepartmentShare
+      summary: Stop sharing a knowledge item
+      description: "`tenant.departments.read`; a lead of the receiving or the owning department, or `tenant.departments.write`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: shareUuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/conversations/{uuid}/department:
+    get:
+      tags: [Tenant]
+      operationId: getTenantConversationDepartment
+      summary: Department of a conversation
+      description: "`tenant.conversations.read` + `tenant.departments.read` (CF-215). The department, who set it (`customer` widget pick, `ai` prediction with its confidence, `agent` transfer) and the transfer history with the handed-over context."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Conversation department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConversationDepartment"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/conversations/{uuid}/department-transfer:
+    post:
+      tags: [Tenant]
+      operationId: postTenantConversationDepartmentTransfer
+      summary: Transfer a conversation to another department
+      description: "`tenant.conversations.assign` (CF-215). Moves the conversation with its context: `reason` and `context_summary` land in the timeline and the transfer history. A team of another department is unassigned so the receiving department's routing picks it up; `release_assignee` unassigns the agent too. `department_uuid: null` makes it organization-wide."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentTransferInput"
+      responses:
+        "200":
+          description: Conversation department after the transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeConversationDepartment"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
   /v1/tenant/teams/meta:
     get:
       tags: [Tenant]
@@ -27850,7 +28138,7 @@ paths:
       ],
       "operationId": "knowledgeArticles",
       "summary": "List current draft articles",
-      "description": "Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server.",
+      "description": "Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server. Department visibility (CF-215): members see organization-wide articles, their departments' articles and articles shared with their departments; `tenant.departments.read_all` sees all. Other departments' articles answer 404 on the item routes.",
       "security": [
         {
           "bearerAuth": []
@@ -27894,6 +28182,13 @@ paths:
           "in": "query",
           "required": false,
           "schema": { "type": "string", "enum": ["tr", "en"] }
+        },
+        {
+          "name": "department",
+          "in": "query",
+          "required": false,
+          "description": "`none` = organization-wide only, or a department uuid (CF-215).",
+          "schema": { "type": "string" }
         },
         {
           "name": "visibility",
@@ -32532,6 +32827,7 @@ paths:
       ],
       "operationId": "uploadKnowledgeSource",
       "summary": "Store and queue PDF DOCX Markdown or text import; max 8 MiB",
+      "description": "Multipart `file`, `title`, `locale` and optional `department_uuid` (CF-215).",
       "security": [
         {
           "bearerAuth": []
@@ -44027,6 +44323,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/PublicRequestForm"
             - type: "null"
+        departments:
+          type: array
+          description: Departments the visitor may pick for a new conversation (CF-215); empty hides the picker and the AI routes the first message.
+          items: { $ref: "#/components/schemas/WidgetDepartment" }
     WidgetIdentifyInput:
       type: object
       required: [user_id, user_hash]
@@ -44069,6 +44369,7 @@ components:
         phone: { type: string, description: Visitor phone (older SDKs) }
         consent: { type: boolean, description: GDPR/KVKK checkbox of the pre-chat form }
         intent: { type: string, enum: ["", human, callback, video], description: "human asks for a person (the AI agent hands off)" }
+        department_uuid: { type: string, format: uuid, description: "Department the visitor picked for a new conversation (CF-215); one of bootstrap `departments`" }
         attributes: { type: object, additionalProperties: true, description: SDK attributes set before the contact existed }
         events:
           type: array
@@ -44087,6 +44388,7 @@ components:
         attributes: { type: string, description: Attributes as JSON }
         consent: { type: string, enum: ["true", "false"] }
         intent: { type: string }
+        department_uuid: { type: string, format: uuid }
         phone: { type: string }
         text: { type: string }
         client_id: { type: string, format: uuid }
@@ -44236,6 +44538,13 @@ components:
     "KnowledgeArticle": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department of the article (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer",
           "format": "int64"
@@ -44354,6 +44663,11 @@ components:
     "KnowledgeArticleInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "slug": {
           "type": "string"
         },
@@ -45060,6 +45374,11 @@ components:
     "AIBusinessContextInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -45104,6 +45423,13 @@ components:
     "AIBusinessContextSection": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "kind": {
           "type": "string",
           "enum": [
@@ -45713,6 +46039,13 @@ components:
     "AIKnowledgeSuggestion": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -45935,6 +46268,11 @@ components:
     "AIKnowledgeSourceInput": {
       "type": "object",
       "properties": {
+        "department_uuid": {
+          "description": "Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).",
+          "type": ["string", "null"],
+          "format": "uuid"
+        },
         "url": {
           "type": "string",
           "format": "uri",
@@ -45974,6 +46312,13 @@ components:
     "AIKnowledgeSource": {
       "type": "object",
       "properties": {
+        "department": {
+          "description": "Department the item belongs to (CF-215); null = organization-wide.",
+          "anyOf": [
+            { "$ref": "#/components/schemas/DepartmentRef" },
+            { "type": "null" }
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -48987,6 +49332,11 @@ components:
         author_id: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        department_uuid:
+          description: Department of the article (CF-215); null = organization-wide
+          type: [string, "null"]
+          format: uuid
+        department_name: { type: [string, "null"] }
         collection_uuid:
           anyOf:
             - { type: string, format: uuid }
@@ -54369,6 +54719,236 @@ components:
           items: { type: string }
         joined_at: { type: string, format: date-time }
 
+    DepartmentRef:
+      type: object
+      required: [uuid, name, color]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+
+    DepartmentWorkingHours:
+      type: object
+      required: [days]
+      properties:
+        days:
+          type: array
+          items:
+            type: object
+            required: [day, open, start, end]
+            properties:
+              day: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+              open: { type: boolean }
+              start: { type: string, example: "09:00" }
+              end: { type: string, example: "18:00" }
+
+    DepartmentAISettings:
+      type: object
+      required: [enabled, instructions, routing_hint]
+      properties:
+        enabled: { type: boolean, description: The customer AI may answer conversations of the department }
+        instructions: { type: string, maxLength: 4000, description: Added to the AI's reply instructions }
+        routing_hint: { type: string, maxLength: 1000, description: Tells the AI which first messages belong here }
+
+    Department:
+      type: object
+      required: [uuid, name, description, color, brand_uuid, widget_visible, sort_order, sla_policy_uuid, timezone, working_hours, ai, team_count, teams, leads, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string, description: "`#RRGGBB` or empty" }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        widget_visible: { type: boolean, description: Offered in the web widget's department picker }
+        sort_order: { type: integer, format: int32 }
+        sla_policy_uuid: { type: [string, "null"], format: uuid, description: "SLA policy of the department's conversations (before brand and company policies)" }
+        timezone: { type: [string, "null"] }
+        working_hours:
+          description: Own hours; null = the organization's. Teams without their own hours inherit them.
+          oneOf:
+            - $ref: "#/components/schemas/DepartmentWorkingHours"
+            - type: "null"
+        ai: { $ref: "#/components/schemas/DepartmentAISettings" }
+        team_count: { type: integer, format: int64 }
+        teams:
+          type: array
+          items: { $ref: "#/components/schemas/DepartmentRef" }
+        leads:
+          type: array
+          items:
+            type: object
+            required: [uuid, email, name, surname]
+            properties:
+              uuid: { type: string, format: uuid }
+              email: { type: string }
+              name: { type: string }
+              surname: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DepartmentInput:
+      type: object
+      additionalProperties: false
+      description: "Create: `name` required. Patch: any subset."
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        color: { type: string, example: "#2563EB" }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        widget_visible: { type: boolean }
+        sort_order: { type: integer, format: int32 }
+        sla_policy_uuid: { type: [string, "null"], format: uuid }
+        timezone: { type: string, example: Europe/Istanbul }
+        working_hours: { $ref: "#/components/schemas/DepartmentWorkingHours" }
+        inherit_hours: { type: boolean, description: Drop the department's own hours and timezone }
+        ai:
+          type: object
+          additionalProperties: false
+          properties:
+            enabled: { type: boolean }
+            instructions: { type: string, maxLength: 4000 }
+            routing_hint: { type: string, maxLength: 1000 }
+        team_uuids:
+          type: array
+          description: Complete team list of the department
+          items: { type: string, format: uuid }
+
+    DepartmentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Department" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    DepartmentShareInput:
+      type: object
+      required: [resource_kind, resource_uuid]
+      additionalProperties: false
+      properties:
+        resource_kind: { type: string, enum: [article, source, context] }
+        resource_uuid: { type: string, format: uuid }
+
+    DepartmentShare:
+      type: object
+      required: [uuid, resource_kind, resource_uuid, resource_title, department, owner, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        resource_kind: { type: string, enum: [article, source, context] }
+        resource_uuid: { type: string, format: uuid }
+        resource_title: { type: string }
+        department: { $ref: "#/components/schemas/DepartmentRef" }
+        owner:
+          description: Department the item belongs to
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+
+    DepartmentTransfer:
+      type: object
+      required: [uuid, from, to, actor_kind, actor_uuid, actor_name, confidence, reason, context_summary, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        from:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        to:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        actor_kind: { type: string, enum: [customer, ai, agent, rule] }
+        actor_uuid: { type: [string, "null"], format: uuid }
+        actor_name: { type: string }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        reason: { type: string }
+        context_summary: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ConversationDepartment:
+      type: object
+      required: [department, source, confidence, routed_at, transfers]
+      properties:
+        department:
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
+        source: { type: [string, "null"], enum: [customer, ai, agent, rule, null] }
+        confidence: { type: [number, "null"], description: "The AI's confidence when it routed the first message (threshold 0.6)" }
+        routed_at: { type: [string, "null"], format: date-time }
+        transfers:
+          type: array
+          items: { $ref: "#/components/schemas/DepartmentTransfer" }
+
+    DepartmentTransferInput:
+      type: object
+      additionalProperties: false
+      required: [department_uuid]
+      properties:
+        department_uuid: { type: [string, "null"], format: uuid }
+        reason: { type: string, maxLength: 1000 }
+        context_summary: { type: string, maxLength: 4000, description: What the receiving department needs to know }
+        release_assignee: { type: boolean }
+
+    WidgetDepartment:
+      type: object
+      required: [uuid, name, description, color]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+
+    EnvelopeDepartment:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Department" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/DepartmentPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentShare:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/DepartmentShare" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeDepartmentShares:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/DepartmentShare" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeConversationDepartment:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConversationDepartment" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     Team:
       type: object
       required: [uuid, name, description, color, timezone, working_hours, skills, member_count, leads, created_at, updated_at]
@@ -54396,6 +54976,11 @@ components:
           type: array
           description: Only on get, create, patch and the member routes
           items: { $ref: "#/components/schemas/TeamMember" }
+        department:
+          description: Department of the team (CF-215); null = none
+          anyOf:
+            - $ref: "#/components/schemas/DepartmentRef"
+            - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -54601,6 +55186,10 @@ components:
         members:
           type: array
           items: { $ref: "#/components/schemas/TeamInitialMember" }
+        department_uuid:
+          type: [string, "null"]
+          format: uuid
+          description: Department of the team (CF-215); null takes it out, omitted keeps it
 
     SkillsInput:
       type: object

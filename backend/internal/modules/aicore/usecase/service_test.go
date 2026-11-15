@@ -24,16 +24,18 @@ import (
 )
 
 type fakeAI struct {
-	input   string
-	calls   atomic.Int32
-	err     error
-	started chan struct{}
-	release chan struct{}
+	input        string
+	instructions string
+	calls        atomic.Int32
+	err          error
+	started      chan struct{}
+	release      chan struct{}
 }
 
 func (f *fakeAI) Generate(ctx context.Context, req ai.Request) (ai.Result, error) {
 	f.calls.Add(1)
 	f.input = req.Turns[0].Text
+	f.instructions = req.Instructions
 	if f.started != nil {
 		close(f.started)
 		select {

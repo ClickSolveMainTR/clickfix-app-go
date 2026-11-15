@@ -188,5 +188,9 @@
   "labels.tenant.categories.manage": "Kategori ağacını yönet",
   "labels.tenant.categories.label": "Kayıtların kategorisini onayla veya düzelt",
   "labels.tenant.categories.export": "Kategori etiketlerini dışa aktar",
-  "groups.tenant_categories": "Kategoriler"
+  "groups.tenant_categories": "Kategoriler",
+  "labels.tenant.departments.read": "Departmanları görüntüle",
+  "labels.tenant.departments.write": "Departmanları yönet",
+  "labels.tenant.departments.read_all": "Tüm departmanların bilgisini gör",
+  "groups.tenant_departments": "Departmanlar"
 }

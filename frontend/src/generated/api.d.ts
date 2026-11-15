@@ -3625,6 +3625,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/departments/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Departments list metadata
+         * @description Table contract of `GET /v1/tenant/departments` (`tenant.departments.read`, CF-215).
+         */
+        get: operations["getTenantDepartmentsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List departments
+         * @description `tenant.departments.read` (CF-215). A department is a business unit (technical support, sales ...), optionally under a brand; teams belong to it. Listed in `sort_order`. `q` searches name and description, `brand` filters by brand uuid, `mine=true` lists the caller's departments (through their teams).
+         */
+        get: operations["getTenantDepartments"];
+        put?: never;
+        /**
+         * Create a department
+         * @description `tenant.departments.write`. `name` is required and unique in the organization. `team_uuids` sets the department's teams.
+         */
+        post: operations["postTenantDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a department
+         * @description `tenant.departments.read`. Includes teams and leads (the leads of its teams).
+         */
+        get: operations["getTenantDepartment"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a department
+         * @description `tenant.departments.write`. Teams and conversations lose the department. Knowledge the department still owns blocks the delete with `409 DEPARTMENT_IN_USE` (details carry the counts) unless `move_to` is `none` (organization-wide) or another department's uuid.
+         */
+        delete: operations["deleteTenantDepartment"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a department
+         * @description `tenant.departments.write`. Any subset of the fields; `brand_uuid` / `sla_policy_uuid` take null to clear, `inherit_hours: true` drops the department's own hours, `team_uuids` replaces the team list.
+         */
+        patch: operations["patchTenantDepartment"];
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}/shares": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Knowledge shared with or by a department
+         * @description `tenant.departments.read`. Items shared with this department and this department's items shared with others.
+         */
+        get: operations["getTenantDepartmentShares"];
+        put?: never;
+        /**
+         * Share a knowledge item with a department
+         * @description `tenant.departments.read`; the caller must lead the item's department (a lead of one of its teams) or hold `tenant.departments.write`, else `403`. Knowledge is closed by default: a department sees its own items, organization-wide items and items shared with it. Organization-wide items need no share (`422 organization_wide`).
+         */
+        post: operations["postTenantDepartmentShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}/shares/{shareUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop sharing a knowledge item
+         * @description `tenant.departments.read`; a lead of the receiving or the owning department, or `tenant.departments.write`.
+         */
+        delete: operations["deleteTenantDepartmentShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/department": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Department of a conversation
+         * @description `tenant.conversations.read` + `tenant.departments.read` (CF-215). The department, who set it (`customer` widget pick, `ai` prediction with its confidence, `agent` transfer) and the transfer history with the handed-over context.
+         */
+        get: operations["getTenantConversationDepartment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/department-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer a conversation to another department
+         * @description `tenant.conversations.assign` (CF-215). Moves the conversation with its context: `reason` and `context_summary` land in the timeline and the transfer history. A team of another department is unassigned so the receiving department's routing picks it up; `release_assignee` unassigns the agent too. `department_uuid: null` makes it organization-wide.
+         */
+        post: operations["postTenantConversationDepartmentTransfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/teams/meta": {
         parameters: {
             query?: never;
@@ -11831,7 +12003,7 @@ export interface paths {
         };
         /**
          * List current draft articles
-         * @description Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server.
+         * @description Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server. Department visibility (CF-215): members see organization-wide articles, their departments' articles and articles shared with their departments; `tenant.departments.read_all` sees all. Other departments' articles answer 404 on the item routes.
          */
         get: operations["knowledgeArticles"];
         put?: never;
@@ -13220,7 +13392,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Store and queue PDF DOCX Markdown or text import; max 8 MiB */
+        /**
+         * Store and queue PDF DOCX Markdown or text import; max 8 MiB
+         * @description Multipart `file`, `title`, `locale` and optional `department_uuid` (CF-215).
+         */
         post: operations["uploadKnowledgeSource"];
         delete?: never;
         options?: never;
@@ -18448,6 +18623,8 @@ export interface components {
             conversations: components["schemas"]["WidgetConversation"][];
             /** @description Start form of a new conversation (CF-52); null when none is offered. */
             request_form?: components["schemas"]["PublicRequestForm"] | null;
+            /** @description Departments the visitor may pick for a new conversation (CF-215); empty hides the picker and the AI routes the first message. */
+            departments?: components["schemas"]["WidgetDepartment"][];
         };
         WidgetIdentifyInput: {
             /** @description The user's id in your system (the contact's external id); no line breaks */
@@ -18493,6 +18670,11 @@ export interface components {
              * @enum {string}
              */
             intent?: "" | "human" | "callback" | "video";
+            /**
+             * Format: uuid
+             * @description Department the visitor picked for a new conversation (CF-215); one of bootstrap `departments`
+             */
+            department_uuid?: string;
             /** @description SDK attributes set before the contact existed */
             attributes?: {
                 [key: string]: unknown;
@@ -18515,6 +18697,8 @@ export interface components {
             /** @enum {string} */
             consent?: "true" | "false";
             intent?: string;
+            /** Format: uuid */
+            department_uuid?: string;
             phone?: string;
             text?: string;
             /** Format: uuid */
@@ -18640,6 +18824,8 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         KnowledgeArticle: {
+            /** @description Department of the article (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** Format: int64 */
             id: number;
             /** Format: uuid */
@@ -18669,6 +18855,11 @@ export interface components {
             deleted_at: string | null;
         };
         KnowledgeArticleInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             slug: string;
             /** @enum {string} */
             locale: "tr" | "en";
@@ -18867,6 +19058,11 @@ export interface components {
             published_revision: number | null;
         };
         AIBusinessContextInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             /** @enum {string} */
             kind: "company" | "products" | "pricing" | "refunds" | "tone" | "forbidden" | "other";
             title: string;
@@ -18876,6 +19072,8 @@ export interface components {
             revision: number;
         };
         AIBusinessContextSection: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** @enum {string} */
             kind: "company" | "products" | "pricing" | "refunds" | "tone" | "forbidden" | "other";
             title: string;
@@ -19038,6 +19236,8 @@ export interface components {
             conversation_ids: number[];
         };
         AIKnowledgeSuggestion: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             id: number;
             /** Format: uuid */
             uuid: string;
@@ -19097,6 +19297,11 @@ export interface components {
             locale: "tr" | "en";
         };
         AIKnowledgeSourceInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             /** Format: uri */
             url: string;
             title: string;
@@ -19106,6 +19311,8 @@ export interface components {
             interval_hours: number;
         };
         AIKnowledgeSource: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             id: number;
             /** Format: uuid */
             uuid: string;
@@ -19931,6 +20138,12 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: uuid
+             * @description Department of the article (CF-215); null = organization-wide
+             */
+            department_uuid?: string | null;
+            department_name?: string | null;
             collection_uuid: string | null;
             /** Format: int64 */
             helpful_count: number;
@@ -23840,6 +24053,194 @@ export interface components {
             /** Format: date-time */
             joined_at: string;
         };
+        DepartmentRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+        };
+        DepartmentWorkingHours: {
+            days: {
+                /** @enum {string} */
+                day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+                open: boolean;
+                /** @example 09:00 */
+                start: string;
+                /** @example 18:00 */
+                end: string;
+            }[];
+        };
+        DepartmentAISettings: {
+            /** @description The customer AI may answer conversations of the department */
+            enabled: boolean;
+            /** @description Added to the AI's reply instructions */
+            instructions: string;
+            /** @description Tells the AI which first messages belong here */
+            routing_hint: string;
+        };
+        Department: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            /** @description `#RRGGBB` or empty */
+            color: string;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** @description Offered in the web widget's department picker */
+            widget_visible: boolean;
+            /** Format: int32 */
+            sort_order: number;
+            /**
+             * Format: uuid
+             * @description SLA policy of the department's conversations (before brand and company policies)
+             */
+            sla_policy_uuid: string | null;
+            timezone: string | null;
+            /** @description Own hours; null = the organization's. Teams without their own hours inherit them. */
+            working_hours: components["schemas"]["DepartmentWorkingHours"] | null;
+            ai: components["schemas"]["DepartmentAISettings"];
+            /** Format: int64 */
+            team_count: number;
+            teams: components["schemas"]["DepartmentRef"][];
+            leads: {
+                /** Format: uuid */
+                uuid: string;
+                email: string;
+                name: string;
+                surname: string;
+            }[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Create: `name` required. Patch: any subset. */
+        DepartmentInput: {
+            name?: string;
+            description?: string;
+            /** @example #2563EB */
+            color?: string;
+            /** Format: uuid */
+            brand_uuid?: string | null;
+            widget_visible?: boolean;
+            /** Format: int32 */
+            sort_order?: number;
+            /** Format: uuid */
+            sla_policy_uuid?: string | null;
+            /** @example Europe/Istanbul */
+            timezone?: string;
+            working_hours?: components["schemas"]["DepartmentWorkingHours"];
+            /** @description Drop the department's own hours and timezone */
+            inherit_hours?: boolean;
+            ai?: {
+                enabled?: boolean;
+                instructions?: string;
+                routing_hint?: string;
+            };
+            /** @description Complete team list of the department */
+            team_uuids?: string[];
+        };
+        DepartmentPage: {
+            items: components["schemas"]["Department"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        DepartmentShareInput: {
+            /** @enum {string} */
+            resource_kind: "article" | "source" | "context";
+            /** Format: uuid */
+            resource_uuid: string;
+        };
+        DepartmentShare: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            resource_kind: "article" | "source" | "context";
+            /** Format: uuid */
+            resource_uuid: string;
+            resource_title: string;
+            department: components["schemas"]["DepartmentRef"];
+            /** @description Department the item belongs to */
+            owner: components["schemas"]["DepartmentRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DepartmentTransfer: {
+            /** Format: uuid */
+            uuid: string;
+            from: components["schemas"]["DepartmentRef"] | null;
+            to: components["schemas"]["DepartmentRef"] | null;
+            /** @enum {string} */
+            actor_kind: "customer" | "ai" | "agent" | "rule";
+            /** Format: uuid */
+            actor_uuid: string | null;
+            actor_name: string;
+            confidence: number | null;
+            reason: string;
+            context_summary: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConversationDepartment: {
+            department: components["schemas"]["DepartmentRef"] | null;
+            /** @enum {string|null} */
+            source: "customer" | "ai" | "agent" | "rule" | null;
+            /** @description The AI's confidence when it routed the first message (threshold 0.6) */
+            confidence: number | null;
+            /** Format: date-time */
+            routed_at: string | null;
+            transfers: components["schemas"]["DepartmentTransfer"][];
+        };
+        DepartmentTransferInput: {
+            /** Format: uuid */
+            department_uuid: string | null;
+            reason?: string;
+            /** @description What the receiving department needs to know */
+            context_summary?: string;
+            release_assignee?: boolean;
+        };
+        WidgetDepartment: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            color: string;
+        };
+        EnvelopeDepartment: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Department"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DepartmentPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentShare: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DepartmentShare"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentShares: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["DepartmentShare"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeConversationDepartment: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConversationDepartment"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         Team: {
             /** Format: uuid */
             uuid: string;
@@ -23857,6 +24258,8 @@ export interface components {
             leads: components["schemas"]["TeamMemberUser"][];
             /** @description Only on get, create, patch and the member routes */
             members?: components["schemas"]["TeamMember"][];
+            /** @description Department of the team (CF-215); null = none */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -24019,6 +24422,11 @@ export interface components {
             inherit_hours?: boolean;
             skills?: string[];
             members?: components["schemas"]["TeamInitialMember"][];
+            /**
+             * Format: uuid
+             * @description Department of the team (CF-215); null takes it out, omitted keeps it
+             */
+            department_uuid?: string | null;
         };
         SkillsInput: {
             skills: string[];
@@ -35979,6 +36387,376 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantDepartmentsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantDepartments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                brand?: string;
+                mine?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Department page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    postTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentInput"];
+            };
+        };
+        responses: {
+            /** @description Created department */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantDepartment: {
+        parameters: {
+            query?: {
+                move_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    patchTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentInput"];
+            };
+        };
+        responses: {
+            /** @description Department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getTenantDepartmentShares: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentShares"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantDepartmentShare: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentShareInput"];
+            };
+        };
+        responses: {
+            /** @description Share */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentShare"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    deleteTenantDepartmentShare: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                shareUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantConversationDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversation department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationDepartment"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantConversationDepartmentTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentTransferInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation department after the transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
         };
     };
     getTenantTeamsMeta: {
@@ -54616,6 +55394,8 @@ export interface operations {
                 offset?: number;
                 q?: string;
                 locale?: "tr" | "en";
+                /** @description `none` = organization-wide only, or a department uuid (CF-215). */
+                department?: string;
                 visibility?: "public" | "internal";
                 /** @description draft: never published; published: has a published version; changed: published with a newer draft. */
                 state?: "draft" | "published" | "changed";
