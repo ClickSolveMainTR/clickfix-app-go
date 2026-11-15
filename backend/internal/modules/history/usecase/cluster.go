@@ -45,7 +45,7 @@ func BuildCase(org int64, r Record) (Case, bool) {
 		Subject:    truncate(anon.Redact(r.Subject), model.MaxSubjectRunes),
 		Problem:    truncate(anon.Redact(strings.Join(problem, "\n")), model.MaxCaseTextRunes),
 		Resolution: truncate(anon.Redact(resolution), model.MaxCaseTextRunes),
-		Messages:   int32(len(r.Lines)),
+		Messages:   int32(len(r.Lines)), // #nosec G115 -- bounded by model.MaxMessages
 	}
 	if c.Problem == "" && c.Subject != "" {
 		c.Problem = c.Subject

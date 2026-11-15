@@ -42,9 +42,16 @@ func (embedder) Model() string { return "fake-dept-v1" }
 func (embedder) Embed(_ context.Context, in []string) (ai.Embeddings, error) {
 	out := make([][]float32, 0, len(in))
 	for range in {
-		out = append(out, []float32{1, 0})
+		out = append(out, testVec(1, 0))
 	}
 	return ai.Embeddings{Vectors: out}, nil
+}
+
+// testVec pads the given leading values to a full-size embedding.
+func testVec(xs ...float32) []float32 {
+	v := make([]float32, ai.EmbeddingDimensions)
+	copy(v, xs)
+	return v
 }
 
 type fixture struct {

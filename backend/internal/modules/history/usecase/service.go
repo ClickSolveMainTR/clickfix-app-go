@@ -171,7 +171,7 @@ func (s *Service) Upload(ctx context.Context, org, actor int64, in model.UploadI
 	run, err := s.Q.HistoryImportCreate(ctx, db.HistoryImportCreateParams{OrganizationID: org, BrandID: brand, DepartmentID: department, Source: "upload", FileName: truncate(filepath.Base(name), 255),
 		ConsentAnalysis: true, ConsentTraining: in.ConsentTraining, ConsentBy: pgtype.Int8{Int64: actor, Valid: actor > 0}, RawKey: key,
 		RawRetainUntil: pgtype.Timestamptz{Time: s.now().Add(time.Duration(settings.RawRetentionHours) * time.Hour), Valid: true},
-		CreatedBy:      pgtype.Int8{Int64: actor, Valid: actor > 0}, TotalRecords: int32(len(b.Tickets))})
+		CreatedBy:      pgtype.Int8{Int64: actor, Valid: actor > 0}, TotalRecords: int32(len(b.Tickets))}) // #nosec G115 -- bounded by model.MaxTickets in validate
 	if err != nil {
 		_ = s.Store.Delete(context.WithoutCancel(ctx), key)
 		return db.HistoryImport{}, mapDB(err)

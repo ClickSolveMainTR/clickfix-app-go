@@ -49,13 +49,13 @@ func (b *bagEmbedder) Embed(_ context.Context, in []string) (ai.Embeddings, erro
 	b.calls.Add(1)
 	out := make([][]float32, len(in))
 	for i, s := range in {
-		v := make([]float32, 256)
+		v := make([]float32, ai.EmbeddingDimensions)
 		for _, w := range strings.Fields(Normalize(s)) {
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(w))
-			v[h.Sum32()%256]++
+			v[h.Sum32()%ai.EmbeddingDimensions]++
 		}
-		v[255] += 0.01 // never a zero vector
+		v[ai.EmbeddingDimensions-1] += 0.01 // never a zero vector
 		out[i] = v
 	}
 	return ai.Embeddings{Vectors: out, InputTokens: int64(len(in))}, nil

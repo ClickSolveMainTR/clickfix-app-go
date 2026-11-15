@@ -79,9 +79,16 @@ func (embedder) Model() string { return "test-embed" }
 func (embedder) Embed(_ context.Context, in []string) (ai.Embeddings, error) {
 	v := make([][]float32, len(in))
 	for i := range v {
-		v[i] = []float32{0.5, 0.25, 0.125}
+		v[i] = testVec(0.5, 0.25, 0.125)
 	}
 	return ai.Embeddings{Vectors: v, InputTokens: 1}, nil
+}
+
+// testVec pads the given leading values to a full-size embedding.
+func testVec(xs ...float32) []float32 {
+	v := make([]float32, ai.EmbeddingDimensions)
+	copy(v, xs)
+	return v
 }
 
 // TestCategoryRoutes covers tree management, department scope, RBAC,
@@ -404,9 +411,9 @@ func (keywords) Embed(_ context.Context, in []string) (ai.Embeddings, error) {
 	v := make([][]float32, len(in))
 	for i, s := range in {
 		if strings.Contains(strings.ToLower(s), "fatura") {
-			v[i] = []float32{1, 0}
+			v[i] = testVec(1, 0)
 		} else {
-			v[i] = []float32{0.5, 0.5}
+			v[i] = testVec(0.5, 0.5)
 		}
 	}
 	return ai.Embeddings{Vectors: v, InputTokens: 1}, nil

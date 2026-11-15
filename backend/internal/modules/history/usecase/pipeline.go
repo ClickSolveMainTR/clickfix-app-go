@@ -151,7 +151,7 @@ func (s *Service) process(ctx context.Context, p *progress) error {
 	if err != nil {
 		return err
 	}
-	p.total = int32(len(records))
+	p.total = int32(len(records)) // #nosec G115 -- sources return at most model.MaxTickets records
 	if run.Source == "nightly" && len(records) >= model.MaxTickets {
 		// Records come ordered by close time: continue after the last one.
 		if last := records[len(records)-1].ClosedAt; last != nil {
@@ -350,7 +350,7 @@ func (s *Service) refreshEvidence(ctx context.Context, org, clusterID int64, set
 		resolutions[i] = r.ResolutionEmbedding
 	}
 	group := evidenceGroup(resolutions, float64(settings.ResolutionSimilarity))
-	if err := s.Q.HistoryClusterEvidence(ctx, db.HistoryClusterEvidenceParams{OrganizationID: org, ID: clusterID, Evidence: int32(len(group))}); err != nil {
+	if err := s.Q.HistoryClusterEvidence(ctx, db.HistoryClusterEvidenceParams{OrganizationID: org, ID: clusterID, Evidence: int32(len(group))}); err != nil { // #nosec G115 -- a group is at most one run's records (MaxTickets)
 		return nil, err
 	}
 	out := make([]db.HistoryClusterCasesRow, 0, len(group))
@@ -371,7 +371,7 @@ func (s *Service) evaluate(ctx context.Context, p *progress, settings db.History
 	if err != nil {
 		return err
 	}
-	if int32(len(group)) < settings.EvidenceThreshold {
+	if int32(len(group)) < settings.EvidenceThreshold { // #nosec G115 -- a group is at most one run's records (MaxTickets)
 		return nil
 	}
 	state, err := s.Q.HistoryClusterSuggestionState(ctx, db.HistoryClusterSuggestionStateParams{OrganizationID: org, ClusterID: pgtype.Int8{Int64: clusterID, Valid: true}})
@@ -438,7 +438,7 @@ func (s *Service) evaluate(ctx context.Context, p *progress, settings db.History
 	}
 	_, err = s.Q.HistorySuggestionCreate(ctx, db.HistorySuggestionCreateParams{OrganizationID: org, Topic: truncate(topic, 200), Title: draft.Title, Body: draft.Body,
 		ClusterID: pgtype.Int8{Int64: clusterID, Valid: true}, ImportID: pgtype.Int8{Int64: p.run.ID, Valid: true}, DepartmentID: cluster.DepartmentID,
-		EvidenceCount: int32(len(group)), ConflictArticleID: conflict, ConflictScore: conflictScore})
+		EvidenceCount: int32(len(group)), ConflictArticleID: conflict, ConflictScore: conflictScore}) // #nosec G115 -- a group is at most one run's records (MaxTickets)
 	if pgCode(err) == "23505" {
 		return nil // another run created the pending suggestion first
 	}

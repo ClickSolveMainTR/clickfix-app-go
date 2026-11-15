@@ -45,19 +45,19 @@ func (r *recorder) all() string {
 // most words are close, unrelated texts are far.
 type fakeEmbedder struct{ rec *recorder }
 
-func (e fakeEmbedder) Model() string { return "fake-bow-64" }
+func (e fakeEmbedder) Model() string { return "fake-bow" }
 func (e fakeEmbedder) Embed(_ context.Context, in []string) (ai.Embeddings, error) {
 	e.rec.add(in...)
 	out := ai.Embeddings{InputTokens: int64(len(in))}
 	for _, s := range in {
-		v := make([]float32, 64)
+		v := make([]float32, ai.EmbeddingDimensions)
 		for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) }) {
 			if len([]rune(w)) < 3 {
 				continue
 			}
 			h := fnv.New32a()
 			_, _ = h.Write([]byte(w))
-			v[h.Sum32()%64]++
+			v[h.Sum32()%ai.EmbeddingDimensions]++
 		}
 		var n float64
 		for _, x := range v {
