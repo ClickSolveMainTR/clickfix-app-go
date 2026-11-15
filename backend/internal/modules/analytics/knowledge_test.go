@@ -102,7 +102,7 @@ func TestKnowledgePanelDepartmentScope(t *testing.T) {
 	svc := au.NewKnowledge(store)
 	dept := uuid.New()
 	if _, err := svc.Panel(context.Background(), 5, &dept, time.Time{}, time.Time{}); !errors.Is(err, am.ErrDepartmentsUnavailable) {
-		t.Fatalf("department before CF-215: %v", err)
+		t.Fatalf("department without a department source: %v", err)
 	}
 	svc.Departments = fakeDepartments{{ID: 9, UUID: dept, Name: "Muhasebe"}}
 	svc.Cache = fakeCache{lookups: 10, hits: 4}
@@ -117,7 +117,8 @@ func TestKnowledgePanelDepartmentScope(t *testing.T) {
 	if out.Department == nil || out.Department.UUID != dept || len(out.Departments) != 1 {
 		t.Fatalf("department %+v", out.Department)
 	}
-	// Organization-only sources say so instead of showing the whole organization.
+	// Organization-only sources (here the fake store) say so instead of
+	// showing the whole organization.
 	for name, a := range map[string]am.Availability{"usage": out.Usage.Availability, "gaps": out.KnowledgeGaps.Availability, "suggestions": out.Suggestions.Availability, "categories": out.Categories.Availability, "handoff": out.Handoff.Availability} {
 		if a.Available || a.Reason != am.ReasonDepartmentScopeUnavailable {
 			t.Errorf("%s: %+v", name, a)

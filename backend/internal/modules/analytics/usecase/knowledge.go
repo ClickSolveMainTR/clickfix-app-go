@@ -11,9 +11,10 @@ import (
 )
 
 // CF-220: the AI knowledge panel composes independent sources. Built-in
-// sources read existing tables for the whole organization; the layers that
-// are still being built plug in through the interfaces below. A nil or
-// organization-only source shows its section as "no data" with a reason.
+// sources read existing tables; departments (CF-215), the answer cache
+// (CF-216) and categorization (CF-218) plug in through the interfaces
+// below (wired in CF-225). A nil or organization-only source shows its
+// section as "no data" with a reason.
 
 // KnowledgeStore holds the built-in, table-backed sources. A source that
 // cannot filter by department returns model.ErrDepartmentScope.
@@ -196,7 +197,10 @@ func (s *KnowledgeService) categories(ctx context.Context, scope model.Knowledge
 	var e error
 	if s.Categories != nil {
 		rows, e = s.Categories.Classifications(ctx, scope)
-	} else {
+	}
+	// Without the categorization layer, or before it classified anything in
+	// the window (no category tree yet), the latest triage results stand in.
+	if s.Categories == nil || (e == nil && len(rows) == 0) {
 		rows, e = s.Store.Classifications(ctx, scope)
 	}
 	a, err := availability(e)

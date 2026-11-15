@@ -67,9 +67,10 @@ ON CONFLICT(organization_id,audience,locale,scope_key,question_hash) DO UPDATE S
 -- name: AnswerCacheCount :one
 SELECT count(*) FROM ai_answer_cache WHERE organization_id=$1;
 -- name: AnswerCacheStat :exec
-INSERT INTO ai_answer_cache_stats(organization_id,day,audience,exact_hits,semantic_hits,misses)
-VALUES($1,current_date,$2,sqlc.arg(exact)::bigint,sqlc.arg(semantic)::bigint,sqlc.arg(miss)::bigint)
-ON CONFLICT(organization_id,day,audience) DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
+-- One row per day, audience and department (NULL = organization wide, CF-225).
+INSERT INTO ai_answer_cache_stats(organization_id,day,audience,department_id,exact_hits,semantic_hits,misses)
+VALUES($1,current_date,$2,sqlc.narg(department_id)::bigint,sqlc.arg(exact)::bigint,sqlc.arg(semantic)::bigint,sqlc.arg(miss)::bigint)
+ON CONFLICT ON CONSTRAINT uq_ai_answer_cache_stats_day DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
  semantic_hits=ai_answer_cache_stats.semantic_hits+excluded.semantic_hits,misses=ai_answer_cache_stats.misses+excluded.misses;
 -- name: AnswerCacheStats :many
 SELECT audience,sum(exact_hits)::bigint AS exact_hits,sum(semantic_hits)::bigint AS semantic_hits,sum(misses)::bigint AS misses

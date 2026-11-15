@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,9 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/classify"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/handler"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
+	deptusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	orgmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/model"
 	orgrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/repository"
 	orgusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
@@ -431,20 +434,58 @@ func (keywords) Embed(_ context.Context, in []string) (ai.Embeddings, error) {
 	return ai.Embeddings{Vectors: v, InputTokens: 1}, nil
 }
 
-// TestDepartmentsUnavailable: until CF-215 lands, department scope is
-// refused instead of being silently dropped.
-func TestDepartmentsUnavailable(t *testing.T) {
+// TestDepartmentDirectory: with the department directory (CF-225) a
+// category list is scoped to a department of the organization; another
+// organization's department is not found. Without a directory department
+// scope is still refused instead of being silently dropped.
+func TestDepartmentDirectory(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
-	pool, err := pgxpool.New(context.Background(), dsn)
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	svc := usecase.New(pool, db.New(pool), usecase.Options{})
-	if _, err := svc.List(context.Background(), 1, uuid.New(), false); err != usecase.ErrDepartmentsUnavailable {
-		t.Fatalf("list by department = %v", err)
+	q := db.New(pool)
+	if _, err := usecase.New(pool, q, usecase.Options{}).List(ctx, 1, uuid.New(), false); err != usecase.ErrDepartmentsUnavailable {
+		t.Fatalf("list by department without a directory = %v", err)
+	}
+	orgs, depts := [2]int64{}, [2]db.Department{}
+	for i := range orgs {
+		if err := pool.QueryRow(ctx, "INSERT INTO organizations(slug,name) VALUES($1,'Cat dept') RETURNING id", "cat-dept-"+uuid.NewString()).Scan(&orgs[i]); err != nil {
+			t.Fatal(err)
+		}
+		if depts[i], err = q.CreateDepartment(ctx, db.CreateDepartmentParams{OrganizationID: orgs[i], Name: "Destek", AiEnabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		bg := context.Background()
+		_, _ = pool.Exec(bg, "DELETE FROM categories WHERE organization_id = ANY($1)", orgs[:])
+		_, _ = pool.Exec(bg, "DELETE FROM organizations WHERE id = ANY($1)", orgs[:])
+	})
+	svc := usecase.New(pool, q, usecase.Options{Departments: deptusecase.NewDirectory(q), Embedder: embedder{}})
+	scoped, err := svc.Create(ctx, orgs[0], model.CategoryInput{Name: ptr("Fatura"), DepartmentUUID: ptr(depts[0].Uuid.String())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scoped.DepartmentUUID == nil || *scoped.DepartmentUUID != depts[0].Uuid {
+		t.Fatalf("department of the node %+v", scoped.DepartmentUUID)
+	}
+	list, err := svc.List(ctx, orgs[0], depts[0].Uuid, false)
+	if err != nil || len(list) != 1 || list[0].UUID != scoped.UUID {
+		t.Fatalf("department list %+v %v", list, err)
+	}
+	var ve *usecase.ValidationError
+	if _, err := svc.List(ctx, orgs[0], depts[1].Uuid, false); !errors.As(err, &ve) {
+		t.Fatalf("another organization's department = %v", err)
+	}
+	if _, err := svc.Create(ctx, orgs[0], model.CategoryInput{Name: ptr("Kargo"), DepartmentUUID: ptr(depts[1].Uuid.String())}); !errors.As(err, &ve) {
+		t.Fatalf("node in another organization's department = %v", err)
 	}
 }
+
+func ptr[T any](v T) *T { return &v }
