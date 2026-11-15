@@ -78,7 +78,9 @@ func (s *Service) Process(ctx context.Context, org int64, id uuid.UUID) error {
 		return err
 	}
 	ctx = orgctx.WithOrganizationID(ctx, org)
-	p := &progress{run: run}
+	// A run that fails before its first stage report keeps its stored stage
+	// ("" would violate history_imports_stage_check).
+	p := &progress{run: run, stage: run.Stage}
 	runErr := s.process(ctx, p)
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
