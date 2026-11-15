@@ -46376,8 +46376,47 @@ components:
         "input"
       ]
     }
+    "AILimit": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": ["integer", "null"],
+          "format": "int64",
+          "description": "null when unlimited"
+        },
+        "unlimited": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "limit",
+        "unlimited"
+      ],
+      "additionalProperties": false
+    }
+    "AILimits": {
+      "type": "object",
+      "properties": {
+        "daily_calls": {
+          "$ref": "#/components/schemas/AILimit"
+        },
+        "concurrency": {
+          "$ref": "#/components/schemas/AILimit"
+        },
+        "daily_budget_micros": {
+          "$ref": "#/components/schemas/AILimit"
+        }
+      },
+      "required": [
+        "daily_calls",
+        "concurrency",
+        "daily_budget_micros"
+      ],
+      "additionalProperties": false
+    }
     "AIPolicy": {
       "type": "object",
+      "description": "Tenant AI policy (CF-229). platform_limits are the plan grant or organization override set by the platform; effective_limits are the lower of the platform and tenant limits and are what reservations enforce.",
       "properties": {
         "organization_id": {
           "type": "integer",
@@ -46396,20 +46435,29 @@ components:
           "default": false
         },
         "daily_calls": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit.",
           "minimum": 1,
           "maximum": 100000
         },
         "concurrency": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit.",
           "minimum": 1,
           "maximum": 20
         },
         "daily_budget_micros": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.",
           "format": "int64",
           "minimum": 1,
           "maximum": 1000000000000
+        },
+        "platform_limits": {
+          "$ref": "#/components/schemas/AILimits"
+        },
+        "effective_limits": {
+          "$ref": "#/components/schemas/AILimits"
         },
         "created_at": {
           "type": "string",
@@ -46428,6 +46476,8 @@ components:
         "daily_calls",
         "concurrency",
         "daily_budget_micros",
+        "platform_limits",
+        "effective_limits",
         "created_at",
         "updated_at"
       ]
@@ -46448,17 +46498,20 @@ components:
           "default": false
         },
         "daily_calls": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit.",
           "minimum": 1,
           "maximum": 100000
         },
         "concurrency": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit.",
           "minimum": 1,
           "maximum": 20
         },
         "daily_budget_micros": {
-          "type": "integer",
+          "type": ["integer", "null"],
+          "description": "Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.",
           "format": "int64",
           "minimum": 1,
           "maximum": 1000000000000

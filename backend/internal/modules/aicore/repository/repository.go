@@ -32,14 +32,18 @@ func New(b *billingrepo.Repository, e *entitlements.Service) *Store {
 func (s *Store) Policy(ctx context.Context, org int64) (db.AiPolicy, error) {
 	p, err := s.Billing.Q.AIPolicy(ctx, org)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return db.AiPolicy{OrganizationID: org, MaskPii: true, DailyCalls: 100, Concurrency: 3, DailyBudgetMicros: 10000000}, nil
+		// No row: AI is off and every daily limit follows the platform.
+		return db.AiPolicy{OrganizationID: org, MaskPii: true}, nil
 	}
 	return p, err
 }
 
 func (s *Store) SavePolicy(ctx context.Context, in db.AISavePolicyParams) (db.AiPolicy, error) {
 	out := db.AiPolicy{}
-	if in.DailyCalls < 1 || in.DailyCalls > 100000 || in.Concurrency < 1 || in.Concurrency > 20 || in.DailyBudgetMicros < 1 || in.DailyBudgetMicros > 1000000000000 {
+	// NULL follows the platform limit; a value can only lower it (Effective).
+	if in.DailyCalls.Valid && (in.DailyCalls.Int32 < 1 || in.DailyCalls.Int32 > 100000) ||
+		in.Concurrency.Valid && (in.Concurrency.Int32 < 1 || in.Concurrency.Int32 > 20) ||
+		in.DailyBudgetMicros.Valid && (in.DailyBudgetMicros.Int64 < 1 || in.DailyBudgetMicros.Int64 > 1000000000000) {
 		return out, model.ErrInvalid
 	}
 	err := s.Billing.Within(ctx, func(r *billingrepo.Repository) error {
@@ -98,17 +102,20 @@ func (s *Store) Reserve(ctx context.Context, in db.AIInsertRunParams) (db.AiRun,
 		if err != nil {
 			return err
 		}
-		if daily.Calls >= int64(p.DailyCalls) {
+		// CF-229: the platform entitlement (unlimited included) governs; the
+		// tenant policy can only lower it.
+		limits := Effective(values, p)
+		if !limits.DailyCalls.Allows(daily.Calls, 1) {
 			return model.ErrDaily
 		}
-		if in.ReservedCostMicros > p.DailyBudgetMicros-daily.Cost {
+		if !limits.DailyBudgetMicros.Allows(daily.Cost, in.ReservedCostMicros) {
 			return model.ErrBudget
 		}
 		active, err := q.AIActive(ctx, in.OrganizationID)
 		if err != nil {
 			return err
 		}
-		if active >= int64(p.Concurrency) {
+		if !limits.Concurrency.Allows(active, 1) {
 			return model.ErrConcurrency
 		}
 		month, err := q.AIQuotaMonth(ctx, in.OrganizationID)
