@@ -275,7 +275,7 @@ func (s *ToolService) execute(ctx context.Context, org, actor int64, c db.Conver
 		if s.Core == nil || s.Core.RAG == nil {
 			return "", ai.ErrUnavailable
 		}
-		citations, err := s.Core.RAG.Search(ctx, org, text("query"), "tr", true)
+		citations, err := s.Core.RAG.SearchScoped(ctx, conversationScope(org, c), text("query"), "tr", true)
 		if err != nil {
 			return "", err
 		}

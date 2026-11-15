@@ -340,6 +340,7 @@ func main() {
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
+		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
 		Handle(eventdispatch.TaskConsume, eventProcessor.ProcessTask).
 		Handle(eventdispatch.TaskPurgeConsumptions, eventProcessor.PurgeConsumptions).
 		Handle(queue.TaskSLASweep, queue.SLASweepHandler(slaSvc.Sweep)).

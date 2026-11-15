@@ -1147,14 +1147,16 @@ func (q *Queries) AISaveSimilarLink(ctx context.Context, arg AISaveSimilarLinkPa
 const aISimilarConversations = `-- name: AISimilarConversations :many
 SELECT c.id,c.uuid,c.subject,c.status,ts_rank_cd(to_tsvector('simple',c.subject||' '||c.last_message_preview),plainto_tsquery('simple',$2::text))::real AS score
 FROM conversations c WHERE c.organization_id=$1 AND c.id<>$3 AND c.deleted_at IS NULL
+AND (c.brand_id IS NULL OR c.brand_id=$4::uuid)
 AND to_tsvector('simple',c.subject||' '||c.last_message_preview) @@ plainto_tsquery('simple',$2::text)
-ORDER BY score DESC,c.id DESC LIMIT 10
+ORDER BY (c.brand_id IS NOT NULL) DESC,score DESC,c.id DESC LIMIT 10
 `
 
 type AISimilarConversationsParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Q              string `json:"q"`
-	CurrentID      int64  `json:"current_id"`
+	OrganizationID int64       `json:"organization_id"`
+	Q              string      `json:"q"`
+	CurrentID      int64       `json:"current_id"`
+	BrandID        pgtype.UUID `json:"brand_id"`
 }
 
 type AISimilarConversationsRow struct {
@@ -1165,8 +1167,16 @@ type AISimilarConversationsRow struct {
 	Score   float32   `json:"score"`
 }
 
+// CF-214: same brand first, then brandless (organization-wide) conversations;
+// another brand's conversations never match. A brandless conversation only
+// matches brandless ones.
 func (q *Queries) AISimilarConversations(ctx context.Context, arg AISimilarConversationsParams) ([]AISimilarConversationsRow, error) {
-	rows, err := q.db.Query(ctx, aISimilarConversations, arg.OrganizationID, arg.Q, arg.CurrentID)
+	rows, err := q.db.Query(ctx, aISimilarConversations,
+		arg.OrganizationID,
+		arg.Q,
+		arg.CurrentID,
+		arg.BrandID,
+	)
 	if err != nil {
 		return nil, err
 	}

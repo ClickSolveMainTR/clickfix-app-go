@@ -18,6 +18,7 @@ import (
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
@@ -152,7 +153,7 @@ func TestTriageUsesCheapProviderCreditsAndDedup(t *testing.T) {
 
 type fakeSources struct{ citation kbmodel.Citation }
 
-func (f fakeSources) Search(context.Context, int64, string, string, bool) ([]kbmodel.Citation, error) {
+func (f fakeSources) SearchScoped(context.Context, vectorstore.Scope, string, string, bool) ([]kbmodel.Citation, error) {
 	return []kbmodel.Citation{f.citation}, nil
 }
 

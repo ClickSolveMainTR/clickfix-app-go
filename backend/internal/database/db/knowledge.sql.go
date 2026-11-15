@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -195,6 +196,74 @@ func (q *Queries) KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesPa
 			&i.DepartmentName,
 			&i.HelpfulCount,
 			&i.NotHelpfulCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const knowledgeChunksByIDs = `-- name: KnowledgeChunksByIDs :many
+SELECT c.id,c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title
+ FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
+ JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
+ WHERE c.organization_id=$1 AND c.id=ANY($2::bigint[]) AND a.deleted_at IS NULL AND a.published_version=c.version
+ AND a.locale=$3 AND (NOT $4::boolean OR v.visibility='public')
+ AND (NOT $5::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$6::bigint[]))
+`
+
+type KnowledgeChunksByIDsParams struct {
+	OrganizationID    int64   `json:"organization_id"`
+	Ids               []int64 `json:"ids"`
+	Locale            string  `json:"locale"`
+	PublicOnly        bool    `json:"public_only"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
+}
+
+type KnowledgeChunksByIDsRow struct {
+	ID          int64     `json:"id"`
+	Uuid        uuid.UUID `json:"uuid"`
+	ArticleID   int64     `json:"article_id"`
+	Version     int32     `json:"version"`
+	Content     string    `json:"content"`
+	ArticleUuid uuid.UUID `json:"article_uuid"`
+	Slug        string    `json:"slug"`
+	Locale      string    `json:"locale"`
+	Title       string    `json:"title"`
+}
+
+// Hydrates vector hits (vectorstore.Search) with the published, visible article data.
+func (q *Queries) KnowledgeChunksByIDs(ctx context.Context, arg KnowledgeChunksByIDsParams) ([]KnowledgeChunksByIDsRow, error) {
+	rows, err := q.db.Query(ctx, knowledgeChunksByIDs,
+		arg.OrganizationID,
+		arg.Ids,
+		arg.Locale,
+		arg.PublicOnly,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []KnowledgeChunksByIDsRow{}
+	for rows.Next() {
+		var i KnowledgeChunksByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.ArticleID,
+			&i.Version,
+			&i.Content,
+			&i.ArticleUuid,
+			&i.Slug,
+			&i.Locale,
+			&i.Title,
 		); err != nil {
 			return nil, err
 		}
@@ -415,20 +484,27 @@ func (q *Queries) KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInser
 }
 
 const knowledgeInsertChunk = `-- name: KnowledgeInsertChunk :one
-INSERT INTO knowledge_chunks(organization_id,article_id,version,ordinal,content,embedding,embedding_model) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id, uuid, organization_id, article_id, version, ordinal, content, embedding, embedding_model, created_at
+INSERT INTO knowledge_chunks(organization_id,article_id,version,ordinal,content,embedding,embedding_model,pending_embedding,pending_model)
+ VALUES($1,$2,$3,$4,$5,
+ $6::vector,$7,$8::vector,$9::text)
+ RETURNING uuid
 `
 
 type KnowledgeInsertChunkParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	ArticleID      int64     `json:"article_id"`
-	Version        int32     `json:"version"`
-	Ordinal        int32     `json:"ordinal"`
-	Content        string    `json:"content"`
-	Embedding      []float32 `json:"embedding"`
-	EmbeddingModel string    `json:"embedding_model"`
+	OrganizationID   int64              `json:"organization_id"`
+	ArticleID        int64              `json:"article_id"`
+	Version          int32              `json:"version"`
+	Ordinal          int32              `json:"ordinal"`
+	Content          string             `json:"content"`
+	Embedding        vectorstore.Vector `json:"embedding"`
+	EmbeddingModel   string             `json:"embedding_model"`
+	PendingEmbedding vectorstore.Vector `json:"pending_embedding"`
+	PendingModel     pgtype.Text        `json:"pending_model"`
 }
 
-func (q *Queries) KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (KnowledgeChunk, error) {
+// brand_id comes from the article (trigger). While the organization is being
+// re-embedded the vector goes to pending_* (CF-214).
+func (q *Queries) KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, knowledgeInsertChunk,
 		arg.OrganizationID,
 		arg.ArticleID,
@@ -437,21 +513,12 @@ func (q *Queries) KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertC
 		arg.Content,
 		arg.Embedding,
 		arg.EmbeddingModel,
+		arg.PendingEmbedding,
+		arg.PendingModel,
 	)
-	var i KnowledgeChunk
-	err := row.Scan(
-		&i.ID,
-		&i.Uuid,
-		&i.OrganizationID,
-		&i.ArticleID,
-		&i.Version,
-		&i.Ordinal,
-		&i.Content,
-		&i.Embedding,
-		&i.EmbeddingModel,
-		&i.CreatedAt,
-	)
-	return i, err
+	var uuid uuid.UUID
+	err := row.Scan(&uuid)
+	return uuid, err
 }
 
 const knowledgeInsertVersion = `-- name: KnowledgeInsertVersion :exec
@@ -596,23 +663,30 @@ func (q *Queries) KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSave
 
 const knowledgeSearchLexical = `-- name: KnowledgeSearchLexical :many
 SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
- ts_rank_cd(to_tsvector('simple',c.content),plainto_tsquery('simple',$3::text))::double precision AS score
+ ts_rank_cd(to_tsvector('simple',c.content),plainto_tsquery('simple',$1::text))::double precision AS score,
+ (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
- WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$2 AND (NOT $4::boolean OR v.visibility='public')
- AND (NOT $5::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$6::bigint[]))
- AND to_tsvector('simple',c.content) @@ plainto_tsquery('simple',$3::text)
+ WHERE c.organization_id=$2 AND a.deleted_at IS NULL AND a.published_version=c.version
+ AND a.locale=$3 AND (NOT $4::boolean OR v.visibility='public')
+ AND ($5::boolean OR c.brand_id IS NULL OR c.brand_id=$6::uuid)
+ AND ($7::boolean OR c.department_id IS NULL OR c.department_id=$8::uuid)
+ AND (NOT $9::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$10::bigint[]))
+ AND to_tsvector('simple',c.content) @@ plainto_tsquery('simple',$1::text)
  ORDER BY score DESC,c.id LIMIT 40
 `
 
 type KnowledgeSearchLexicalParams struct {
-	OrganizationID    int64   `json:"organization_id"`
-	Locale            string  `json:"locale"`
-	Q                 string  `json:"q"`
-	PublicOnly        bool    `json:"public_only"`
-	DeptRestrict      bool    `json:"dept_restrict"`
-	ViewerDepartments []int64 `json:"viewer_departments"`
+	Q                 string      `json:"q"`
+	OrganizationID    int64       `json:"organization_id"`
+	Locale            string      `json:"locale"`
+	PublicOnly        bool        `json:"public_only"`
+	AllBrands         bool        `json:"all_brands"`
+	BrandID           pgtype.UUID `json:"brand_id"`
+	AllDepartments    bool        `json:"all_departments"`
+	DepartmentID      pgtype.UUID `json:"department_id"`
+	DeptRestrict      bool        `json:"dept_restrict"`
+	ViewerDepartments []int64     `json:"viewer_departments"`
 }
 
 type KnowledgeSearchLexicalRow struct {
@@ -625,14 +699,20 @@ type KnowledgeSearchLexicalRow struct {
 	Locale      string    `json:"locale"`
 	Title       string    `json:"title"`
 	Score       float64   `json:"score"`
+	Specific    bool      `json:"specific"`
 }
 
+// Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
 func (q *Queries) KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error) {
 	rows, err := q.db.Query(ctx, knowledgeSearchLexical,
+		arg.Q,
 		arg.OrganizationID,
 		arg.Locale,
-		arg.Q,
 		arg.PublicOnly,
+		arg.AllBrands,
+		arg.BrandID,
+		arg.AllDepartments,
+		arg.DepartmentID,
 		arg.DeptRestrict,
 		arg.ViewerDepartments,
 	)
@@ -653,77 +733,7 @@ func (q *Queries) KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearc
 			&i.Locale,
 			&i.Title,
 			&i.Score,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const knowledgeSearchVector = `-- name: KnowledgeSearchVector :many
-SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
- ai_cosine(c.embedding,$4::real[])::double precision AS score
- FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
- JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
- WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$2 AND (NOT $5::boolean OR v.visibility='public')
- AND (NOT $6::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$7::bigint[])) AND c.embedding_model=$3
- ORDER BY score DESC,c.id LIMIT 40
-`
-
-type KnowledgeSearchVectorParams struct {
-	OrganizationID    int64     `json:"organization_id"`
-	Locale            string    `json:"locale"`
-	EmbeddingModel    string    `json:"embedding_model"`
-	Embedding         []float32 `json:"embedding"`
-	PublicOnly        bool      `json:"public_only"`
-	DeptRestrict      bool      `json:"dept_restrict"`
-	ViewerDepartments []int64   `json:"viewer_departments"`
-}
-
-type KnowledgeSearchVectorRow struct {
-	Uuid        uuid.UUID `json:"uuid"`
-	ArticleID   int64     `json:"article_id"`
-	Version     int32     `json:"version"`
-	Content     string    `json:"content"`
-	ArticleUuid uuid.UUID `json:"article_uuid"`
-	Slug        string    `json:"slug"`
-	Locale      string    `json:"locale"`
-	Title       string    `json:"title"`
-	Score       float64   `json:"score"`
-}
-
-func (q *Queries) KnowledgeSearchVector(ctx context.Context, arg KnowledgeSearchVectorParams) ([]KnowledgeSearchVectorRow, error) {
-	rows, err := q.db.Query(ctx, knowledgeSearchVector,
-		arg.OrganizationID,
-		arg.Locale,
-		arg.EmbeddingModel,
-		arg.Embedding,
-		arg.PublicOnly,
-		arg.DeptRestrict,
-		arg.ViewerDepartments,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []KnowledgeSearchVectorRow{}
-	for rows.Next() {
-		var i KnowledgeSearchVectorRow
-		if err := rows.Scan(
-			&i.Uuid,
-			&i.ArticleID,
-			&i.Version,
-			&i.Content,
-			&i.ArticleUuid,
-			&i.Slug,
-			&i.Locale,
-			&i.Title,
-			&i.Score,
+			&i.Specific,
 		); err != nil {
 			return nil, err
 		}
@@ -864,19 +874,26 @@ func (q *Queries) KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdat
 }
 
 const knowledgeValidChunks = `-- name: KnowledgeValidChunks :many
-SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title
+SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
+ (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
- WHERE c.organization_id=$1 AND c.uuid=ANY($3::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$2 AND (NOT $4::boolean OR v.visibility='public')
- AND (NOT $5::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$6::bigint[]))
+ WHERE c.organization_id=$1 AND c.uuid=ANY($2::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
+ AND a.locale=$3 AND (NOT $4::boolean OR v.visibility='public')
+ AND ($5::boolean OR c.brand_id IS NULL OR c.brand_id=$6::uuid)
+ AND ($7::boolean OR c.department_id IS NULL OR c.department_id=$8::uuid)
+ AND (NOT $9::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$10::bigint[]))
 `
 
 type KnowledgeValidChunksParams struct {
 	OrganizationID    int64       `json:"organization_id"`
-	Locale            string      `json:"locale"`
 	Ids               []uuid.UUID `json:"ids"`
+	Locale            string      `json:"locale"`
 	PublicOnly        bool        `json:"public_only"`
+	AllBrands         bool        `json:"all_brands"`
+	BrandID           pgtype.UUID `json:"brand_id"`
+	AllDepartments    bool        `json:"all_departments"`
+	DepartmentID      pgtype.UUID `json:"department_id"`
 	DeptRestrict      bool        `json:"dept_restrict"`
 	ViewerDepartments []int64     `json:"viewer_departments"`
 }
@@ -890,14 +907,19 @@ type KnowledgeValidChunksRow struct {
 	Slug        string    `json:"slug"`
 	Locale      string    `json:"locale"`
 	Title       string    `json:"title"`
+	Specific    bool      `json:"specific"`
 }
 
 func (q *Queries) KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidChunksParams) ([]KnowledgeValidChunksRow, error) {
 	rows, err := q.db.Query(ctx, knowledgeValidChunks,
 		arg.OrganizationID,
-		arg.Locale,
 		arg.Ids,
+		arg.Locale,
 		arg.PublicOnly,
+		arg.AllBrands,
+		arg.BrandID,
+		arg.AllDepartments,
+		arg.DepartmentID,
 		arg.DeptRestrict,
 		arg.ViewerDepartments,
 	)
@@ -917,6 +939,7 @@ func (q *Queries) KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidCh
 			&i.Slug,
 			&i.Locale,
 			&i.Title,
+			&i.Specific,
 		); err != nil {
 			return nil, err
 		}
