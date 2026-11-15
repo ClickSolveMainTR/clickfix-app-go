@@ -4,6 +4,7 @@ import (
 	appointmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/appointments/usecase"
 	authrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/repository"
 	authuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/usecase"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 
 	"context"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
@@ -200,6 +201,7 @@ func main() {
 		Surveys:             surveysSvc,
 		Status:              statusSvc,
 		LiveActivities:      mobileextmodule.NewService(cfg.APNs, pool, queries, log),
+		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
 	})
 	if err != nil {
 		log.Error("event_consumers_init_failed", "error", err)

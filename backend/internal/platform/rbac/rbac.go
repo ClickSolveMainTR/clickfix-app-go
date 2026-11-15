@@ -175,6 +175,14 @@ const (
 	PermTenantIntegrationsUse    = "tenant.integrations.use"
 )
 
+// Category taxonomy and the label store (CF-218).
+const (
+	PermTenantCategoriesRead   = "tenant.categories.read"
+	PermTenantCategoriesManage = "tenant.categories.manage"
+	PermTenantCategoriesLabel  = "tenant.categories.label"
+	PermTenantCategoriesExport = "tenant.categories.export"
+)
+
 // Departments (CF-215): business units with their own knowledge, SLA,
 // working hours and AI settings. read_all sees every department's knowledge.
 const (

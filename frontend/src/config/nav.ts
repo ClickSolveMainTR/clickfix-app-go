@@ -5,6 +5,7 @@ import {
   Workflow,
   BarChart3,
   BookOpen,
+  FolderTree,
   CalendarCog,
   CalendarDays,
   BookUser,
@@ -667,6 +668,13 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.knowledge.root,
           icon: BookOpen,
           permission: permissions.tenant.settings.read,
+        },
+        {
+          id: "settings-categories",
+          titleKey: "layout.nav_categories",
+          href: routes.cms.settings.categories,
+          icon: FolderTree,
+          permission: permissions.tenant.categories.read,
         },
         {
           id: "settings-billing",

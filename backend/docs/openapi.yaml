@@ -6272,6 +6272,313 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/tenant/categories/meta:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoriesMeta
+      summary: Category tree metadata
+      description: "Table contract of `GET /v1/tenant/categories` (`tenant.categories.read`, CF-218)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Resource meta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeResourceMeta"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategories
+      summary: List the category tree
+      description: "`tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; until departments land (CF-215) it answers `400 VALIDATION_ERROR` (`department`, `unavailable`). Archived nodes only with `include_archived=true`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: department
+          in: query
+          schema: { type: string, format: uuid }
+        - name: include_archived
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Category tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+    post:
+      tags: [Tenant]
+      operationId: postTenantCategory
+      summary: Create a category
+      description: "`tenant.categories.manage` (CF-218). `slug` defaults to the slugified name. A root may be organization-wide or belong to a department; a child of a department node belongs to the same department (it inherits it when `department_uuid` is omitted); a child of an organization-wide node may open a department branch. At most 5 levels. `examples` (up to 50) are sample texts the embedding classifier compares records with. Errors: `400 VALIDATION_ERROR` (`name`, `slug`, `examples`, `parent_uuid` `not_found`/`cycle`/`too_deep`/`archived`, `department_uuid` `mismatch`/`not_found`/`unavailable`), `409 CONFLICT` when the slug is taken."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/categories/review:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryReview
+      summary: Records waiting for a category decision
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Records whose classification stayed below the confidence bar (`needs_review`), newest first. `subject_type` narrows the kind."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: subject_type
+          in: query
+          schema: { $ref: "#/components/schemas/CategorySubjectType" }
+      responses:
+        "200":
+          description: Review page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentPage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories/labels/export:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryLabelsExport
+      summary: Export the category labels (training set)
+      description: "`tenant.categories.read` + `tenant.categories.export` (CF-218). Every agent confirmation and correction of the organization as JSON Lines, oldest first: masked text, its vector and embedding model, the previous and the new category, the previous source and confidence, who and when. The training set of the organization's own classifier (CF-219); it never contains another organization's labels. `since` (RFC 3339) exports labels created from then on. Not wrapped in the response envelope."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: One CategoryLabelExport object per line
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: "#/components/schemas/CategoryLabelExport"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+
+  /v1/tenant/categories/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategory
+      summary: Get a category
+      description: "`tenant.categories.read` (CF-218)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Tenant]
+      operationId: patchTenantCategory
+      summary: Update a category
+      description: "`tenant.categories.manage` (CF-218). Omitted fields keep their value; `parent_uuid: \"\"` makes the node a root, `department_uuid: \"\"` makes it organization-wide. Moving a node moves its subtree (same rules as create). `archived: true` archives the node and its subtree: archived nodes are no classification candidates but keep their labels."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "200":
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategory"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCategory
+      summary: Delete an unused category
+      description: "`tenant.categories.manage` (CF-218). Only a node without children, records or labels; otherwise `409 CONFLICT` (archive it instead). Answers `status: deleted`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/tenant/category-assignments/{subjectType}/{subjectUuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantCategoryAssignment
+      summary: Get a record's category
+      description: "`tenant.categories.read` (CF-218). The record must be visible to the caller (conversations follow the inbox visibility; suggestions need `tenant.settings.read`), else `404`. `assignment` is `null` while the record has no category."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantCategoryAssignment
+      summary: Confirm or correct a record's category
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). The record takes the category with source `human` and confidence 1. The decision is stored as a label (`confirm` when the category stays, `correct` otherwise): masked text, vector, previous and new category, who and when. Errors: `400 VALIDATION_ERROR` (`category_uuid` `not_found`/`archived`/`department`)."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryLabelInput"
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantCategoryAssignment
+      summary: Clear a record's category
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Labels already collected stay. Answers `status: deleted`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+      responses:
+        "200":
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeStatus"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tenant/category-assignments/{subjectType}/{subjectUuid}/classify:
+    post:
+      tags: [Tenant]
+      operationId: postTenantCategoryClassify
+      summary: Classify a record
+      description: "`tenant.categories.read` + `tenant.categories.label` (CF-218). Phase 1: embedding similarity to the category examples and labelled records; when unsure the AI (metered, `tenant.ai` policy and credits apply); when confidence stays low the record goes to the review queue (`needs_review`). An existing decision is returned unchanged; `force=true` re-runs a machine decision, never a human one. Errors: `409 CONFLICT` when the organization has no categories or the record has no text."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/CategorySubjectTypePath"
+        - $ref: "#/components/parameters/CategorySubjectUuidPath"
+        - name: force
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvelopeCategoryAssignmentResult"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/tenant/departments/meta:
     get:
       tags: [Tenant]
@@ -42388,6 +42695,16 @@ components:
       required: true
       description: Set-up run uuid (CF-140).
       schema: { type: string, format: uuid }
+    CategorySubjectTypePath:
+      name: subjectType
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/CategorySubjectType" }
+    CategorySubjectUuidPath:
+      name: subjectUuid
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     XOrganization:
       name: X-Organization
       in: header
@@ -54666,6 +54983,162 @@ components:
             - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    CategorySubjectType:
+      type: string
+      description: Record kinds that carry a category (CF-218). `archive_record` (CF-217) and `knowledge_unit` (CF-216) answer 404 until their modules register.
+      enum: [conversation, archive_record, knowledge_unit, suggestion]
+
+    CategorySource:
+      type: string
+      description: Who decided the category. `model` is the organization's own classifier (CF-219).
+      enum: [embedding, ai, human, model]
+
+    Category:
+      type: object
+      required: [uuid, department_uuid, parent_uuid, name, slug, description, examples, position, depth, archived, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        department_uuid: { type: [string, "null"], format: uuid, description: "null = organization-wide" }
+        parent_uuid: { type: [string, "null"], format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        examples: { type: array, items: { type: string } }
+        position: { type: integer }
+        depth: { type: integer, minimum: 0, maximum: 4 }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CategoryInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, maxLength: 80, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" }
+        description: { type: string, maxLength: 1000 }
+        examples: { type: array, maxItems: 50, items: { type: string, maxLength: 500 } }
+        position: { type: integer }
+        parent_uuid: { type: string, description: "Parent uuid; empty string makes a root" }
+        department_uuid: { type: string, description: "Department uuid; empty string makes the node organization-wide" }
+        archived: { type: boolean }
+
+    CategoryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Category" }
+
+    CategoryRef:
+      type: object
+      required: [uuid, name, slug]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+
+    CategoryAssignment:
+      type: object
+      required: [subject_type, subject_uuid, category, confidence, source, classifier, needs_review, updated_at]
+      properties:
+        subject_type: { $ref: "#/components/schemas/CategorySubjectType" }
+        subject_uuid: { type: string, format: uuid }
+        category:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryRef"
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source: { $ref: "#/components/schemas/CategorySource" }
+        classifier: { type: string, description: "Stage and version that decided (embedding/v1, ai/v1, human, none)" }
+        needs_review: { type: boolean }
+        updated_at: { type: string, format: date-time }
+
+    CategoryAssignmentResult:
+      type: object
+      required: [assignment]
+      properties:
+        assignment:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryAssignment"
+
+    CategoryAssignmentPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryAssignment" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    CategoryLabelInput:
+      type: object
+      required: [category_uuid]
+      additionalProperties: false
+      properties:
+        category_uuid: { type: string, format: uuid }
+
+    CategoryLabelExport:
+      type: object
+      description: One line of the label export (CF-219 training set).
+      required: [uuid, created_at, subject_type, department_uuid, action, text, embedding_model, embedding, category, previous_category, previous_source, previous_confidence, labeled_by]
+      properties:
+        uuid: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        subject_type: { $ref: "#/components/schemas/CategorySubjectType" }
+        department_uuid: { type: [string, "null"], format: uuid }
+        action: { type: string, enum: [confirm, correct] }
+        text: { type: string, description: "Record text with personal data masked" }
+        embedding_model: { type: string, description: "Empty when the vector could not be built" }
+        embedding: { type: array, items: { type: number } }
+        category: { $ref: "#/components/schemas/CategoryRef" }
+        previous_category:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategoryRef"
+        previous_source:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CategorySource"
+        previous_confidence: { type: [number, "null"] }
+        labeled_by: { type: string, format: uuid }
+
+    EnvelopeCategory:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/Category" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryList" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryAssignmentResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryAssignmentResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeCategoryAssignmentPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/CategoryAssignmentPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     TeamPage:
       type: object

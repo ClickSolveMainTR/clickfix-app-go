@@ -314,3 +314,9 @@ integration_calls
 custom_field_unknown_keys
 custom_field_unknown_values
 knowledge_article_audiences
+
+# Categories (CF-218)
+categories
+category_examples
+category_assignments
+category_labels

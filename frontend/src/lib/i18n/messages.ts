@@ -43,6 +43,7 @@ import enSecurity from "@/locales/en/security.json";
 import enPlatformHealth from "@/locales/en/platform_health.json";
 import enEngineering from "@/locales/en/engineering.json";
 import enTeams from "@/locales/en/teams.json";
+import enCategories from "@/locales/en/categories.json";
 import enDepartments from "@/locales/en/departments.json";
 import enChannels from "@/locales/en/channels.json";
 import enInbox from "@/locales/en/inbox.json";
@@ -129,6 +130,7 @@ import trSecurity from "@/locales/tr/security.json";
 import trPlatformHealth from "@/locales/tr/platform_health.json";
 import trEngineering from "@/locales/tr/engineering.json";
 import trTeams from "@/locales/tr/teams.json";
+import trCategories from "@/locales/tr/categories.json";
 import trDepartments from "@/locales/tr/departments.json";
 import trChannels from "@/locales/tr/channels.json";
 import trInbox from "@/locales/tr/inbox.json";
@@ -188,6 +190,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     security: trSecurity,
     platform_health: trPlatformHealth,
     teams: trTeams,
+    categories: trCategories,
     departments: trDepartments,
     engineering: trEngineering,
     channels: trChannels,
@@ -270,6 +273,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     security: enSecurity,
     platform_health: enPlatformHealth,
     teams: enTeams,
+    categories: enCategories,
     departments: enDepartments,
     engineering: enEngineering,
     channels: enChannels,
