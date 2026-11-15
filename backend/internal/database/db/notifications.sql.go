@@ -1068,6 +1068,57 @@ func (q *Queries) MarkNotificationSent(ctx context.Context, arg MarkNotification
 	return i, err
 }
 
+const markNotificationSkipped = `-- name: MarkNotificationSkipped :one
+UPDATE notifications
+SET status = 'cancelled',
+    last_error = $2,
+    max_attempts = GREATEST(LEAST(max_attempts, attempt_count), 1)
+WHERE id = $1
+RETURNING id, uuid, user_id, channel, status, priority, title, body, payload, action_url, recipient, template_code, source_event, scheduled_at, sent_at, delivered_at, read_at, failed_at, cancelled_at, attempt_count, max_attempts, last_error, provider, provider_reference, created_at, updated_at, organization_id
+`
+
+type MarkNotificationSkippedParams struct {
+	ID        int64       `json:"id"`
+	LastError pgtype.Text `json:"last_error"`
+}
+
+// Skipped: intentionally not sent (undeliverable recipient such as a
+// reserved domain). Stored as cancelled with the reason; no retries left.
+func (q *Queries) MarkNotificationSkipped(ctx context.Context, arg MarkNotificationSkippedParams) (Notification, error) {
+	row := q.db.QueryRow(ctx, markNotificationSkipped, arg.ID, arg.LastError)
+	var i Notification
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.UserID,
+		&i.Channel,
+		&i.Status,
+		&i.Priority,
+		&i.Title,
+		&i.Body,
+		&i.Payload,
+		&i.ActionUrl,
+		&i.Recipient,
+		&i.TemplateCode,
+		&i.SourceEvent,
+		&i.ScheduledAt,
+		&i.SentAt,
+		&i.DeliveredAt,
+		&i.ReadAt,
+		&i.FailedAt,
+		&i.CancelledAt,
+		&i.AttemptCount,
+		&i.MaxAttempts,
+		&i.LastError,
+		&i.Provider,
+		&i.ProviderReference,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OrganizationID,
+	)
+	return i, err
+}
+
 const notificationConversationContext = `-- name: NotificationConversationContext :one
 SELECT c.uuid, c.number, c.subject, c.channel_type, c.assignee_user_id,
        c.last_message_preview, c.first_response_at,

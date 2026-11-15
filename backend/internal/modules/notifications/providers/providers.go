@@ -41,6 +41,9 @@ type EmailProvider struct {
 	// AppURL is the public frontend origin: relative action links resolve
 	// against it and the footer links to its notification preferences.
 	AppURL string
+	// DeliverReserved sends to reserved domains (example.com, *.test) too.
+	// Only for local development, where MailHog accepts every address.
+	DeliverReserved bool
 }
 
 func (EmailProvider) Channel() string { return model.ChannelEmail }
@@ -52,6 +55,11 @@ func (p EmailProvider) Deliver(ctx context.Context, n db.Notification, _ *uuid.U
 	}
 	if to == "" {
 		return DeliveryResult{}, ErrNoRecipient
+	}
+	if !p.DeliverReserved && mail.IsReservedAddress(to) {
+		// Demo and seed users live on reserved domains; the provider would
+		// reject them permanently (CF-226).
+		return DeliveryResult{}, &SkipError{Reason: SkipReservedDomain}
 	}
 	if p.Mail == nil {
 		p.Mail = mail.NoopSender{}
@@ -202,6 +210,17 @@ func (p NoopProvider) Deliver(_ context.Context, n db.Notification, _ *uuid.UUID
 
 // ErrNoRecipient is returned when email has no recipient.
 var ErrNoRecipient = errString("notification recipient required")
+
+// SkipReservedDomain: the recipient is on an RFC 2606 reserved domain.
+const SkipReservedDomain = "reserved_domain"
+
+// SkipError means the notification is intentionally not sent: it is
+// recorded as skipped, not as a failure, and is never retried or reported.
+type SkipError struct {
+	Reason string
+}
+
+func (e *SkipError) Error() string { return "notification skipped: " + e.Reason }
 
 type errString string
 
