@@ -684,7 +684,7 @@ UPDATE conversations SET
     resolved_at = COALESCE(resolved_at, NOW()), closed_at = COALESCE(closed_at, NOW()),
     waiting_since = NULL, updated_at = NOW()
 WHERE organization_id = $2 AND id = $3
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type MarkConversationMergedParams struct {
@@ -738,6 +738,10 @@ func (q *Queries) MarkConversationMerged(ctx context.Context, arg MarkConversati
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -921,7 +925,7 @@ FROM (
     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.deleted_at IS NULL
 ) s
 WHERE c.organization_id = $1 AND c.id = $2
-RETURNING c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id
+RETURNING c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id, c.department_id, c.department_source, c.department_confidence, c.department_routed_at
 `
 
 type RecountConversationParams struct {
@@ -975,6 +979,10 @@ func (q *Queries) RecountConversation(ctx context.Context, arg RecountConversati
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }

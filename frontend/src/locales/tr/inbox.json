@@ -400,5 +400,10 @@
   "screen.title": "Ekran bağlamı",
   "screen.page": "Sayfa",
   "screen.events": "Olaylar",
-  "filters.identity": "Kimlik"
+  "filters.identity": "Kimlik",
+  "events.department_transferred": "{{actor}} konuşmayı {{department}} departmanına devretti",
+  "events.department_picked": "Müşteri {{department}} departmanını seçti",
+  "events.department_predicted": "AI konuşmayı {{department}} departmanına yönlendirdi",
+  "events.department_organization_wide": "organizasyon geneli",
+  "events.department_ai": "AI"
 }

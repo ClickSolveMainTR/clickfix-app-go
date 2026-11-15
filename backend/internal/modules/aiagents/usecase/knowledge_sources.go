@@ -17,6 +17,7 @@ import (
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	kb "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ioengine"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/storage"
@@ -31,6 +32,10 @@ type SourceInput struct {
 	Locale        string `json:"locale"`
 	MaxDepth      int32  `json:"max_depth"`
 	IntervalHours int32  `json:"interval_hours"`
+	// Department (CF-215): null or omitted is organization-wide.
+	Department deptscope.Optional `json:"department_uuid"`
+	// DepartmentID is the resolved Department (handler).
+	DepartmentID pgtype.Int8 `json:"-"`
 }
 type SourceService struct {
 	Agents  *Service
@@ -51,7 +56,23 @@ func (s *SourceService) CreateURL(ctx context.Context, org, actor int64, in Sour
 	if _, err := toolURL(in.URL); err != nil {
 		return db.KnowledgeSource{}, err
 	}
-	return s.Agents.Repo.Q.AIKnowledgeSourceCreate(ctx, db.AIKnowledgeSourceCreateParams{OrganizationID: org, Kind: "url", Location: in.URL, Title: in.Title, Locale: in.Locale, AuthorID: actor, MaxDepth: in.MaxDepth, IntervalHours: in.IntervalHours})
+	row, err := s.Agents.Repo.Q.AIKnowledgeSourceCreate(ctx, db.AIKnowledgeSourceCreateParams{OrganizationID: org, Kind: "url", Location: in.URL, Title: in.Title, Locale: in.Locale, AuthorID: actor, MaxDepth: in.MaxDepth, IntervalHours: in.IntervalHours})
+	if err != nil {
+		return row, err
+	}
+	return s.department(ctx, org, row, in.DepartmentID)
+}
+
+// department files a new source under its department (CF-215).
+func (s *SourceService) department(ctx context.Context, org int64, row db.KnowledgeSource, dept pgtype.Int8) (db.KnowledgeSource, error) {
+	if !dept.Valid {
+		return row, nil
+	}
+	if _, err := s.Agents.Repo.Q.SetKnowledgeSourceDepartment(ctx, db.SetKnowledgeSourceDepartmentParams{OrganizationID: org, Uuid: row.Uuid, DepartmentID: dept}); err != nil {
+		return row, err
+	}
+	row.DepartmentID = dept
+	return row, nil
 }
 
 func (s *SourceService) Upload(ctx context.Context, org, actor int64, in SourceInput, name string, data []byte) (db.KnowledgeSource, error) {
@@ -71,8 +92,9 @@ func (s *SourceService) Upload(ctx context.Context, org, actor int64, in SourceI
 	row, err := s.Agents.Repo.Q.AIKnowledgeSourceCreate(ctx, db.AIKnowledgeSourceCreateParams{OrganizationID: org, Kind: "file", Location: key, Title: in.Title, Locale: in.Locale, AuthorID: actor, MaxDepth: 0, IntervalHours: in.IntervalHours})
 	if err != nil {
 		_ = s.Storage.Delete(ctx, key)
+		return row, err
 	}
-	return row, err
+	return s.department(ctx, org, row, in.DepartmentID)
 }
 
 func (s *SourceService) Sync(ctx context.Context, org int64, id uuid.UUID) (err error) {

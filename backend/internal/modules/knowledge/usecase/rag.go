@@ -15,6 +15,7 @@ import (
 	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
@@ -308,6 +309,7 @@ func (r *RAG) vectorCandidates(ctx context.Context, scope vectorstore.Scope, que
 	if !validVectors(embedded.Vectors, 1) {
 		return nil, ai.ErrInvalidOutput
 	}
+	restrict, viewer := deptscope.Effective(ctx).Args()
 	hits, err := vectorstore.Search(ctx, r.KB.Repo.Pool, ChunkSource, scope, vectorstore.Query{
 		Vector: embedded.Vectors[0], Model: searchModel, MinSimilarity: KnowledgeMinSimilarity, Limit: 40,
 		Args: pgx.NamedArgs{"locale": locale, "public_only": publicOnly},
@@ -319,7 +321,7 @@ func (r *RAG) vectorCandidates(ctx context.Context, scope vectorstore.Scope, que
 	for i, h := range hits {
 		ids[i] = h.ID
 	}
-	rows, err := r.KB.Repo.Q.KnowledgeChunksByIDs(ctx, db.KnowledgeChunksByIDsParams{OrganizationID: org, Ids: ids, Locale: locale, PublicOnly: publicOnly})
+	rows, err := r.KB.Repo.Q.KnowledgeChunksByIDs(ctx, db.KnowledgeChunksByIDsParams{OrganizationID: org, Ids: ids, Locale: locale, PublicOnly: publicOnly, DeptRestrict: restrict, ViewerDepartments: viewer})
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +376,9 @@ func (r *RAG) skip(ctx context.Context, org int64, a db.KnowledgePublishedRow, r
 }
 
 // Search is the organization-wide (all brands) search for internal callers:
-// admin search, team chat, help center.
+// admin search, team chat, help center. It follows the department scope of
+// ctx (CF-215, deptscope): without one only organization-wide articles are
+// candidates.
 func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publicOnly bool) ([]model.Citation, error) {
 	return r.SearchScoped(ctx, vectorstore.Organization(org), query, locale, publicOnly)
 }
@@ -388,6 +392,7 @@ func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, 
 		return nil, model.ErrInvalid
 	}
 	ctx = orgctx.WithOrganizationID(ctx, org)
+	restrict, viewer := deptscope.Effective(ctx).Args()
 	if len(query) == 0 || len(query) > 4000 || (locale != "tr" && locale != "en") {
 		return nil, model.ErrInvalid
 	}
@@ -421,7 +426,8 @@ func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, 
 			return nil, err
 		}
 		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly,
-			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID})
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
@@ -436,7 +442,8 @@ func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, 
 		}
 	} else {
 		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly,
-			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID})
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}

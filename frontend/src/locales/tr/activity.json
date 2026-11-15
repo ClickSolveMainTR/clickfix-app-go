@@ -246,5 +246,12 @@
   "actions.assistant.document_added": "Asistana belge paylaşıldı",
   "actions.assistant.document_removed": "Asistandan belge kaldırıldı",
   "actions.auto_replies.updated": "Otomatik yanıtlar güncellendi",
-  "resources.auto_replies": "Otomatik yanıtlar"
+  "resources.auto_replies": "Otomatik yanıtlar",
+  "actions.departments.created": "Departman oluşturuldu",
+  "actions.departments.updated": "Departman güncellendi",
+  "actions.departments.deleted": "Departman silindi",
+  "actions.departments.shared": "Departman bilgisi paylaşıldı",
+  "actions.departments.unshared": "Departman bilgi paylaşımı kaldırıldı",
+  "actions.departments.conversation_transferred": "Konuşma başka departmana devredildi",
+  "resources.tenant.departments": "Departmanlar"
 }

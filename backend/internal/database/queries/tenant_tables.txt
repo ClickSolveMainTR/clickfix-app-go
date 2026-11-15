@@ -16,6 +16,10 @@ onboarding_setup_runs
 onboarding_setup_items
 teams
 team_members
+# Departments (CF-215)
+departments
+department_knowledge_shares
+conversation_department_transfers
 support_access_grants
 agent_presence
 attachments

@@ -174,3 +174,11 @@ const (
 	PermTenantIntegrationsManage = "tenant.integrations.manage"
 	PermTenantIntegrationsUse    = "tenant.integrations.use"
 )
+
+// Departments (CF-215): business units with their own knowledge, SLA,
+// working hours and AI settings. read_all sees every department's knowledge.
+const (
+	PermTenantDepartmentsRead    = "tenant.departments.read"
+	PermTenantDepartmentsWrite   = "tenant.departments.write"
+	PermTenantDepartmentsReadAll = "tenant.departments.read_all"
+)

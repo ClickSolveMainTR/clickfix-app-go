@@ -54,7 +54,7 @@ VALUES (
     $1, $2, $3, $4,
     $5, $6, $7::text[]
 )
-RETURNING id, uuid, organization_id, name, description, color, timezone, working_hours, skills, created_at, updated_at
+RETURNING id, uuid, organization_id, name, description, color, timezone, working_hours, skills, created_at, updated_at, department_id
 `
 
 type CreateTeamParams struct {
@@ -91,6 +91,7 @@ func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, e
 		&i.Skills,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -155,7 +156,7 @@ func (q *Queries) GetOrganizationMemberUserID(ctx context.Context, arg GetOrgani
 }
 
 const getTeamByUUID = `-- name: GetTeamByUUID :one
-SELECT t.id, t.uuid, t.organization_id, t.name, t.description, t.color, t.timezone, t.working_hours, t.skills, t.created_at, t.updated_at,
+SELECT t.id, t.uuid, t.organization_id, t.name, t.description, t.color, t.timezone, t.working_hours, t.skills, t.created_at, t.updated_at, t.department_id,
        (SELECT COUNT(*) FROM team_members tm
         WHERE tm.organization_id = t.organization_id AND tm.team_id = t.id)::bigint AS member_count
 FROM teams t
@@ -179,6 +180,7 @@ type GetTeamByUUIDRow struct {
 	Skills         []string           `json:"skills"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 	MemberCount    int64              `json:"member_count"`
 }
 
@@ -197,6 +199,7 @@ func (q *Queries) GetTeamByUUID(ctx context.Context, arg GetTeamByUUIDParams) (G
 		&i.Skills,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 		&i.MemberCount,
 	)
 	return i, err
@@ -361,7 +364,7 @@ func (q *Queries) ListTeamUUIDsForUser(ctx context.Context, arg ListTeamUUIDsFor
 }
 
 const listTeams = `-- name: ListTeams :many
-SELECT t.id, t.uuid, t.organization_id, t.name, t.description, t.color, t.timezone, t.working_hours, t.skills, t.created_at, t.updated_at,
+SELECT t.id, t.uuid, t.organization_id, t.name, t.description, t.color, t.timezone, t.working_hours, t.skills, t.created_at, t.updated_at, t.department_id,
        (SELECT COUNT(*) FROM team_members tm
         WHERE tm.organization_id = t.organization_id AND tm.team_id = t.id)::bigint AS member_count
 FROM teams t
@@ -408,6 +411,7 @@ type ListTeamsRow struct {
 	Skills         []string           `json:"skills"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 	MemberCount    int64              `json:"member_count"`
 }
 
@@ -441,6 +445,7 @@ func (q *Queries) ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTea
 			&i.Skills,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
 			&i.MemberCount,
 		); err != nil {
 			return nil, err
@@ -504,7 +509,7 @@ SET name = $1,
     working_hours = $5,
     skills = $6::text[]
 WHERE organization_id = $7 AND uuid = $8
-RETURNING id, uuid, organization_id, name, description, color, timezone, working_hours, skills, created_at, updated_at
+RETURNING id, uuid, organization_id, name, description, color, timezone, working_hours, skills, created_at, updated_at, department_id
 `
 
 type UpdateTeamParams struct {
@@ -542,6 +547,7 @@ func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, e
 		&i.Skills,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 	)
 	return i, err
 }

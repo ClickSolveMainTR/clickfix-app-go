@@ -183,5 +183,9 @@
   "labels.platform.product_feedback.read": "Ürün geri bildirimlerini görüntüle",
   "groups.tenant_assistant": "ClickFix Asistan",
   "labels.tenant.widgets.publish": "Web widget ayarlarını yayınla",
-  "groups.tenant_widgets": "Web widget"
+  "groups.tenant_widgets": "Web widget",
+  "labels.tenant.departments.read": "Departmanları görüntüle",
+  "labels.tenant.departments.write": "Departmanları yönet",
+  "labels.tenant.departments.read_all": "Tüm departmanların bilgisini gör",
+  "groups.tenant_departments": "Departmanlar"
 }

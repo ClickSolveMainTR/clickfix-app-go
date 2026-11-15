@@ -120,6 +120,12 @@ func (s *Service) SaveArticle(ctx context.Context, org, actor int64, id uuid.UUI
 		if e != nil {
 			return e
 		}
+		if create || in.Department.Set {
+			if _, e = q.SetKnowledgeArticleDepartment(ctx, db.SetKnowledgeArticleDepartmentParams{OrganizationID: org, Uuid: id, DepartmentID: in.DepartmentID}); e != nil {
+				return e
+			}
+			out.DepartmentID = in.DepartmentID
+		}
 		return q.KnowledgeInsertVersion(ctx, db.KnowledgeInsertVersionParams{OrganizationID: org, ArticleID: out.ID, Version: out.Version, Title: out.Title, Body: out.Body, Visibility: out.Visibility, AuthorID: actor})
 	})
 	return out, err

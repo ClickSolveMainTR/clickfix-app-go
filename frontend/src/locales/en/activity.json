@@ -246,5 +246,12 @@
   "actions.assistant.document_added": "Document shared with the assistant",
   "actions.assistant.document_removed": "Document removed from the assistant",
   "actions.auto_replies.updated": "Automatic replies updated",
-  "resources.auto_replies": "Automatic replies"
+  "resources.auto_replies": "Automatic replies",
+  "actions.departments.created": "Department created",
+  "actions.departments.updated": "Department updated",
+  "actions.departments.deleted": "Department deleted",
+  "actions.departments.shared": "Department knowledge shared",
+  "actions.departments.unshared": "Department knowledge share removed",
+  "actions.departments.conversation_transferred": "Conversation transferred to another department",
+  "resources.tenant.departments": "Departments"
 }

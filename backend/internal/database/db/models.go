@@ -1356,6 +1356,7 @@ type BusinessContextSection struct {
 	UpdatedBy      int64              `json:"updated_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type BusinessContextVersion struct {
@@ -1727,6 +1728,10 @@ type Conversation struct {
 	MergedAt             pgtype.Timestamptz `json:"merged_at"`
 	AnonymizedAt         pgtype.Timestamptz `json:"anonymized_at"`
 	BrandID              pgtype.UUID        `json:"brand_id"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
+	DepartmentSource     pgtype.Text        `json:"department_source"`
+	DepartmentConfidence pgtype.Float4      `json:"department_confidence"`
+	DepartmentRoutedAt   pgtype.Timestamptz `json:"department_routed_at"`
 }
 
 type ConversationBulkOp struct {
@@ -1746,6 +1751,21 @@ type ConversationBulkOp struct {
 type ConversationCounter struct {
 	OrganizationID int64 `json:"organization_id"`
 	LastNumber     int64 `json:"last_number"`
+}
+
+type ConversationDepartmentTransfer struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	ConversationID   int64              `json:"conversation_id"`
+	FromDepartmentID pgtype.Int8        `json:"from_department_id"`
+	ToDepartmentID   pgtype.Int8        `json:"to_department_id"`
+	ActorKind        string             `json:"actor_kind"`
+	ActorUserID      pgtype.Int8        `json:"actor_user_id"`
+	Confidence       pgtype.Float4      `json:"confidence"`
+	Reason           string             `json:"reason"`
+	ContextSummary   string             `json:"context_summary"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
 type ConversationLink struct {
@@ -1960,6 +1980,37 @@ type DataSubjectRequest struct {
 	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Department struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Color          string             `json:"color"`
+	WidgetVisible  bool               `json:"widget_visible"`
+	SortOrder      int32              `json:"sort_order"`
+	SlaPolicyID    pgtype.UUID        `json:"sla_policy_id"`
+	Timezone       pgtype.Text        `json:"timezone"`
+	WorkingHours   []byte             `json:"working_hours"`
+	AiEnabled      bool               `json:"ai_enabled"`
+	AiInstructions string             `json:"ai_instructions"`
+	RoutingHint    string             `json:"routing_hint"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DepartmentKnowledgeShare struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	DepartmentID   int64              `json:"department_id"`
+	ResourceKind   string             `json:"resource_kind"`
+	ResourceID     int64              `json:"resource_id"`
+	SharedBy       pgtype.Int8        `json:"shared_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type DomainEventLog struct {
@@ -2579,6 +2630,7 @@ type KnowledgeArticle struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	BrandID             pgtype.UUID        `json:"brand_id"`
+	DepartmentID        pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeArticleAudience struct {
@@ -2683,6 +2735,7 @@ type KnowledgeSource struct {
 	LastSyncedAt   pgtype.Timestamptz `json:"last_synced_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeSourceDocument struct {
@@ -2710,6 +2763,7 @@ type KnowledgeSuggestion struct {
 	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeTranslation struct {
@@ -3934,6 +3988,7 @@ type Team struct {
 	Skills         []string           `json:"skills"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type TeamMember struct {
