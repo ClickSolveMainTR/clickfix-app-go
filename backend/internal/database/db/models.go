@@ -116,34 +116,47 @@ type AiCreditReservationLot struct {
 }
 
 type AiEvaluation struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Config         []byte             `json:"config"`
-	ConfigRevision int32              `json:"config_revision"`
-	BaselineUuid   pgtype.UUID        `json:"baseline_uuid"`
-	Status         string             `json:"status"`
-	Report         []byte             `json:"report"`
-	AuthorID       int64              `json:"author_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	Config            []byte             `json:"config"`
+	ConfigRevision    int32              `json:"config_revision"`
+	BaselineUuid      pgtype.UUID        `json:"baseline_uuid"`
+	Status            string             `json:"status"`
+	Report            []byte             `json:"report"`
+	AuthorID          int64              `json:"author_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	TriggerKind       string             `json:"trigger_kind"`
+	DepartmentID      pgtype.Int8        `json:"department_id"`
+	Fingerprint       []byte             `json:"fingerprint"`
+	Model             string             `json:"model"`
+	AnswerAccuracy    pgtype.Float8      `json:"answer_accuracy"`
+	SourceHitRate     pgtype.Float8      `json:"source_hit_rate"`
+	CacheHitRate      pgtype.Float8      `json:"cache_hit_rate"`
+	AvgLatencyMs      pgtype.Float8      `json:"avg_latency_ms"`
+	CostPerCaseMicros pgtype.Float8      `json:"cost_per_case_micros"`
 }
 
 type AiEvaluationCase struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Name           string             `json:"name"`
-	Transcript     string             `json:"transcript"`
-	Locale         string             `json:"locale"`
-	Expected       []byte             `json:"expected"`
-	Revision       int32              `json:"revision"`
-	AuthorID       int64              `json:"author_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	Channel        string             `json:"channel"`
-	Category       string             `json:"category"`
-	ScenarioAt     pgtype.Timestamptz `json:"scenario_at"`
+	ID                   int64              `json:"id"`
+	Uuid                 uuid.UUID          `json:"uuid"`
+	OrganizationID       int64              `json:"organization_id"`
+	Name                 string             `json:"name"`
+	Transcript           string             `json:"transcript"`
+	Locale               string             `json:"locale"`
+	Expected             []byte             `json:"expected"`
+	Revision             int32              `json:"revision"`
+	AuthorID             int64              `json:"author_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Channel              string             `json:"channel"`
+	Category             string             `json:"category"`
+	ScenarioAt           pgtype.Timestamptz `json:"scenario_at"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
+	ExpectedAnswer       string             `json:"expected_answer"`
+	ExpectedArticleUuids []uuid.UUID        `json:"expected_article_uuids"`
+	Active               bool               `json:"active"`
 }
 
 type AiEvaluationResult struct {
@@ -159,6 +172,23 @@ type AiEvaluationResult struct {
 	ErrorCode      string             `json:"error_code"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	AnswerCorrect  bool               `json:"answer_correct"`
+	SourceHit      pgtype.Bool        `json:"source_hit"`
+	CacheHit       pgtype.Bool        `json:"cache_hit"`
+	LatencyMs      int64              `json:"latency_ms"`
+	CostMicros     int64              `json:"cost_micros"`
+}
+
+type AiEvaluationWatch struct {
+	OrganizationID  int64              `json:"organization_id"`
+	Enabled         bool               `json:"enabled"`
+	ActorID         int64              `json:"actor_id"`
+	LastFingerprint []byte             `json:"last_fingerprint"`
+	LastCheckedAt   pgtype.Timestamptz `json:"last_checked_at"`
+	LeaseUntil      pgtype.Timestamptz `json:"lease_until"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AiPolicy struct {

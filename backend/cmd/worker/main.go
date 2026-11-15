@@ -332,6 +332,7 @@ func main() {
 		}).
 		Handle(queue.TaskIntegrationTriggerPurge, func(ctx context.Context, _ *asynq.Task) error { return queries.IntegrationPurgeTriggers(ctx) }).
 		Handle(queue.TaskKnowledgeSync, func(ctx context.Context, _ *asynq.Task) error { return agentSvc.Sources.Sweep(ctx) }).
+		Handle(queue.TaskAIEvaluationSweep, func(ctx context.Context, _ *asynq.Task) error { return agentSvc.SweepEvaluations(ctx) }).
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).

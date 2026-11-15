@@ -64,6 +64,12 @@ type Service struct {
 	// Notices tells the customer when the agent hands the conversation to a
 	// person (CF-198); nil sends nothing.
 	Notices HandoffNotifier
+	// Departments resolves department set ownership (CF-215); nil keeps
+	// every case and run organization wide.
+	Departments DepartmentDirectory
+	// Cache is the answer cache (CF-216); nil leaves cache hit rate
+	// unmeasured.
+	Cache AnswerCache
 }
 
 // HandoffNotifier posts the handoff notice to the customer.

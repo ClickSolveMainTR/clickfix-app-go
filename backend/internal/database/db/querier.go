@@ -31,20 +31,42 @@ type Querier interface {
 	AICountRuns(ctx context.Context, organizationID int64) (int64, error)
 	AICreditBalance(ctx context.Context, organizationID int64) (int64, error)
 	AICreditEntry(ctx context.Context, arg AICreditEntryParams) error
-	AIEvaluationCaseCount(ctx context.Context, organizationID int64) (int64, error)
+	AIEvaluationCaseCount(ctx context.Context, arg AIEvaluationCaseCountParams) (int64, error)
 	AIEvaluationCaseCreate(ctx context.Context, arg AIEvaluationCaseCreateParams) (AiEvaluationCase, error)
+	AIEvaluationCaseUpdate(ctx context.Context, arg AIEvaluationCaseUpdateParams) (AiEvaluationCase, error)
 	AIEvaluationCases(ctx context.Context, arg AIEvaluationCasesParams) ([]AiEvaluationCase, error)
 	AIEvaluationCount(ctx context.Context, organizationID int64) (int64, error)
+	AIEvaluationFingerprintParts(ctx context.Context, organizationID int64) (AIEvaluationFingerprintPartsRow, error)
 	AIEvaluationFinish(ctx context.Context, arg AIEvaluationFinishParams) (AiEvaluation, error)
 	AIEvaluationGet(ctx context.Context, arg AIEvaluationGetParams) (AiEvaluation, error)
+	// Previous completed run of the same scope: the "before" of a before/after pair.
+	AIEvaluationLatestCompleted(ctx context.Context, arg AIEvaluationLatestCompletedParams) (AiEvaluation, error)
 	AIEvaluationList(ctx context.Context, arg AIEvaluationListParams) ([]AiEvaluation, error)
 	AIEvaluationResultCount(ctx context.Context, arg AIEvaluationResultCountParams) (int64, error)
 	AIEvaluationResultCreate(ctx context.Context, arg AIEvaluationResultCreateParams) error
 	AIEvaluationResults(ctx context.Context, arg AIEvaluationResultsParams) ([]AiEvaluationResult, error)
+	// CF-220: knowledge layer measurement (evaluation sets, watches, insight panel).
+	// Active cases of a run; a department run takes that department's cases only.
+	AIEvaluationRunCases(ctx context.Context, arg AIEvaluationRunCasesParams) ([]AiEvaluationCase, error)
 	AIEvaluationStart(ctx context.Context, arg AIEvaluationStartParams) (AiEvaluation, error)
+	// Enabled watches not checked in the last 10 minutes; the lease keeps two
+	// workers from running the same organization's set at once.
+	AIEvaluationWatchClaim(ctx context.Context) ([]AiEvaluationWatch, error)
+	AIEvaluationWatchFinish(ctx context.Context, arg AIEvaluationWatchFinishParams) error
+	AIEvaluationWatchGet(ctx context.Context, organizationID int64) (AiEvaluationWatch, error)
+	AIEvaluationWatchSave(ctx context.Context, arg AIEvaluationWatchSaveParams) (AiEvaluationWatch, error)
 	AIFinishRun(ctx context.Context, arg AIFinishRunParams) (int64, error)
 	AIGetRun(ctx context.Context, arg AIGetRunParams) (AiRun, error)
 	AIInsertRun(ctx context.Context, arg AIInsertRunParams) (AiRun, error)
+	// Latest completed triage per conversation in the window; confidence -1 = none.
+	AIInsightClassifications(ctx context.Context, arg AIInsightClassificationsParams) ([]AIInsightClassificationsRow, error)
+	// Last two completed runs of the scope: the latest and the one before it.
+	AIInsightEvaluations(ctx context.Context, arg AIInsightEvaluationsParams) ([]AIInsightEvaluationsRow, error)
+	AIInsightGaps(ctx context.Context, arg AIInsightGapsParams) ([]AIInsightGapsRow, error)
+	// Terminal outcome per conversation = its latest reply job in the window.
+	AIInsightReplyOutcomes(ctx context.Context, arg AIInsightReplyOutcomesParams) (AIInsightReplyOutcomesRow, error)
+	AIInsightSuggestions(ctx context.Context, arg AIInsightSuggestionsParams) ([]AIInsightSuggestionsRow, error)
+	AIInsightUsage(ctx context.Context, arg AIInsightUsageParams) ([]AIInsightUsageRow, error)
 	AIKnowledgeGapTopicCount(ctx context.Context, arg AIKnowledgeGapTopicCountParams) (int64, error)
 	AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTopicsParams) ([]AIKnowledgeGapTopicsRow, error)
 	AIKnowledgeSourceClaim(ctx context.Context, arg AIKnowledgeSourceClaimParams) (KnowledgeSource, error)

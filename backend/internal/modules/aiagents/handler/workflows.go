@@ -110,13 +110,22 @@ func (h *Handler) EvaluationCases(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		rows, err := h.Service.Repo.Q.AIEvaluationCases(r.Context(), db.AIEvaluationCasesParams{OrganizationID: org, Limit: q.Limit, Offset: q.Offset})
+		dept, ok := h.departmentFilter(w, r, org)
+		if !ok {
+			return
+		}
+		rows, err := h.Service.Repo.Q.AIEvaluationCases(r.Context(), db.AIEvaluationCasesParams{OrganizationID: org, DepartmentID: dept, Limit: q.Limit, Offset: q.Offset})
 		if err != nil {
 			fail(w, r, err)
 			return
 		}
-		total, err := h.Service.Repo.Q.AIEvaluationCaseCount(r.Context(), org)
-		writePage(w, r, rows, total, q, err)
+		views, err := h.caseViews(r.Context(), org, rows)
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
+		total, err := h.Service.Repo.Q.AIEvaluationCaseCount(r.Context(), db.AIEvaluationCaseCountParams{OrganizationID: org, DepartmentID: dept})
+		writePage(w, r, views, total, q, err)
 		return
 	}
 	var in usecase.EvaluationCaseInput
@@ -127,7 +136,7 @@ func (h *Handler) EvaluationCases(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		h.audit(r, "evaluation_case.created")
 	}
-	writeResult(w, r, out, err)
+	h.oneCase(w, r, org, out, err)
 }
 func (h *Handler) Evaluations(w http.ResponseWriter, r *http.Request) {
 	org, actor := scope(r)
@@ -141,8 +150,13 @@ func (h *Handler) Evaluations(w http.ResponseWriter, r *http.Request) {
 			fail(w, r, err)
 			return
 		}
+		views, err := h.evaluationViews(r.Context(), org, rows)
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
 		total, err := h.Service.Repo.Q.AIEvaluationCount(r.Context(), org)
-		writePage(w, r, rows, total, q, err)
+		writePage(w, r, views, total, q, err)
 		return
 	}
 	var in usecase.EvaluationInput
@@ -153,7 +167,7 @@ func (h *Handler) Evaluations(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		h.audit(r, "evaluation.completed")
 	}
-	writeResult(w, r, out, err)
+	h.oneEvaluation(w, r, org, out, err)
 }
 func (h *Handler) Evaluation(w http.ResponseWriter, r *http.Request) {
 	org, _ := scope(r)
@@ -162,7 +176,7 @@ func (h *Handler) Evaluation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, err := h.Service.Repo.Q.AIEvaluationGet(r.Context(), db.AIEvaluationGetParams{OrganizationID: org, Uuid: id})
-	writeResult(w, r, out, err)
+	h.oneEvaluation(w, r, org, out, err)
 }
 func (h *Handler) EvaluationResults(w http.ResponseWriter, r *http.Request) {
 	org, _ := scope(r)
@@ -179,8 +193,13 @@ func (h *Handler) EvaluationResults(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
+	views, err := h.resultViews(r.Context(), org, rows)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
 	total, err := h.Service.Repo.Q.AIEvaluationResultCount(r.Context(), db.AIEvaluationResultCountParams{OrganizationID: org, EvaluationUuid: id})
-	writePage(w, r, rows, total, q, err)
+	writePage(w, r, views, total, q, err)
 }
 func (h *Handler) KnowledgeGaps(w http.ResponseWriter, r *http.Request) {
 	org, _ := scope(r)
@@ -457,7 +476,10 @@ func (h *Handler) WorkflowMeta(w http.ResponseWriter, r *http.Request) {
 	case "ai/business-context", "knowledge/sources":
 		capabilities.Create = true
 		capabilities.Update = true
-	case "ai/evaluation-cases", "ai/evaluations":
+	case "ai/evaluation-cases":
+		capabilities.Create = true
+		capabilities.Update = true
+	case "ai/evaluations":
 		capabilities.Create = true
 	case "ai/knowledge-suggestions", "knowledge/reviews":
 		capabilities.Update = true

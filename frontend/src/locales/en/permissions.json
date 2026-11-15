@@ -50,6 +50,8 @@
   "labels.tenant.integrations.read": "View the connected system settings",
   "labels.tenant.integrations.manage": "Manage the connected system (endpoints, actions, AI playbooks)",
   "labels.tenant.integrations.use": "Use connected system data and run its actions",
+  "labels.tenant.ai_insights.read": "View the AI knowledge panel and evaluation results",
+  "labels.tenant.ai_insights.manage": "Manage AI evaluation sets and run evaluations",
   "labels.tenant.onboarding.manage": "Run the smart setup (AI or template) and undo it",
   "labels.platform.storage.read": "View file storage",
   "labels.platform.storage.write": "Manage file storage",

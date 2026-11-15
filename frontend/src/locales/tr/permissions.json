@@ -50,6 +50,8 @@
   "labels.tenant.integrations.read": "Bağlı sistem ayarlarını görüntüle",
   "labels.tenant.integrations.manage": "Bağlı sistemi yönet (uçlar, işler, AI tarifleri)",
   "labels.tenant.integrations.use": "Bağlı sistem verisini kullan ve işlerini çalıştır",
+  "labels.tenant.ai_insights.read": "AI bilgi panelini ve ölçüm sonuçlarını görüntüle",
+  "labels.tenant.ai_insights.manage": "AI ölçüm setlerini yönet ve ölçüm çalıştır",
   "labels.tenant.onboarding.manage": "Akıllı kurulumu (yapay zekâ veya şablon) uygula ve geri al",
   "labels.platform.storage.read": "Dosya deposunu görüntüle",
   "labels.platform.storage.write": "Dosya deposunu yönet",

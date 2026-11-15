@@ -144,6 +144,9 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** AI knowledge layer measurement: panel and evaluation sets (CF-220). */
+  TenantAIInsightsRead: "tenant.ai_insights.read",
+  TenantAIInsightsManage: "tenant.ai_insights.manage",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];
@@ -353,6 +356,10 @@ export const permissions = {
       use: Permission.TenantAiUse,
       read: Permission.TenantAiRead,
       write: Permission.TenantAiWrite,
+    },
+    aiInsights: {
+      read: Permission.TenantAIInsightsRead,
+      manage: Permission.TenantAIInsightsManage,
     },
     automations: {
       read: Permission.TenantAutomationsRead,

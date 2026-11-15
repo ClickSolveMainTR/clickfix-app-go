@@ -45,29 +45,39 @@ func (q *Queries) AIAgentAssignmentCandidates(ctx context.Context, organizationI
 
 const aIEvaluationCaseCount = `-- name: AIEvaluationCaseCount :one
 SELECT count(*) FROM ai_evaluation_cases WHERE organization_id=$1
+AND ($2::bigint IS NULL OR department_id=$2::bigint)
 `
 
-func (q *Queries) AIEvaluationCaseCount(ctx context.Context, organizationID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, aIEvaluationCaseCount, organizationID)
+type AIEvaluationCaseCountParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
+}
+
+func (q *Queries) AIEvaluationCaseCount(ctx context.Context, arg AIEvaluationCaseCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, aIEvaluationCaseCount, arg.OrganizationID, arg.DepartmentID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const aIEvaluationCaseCreate = `-- name: AIEvaluationCaseCreate :one
-INSERT INTO ai_evaluation_cases(organization_id,name,transcript,locale,expected,author_id,channel,category,scenario_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, uuid, organization_id, name, transcript, locale, expected, revision, author_id, created_at, updated_at, channel, category, scenario_at
+INSERT INTO ai_evaluation_cases(organization_id,name,transcript,locale,expected,author_id,channel,category,scenario_at,department_id,expected_answer,expected_article_uuids)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::uuid[]) RETURNING id, uuid, organization_id, name, transcript, locale, expected, revision, author_id, created_at, updated_at, channel, category, scenario_at, department_id, expected_answer, expected_article_uuids, active
 `
 
 type AIEvaluationCaseCreateParams struct {
-	OrganizationID int64              `json:"organization_id"`
-	Name           string             `json:"name"`
-	Transcript     string             `json:"transcript"`
-	Locale         string             `json:"locale"`
-	Expected       []byte             `json:"expected"`
-	AuthorID       int64              `json:"author_id"`
-	Channel        string             `json:"channel"`
-	Category       string             `json:"category"`
-	ScenarioAt     pgtype.Timestamptz `json:"scenario_at"`
+	OrganizationID       int64              `json:"organization_id"`
+	Name                 string             `json:"name"`
+	Transcript           string             `json:"transcript"`
+	Locale               string             `json:"locale"`
+	Expected             []byte             `json:"expected"`
+	AuthorID             int64              `json:"author_id"`
+	Channel              string             `json:"channel"`
+	Category             string             `json:"category"`
+	ScenarioAt           pgtype.Timestamptz `json:"scenario_at"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
+	ExpectedAnswer       string             `json:"expected_answer"`
+	ExpectedArticleUuids []uuid.UUID        `json:"expected_article_uuids"`
 }
 
 func (q *Queries) AIEvaluationCaseCreate(ctx context.Context, arg AIEvaluationCaseCreateParams) (AiEvaluationCase, error) {
@@ -81,6 +91,9 @@ func (q *Queries) AIEvaluationCaseCreate(ctx context.Context, arg AIEvaluationCa
 		arg.Channel,
 		arg.Category,
 		arg.ScenarioAt,
+		arg.DepartmentID,
+		arg.ExpectedAnswer,
+		arg.ExpectedArticleUuids,
 	)
 	var i AiEvaluationCase
 	err := row.Scan(
@@ -98,22 +111,34 @@ func (q *Queries) AIEvaluationCaseCreate(ctx context.Context, arg AIEvaluationCa
 		&i.Channel,
 		&i.Category,
 		&i.ScenarioAt,
+		&i.DepartmentID,
+		&i.ExpectedAnswer,
+		&i.ExpectedArticleUuids,
+		&i.Active,
 	)
 	return i, err
 }
 
 const aIEvaluationCases = `-- name: AIEvaluationCases :many
-SELECT id, uuid, organization_id, name, transcript, locale, expected, revision, author_id, created_at, updated_at, channel, category, scenario_at FROM ai_evaluation_cases WHERE organization_id=$1 ORDER BY id LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, name, transcript, locale, expected, revision, author_id, created_at, updated_at, channel, category, scenario_at, department_id, expected_answer, expected_article_uuids, active FROM ai_evaluation_cases WHERE organization_id=$1
+AND ($4::bigint IS NULL OR department_id=$4::bigint)
+ORDER BY id LIMIT $2 OFFSET $3
 `
 
 type AIEvaluationCasesParams struct {
-	OrganizationID int64 `json:"organization_id"`
-	Limit          int32 `json:"limit"`
-	Offset         int32 `json:"offset"`
+	OrganizationID int64       `json:"organization_id"`
+	Limit          int32       `json:"limit"`
+	Offset         int32       `json:"offset"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
 }
 
 func (q *Queries) AIEvaluationCases(ctx context.Context, arg AIEvaluationCasesParams) ([]AiEvaluationCase, error) {
-	rows, err := q.db.Query(ctx, aIEvaluationCases, arg.OrganizationID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, aIEvaluationCases,
+		arg.OrganizationID,
+		arg.Limit,
+		arg.Offset,
+		arg.DepartmentID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +161,10 @@ func (q *Queries) AIEvaluationCases(ctx context.Context, arg AIEvaluationCasesPa
 			&i.Channel,
 			&i.Category,
 			&i.ScenarioAt,
+			&i.DepartmentID,
+			&i.ExpectedAnswer,
+			&i.ExpectedArticleUuids,
+			&i.Active,
 		); err != nil {
 			return nil, err
 		}
@@ -159,14 +188,22 @@ func (q *Queries) AIEvaluationCount(ctx context.Context, organizationID int64) (
 }
 
 const aIEvaluationFinish = `-- name: AIEvaluationFinish :one
-UPDATE ai_evaluations SET status=$3,report=$4 WHERE organization_id=$1 AND uuid=$2 AND status='running' RETURNING id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at
+UPDATE ai_evaluations SET status=$3,report=$4,model=$5,answer_accuracy=$6,source_hit_rate=$7,
+cache_hit_rate=$8,avg_latency_ms=$9,cost_per_case_micros=$10
+WHERE organization_id=$1 AND uuid=$2 AND status='running' RETURNING id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at, trigger_kind, department_id, fingerprint, model, answer_accuracy, source_hit_rate, cache_hit_rate, avg_latency_ms, cost_per_case_micros
 `
 
 type AIEvaluationFinishParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	Uuid           uuid.UUID `json:"uuid"`
-	Status         string    `json:"status"`
-	Report         []byte    `json:"report"`
+	OrganizationID    int64         `json:"organization_id"`
+	Uuid              uuid.UUID     `json:"uuid"`
+	Status            string        `json:"status"`
+	Report            []byte        `json:"report"`
+	Model             string        `json:"model"`
+	AnswerAccuracy    pgtype.Float8 `json:"answer_accuracy"`
+	SourceHitRate     pgtype.Float8 `json:"source_hit_rate"`
+	CacheHitRate      pgtype.Float8 `json:"cache_hit_rate"`
+	AvgLatencyMs      pgtype.Float8 `json:"avg_latency_ms"`
+	CostPerCaseMicros pgtype.Float8 `json:"cost_per_case_micros"`
 }
 
 func (q *Queries) AIEvaluationFinish(ctx context.Context, arg AIEvaluationFinishParams) (AiEvaluation, error) {
@@ -175,6 +212,12 @@ func (q *Queries) AIEvaluationFinish(ctx context.Context, arg AIEvaluationFinish
 		arg.Uuid,
 		arg.Status,
 		arg.Report,
+		arg.Model,
+		arg.AnswerAccuracy,
+		arg.SourceHitRate,
+		arg.CacheHitRate,
+		arg.AvgLatencyMs,
+		arg.CostPerCaseMicros,
 	)
 	var i AiEvaluation
 	err := row.Scan(
@@ -189,12 +232,21 @@ func (q *Queries) AIEvaluationFinish(ctx context.Context, arg AIEvaluationFinish
 		&i.AuthorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TriggerKind,
+		&i.DepartmentID,
+		&i.Fingerprint,
+		&i.Model,
+		&i.AnswerAccuracy,
+		&i.SourceHitRate,
+		&i.CacheHitRate,
+		&i.AvgLatencyMs,
+		&i.CostPerCaseMicros,
 	)
 	return i, err
 }
 
 const aIEvaluationGet = `-- name: AIEvaluationGet :one
-SELECT id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at FROM ai_evaluations WHERE organization_id=$1 AND uuid=$2
+SELECT id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at, trigger_kind, department_id, fingerprint, model, answer_accuracy, source_hit_rate, cache_hit_rate, avg_latency_ms, cost_per_case_micros FROM ai_evaluations WHERE organization_id=$1 AND uuid=$2
 `
 
 type AIEvaluationGetParams struct {
@@ -217,12 +269,21 @@ func (q *Queries) AIEvaluationGet(ctx context.Context, arg AIEvaluationGetParams
 		&i.AuthorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TriggerKind,
+		&i.DepartmentID,
+		&i.Fingerprint,
+		&i.Model,
+		&i.AnswerAccuracy,
+		&i.SourceHitRate,
+		&i.CacheHitRate,
+		&i.AvgLatencyMs,
+		&i.CostPerCaseMicros,
 	)
 	return i, err
 }
 
 const aIEvaluationList = `-- name: AIEvaluationList :many
-SELECT id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at FROM ai_evaluations WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at, trigger_kind, department_id, fingerprint, model, answer_accuracy, source_hit_rate, cache_hit_rate, avg_latency_ms, cost_per_case_micros FROM ai_evaluations WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
 `
 
 type AIEvaluationListParams struct {
@@ -252,6 +313,15 @@ func (q *Queries) AIEvaluationList(ctx context.Context, arg AIEvaluationListPara
 			&i.AuthorID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TriggerKind,
+			&i.DepartmentID,
+			&i.Fingerprint,
+			&i.Model,
+			&i.AnswerAccuracy,
+			&i.SourceHitRate,
+			&i.CacheHitRate,
+			&i.AvgLatencyMs,
+			&i.CostPerCaseMicros,
 		); err != nil {
 			return nil, err
 		}
@@ -280,8 +350,10 @@ func (q *Queries) AIEvaluationResultCount(ctx context.Context, arg AIEvaluationR
 }
 
 const aIEvaluationResultCreate = `-- name: AIEvaluationResultCreate :exec
-INSERT INTO ai_evaluation_results(organization_id,evaluation_uuid,case_uuid,case_revision,case_snapshot,output,score,run_uuid,error_code)
-VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT uuid FROM ai_runs WHERE organization_id=$1 AND uuid=$8::uuid),$9)
+INSERT INTO ai_evaluation_results(organization_id,evaluation_uuid,case_uuid,case_revision,case_snapshot,output,score,run_uuid,error_code,
+department_id,answer_correct,source_hit,cache_hit,latency_ms,cost_micros)
+VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT uuid FROM ai_runs WHERE organization_id=$1 AND uuid=$8::uuid),$9,
+$10,$11,$12,$13,$14,$15)
 `
 
 type AIEvaluationResultCreateParams struct {
@@ -294,6 +366,12 @@ type AIEvaluationResultCreateParams struct {
 	Score          float64     `json:"score"`
 	RunUuid        pgtype.UUID `json:"run_uuid"`
 	ErrorCode      string      `json:"error_code"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
+	AnswerCorrect  bool        `json:"answer_correct"`
+	SourceHit      pgtype.Bool `json:"source_hit"`
+	CacheHit       pgtype.Bool `json:"cache_hit"`
+	LatencyMs      int64       `json:"latency_ms"`
+	CostMicros     int64       `json:"cost_micros"`
 }
 
 func (q *Queries) AIEvaluationResultCreate(ctx context.Context, arg AIEvaluationResultCreateParams) error {
@@ -307,12 +385,18 @@ func (q *Queries) AIEvaluationResultCreate(ctx context.Context, arg AIEvaluation
 		arg.Score,
 		arg.RunUuid,
 		arg.ErrorCode,
+		arg.DepartmentID,
+		arg.AnswerCorrect,
+		arg.SourceHit,
+		arg.CacheHit,
+		arg.LatencyMs,
+		arg.CostMicros,
 	)
 	return err
 }
 
 const aIEvaluationResults = `-- name: AIEvaluationResults :many
-SELECT id, organization_id, evaluation_uuid, case_uuid, case_revision, case_snapshot, output, score, run_uuid, error_code, created_at, updated_at FROM ai_evaluation_results WHERE organization_id=$1 AND evaluation_uuid=$2 ORDER BY id LIMIT $3 OFFSET $4
+SELECT id, organization_id, evaluation_uuid, case_uuid, case_revision, case_snapshot, output, score, run_uuid, error_code, created_at, updated_at, department_id, answer_correct, source_hit, cache_hit, latency_ms, cost_micros FROM ai_evaluation_results WHERE organization_id=$1 AND evaluation_uuid=$2 ORDER BY id LIMIT $3 OFFSET $4
 `
 
 type AIEvaluationResultsParams struct {
@@ -349,6 +433,12 @@ func (q *Queries) AIEvaluationResults(ctx context.Context, arg AIEvaluationResul
 			&i.ErrorCode,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
+			&i.AnswerCorrect,
+			&i.SourceHit,
+			&i.CacheHit,
+			&i.LatencyMs,
+			&i.CostMicros,
 		); err != nil {
 			return nil, err
 		}
@@ -361,7 +451,8 @@ func (q *Queries) AIEvaluationResults(ctx context.Context, arg AIEvaluationResul
 }
 
 const aIEvaluationStart = `-- name: AIEvaluationStart :one
-INSERT INTO ai_evaluations(organization_id,config,config_revision,baseline_uuid,author_id) VALUES($1,$2,$3,$4,$5) RETURNING id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at
+INSERT INTO ai_evaluations(organization_id,config,config_revision,baseline_uuid,author_id,trigger_kind,department_id,fingerprint)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, uuid, organization_id, config, config_revision, baseline_uuid, status, report, author_id, created_at, updated_at, trigger_kind, department_id, fingerprint, model, answer_accuracy, source_hit_rate, cache_hit_rate, avg_latency_ms, cost_per_case_micros
 `
 
 type AIEvaluationStartParams struct {
@@ -370,6 +461,9 @@ type AIEvaluationStartParams struct {
 	ConfigRevision int32       `json:"config_revision"`
 	BaselineUuid   pgtype.UUID `json:"baseline_uuid"`
 	AuthorID       int64       `json:"author_id"`
+	TriggerKind    string      `json:"trigger_kind"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
+	Fingerprint    []byte      `json:"fingerprint"`
 }
 
 func (q *Queries) AIEvaluationStart(ctx context.Context, arg AIEvaluationStartParams) (AiEvaluation, error) {
@@ -379,6 +473,9 @@ func (q *Queries) AIEvaluationStart(ctx context.Context, arg AIEvaluationStartPa
 		arg.ConfigRevision,
 		arg.BaselineUuid,
 		arg.AuthorID,
+		arg.TriggerKind,
+		arg.DepartmentID,
+		arg.Fingerprint,
 	)
 	var i AiEvaluation
 	err := row.Scan(
@@ -393,6 +490,15 @@ func (q *Queries) AIEvaluationStart(ctx context.Context, arg AIEvaluationStartPa
 		&i.AuthorID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TriggerKind,
+		&i.DepartmentID,
+		&i.Fingerprint,
+		&i.Model,
+		&i.AnswerAccuracy,
+		&i.SourceHitRate,
+		&i.CacheHitRate,
+		&i.AvgLatencyMs,
+		&i.CostPerCaseMicros,
 	)
 	return i, err
 }

@@ -12749,11 +12749,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organization EvaluationCases */
+        /**
+         * List organization EvaluationCases
+         * @description Requires tenant.ai_insights.read.
+         */
         get: operations["listEvaluationCases"];
         put?: never;
-        /** Save a masked golden scenario or conversation transcript */
+        /**
+         * Save a masked golden scenario or conversation transcript
+         * @description Requires tenant.ai_insights.manage.
+         */
         post: operations["createEvaluationCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/evaluation-cases/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace an evaluation case (bumps its revision)
+         * @description Requires tenant.ai_insights.manage.
+         */
+        put: operations["updateEvaluationCase"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12767,11 +12793,61 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organization Evaluations */
+        /**
+         * List organization Evaluations
+         * @description Run history, newest first. Requires tenant.ai_insights.read.
+         */
         get: operations["listEvaluations"];
         put?: never;
-        /** Replay golden set against configuration and compare baseline */
+        /**
+         * Run the evaluation set (manual) and compare with the previous run
+         * @description Requires tenant.ai_insights.manage. Spends AI credits for every active case.
+         */
         post: operations["runAIEvaluation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/evaluations/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Automatic evaluation runs
+         * @description Requires tenant.ai_insights.read.
+         */
+        get: operations["getEvaluationWatch"];
+        /**
+         * Turn automatic evaluation runs on or off
+         * @description Requires tenant.ai_insights.manage. When on, the set reruns (within ~10 minutes) after the agent config, the reply model or the published knowledge changes; runs spend AI credits and are recorded under the member who turned it on.
+         */
+        put: operations["setEvaluationWatch"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/analytics/ai-knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI knowledge panel of the organization or a department
+         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days.
+         */
+        get: operations["getAIKnowledgePanel"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18756,8 +18832,10 @@ export interface components {
             handoff?: boolean | null;
             minimum_confidence?: number;
         };
+        /** @description A question of the organization's (or a department's) evaluation set. At least one of expected, expected_answer or expected_article_uuids is required. */
         AIEvaluationCaseInput: {
             name: string;
+            /** @description Conversation the agent answers; optional when question is given. */
             transcript?: string;
             /** @enum {string} */
             locale: "tr" | "en";
@@ -18769,12 +18847,27 @@ export interface components {
             category?: string;
             /** Format: date-time */
             at?: string;
+            /** @description Short form of a set question; stored as the transcript "Customer: <question>" when transcript is empty. */
+            question?: string;
+            /**
+             * Format: uuid
+             * @description Department set (CF-215); omitted = organization wide.
+             */
+            department_uuid?: string;
+            /** @description Expected answer; correct when the reply holds at least 60% of its content words. */
+            expected_answer?: string;
+            /** @description Knowledge articles a correct answer should cite (source hit). */
+            expected_article_uuids?: string[];
+            /**
+             * @description Inactive cases stay in the set but are not run.
+             * @default true
+             */
+            active: boolean;
         };
         AIEvaluationCase: {
             id: number;
             /** Format: uuid */
             uuid: string;
-            organization_id: number;
             name: string;
             transcript: string;
             /** @enum {string} */
@@ -18791,6 +18884,10 @@ export interface components {
             category?: string;
             /** Format: date-time */
             scenario_at?: string;
+            department_uuid: string | null;
+            expected_answer: string;
+            expected_article_uuids: string[];
+            active: boolean;
         };
         AISimulationInput: {
             transcript: string;
@@ -18821,11 +18918,36 @@ export interface components {
             /** @enum {string} */
             outcome: "draft" | "handoff" | "disabled";
             cost_micros: number;
+            model?: string;
+            latency_ms?: number;
+            cited_article_uuids?: string[] | null;
         };
         AIEvaluationInput: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Run to compare with; default is the previous completed run of the same scope.
+             */
             baseline_uuid?: string;
             config?: components["schemas"]["AIAgentConfig"];
+            /**
+             * Format: uuid
+             * @description Run only this department's set (CF-215).
+             */
+            department_uuid?: string;
+        };
+        /** @description Before/after metrics of a run; null = not measurable (no expected sources, no answer cache connected, no completed case). */
+        AIEvaluationMetrics: {
+            cases: number;
+            completed: number;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
+        };
+        /** @description One department's share of a run; department_uuid null = organization-wide cases. */
+        AIEvaluationDepartmentMetrics: components["schemas"]["AIEvaluationMetrics"] & {
+            department_uuid: string | null;
         };
         AIEvaluationReport: {
             cases: number;
@@ -18834,12 +18956,22 @@ export interface components {
             regressions: string[];
             cost_micros: number;
             scoring: string;
+            metrics?: components["schemas"]["AIEvaluationMetrics"];
+            before?: components["schemas"]["AIEvaluationMetrics"] | null;
+            departments?: components["schemas"]["AIEvaluationDepartmentMetrics"][];
+        };
+        /** @description What a run was measured against; a watch reruns the set when it changes. */
+        AIEvaluationFingerprint: {
+            config_revision?: number;
+            /** Format: date-time */
+            knowledge_updated_at?: string;
+            knowledge_published?: number;
+            reply_model?: string;
         };
         AIEvaluation: {
             id: number;
             /** Format: uuid */
             uuid: string;
-            organization_id: number;
             config: components["schemas"]["AIAgentConfig"];
             config_revision: number;
             baseline_uuid: string | null;
@@ -18853,10 +18985,19 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /** @enum {string} */
+            trigger_kind: "manual" | "initial" | "config_change" | "model_change" | "knowledge_change";
+            department_uuid: string | null;
+            fingerprint?: components["schemas"]["AIEvaluationFingerprint"];
+            model: string;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
         };
         AIEvaluationResult: {
             id: number;
-            organization_id: number;
             /** Format: uuid */
             evaluation_uuid: string;
             /** Format: uuid */
@@ -18871,6 +19012,142 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            department_uuid: string | null;
+            answer_correct: boolean;
+            source_hit: boolean | null;
+            cache_hit: boolean | null;
+            latency_ms: number;
+            cost_micros: number;
+        };
+        AIEvaluationWatch: {
+            enabled: boolean;
+            last_checked_at: string | null;
+            last_fingerprint: components["schemas"]["AIEvaluationFingerprint"] | null;
+        };
+        AIKnowledgeEvaluationPoint: {
+            /** Format: uuid */
+            uuid: string;
+            trigger: string;
+            model: string;
+            /** Format: date-time */
+            created_at: string;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
+        };
+        /** @description AI knowledge panel (CF-220). Every section carries available/reason; a missing source is shown as no data, never as zero. */
+        AIKnowledgePanel: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            until: string;
+            department: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            } | null;
+            departments: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            }[];
+            cache: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                lookups: number;
+                hits: number;
+                hit_rate: number | null;
+            };
+            ai_usage: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                calls: number;
+                failed: number;
+                cost_micros: number;
+                by_task: {
+                    task: string;
+                    calls: number;
+                    failed: number;
+                    cost_micros: number;
+                    avg_latency_ms: number;
+                }[];
+            };
+            knowledge_gaps: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                topics: {
+                    topic: string;
+                    conversations: number;
+                }[];
+            };
+            suggestions: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                pending: number;
+                approved: number;
+                rejected: number;
+            };
+            categories: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                classified: number;
+                avg_confidence: number | null;
+                /** @description Classifications under 0.6 confidence. */
+                low_confidence: number;
+                categories: {
+                    category: string;
+                    conversations: number;
+                    avg_confidence: number | null;
+                }[];
+                confidence_buckets: {
+                    from: number;
+                    to: number;
+                    count: number;
+                }[];
+            };
+            handoff: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                conversations: number;
+                handoffs: number;
+                rate: number | null;
+            };
+            evaluation: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                latest: components["schemas"]["AIKnowledgeEvaluationPoint"] | null;
+                previous: components["schemas"]["AIKnowledgeEvaluationPoint"] | null;
+            };
         };
         AIKnowledgeGap: {
             topic: string;
@@ -56506,6 +56783,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                department_uuid?: string;
             };
             header: {
                 /** @description Organization slug or UUID; authenticated membership required. */
@@ -56638,6 +56917,57 @@ export interface operations {
             };
             /** @description Source or provider unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateEvaluationCase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIEvaluationCaseInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationCase"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Organization-owned record not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -56787,6 +57117,132 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    getEvaluationWatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationWatch"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setEvaluationWatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationWatch"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAIKnowledgePanel: {
+        parameters: {
+            query?: {
+                from?: string;
+                /** @description Exclusive end; at most 366 days after from. */
+                until?: string;
+                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                department_uuid?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIKnowledgePanel"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listKnowledgeSuggestions: {
