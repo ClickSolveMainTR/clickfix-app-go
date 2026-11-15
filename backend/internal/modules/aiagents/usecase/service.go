@@ -75,6 +75,12 @@ type Service struct {
 	// Memory is the knowledge layer (CF-216): knowledge units behind the
 	// answer cache, and case memory. nil keeps the plain AI path.
 	Memory Memory
+	// DepartmentSets resolves department set ownership for evaluation
+	// cases and runs (CF-220); nil keeps every case organization wide.
+	DepartmentSets DepartmentDirectory
+	// Cache is the answer cache (CF-216); nil leaves cache hit rate
+	// unmeasured in evaluations.
+	Cache AnswerCache
 }
 
 // Memory answers from knowledge units before any generation and offers

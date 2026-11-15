@@ -50,6 +50,8 @@
   "labels.tenant.integrations.read": "Bağlı sistem ayarlarını görüntüle",
   "labels.tenant.integrations.manage": "Bağlı sistemi yönet (uçlar, işler, AI tarifleri)",
   "labels.tenant.integrations.use": "Bağlı sistem verisini kullan ve işlerini çalıştır",
+  "labels.tenant.ai_insights.read": "AI bilgi panelini ve ölçüm sonuçlarını görüntüle",
+  "labels.tenant.ai_insights.manage": "AI ölçüm setlerini yönet ve ölçüm çalıştır",
   "labels.tenant.history.read": "Geçmiş kayıt arşivini ve işlerini görüntüle",
   "labels.tenant.history.manage": "Geçmiş kayıt yükle, işleri iptal et ve geri al, ayarları değiştir",
   "labels.tenant.history.review": "Geçmiş kayıtlardan gelen önerileri onayla, reddet veya düzelt",

@@ -30650,6 +30650,15 @@ paths:
             "minimum": 0,
             "default": 0
           }
+        },
+        {
+          "name": "department_uuid",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE."
         }
       ],
       "responses": {
@@ -30724,7 +30733,8 @@ paths:
         "503": {
           "description": "Source or provider unavailable"
         }
-      }
+      },
+      "description": "Requires tenant.ai_insights.read."
     },
     "post": {
       "tags": [
@@ -30806,6 +30816,93 @@ paths:
               "$ref": "#/components/schemas/AIEvaluationCaseInput"
             }
           }
+        }
+      },
+      "description": "Requires tenant.ai_insights.manage."
+    }
+  }
+  "/v1/tenant/ai/evaluation-cases/{uuid}": {
+    "put": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "updateEvaluationCase",
+      "summary": "Replace an evaluation case (bumps its revision)",
+      "description": "Requires tenant.ai_insights.manage.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AIEvaluationCaseInput"
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIEvaluationCase"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "Organization-owned record not found"
+        },
+        "400": {
+          "description": "Invalid input or DEPARTMENTS_UNAVAILABLE"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
         }
       }
     }
@@ -30924,14 +31021,15 @@ paths:
         "503": {
           "description": "Source or provider unavailable"
         }
-      }
+      },
+      "description": "Run history, newest first. Requires tenant.ai_insights.read."
     },
     "post": {
       "tags": [
         "AI"
       ],
       "operationId": "runAIEvaluation",
-      "summary": "Replay golden set against configuration and compare baseline",
+      "summary": "Run the evaluation set (manual) and compare with the previous run",
       "security": [
         {
           "bearerAuth": []
@@ -31006,6 +31104,241 @@ paths:
               "$ref": "#/components/schemas/AIEvaluationInput"
             }
           }
+        }
+      },
+      "description": "Requires tenant.ai_insights.manage. Spends AI credits for every active case."
+    }
+  }
+  "/v1/tenant/ai/evaluations/watch": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "getEvaluationWatch",
+      "summary": "Automatic evaluation runs",
+      "description": "Requires tenant.ai_insights.read.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIEvaluationWatch"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input or DEPARTMENTS_UNAVAILABLE"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    },
+    "put": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "setEvaluationWatch",
+      "summary": "Turn automatic evaluation runs on or off",
+      "description": "Requires tenant.ai_insights.manage. When on, the set reruns (within ~10 minutes) after the agent config, the reply model or the published knowledge changes; runs spend AI credits and are recorded under the member who turned it on.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIEvaluationWatch"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input or DEPARTMENTS_UNAVAILABLE"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/analytics/ai-knowledge": {
+    "get": {
+      "tags": [
+        "Analytics"
+      ],
+      "operationId": "getAIKnowledgePanel",
+      "summary": "AI knowledge panel of the organization or a department",
+      "description": "Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days.",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "from",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        {
+          "name": "until",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": "Exclusive end; at most 366 days after from."
+        },
+        {
+          "name": "department_uuid",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIKnowledgePanel"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input or DEPARTMENTS_UNAVAILABLE"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
         }
       }
     }
@@ -46590,7 +46923,8 @@ components:
         },
         "transcript": {
           "type": "string",
-          "maxLength": 18000
+          "maxLength": 18000,
+          "description": "Conversation the agent answers; optional when question is given."
         },
         "locale": {
           "type": "string",
@@ -46618,13 +46952,43 @@ components:
         "at": {
           "type": "string",
           "format": "date-time"
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 17990,
+          "description": "Short form of a set question; stored as the transcript \"Customer: <question>\" when transcript is empty."
+        },
+        "department_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Department set (CF-215); omitted = organization wide."
+        },
+        "expected_answer": {
+          "type": "string",
+          "maxLength": 6000,
+          "description": "Expected answer; correct when the reply holds at least 60% of its content words."
+        },
+        "expected_article_uuids": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Knowledge articles a correct answer should cite (source hit)."
+        },
+        "active": {
+          "type": "boolean",
+          "default": true,
+          "description": "Inactive cases stay in the set but are not run."
         }
       },
       "required": [
         "name",
         "locale",
         "expected"
-      ]
+      ],
+      "description": "A question of the organization's (or a department's) evaluation set. At least one of expected, expected_answer or expected_article_uuids is required."
     }
     "AIEvaluationCase": {
       "type": "object",
@@ -46635,9 +46999,6 @@ components:
         "uuid": {
           "type": "string",
           "format": "uuid"
-        },
-        "organization_id": {
-          "type": "integer"
         },
         "name": {
           "type": "string"
@@ -46681,12 +47042,35 @@ components:
         "scenario_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "department_uuid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_answer": {
+          "type": "string"
+        },
+        "expected_article_uuids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "active": {
+          "type": "boolean"
         }
       },
       "required": [
         "id",
         "uuid",
-        "organization_id",
         "name",
         "transcript",
         "locale",
@@ -46694,7 +47078,11 @@ components:
         "revision",
         "author_id",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "department_uuid",
+        "expected_answer",
+        "expected_article_uuids",
+        "active"
       ]
     }
     "AISimulationInput": {
@@ -46795,6 +47183,26 @@ components:
         },
         "cost_micros": {
           "type": "integer"
+        },
+        "model": {
+          "type": "string"
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "cited_article_uuids": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -46809,13 +47217,117 @@ components:
       "properties": {
         "baseline_uuid": {
           "type": "string",
-          "format": "uuid"
+          "format": "uuid",
+          "description": "Run to compare with; default is the previous completed run of the same scope."
         },
         "config": {
           "$ref": "#/components/schemas/AIAgentConfig"
+        },
+        "department_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Run only this department's set (CF-215)."
         }
       },
       "required": []
+    }
+    "AIEvaluationMetrics": {
+      "type": "object",
+      "description": "Before/after metrics of a run; null = not measurable (no expected sources, no answer cache connected, no completed case).",
+      "properties": {
+        "cases": {
+          "type": "integer"
+        },
+        "completed": {
+          "type": "integer"
+        },
+        "answer_accuracy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avg_latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_per_case_micros": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "cases",
+        "completed",
+        "answer_accuracy",
+        "source_hit_rate",
+        "cache_hit_rate",
+        "avg_latency_ms",
+        "cost_per_case_micros"
+      ]
+    }
+    "AIEvaluationDepartmentMetrics": {
+      "allOf": [
+        {
+          "$ref": "#/components/schemas/AIEvaluationMetrics"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "department_uuid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "department_uuid"
+          ]
+        }
+      ],
+      "description": "One department's share of a run; department_uuid null = organization-wide cases."
     }
     "AIEvaluationReport": {
       "type": "object",
@@ -46841,6 +47353,25 @@ components:
         },
         "scoring": {
           "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/components/schemas/AIEvaluationMetrics"
+        },
+        "before": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/AIEvaluationMetrics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "departments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AIEvaluationDepartmentMetrics"
+          }
         }
       },
       "required": [
@@ -46852,6 +47383,25 @@ components:
         "scoring"
       ]
     }
+    "AIEvaluationFingerprint": {
+      "type": "object",
+      "description": "What a run was measured against; a watch reruns the set when it changes.",
+      "properties": {
+        "config_revision": {
+          "type": "integer"
+        },
+        "knowledge_updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "knowledge_published": {
+          "type": "integer"
+        },
+        "reply_model": {
+          "type": "string"
+        }
+      }
+    }
     "AIEvaluation": {
       "type": "object",
       "properties": {
@@ -46861,9 +47411,6 @@ components:
         "uuid": {
           "type": "string",
           "format": "uuid"
-        },
-        "organization_id": {
-          "type": "integer"
         },
         "config": {
           "$ref": "#/components/schemas/AIAgentConfig"
@@ -46918,12 +47465,88 @@ components:
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "trigger_kind": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "initial",
+            "config_change",
+            "model_change",
+            "knowledge_change"
+          ]
+        },
+        "department_uuid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fingerprint": {
+          "$ref": "#/components/schemas/AIEvaluationFingerprint"
+        },
+        "model": {
+          "type": "string"
+        },
+        "answer_accuracy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avg_latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_per_case_micros": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "id",
         "uuid",
-        "organization_id",
         "config",
         "config_revision",
         "baseline_uuid",
@@ -46931,16 +47554,21 @@ components:
         "report",
         "author_id",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "trigger_kind",
+        "department_uuid",
+        "model",
+        "answer_accuracy",
+        "source_hit_rate",
+        "cache_hit_rate",
+        "avg_latency_ms",
+        "cost_per_case_micros"
       ]
     }
     "AIEvaluationResult": {
       "type": "object",
       "properties": {
         "id": {
-          "type": "integer"
-        },
-        "organization_id": {
           "type": "integer"
         },
         "evaluation_uuid": {
@@ -46984,11 +47612,50 @@ components:
         "updated_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "department_uuid": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer_correct": {
+          "type": "boolean"
+        },
+        "source_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "cost_micros": {
+          "type": "integer"
         }
       },
       "required": [
         "id",
-        "organization_id",
         "evaluation_uuid",
         "case_uuid",
         "case_revision",
@@ -46998,7 +47665,536 @@ components:
         "run_uuid",
         "error_code",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "department_uuid",
+        "answer_correct",
+        "source_hit",
+        "cache_hit",
+        "latency_ms",
+        "cost_micros"
+      ]
+    }
+    "AIEvaluationWatch": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "last_checked_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/AIEvaluationFingerprint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "enabled",
+        "last_checked_at",
+        "last_fingerprint"
+      ]
+    }
+    "AIKnowledgeEvaluationPoint": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trigger": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "answer_accuracy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache_hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avg_latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_per_case_micros": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "uuid",
+        "trigger",
+        "model",
+        "created_at",
+        "answer_accuracy",
+        "source_hit_rate",
+        "cache_hit_rate",
+        "avg_latency_ms",
+        "cost_per_case_micros"
+      ]
+    }
+    "AIKnowledgePanel": {
+      "type": "object",
+      "description": "AI knowledge panel (CF-220). Every section carries available/reason; a missing source is shown as no data, never as zero.",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "uuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "uuid",
+                "name"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "departments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uuid": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uuid",
+              "name"
+            ]
+          }
+        },
+        "cache": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "lookups": {
+              "type": "integer"
+            },
+            "hits": {
+              "type": "integer"
+            },
+            "hit_rate": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "available",
+            "lookups",
+            "hits",
+            "hit_rate"
+          ]
+        },
+        "ai_usage": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "calls": {
+              "type": "integer"
+            },
+            "failed": {
+              "type": "integer"
+            },
+            "cost_micros": {
+              "type": "integer"
+            },
+            "by_task": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "task": {
+                    "type": "string"
+                  },
+                  "calls": {
+                    "type": "integer"
+                  },
+                  "failed": {
+                    "type": "integer"
+                  },
+                  "cost_micros": {
+                    "type": "integer"
+                  },
+                  "avg_latency_ms": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "task",
+                  "calls",
+                  "failed",
+                  "cost_micros",
+                  "avg_latency_ms"
+                ]
+              }
+            }
+          },
+          "required": [
+            "available",
+            "calls",
+            "failed",
+            "cost_micros",
+            "by_task"
+          ]
+        },
+        "knowledge_gaps": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "topics": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "topic": {
+                    "type": "string"
+                  },
+                  "conversations": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "topic",
+                  "conversations"
+                ]
+              }
+            }
+          },
+          "required": [
+            "available",
+            "topics"
+          ]
+        },
+        "suggestions": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "pending": {
+              "type": "integer"
+            },
+            "approved": {
+              "type": "integer"
+            },
+            "rejected": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "available",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "categories": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "classified": {
+              "type": "integer"
+            },
+            "avg_confidence": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "low_confidence": {
+              "type": "integer",
+              "description": "Classifications under 0.6 confidence."
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "category": {
+                    "type": "string"
+                  },
+                  "conversations": {
+                    "type": "integer"
+                  },
+                  "avg_confidence": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "category",
+                  "conversations",
+                  "avg_confidence"
+                ]
+              }
+            },
+            "confidence_buckets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "number"
+                  },
+                  "to": {
+                    "type": "number"
+                  },
+                  "count": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to",
+                  "count"
+                ]
+              }
+            }
+          },
+          "required": [
+            "available",
+            "classified",
+            "avg_confidence",
+            "low_confidence",
+            "categories",
+            "confidence_buckets"
+          ]
+        },
+        "handoff": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "conversations": {
+              "type": "integer"
+            },
+            "handoffs": {
+              "type": "integer"
+            },
+            "rate": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "available",
+            "conversations",
+            "handoffs",
+            "rate"
+          ]
+        },
+        "evaluation": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "source_not_connected",
+                "department_scope_unavailable"
+              ],
+              "description": "Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable)."
+            },
+            "latest": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AIKnowledgeEvaluationPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "previous": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AIKnowledgeEvaluationPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "available",
+            "latest",
+            "previous"
+          ]
+        }
+      },
+      "required": [
+        "from",
+        "until",
+        "department",
+        "departments",
+        "cache",
+        "ai_usage",
+        "knowledge_gaps",
+        "suggestions",
+        "categories",
+        "handoff",
+        "evaluation"
       ]
     }
     "AIKnowledgeGap": {

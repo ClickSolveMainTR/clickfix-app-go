@@ -194,3 +194,10 @@ const (
 	PermTenantDepartmentsWrite   = "tenant.departments.write"
 	PermTenantDepartmentsReadAll = "tenant.departments.read_all"
 )
+
+// AI knowledge layer measurement (CF-220): the insight panel and the
+// evaluation sets with their run history.
+const (
+	PermTenantAIInsightsRead   = "tenant.ai_insights.read"
+	PermTenantAIInsightsManage = "tenant.ai_insights.manage"
+)

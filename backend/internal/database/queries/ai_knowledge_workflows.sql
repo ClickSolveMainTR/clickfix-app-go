@@ -29,20 +29,29 @@ ORDER BY (c.brand_id IS NOT NULL) DESC,score DESC,c.id DESC LIMIT 10;
 INSERT INTO ai_conversation_links(organization_id,conversation_id,similar_id,score) VALUES($1,$2,$3,$4)
 ON CONFLICT(organization_id,conversation_id,similar_id) DO UPDATE SET score=excluded.score;
 -- name: AIEvaluationCases :many
-SELECT * FROM ai_evaluation_cases WHERE organization_id=$1 ORDER BY id LIMIT $2 OFFSET $3;
+SELECT * FROM ai_evaluation_cases WHERE organization_id=$1
+AND (sqlc.narg(department_id)::bigint IS NULL OR department_id=sqlc.narg(department_id)::bigint)
+ORDER BY id LIMIT $2 OFFSET $3;
 -- name: AIEvaluationCaseCount :one
-SELECT count(*) FROM ai_evaluation_cases WHERE organization_id=$1;
+SELECT count(*) FROM ai_evaluation_cases WHERE organization_id=$1
+AND (sqlc.narg(department_id)::bigint IS NULL OR department_id=sqlc.narg(department_id)::bigint);
 -- name: AIEvaluationCaseCreate :one
-INSERT INTO ai_evaluation_cases(organization_id,name,transcript,locale,expected,author_id,channel,category,scenario_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;
+INSERT INTO ai_evaluation_cases(organization_id,name,transcript,locale,expected,author_id,channel,category,scenario_at,department_id,expected_answer,expected_article_uuids)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,sqlc.narg(department_id),sqlc.arg(expected_answer),sqlc.arg(expected_article_uuids)::uuid[]) RETURNING *;
 -- name: AIEvaluationStart :one
-INSERT INTO ai_evaluations(organization_id,config,config_revision,baseline_uuid,author_id) VALUES($1,$2,$3,$4,$5) RETURNING *;
+INSERT INTO ai_evaluations(organization_id,config,config_revision,baseline_uuid,author_id,trigger_kind,department_id,fingerprint)
+VALUES($1,$2,$3,$4,$5,sqlc.arg(trigger_kind),sqlc.narg(department_id),sqlc.arg(fingerprint)) RETURNING *;
 -- name: AIEvaluationFinish :one
-UPDATE ai_evaluations SET status=$3,report=$4 WHERE organization_id=$1 AND uuid=$2 AND status='running' RETURNING *;
+UPDATE ai_evaluations SET status=$3,report=$4,model=sqlc.arg(model),answer_accuracy=sqlc.narg(answer_accuracy),source_hit_rate=sqlc.narg(source_hit_rate),
+cache_hit_rate=sqlc.narg(cache_hit_rate),avg_latency_ms=sqlc.narg(avg_latency_ms),cost_per_case_micros=sqlc.narg(cost_per_case_micros)
+WHERE organization_id=$1 AND uuid=$2 AND status='running' RETURNING *;
 -- name: AIEvaluationGet :one
 SELECT * FROM ai_evaluations WHERE organization_id=$1 AND uuid=$2;
 -- name: AIEvaluationResultCreate :exec
-INSERT INTO ai_evaluation_results(organization_id,evaluation_uuid,case_uuid,case_revision,case_snapshot,output,score,run_uuid,error_code)
-VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT uuid FROM ai_runs WHERE organization_id=$1 AND uuid=sqlc.narg(run_uuid)::uuid),sqlc.arg(error_code));
+INSERT INTO ai_evaluation_results(organization_id,evaluation_uuid,case_uuid,case_revision,case_snapshot,output,score,run_uuid,error_code,
+department_id,answer_correct,source_hit,cache_hit,latency_ms,cost_micros)
+VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT uuid FROM ai_runs WHERE organization_id=$1 AND uuid=sqlc.narg(run_uuid)::uuid),sqlc.arg(error_code),
+sqlc.narg(department_id),sqlc.arg(answer_correct),sqlc.narg(source_hit),sqlc.narg(cache_hit),sqlc.arg(latency_ms),sqlc.arg(cost_micros));
 -- name: AIEvaluationResults :many
 SELECT * FROM ai_evaluation_results WHERE organization_id=$1 AND evaluation_uuid=$2 ORDER BY id LIMIT $3 OFFSET $4;
 -- name: AIKnowledgeGapTopics :many

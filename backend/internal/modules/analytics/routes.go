@@ -26,6 +26,16 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/analytics/export/{format}", h.Dashboard, rbac.PermTenantConversationsReadAll)
 	route("POST /v1/tenant/analytics/backfill", h.Backfill, rbac.PermTenantConversationsManage)
 }
+
+// RegisterKnowledgeRoutes mounts the AI knowledge panel (CF-220). It shows
+// aggregates only (no conversation content), so tenant.ai_insights.read
+// is enough.
+func RegisterKnowledgeRoutes(mux *http.ServeMux, h *handler.KnowledgeHandler, tokens *jwt.Manager, loader middleware.IdentityLoader, resolver orgctx.Resolver) {
+	if resolver == nil {
+		return
+	}
+	mux.Handle("GET /v1/tenant/analytics/ai-knowledge", middleware.Chain(http.HandlerFunc(h.Panel), middleware.Authenticate(tokens, loader), middleware.RequireOrganization(resolver), middleware.RequireTenantPermission(rbac.PermTenantAIInsightsRead)))
+}
 func EventConsumer(s *usecase.Service) eventdispatch.Consumer {
 	return eventdispatch.Consumer{Name: "analytics_projection", Events: []string{"conversations.*", "conversation.*", "messages.*", "message.*", "sla.*", "surveys.*"}, MaxRetry: 8, Timeout: time.Minute, Handle: func(ctx context.Context, ev events.Event) error {
 		if ev.TenantID == nil || ev.EntityType != "conversation" || ev.EntityID == nil {

@@ -147,6 +147,9 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** AI knowledge layer measurement: panel and evaluation sets (CF-220). */
+  TenantAIInsightsRead: "tenant.ai_insights.read",
+  TenantAIInsightsManage: "tenant.ai_insights.manage",
   /** History pipeline (CF-217): archive, uploads and suggestion reviews. */
   TenantHistoryRead: "tenant.history.read",
   TenantHistoryManage: "tenant.history.manage",
@@ -370,6 +373,10 @@ export const permissions = {
       use: Permission.TenantAiUse,
       read: Permission.TenantAiRead,
       write: Permission.TenantAiWrite,
+    },
+    aiInsights: {
+      read: Permission.TenantAIInsightsRead,
+      manage: Permission.TenantAIInsightsManage,
     },
     automations: {
       read: Permission.TenantAutomationsRead,

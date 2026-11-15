@@ -163,6 +163,7 @@ knowledge_reviews
 ai_evaluation_cases
 ai_evaluations
 ai_evaluation_results
+ai_evaluation_watches
 ai_conversation_links
 # Analytics (CF-110)
 analytics_conversations
