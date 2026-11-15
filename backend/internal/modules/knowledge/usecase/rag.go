@@ -231,7 +231,9 @@ func (r *RAG) Index(ctx context.Context, org int64, id uuid.UUID) error {
 		}
 	}
 	// While the organization is being re-embedded, new vectors wait in
-	// pending_* with the others and switch together (CF-214).
+	// pending_* with the others and switch together (CF-214). Checked outside
+	// the transaction: if the switch lands in between, the chunk stays pending
+	// until the next re-embed run swaps it (it selects pending_model=target).
 	transition := false
 	if len(vectors) > 0 {
 		searchModel, err := vectorstore.SearchModel(ctx, r.KB.Repo.Pool, ChunkSource, org, r.Embedder.Model())
@@ -296,6 +298,7 @@ func (r *RAG) vectorCandidates(ctx context.Context, scope vectorstore.Scope, que
 		// Re-embedding in progress: the query uses the stored vectors' model.
 		embedded, err = named.EmbedModel(ctx, searchModel, []string{query})
 	default:
+		slog.WarnContext(ctx, "knowledge_vector_search_skipped", "organization_id", org, "reason", "embedder cannot use the stored vectors' model", "model", searchModel)
 		return []model.Citation{}, nil
 	}
 	slog.InfoContext(ctx, "ai_stage", "stage", "embeddings", "organization_id", org, "duration_ms", time.Since(started).Milliseconds(), "failed", err != nil)

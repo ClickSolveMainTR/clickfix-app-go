@@ -97,13 +97,22 @@ func Search(ctx context.Context, db Beginner, src Source, scope Scope, q Query) 
 	args["query_model"] = q.Model
 	args["query_limit"] = q.Limit
 	args["min_similarity"] = q.MinSimilarity
-	// #nosec G201 -- table, join and filter are code constants validated above; values are bound.
-	sql := fmt.Sprintf(`SELECT id,similarity,specific FROM (
- SELECT v.id,(1-(v.embedding <=> @query_vector::vector))::float8 AS similarity,%s AS specific
+	// One ordered, limited candidate set per tier: with a brand/department
+	// scope the specific rows get their own LIMIT, so organization-wide rows
+	// cannot crowd them out of the candidates.
+	inner := func(extra string) string {
+		// #nosec G201 -- table, join and filter are code constants validated above; values are bound.
+		return fmt.Sprintf(`(SELECT v.id,(1-(v.embedding <=> @query_vector::vector))::float8 AS similarity,%s AS specific
  FROM %s v %s
- WHERE %s AND v.embedding IS NOT NULL AND v.embedding_model=@query_model
- ORDER BY v.embedding <=> @query_vector::vector LIMIT @query_limit
-) h WHERE similarity>=@min_similarity ORDER BY specific DESC,similarity DESC,id`, specific, src.Table, src.Join, where)
+ WHERE %s%s AND v.embedding IS NOT NULL AND v.embedding_model=@query_model
+ ORDER BY v.embedding <=> @query_vector::vector LIMIT @query_limit)`, specific, src.Table, src.Join, where, extra)
+	}
+	candidates := inner("")
+	if specific != "false" {
+		candidates = inner(" AND "+specific) + " UNION ALL " + inner(" AND NOT "+specific)
+	}
+	sql := `SELECT id,similarity,specific FROM (` + candidates + `) h
+ WHERE similarity>=@min_similarity ORDER BY specific DESC,similarity DESC,id`
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return nil, err
