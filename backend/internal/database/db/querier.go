@@ -1450,7 +1450,7 @@ type Querier interface {
 	KnowledgeGapQuestionRecord(ctx context.Context, arg KnowledgeGapQuestionRecordParams) error
 	KnowledgeGapQuestions(ctx context.Context, arg KnowledgeGapQuestionsParams) ([]KnowledgeGapQuestionsRow, error)
 	KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInsertArticleParams) (KnowledgeArticle, error)
-	// brand_id comes from the article (trigger). While the organization is being
+	// brand_id and department_id come from the article (trigger, CF-222). While the organization is being
 	// re-embedded the vector goes to pending_* (CF-214).
 	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error)
 	KnowledgeInsertVersion(ctx context.Context, arg KnowledgeInsertVersionParams) error
@@ -1465,6 +1465,8 @@ type Querier interface {
 	KnowledgeReviews(ctx context.Context, arg KnowledgeReviewsParams) ([]KnowledgeReviewsRow, error)
 	KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSaveCollectionParams) (KnowledgeCollection, error)
 	// Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
+	// Departments: department_visible on the article is the visibility rule; rows of
+	// the scope's department (department_id) rank as specific (CF-222).
 	KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error)
 	KnowledgeSetIndexState(ctx context.Context, arg KnowledgeSetIndexStateParams) error
 	KnowledgeSetPublished(ctx context.Context, arg KnowledgeSetPublishedParams) (int64, error)

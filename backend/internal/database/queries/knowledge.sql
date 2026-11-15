@@ -72,7 +72,7 @@ SELECT a.id,a.uuid,a.slug,a.locale,a.published_version,v.title,v.body,v.visibili
 -- name: KnowledgeDeleteChunks :exec
 DELETE FROM knowledge_chunks WHERE organization_id=$1 AND article_id=$2;
 -- name: KnowledgeInsertChunk :one
--- brand_id comes from the article (trigger). While the organization is being
+-- brand_id and department_id come from the article (trigger, CF-222). While the organization is being
 -- re-embedded the vector goes to pending_* (CF-214).
 INSERT INTO knowledge_chunks(organization_id,article_id,version,ordinal,content,embedding,embedding_model,pending_embedding,pending_model)
  VALUES(sqlc.arg(organization_id),sqlc.arg(article_id),sqlc.arg(version),sqlc.arg(ordinal),sqlc.arg(content),
@@ -88,27 +88,27 @@ SELECT c.id,c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slu
  AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,sqlc.arg(viewer_departments)::bigint[]));
 -- name: KnowledgeSearchLexical :many
 -- Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
+-- Departments: department_visible on the article is the visibility rule; rows of
+-- the scope's department (department_id) rank as specific (CF-222).
 SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
  ts_rank_cd(to_tsvector('simple',c.content),plainto_tsquery('simple',sqlc.arg(q)::text))::double precision AS score,
- (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
+ ((NOT sqlc.arg(all_brands)::boolean AND c.brand_id IS NOT NULL) OR COALESCE(c.department_id=sqlc.narg(department_id)::bigint,false))::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
  WHERE c.organization_id=sqlc.arg(organization_id) AND a.deleted_at IS NULL AND a.published_version=c.version
  AND a.locale=sqlc.arg(locale) AND (NOT sqlc.arg(public_only)::boolean OR v.visibility='public')
  AND (sqlc.arg(all_brands)::boolean OR c.brand_id IS NULL OR c.brand_id=sqlc.narg(brand_id)::uuid)
- AND (sqlc.arg(all_departments)::boolean OR c.department_id IS NULL OR c.department_id=sqlc.narg(department_id)::uuid)
  AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,sqlc.arg(viewer_departments)::bigint[]))
  AND to_tsvector('simple',c.content) @@ plainto_tsquery('simple',sqlc.arg(q)::text)
  ORDER BY score DESC,c.id LIMIT 40;
 -- name: KnowledgeValidChunks :many
 SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
- (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
+ ((NOT sqlc.arg(all_brands)::boolean AND c.brand_id IS NOT NULL) OR COALESCE(c.department_id=sqlc.narg(department_id)::bigint,false))::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
  WHERE c.organization_id=sqlc.arg(organization_id) AND c.uuid=ANY(sqlc.arg(ids)::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
  AND a.locale=sqlc.arg(locale) AND (NOT sqlc.arg(public_only)::boolean OR v.visibility='public')
  AND (sqlc.arg(all_brands)::boolean OR c.brand_id IS NULL OR c.brand_id=sqlc.narg(brand_id)::uuid)
- AND (sqlc.arg(all_departments)::boolean OR c.department_id IS NULL OR c.department_id=sqlc.narg(department_id)::uuid)
  AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,sqlc.arg(viewer_departments)::bigint[]));
 
 -- name: KnowledgeCountCollections :one

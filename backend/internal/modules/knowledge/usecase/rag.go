@@ -189,6 +189,12 @@ var ChunkSource = vectorstore.Source{
 	Join: `JOIN knowledge_articles a ON a.organization_id=v.organization_id AND a.id=v.article_id
  JOIN knowledge_article_versions kv ON kv.organization_id=v.organization_id AND kv.article_id=v.article_id AND kv.version=v.version`,
 	Filter: `a.deleted_at IS NULL AND a.published_version=v.version AND a.locale=@locale AND (NOT @public_only::boolean OR kv.visibility='public')`,
+	// CF-222: the department filter runs on the chunk's own department_id (a
+	// copy of the article's) inside the vector query, so other departments'
+	// chunks do not use up the candidate limit. Shares are articles shared
+	// with the viewer's department. KnowledgeChunksByIDs checks the article
+	// again with the same rule.
+	DepartmentVisible: `department_visible(v.organization_id,'article',v.article_id,v.department_id,@scope_departments::bigint[])`,
 }
 
 // KnowledgeMinSimilarity is the cosine similarity a chunk needs to become a
@@ -310,7 +316,7 @@ func (r *RAG) vectorCandidates(ctx context.Context, scope vectorstore.Scope, que
 		return nil, ai.ErrInvalidOutput
 	}
 	restrict, viewer := deptscope.Effective(ctx).Args()
-	hits, err := vectorstore.Search(ctx, r.KB.Repo.Pool, ChunkSource, scope, vectorstore.Query{
+	hits, err := vectorstore.Search(ctx, r.KB.Repo.Pool, ChunkSource, scope.WithDepartments(restrict, viewer), vectorstore.Query{
 		Vector: embedded.Vectors[0], Model: searchModel, MinSimilarity: KnowledgeMinSimilarity, Limit: 40,
 		Args: pgx.NamedArgs{"locale": locale, "public_only": publicOnly},
 	})
@@ -385,13 +391,20 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 
 // SearchScoped searches inside a scope (CF-214). With a conversation scope the
 // brand's chunks rank first and organization-wide chunks are the fallback;
-// another brand's chunks never match.
+// another brand's chunks never match. Departments (CF-222): the department
+// scope of ctx (deptscope) decides which departments' chunks match; chunks of
+// scope.DepartmentID rank first and organization-wide chunks are the fallback.
 func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, locale string, publicOnly bool) ([]model.Citation, error) {
 	org := scope.OrganizationID
 	if org <= 0 {
 		return nil, model.ErrInvalid
 	}
 	ctx = orgctx.WithOrganizationID(ctx, org)
+	if _, ok := deptscope.From(ctx); !ok && !scope.AllDepartments {
+		// A conversation scope without a department scope in ctx sees its
+		// own department plus organization-wide knowledge (still closed).
+		ctx = deptscope.With(ctx, deptscope.Only(scope.Departments...))
+	}
 	restrict, viewer := deptscope.Effective(ctx).Args()
 	if len(query) == 0 || len(query) > 4000 || (locale != "tr" && locale != "en") {
 		return nil, model.ErrInvalid
@@ -426,14 +439,14 @@ func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, 
 			return nil, err
 		}
 		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly,
-			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, DepartmentID: scope.DepartmentID,
 			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
 		byID := map[uuid.UUID]model.Citation{}
 		for _, c := range rows {
-			byID[c.Uuid] = model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific && !scope.AllBrands}
+			byID[c.Uuid] = model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific}
 		}
 		for _, id := range ids {
 			if c, ok := byID[id]; ok {
@@ -442,13 +455,13 @@ func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, 
 		}
 	} else {
 		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly,
-			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, DepartmentID: scope.DepartmentID,
 			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
 		for _, c := range rows {
-			lexical = append(lexical, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific && !scope.AllBrands})
+			lexical = append(lexical, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific})
 		}
 	}
 	slog.InfoContext(ctx, "ai_stage", "stage", "lexical_search", "organization_id", org, "duration_ms", time.Since(lexicalStarted).Milliseconds())
