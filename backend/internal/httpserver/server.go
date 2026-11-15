@@ -311,7 +311,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	s.mailMonitor = mail.NewMonitor(mailer, 5*time.Minute)
 	provs := []providers.Provider{
 		providers.InappProvider{},
-		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL},
+		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL, DeliverReserved: cfg.App.Env == "development"},
 		providers.RealtimeProvider{Pub: deps.Realtime},
 		providers.NoopProvider{Name: "sms", Log: log},
 		providers.NoopProvider{Name: "push", Log: log},

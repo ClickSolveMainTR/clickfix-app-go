@@ -1854,6 +1854,9 @@ type Querier interface {
 	// and IN ('delivered', 'read') makes Postgres raise 42P08
 	// (inconsistent types deduced for parameter $2).
 	MarkNotificationSent(ctx context.Context, arg MarkNotificationSentParams) (Notification, error)
+	// Skipped: intentionally not sent (undeliverable recipient such as a
+	// reserved domain). Stored as cancelled with the reason; no retries left.
+	MarkNotificationSkipped(ctx context.Context, arg MarkNotificationSkippedParams) (Notification, error)
 	MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedParams) error
 	MarkOutboxPublished(ctx context.Context, id int64) error
 	MarkOutboxRetry(ctx context.Context, arg MarkOutboxRetryParams) error

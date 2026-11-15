@@ -130,6 +130,16 @@ SET status = 'failed',
 WHERE id = $1
 RETURNING *;
 
+-- name: MarkNotificationSkipped :one
+-- Skipped: intentionally not sent (undeliverable recipient such as a
+-- reserved domain). Stored as cancelled with the reason; no retries left.
+UPDATE notifications
+SET status = 'cancelled',
+    last_error = $2,
+    max_attempts = GREATEST(LEAST(max_attempts, attempt_count), 1)
+WHERE id = $1
+RETURNING *;
+
 -- name: ListStuckProcessingNotificationIDs :many
 SELECT id FROM notifications
 WHERE status = 'processing'

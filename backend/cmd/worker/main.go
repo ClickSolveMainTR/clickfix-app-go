@@ -145,7 +145,7 @@ func main() {
 	mailer := mail.NewSMTPSender(cfg.SMTP)
 	provs := []providers.Provider{
 		providers.InappProvider{},
-		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL},
+		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL, DeliverReserved: cfg.App.Env == "development"},
 		providers.RealtimeProvider{Pub: publisher},
 		providers.NoopProvider{Name: "sms", Log: log},
 		providers.NoopProvider{Name: "push", Log: log},
