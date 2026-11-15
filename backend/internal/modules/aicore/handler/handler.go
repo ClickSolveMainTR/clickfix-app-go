@@ -9,6 +9,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/apierror"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
+	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
 	kbhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/handler"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
@@ -19,6 +20,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Handler struct {
@@ -63,21 +65,22 @@ func (h *Handler) Policy(w http.ResponseWriter, r *http.Request) {
 			fail(w, r, err)
 			return
 		}
-		response.JSON(w, r, 200, policy)
+		h.writePolicy(w, r, policy)
 		return
 	}
 	var in struct {
-		Enabled           bool  `json:"enabled"`
-		MaskPii           bool  `json:"mask_pii"`
-		AllowUnmask       bool  `json:"allow_unmask"`
-		DailyCalls        int32 `json:"daily_calls"`
-		Concurrency       int32 `json:"concurrency"`
-		DailyBudgetMicros int64 `json:"daily_budget_micros"`
+		Enabled     bool `json:"enabled"`
+		MaskPii     bool `json:"mask_pii"`
+		AllowUnmask bool `json:"allow_unmask"`
+		// null follows the platform limit; a number can only lower it.
+		DailyCalls        *int32 `json:"daily_calls"`
+		Concurrency       *int32 `json:"concurrency"`
+		DailyBudgetMicros *int64 `json:"daily_budget_micros"`
 	}
 	if !kbhandler.Decode(w, r, &in) {
 		return
 	}
-	policy, err := h.Service.Repo.SavePolicy(r.Context(), db.AISavePolicyParams{OrganizationID: org, Enabled: in.Enabled, MaskPii: in.MaskPii, AllowUnmask: in.AllowUnmask, DailyCalls: in.DailyCalls, Concurrency: in.Concurrency, DailyBudgetMicros: in.DailyBudgetMicros})
+	policy, err := h.Service.Repo.SavePolicy(r.Context(), db.AISavePolicyParams{OrganizationID: org, Enabled: in.Enabled, MaskPii: in.MaskPii, AllowUnmask: in.AllowUnmask, DailyCalls: int4(in.DailyCalls), Concurrency: int4(in.Concurrency), DailyBudgetMicros: int8(in.DailyBudgetMicros)})
 	if err != nil {
 		fail(w, r, err)
 		return
@@ -87,7 +90,57 @@ func (h *Handler) Policy(w http.ResponseWriter, r *http.Request) {
 		scope := orgctx.Must(r.Context())
 		h.Activity.Record(r.Context(), &p.UserInternal, "organizations.updated", "organizations", &scope.UUID, map[string]any{"area": "ai_policy"}, r)
 	}
-	response.JSON(w, r, 200, policy)
+	h.writePolicy(w, r, policy)
+}
+
+// policyView is the tenant AI policy with the platform limits it sits under
+// and the limits that actually apply (CF-229).
+type policyView struct {
+	OrganizationID    int64              `json:"organization_id"`
+	Enabled           bool               `json:"enabled"`
+	MaskPii           bool               `json:"mask_pii"`
+	AllowUnmask       bool               `json:"allow_unmask"`
+	DailyCalls        *int32             `json:"daily_calls"`
+	Concurrency       *int32             `json:"concurrency"`
+	DailyBudgetMicros *int64             `json:"daily_budget_micros"`
+	PlatformLimits    airepo.Limits      `json:"platform_limits"`
+	EffectiveLimits   airepo.Limits      `json:"effective_limits"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (h *Handler) writePolicy(w http.ResponseWriter, r *http.Request, p db.AiPolicy) {
+	limits, err := h.Service.Repo.Limits(r.Context(), p)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	v := policyView{OrganizationID: p.OrganizationID, Enabled: p.Enabled, MaskPii: p.MaskPii, AllowUnmask: p.AllowUnmask,
+		PlatformLimits: limits.Platform, EffectiveLimits: limits.Effective, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}
+	if p.DailyCalls.Valid {
+		v.DailyCalls = &p.DailyCalls.Int32
+	}
+	if p.Concurrency.Valid {
+		v.Concurrency = &p.Concurrency.Int32
+	}
+	if p.DailyBudgetMicros.Valid {
+		v.DailyBudgetMicros = &p.DailyBudgetMicros.Int64
+	}
+	response.JSON(w, r, 200, v)
+}
+
+func int4(v *int32) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: *v, Valid: true}
+}
+
+func int8(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
 }
 
 func (h *Handler) Run(w http.ResponseWriter, r *http.Request) {

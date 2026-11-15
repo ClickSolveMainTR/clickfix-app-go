@@ -46,11 +46,15 @@ func (s *Service) PrefetchReply(ctx context.Context, scope vectorstore.Scope, in
 		return nil
 	}
 	policy, err := s.Repo.Policy(ctx, org)
-	if err != nil || !policy.Enabled || policy.Concurrency < 2 {
+	if err != nil || !policy.Enabled {
+		return nil
+	}
+	limits, err := s.Repo.Limits(ctx, policy)
+	if err != nil {
 		return nil
 	}
 	active, err := s.Repo.Billing.Q.AIActive(ctx, org)
-	if err != nil || active+2 > int64(policy.Concurrency) {
+	if err != nil || !limits.Effective.Concurrency.Allows(active, 2) {
 		return nil
 	}
 	result := make(chan RetrievalResult, 1)

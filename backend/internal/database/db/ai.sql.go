@@ -334,13 +334,13 @@ INSERT INTO ai_policies(organization_id,enabled,mask_pii,allow_unmask,daily_call
 `
 
 type AISavePolicyParams struct {
-	OrganizationID    int64 `json:"organization_id"`
-	Enabled           bool  `json:"enabled"`
-	MaskPii           bool  `json:"mask_pii"`
-	AllowUnmask       bool  `json:"allow_unmask"`
-	DailyCalls        int32 `json:"daily_calls"`
-	Concurrency       int32 `json:"concurrency"`
-	DailyBudgetMicros int64 `json:"daily_budget_micros"`
+	OrganizationID    int64       `json:"organization_id"`
+	Enabled           bool        `json:"enabled"`
+	MaskPii           bool        `json:"mask_pii"`
+	AllowUnmask       bool        `json:"allow_unmask"`
+	DailyCalls        pgtype.Int4 `json:"daily_calls"`
+	Concurrency       pgtype.Int4 `json:"concurrency"`
+	DailyBudgetMicros pgtype.Int8 `json:"daily_budget_micros"`
 }
 
 func (q *Queries) AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiPolicy, error) {

@@ -125,7 +125,7 @@ func aiFixture(t *testing.T, modes ...string) (*Service, *fakeAI, int64, int64) 
 	}
 	ent := entitlements.New(repo, nil, "ai-test")
 	store := airepo.New(repo, ent)
-	_, err = store.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, AllowUnmask: true, DailyCalls: 100, Concurrency: 1, DailyBudgetMicros: 10000000})
+	_, err = store.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, AllowUnmask: true, DailyCalls: pgtype.Int4{Int32: 100, Valid: true}, Concurrency: pgtype.Int4{Int32: 1, Valid: true}, DailyBudgetMicros: pgtype.Int8{Int64: 10000000, Valid: true}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestAIConcurrencyBudgetAndCancellation(t *testing.T) {
 	if err != nil || active != 0 {
 		t.Fatalf("active=%d %v", active, err)
 	}
-	_, err = svc.Repo.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, DailyCalls: 100, Concurrency: 1, DailyBudgetMicros: 1})
+	_, err = svc.Repo.SavePolicy(ctx, db.AISavePolicyParams{OrganizationID: org, Enabled: true, MaskPii: true, DailyCalls: pgtype.Int4{Int32: 100, Valid: true}, Concurrency: pgtype.Int4{Int32: 1, Valid: true}, DailyBudgetMicros: pgtype.Int8{Int64: 1, Valid: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

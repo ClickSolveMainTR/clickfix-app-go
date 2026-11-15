@@ -241,9 +241,9 @@ type AiPolicy struct {
 	Enabled           bool               `json:"enabled"`
 	MaskPii           bool               `json:"mask_pii"`
 	AllowUnmask       bool               `json:"allow_unmask"`
-	DailyCalls        int32              `json:"daily_calls"`
-	Concurrency       int32              `json:"concurrency"`
-	DailyBudgetMicros int64              `json:"daily_budget_micros"`
+	DailyCalls        pgtype.Int4        `json:"daily_calls"`
+	Concurrency       pgtype.Int4        `json:"concurrency"`
+	DailyBudgetMicros pgtype.Int8        `json:"daily_budget_micros"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }

@@ -19461,6 +19461,20 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AILimit: {
+            /**
+             * Format: int64
+             * @description null when unlimited
+             */
+            limit: number | null;
+            unlimited: boolean;
+        };
+        AILimits: {
+            daily_calls: components["schemas"]["AILimit"];
+            concurrency: components["schemas"]["AILimit"];
+            daily_budget_micros: components["schemas"]["AILimit"];
+        };
+        /** @description Tenant AI policy (CF-229). platform_limits are the plan grant or organization override set by the platform; effective_limits are the lower of the platform and tenant limits and are what reservations enforce. */
         AIPolicy: {
             /** Format: int64 */
             organization_id: number;
@@ -19470,10 +19484,17 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
+            platform_limits: components["schemas"]["AILimits"];
+            effective_limits: components["schemas"]["AILimits"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -19486,10 +19507,15 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
         };
         AIRun: {
             /** Format: int64 */
