@@ -160,6 +160,17 @@ export function ArticlesTab() {
           ),
         }),
         createColumn<KnowledgeArticleListItem>({
+          id: "department",
+          accessorFn: (row) => row.department_name ?? "",
+          labelKey: "knowledge.fields.department",
+          cell: ({ row }) => (
+            <span className="text-muted-foreground truncate text-xs">
+              {row.original.department_name ??
+                t("knowledge.department_organization_wide")}
+            </span>
+          ),
+        }),
+        createColumn<KnowledgeArticleListItem>({
           accessorKey: "version",
           labelKey: "knowledge.articles.columns.version",
           cell: ({ row }) => (

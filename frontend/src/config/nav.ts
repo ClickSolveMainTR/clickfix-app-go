@@ -458,6 +458,13 @@ export const cmsNav = defineNav({
       defaultOpen: true,
       items: [
         {
+          id: "departments",
+          titleKey: "layout.nav_departments",
+          href: routes.cms.departments.root,
+          icon: Building2,
+          permission: permissions.tenant.departments.read,
+        },
+        {
           id: "teams",
           titleKey: "layout.nav_teams",
           href: routes.cms.teams.root,

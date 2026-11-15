@@ -13,7 +13,7 @@ import (
 )
 
 const claimDueSLAMetrics = `-- name: ClaimDueSLAMetrics :many
-SELECT m.organization_id, m.conversation_id, m.metric, m.policy_id, m.target_seconds, m.cycle, m.started_at, m.resumed_at, m.consumed_seconds, m.paused_at, m.warn_at, m.due_at, m.warned_at, m.breached_at, m.completed_at, m.updated_at, c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id FROM conversation_sla_metrics m
+SELECT m.organization_id, m.conversation_id, m.metric, m.policy_id, m.target_seconds, m.cycle, m.started_at, m.resumed_at, m.consumed_seconds, m.paused_at, m.warn_at, m.due_at, m.warned_at, m.breached_at, m.completed_at, m.updated_at, c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id, c.department_id, c.department_source, c.department_confidence, c.department_routed_at FROM conversation_sla_metrics m
 JOIN conversations c ON c.organization_id = m.organization_id AND c.id = m.conversation_id
 WHERE m.completed_at IS NULL AND m.paused_at IS NULL AND m.breached_at IS NULL
   AND c.deleted_at IS NULL
@@ -107,6 +107,10 @@ func (q *Queries) ClaimDueSLAMetrics(ctx context.Context, arg ClaimDueSLAMetrics
 			&i.Conversation.MergedAt,
 			&i.Conversation.AnonymizedAt,
 			&i.Conversation.BrandID,
+			&i.Conversation.DepartmentID,
+			&i.Conversation.DepartmentSource,
+			&i.Conversation.DepartmentConfidence,
+			&i.Conversation.DepartmentRoutedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -357,6 +361,29 @@ func (q *Queries) GetDefaultBusinessHours(ctx context.Context, organizationID in
 	return i, err
 }
 
+const getDepartmentWorkingHours = `-- name: GetDepartmentWorkingHours :one
+SELECT working_hours, timezone, sla_policy_id FROM departments WHERE organization_id = $1 AND id = $2
+`
+
+type GetDepartmentWorkingHoursParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+type GetDepartmentWorkingHoursRow struct {
+	WorkingHours []byte      `json:"working_hours"`
+	Timezone     pgtype.Text `json:"timezone"`
+	SlaPolicyID  pgtype.UUID `json:"sla_policy_id"`
+}
+
+// A department's own hours (CF-215); NULL working_hours means the organization's.
+func (q *Queries) GetDepartmentWorkingHours(ctx context.Context, arg GetDepartmentWorkingHoursParams) (GetDepartmentWorkingHoursRow, error) {
+	row := q.db.QueryRow(ctx, getDepartmentWorkingHours, arg.OrganizationID, arg.ID)
+	var i GetDepartmentWorkingHoursRow
+	err := row.Scan(&i.WorkingHours, &i.Timezone, &i.SlaPolicyID)
+	return i, err
+}
+
 const getSLAPolicyByID = `-- name: GetSLAPolicyByID :one
 SELECT id, uuid, organization_id, name, description, is_active, position, business_hours_id, conditions, warning_percent, created_at, updated_at FROM sla_policies WHERE organization_id = $1 AND id = $2
 `
@@ -445,7 +472,10 @@ func (q *Queries) GetTeamBusinessHours(ctx context.Context, arg GetTeamBusinessH
 }
 
 const getTeamWorkingHours = `-- name: GetTeamWorkingHours :one
-SELECT working_hours, timezone FROM teams WHERE organization_id = $1 AND id = $2
+SELECT COALESCE(t.working_hours, d.working_hours) AS working_hours, COALESCE(t.timezone, d.timezone) AS timezone
+FROM teams t
+LEFT JOIN departments d ON d.organization_id = t.organization_id AND d.id = t.department_id
+WHERE t.organization_id = $1 AND t.id = $2
 `
 
 type GetTeamWorkingHoursParams struct {
@@ -459,6 +489,7 @@ type GetTeamWorkingHoursRow struct {
 }
 
 // A team's own hours (CF-5); NULL working_hours means the organization's.
+// A team without its own hours inherits its department's (CF-215).
 func (q *Queries) GetTeamWorkingHours(ctx context.Context, arg GetTeamWorkingHoursParams) (GetTeamWorkingHoursRow, error) {
 	row := q.db.QueryRow(ctx, getTeamWorkingHours, arg.OrganizationID, arg.ID)
 	var i GetTeamWorkingHoursRow

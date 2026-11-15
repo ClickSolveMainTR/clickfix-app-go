@@ -40,6 +40,7 @@ import (
 	healthusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customerhealth/usecase"
 	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
+	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
@@ -284,6 +285,10 @@ func main() {
 
 	supportoperations.RegisterEvents(eventBus, aiBilling, aiCore.AI, inboxCore.Conversations, notifSvc, publisher)
 	agentSvc.Sender = inboxCore.Conversations
+	// Departments (CF-215): AI routing of first messages and transfers.
+	departmentsSvc := departmentsusecase.New(pool, queries)
+	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)

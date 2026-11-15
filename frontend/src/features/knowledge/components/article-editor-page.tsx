@@ -33,6 +33,7 @@ import {
 import { Permission } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { ArticleBrandAssign } from "@/features/brands/components/article-brand-assign";
+import { useDepartmentOptions } from "@/features/departments/hooks/use-departments";
 import { useActiveOrganization } from "@/features/organizations";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { isApiError } from "@/lib/api";
@@ -64,6 +65,8 @@ type Draft = {
   locale: "tr" | "en";
   visibility: "public" | "internal";
   collection: string;
+  /** Department uuid or NONE (organization-wide, CF-215). */
+  department: string;
   tags: string[];
   body: string;
 };
@@ -76,6 +79,7 @@ function draftOf(a: KnowledgeArticle | null, collectionUuid: string): Draft {
     locale: a?.locale ?? "tr",
     visibility: a?.visibility ?? "public",
     collection: collectionUuid,
+    department: a?.department?.uuid ?? NONE,
     tags: a?.tags ?? [],
     body: a?.body ?? "",
   };
@@ -89,6 +93,7 @@ function sameDraft(a: Draft, b: Draft) {
     a.locale === b.locale &&
     a.visibility === b.visibility &&
     a.collection === b.collection &&
+    a.department === b.department &&
     a.tags.join("\u0000") === b.tags.join("\u0000") &&
     a.body.trim() === b.body.trim()
   );
@@ -212,6 +217,11 @@ function Editor({
 
   useUnsavedChangesGuard(dirty && canWrite);
 
+  const { active: activeOrg } = useActiveOrganization();
+  const canReadDepartments = (activeOrg?.permissions ?? []).includes(
+    Permission.TenantDepartmentsRead,
+  );
+  const { options: departmentOptions } = useDepartmentOptions();
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
@@ -223,6 +233,7 @@ function Editor({
     body: draft.body,
     tags: draft.tags,
     collection_uuid: draft.collection === NONE ? null : draft.collection,
+    department_uuid: draft.department === NONE ? null : draft.department,
     ...(article ? { version: article.version } : {}),
   });
 
@@ -537,6 +548,35 @@ function Editor({
                   </SelectContent>
                 </Select>
               </div>
+              {canReadDepartments ? (
+                <div className="space-y-2">
+                  <Label htmlFor="kb-department">
+                    {t("knowledge.fields.department")}
+                  </Label>
+                  <Select
+                    value={draft.department}
+                    disabled={readOnly}
+                    onValueChange={(v) => set("department", v)}
+                  >
+                    <SelectTrigger id="kb-department" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>
+                        {t("knowledge.department_organization_wide")}
+                      </SelectItem>
+                      {departmentOptions.map((d) => (
+                        <SelectItem key={d.value} value={d.value}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    {t("knowledge.department_hint")}
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="kb-tags">{t("knowledge.fields.tags")}</Label>
                 <TagsInput

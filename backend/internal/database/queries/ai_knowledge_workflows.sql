@@ -1,7 +1,10 @@
 -- name: BusinessContextList :many
-SELECT * FROM business_context_sections WHERE organization_id=$1 ORDER BY sort_order,id LIMIT $2 OFFSET $3;
+SELECT * FROM business_context_sections WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(organization_id,'context',id,department_id,sqlc.arg(viewer_departments)::bigint[]))
+ ORDER BY sort_order,id LIMIT $2 OFFSET $3;
 -- name: BusinessContextCount :one
-SELECT count(*) FROM business_context_sections WHERE organization_id=$1;
+SELECT count(*) FROM business_context_sections WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(organization_id,'context',id,department_id,sqlc.arg(viewer_departments)::bigint[]));
 -- name: BusinessContextCreate :one
 INSERT INTO business_context_sections(organization_id,kind,title,body,active,sort_order,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *;
 -- name: BusinessContextUpdate :one
@@ -48,9 +51,12 @@ WITH latest AS (
 INSERT INTO knowledge_suggestions(organization_id,topic,conversation_id,title,body) VALUES($1,$2,$3,$4,$5)
 ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING *;
 -- name: AIKnowledgeSuggestions :many
-SELECT * FROM knowledge_suggestions WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3;
+SELECT * FROM knowledge_suggestions WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_id IS NULL OR department_id=ANY(sqlc.arg(viewer_departments)::bigint[]))
+ ORDER BY id DESC LIMIT $2 OFFSET $3;
 -- name: AIKnowledgeSuggestionCount :one
-SELECT count(*) FROM knowledge_suggestions WHERE organization_id=$1;
+SELECT count(*) FROM knowledge_suggestions WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_id IS NULL OR department_id=ANY(sqlc.arg(viewer_departments)::bigint[]));
 -- name: AIKnowledgeSuggestionLock :one
 SELECT * FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE;
 -- name: AIKnowledgeSuggestionReview :one
@@ -80,9 +86,12 @@ SELECT count(*) FROM knowledge_reviews WHERE organization_id=$1;
 -- name: KnowledgeReviewDone :one
 UPDATE knowledge_reviews SET status='done' WHERE organization_id=$1 AND uuid=$2 RETURNING *;
 -- name: AIKnowledgeSources :many
-SELECT id,uuid,organization_id,kind,title,locale,enabled,max_depth,interval_hours,next_sync_at,status,last_error,last_synced_at,created_at,updated_at FROM knowledge_sources WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3;
+SELECT id,uuid,organization_id,kind,title,locale,enabled,max_depth,interval_hours,next_sync_at,status,last_error,last_synced_at,created_at,updated_at,department_id FROM knowledge_sources WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(organization_id,'source',id,department_id,sqlc.arg(viewer_departments)::bigint[]))
+ ORDER BY id DESC LIMIT $2 OFFSET $3;
 -- name: AIKnowledgeSourceCount :one
-SELECT count(*) FROM knowledge_sources WHERE organization_id=$1;
+SELECT count(*) FROM knowledge_sources WHERE organization_id=$1
+ AND (NOT sqlc.arg(dept_restrict)::boolean OR department_visible(organization_id,'source',id,department_id,sqlc.arg(viewer_departments)::bigint[]));
 -- name: AIKnowledgeSourceCreate :one
 INSERT INTO knowledge_sources(organization_id,kind,location,title,locale,author_id,max_depth,interval_hours) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *;
 -- name: AIKnowledgeSourceGet :one

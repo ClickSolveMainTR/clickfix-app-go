@@ -34,6 +34,8 @@ export function createTeamSchema(t: Translate) {
         t("teams.validation.color"),
       ),
     skills: z.array(z.string()).max(30, t("teams.validation.too_many_skills")),
+    /** Department uuid or "none" (CF-215). */
+    department_uuid: z.string(),
     inherit_hours: z.boolean(),
     timezone: z.string(),
     working_hours: z.object({ days: z.array(day).length(7) }),
@@ -60,6 +62,7 @@ export function teamToForm(team?: Team): TeamFormValues {
     description: team?.description ?? "",
     color: team?.color ?? "",
     skills: team?.skills ?? [],
+    department_uuid: team?.department?.uuid ?? "none",
     inherit_hours: team ? own === null : true,
     timezone: team?.timezone ?? "",
     working_hours: { days },
@@ -73,6 +76,8 @@ export function formToTeamInput(values: TeamFormValues): TeamInput {
     description: values.description.trim(),
     color: values.color.trim().toUpperCase(),
     skills: values.skills,
+    department_uuid:
+      values.department_uuid === "none" ? null : values.department_uuid,
   };
   if (values.inherit_hours) return { ...base, inherit_hours: true };
   return {

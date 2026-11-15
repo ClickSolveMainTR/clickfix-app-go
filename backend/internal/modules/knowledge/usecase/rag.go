@@ -16,6 +16,7 @@ import (
 	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
@@ -277,7 +278,8 @@ func (r *RAG) vectorCandidates(ctx context.Context, org int64, query, locale str
 	if !validVectors(embedded.Vectors, 1) {
 		return nil, ai.ErrInvalidOutput
 	}
-	rows, err := r.KB.Repo.Q.KnowledgeSearchVector(ctx, db.KnowledgeSearchVectorParams{OrganizationID: org, Locale: locale, Embedding: embedded.Vectors[0], PublicOnly: publicOnly, EmbeddingModel: r.Embedder.Model()})
+	restrict, viewer := deptscope.Effective(ctx).Args()
+	rows, err := r.KB.Repo.Q.KnowledgeSearchVector(ctx, db.KnowledgeSearchVectorParams{OrganizationID: org, Locale: locale, Embedding: embedded.Vectors[0], PublicOnly: publicOnly, EmbeddingModel: r.Embedder.Model(), DeptRestrict: restrict, ViewerDepartments: viewer})
 	if err != nil {
 		return nil, err
 	}
@@ -327,8 +329,11 @@ func (r *RAG) skip(ctx context.Context, org int64, a db.KnowledgePublishedRow, r
 	})
 }
 
+// Search follows the department scope of ctx (CF-215, deptscope): without
+// one only organization-wide articles are candidates.
 func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publicOnly bool) ([]model.Citation, error) {
 	ctx = orgctx.WithOrganizationID(ctx, org)
+	restrict, viewer := deptscope.Effective(ctx).Args()
 	if len(query) == 0 || len(query) > 4000 || (locale != "tr" && locale != "en") {
 		return nil, model.ErrInvalid
 	}
@@ -361,7 +366,7 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 		if err != nil {
 			return nil, err
 		}
-		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly})
+		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly, DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
@@ -375,7 +380,7 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 			}
 		}
 	} else {
-		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly})
+		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly, DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}

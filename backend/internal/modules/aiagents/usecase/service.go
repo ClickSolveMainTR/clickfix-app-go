@@ -21,6 +21,7 @@ import (
 	sysmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/model"
 	systems "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
@@ -64,6 +65,10 @@ type Service struct {
 	// Notices tells the customer when the agent hands the conversation to a
 	// person (CF-198); nil sends nothing.
 	Notices HandoffNotifier
+	// Departments predicts and transfers the department of a conversation
+	// and scopes its knowledge (CF-215); nil keeps everything
+	// organization-wide.
+	Departments DepartmentRouter
 }
 
 // HandoffNotifier posts the handoff notice to the customer.
@@ -166,7 +171,7 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	if err != nil {
 		return err
 	}
-	if !cfg.TriageEnabled && cfg.Mode == "off" {
+	if !cfg.TriageEnabled && cfg.Mode == "off" && s.Departments == nil {
 		return nil
 	}
 	msg, err := s.Repo.Q.GetMessageByUUID(ctx, db.GetMessageByUUIDParams{OrganizationID: org, Uuid: message})
@@ -182,6 +187,14 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	conv, err := s.Repo.Q.GetConversationByID(ctx, db.GetConversationByIDParams{OrganizationID: org, ID: msg.ConversationID})
 	if err != nil {
 		return err
+	}
+	// CF-215: a first message without the customer's pick gets the AI's
+	// department guess; knowledge and business context follow the
+	// conversation's department from here on.
+	conv = s.routeDepartment(ctx, org, msg, conv, cfg.Locale)
+	ctx = deptscope.With(ctx, deptscope.Of(conv.DepartmentID))
+	if !cfg.TriageEnabled && cfg.Mode == "off" {
+		return nil
 	}
 	transcript, err := s.context(ctx, org, conv)
 	if err != nil {
@@ -385,6 +398,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	options := core.AgentOptions{
 		StableData: cfg.Persona, Knowledge: knowledge, ConversationID: conv.ID, Instructions: replyInstructions, Schema: replySchema,
 	}
+	if answers, err := s.departmentAI(ctx, org, conv, &options); err != nil {
+		return err
+	} else if !answers {
+		return handoff("AI agent is turned off for this department")
+	}
 	if s.Tools != nil {
 		offered, err := s.Tools.Offered(ctx, org)
 		if err != nil {
@@ -409,6 +427,9 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			value, err := s.Tools.Invoke(ctx, org, 0, conv.Uuid, Invocation{Name: call.Name, Arguments: call.Input, Key: uuid.NewSHA1(job.Uuid, []byte(call.ID))})
 			return ai.ToolResult{Content: value}, err
 		}
+	}
+	if tools, runner := s.departmentTool(ctx, org, conv, options.Runner); len(tools) > 0 {
+		options.Tools, options.Runner = append(options.Tools, tools...), runner
 	}
 	run, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: 2048}, options)
 	if runErr != nil {
@@ -493,6 +514,8 @@ func (s *Service) Copilot(ctx context.Context, org, actor int64, id uuid.UUID, i
 	if err = s.Repo.CheckConversation(ctx, org, conv.ID); err != nil {
 		return core.RunResult{}, err
 	}
+	// The agent assistant answers from the conversation's department (CF-215).
+	ctx = deptscope.With(ctx, deptscope.Of(conv.DepartmentID))
 	transcript, err := s.context(ctx, org, conv)
 	if err != nil {
 		return core.RunResult{}, err

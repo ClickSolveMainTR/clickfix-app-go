@@ -78,5 +78,8 @@
   "skills.description": "{{name}} için yönlendirmede kullanılan beceri etiketleri.",
   "skills.action": "Beceriler",
   "skills.save": "Becerileri kaydet",
-  "skills.saved": "Beceriler kaydedildi."
+  "skills.saved": "Beceriler kaydedildi.",
+  "fields.department": "Departman",
+  "fields.department_hint": "Ekip bu iş biriminin bilgisini, SLA'sını ve saatlerini kullanır.",
+  "fields.no_department": "Departman yok"
 }

@@ -13,7 +13,7 @@ import (
 )
 
 const knowledgeArticle = `-- name: KnowledgeArticle :one
-SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id FROM knowledge_articles WHERE organization_id=$1 AND uuid=$2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id, department_id FROM knowledge_articles WHERE organization_id=$1 AND uuid=$2 AND deleted_at IS NULL
 `
 
 type KnowledgeArticleParams struct {
@@ -43,6 +43,7 @@ func (q *Queries) KnowledgeArticle(ctx context.Context, arg KnowledgeArticlePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BrandID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -59,15 +60,22 @@ SELECT count(*) FROM knowledge_articles a
  AND ($6::text='' OR ($6::text='draft' AND a.published_version IS NULL)
   OR ($6::text='published' AND a.published_version IS NOT NULL)
   OR ($6::text='changed' AND a.published_version IS NOT NULL AND a.published_version<>a.version))
+ AND (NOT $7::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$8::bigint[]))
+ AND ($9::text='' OR ($9::text='none' AND a.department_id IS NULL)
+  OR ($9::text='id' AND a.department_id=$10::bigint))
 `
 
 type KnowledgeArticleCountParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	Q              string      `json:"q"`
-	Locale         string      `json:"locale"`
-	Visibility     string      `json:"visibility"`
-	CollectionUuid pgtype.UUID `json:"collection_uuid"`
-	State          string      `json:"state"`
+	OrganizationID    int64       `json:"organization_id"`
+	Q                 string      `json:"q"`
+	Locale            string      `json:"locale"`
+	Visibility        string      `json:"visibility"`
+	CollectionUuid    pgtype.UUID `json:"collection_uuid"`
+	State             string      `json:"state"`
+	DeptRestrict      bool        `json:"dept_restrict"`
+	ViewerDepartments []int64     `json:"viewer_departments"`
+	DepartmentMode    string      `json:"department_mode"`
+	DepartmentID      pgtype.Int8 `json:"department_id"`
 }
 
 func (q *Queries) KnowledgeArticleCount(ctx context.Context, arg KnowledgeArticleCountParams) (int64, error) {
@@ -78,6 +86,10 @@ func (q *Queries) KnowledgeArticleCount(ctx context.Context, arg KnowledgeArticl
 		arg.Visibility,
 		arg.CollectionUuid,
 		arg.State,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+		arg.DepartmentMode,
+		arg.DepartmentID,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -86,13 +98,14 @@ func (q *Queries) KnowledgeArticleCount(ctx context.Context, arg KnowledgeArticl
 
 const knowledgeArticles = `-- name: KnowledgeArticles :many
 SELECT a.uuid,a.slug,a.locale,a.title,a.tags,a.visibility,a.version,a.published_version,a.author_id,
- a.created_at,a.updated_at,c.uuid AS collection_uuid,
+ a.created_at,a.updated_at,c.uuid AS collection_uuid,d.uuid AS department_uuid,d.name AS department_name,
  COALESCE(f.helpful,0)::bigint AS helpful_count,COALESCE(f.not_helpful,0)::bigint AS not_helpful_count
  FROM knowledge_articles a
  LEFT JOIN knowledge_collections c ON c.organization_id=a.organization_id AND c.id=a.collection_id
  LEFT JOIN knowledge_collections p ON p.organization_id=c.organization_id AND p.id=c.parent_id
  LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE helpful) AS helpful,count(*) FILTER (WHERE NOT helpful) AS not_helpful
   FROM knowledge_article_feedback fb WHERE fb.organization_id=a.organization_id AND fb.article_id=a.id) f ON true
+ LEFT JOIN departments d ON d.organization_id=a.organization_id AND d.id=a.department_id
  WHERE a.organization_id=$1 AND a.deleted_at IS NULL
  AND ($4::text='' OR a.title ILIKE '%'||$4::text||'%' OR a.slug ILIKE '%'||$4::text||'%')
  AND ($5::text='' OR a.locale=$5::text)
@@ -101,19 +114,26 @@ SELECT a.uuid,a.slug,a.locale,a.title,a.tags,a.visibility,a.version,a.published_
  AND ($8::text='' OR ($8::text='draft' AND a.published_version IS NULL)
   OR ($8::text='published' AND a.published_version IS NOT NULL)
   OR ($8::text='changed' AND a.published_version IS NOT NULL AND a.published_version<>a.version))
+ AND (NOT $9::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$10::bigint[]))
+ AND ($11::text='' OR ($11::text='none' AND a.department_id IS NULL)
+  OR ($11::text='id' AND a.department_id=$12::bigint))
  ORDER BY a.updated_at DESC,a.id DESC
  LIMIT $2 OFFSET $3
 `
 
 type KnowledgeArticlesParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	Limit          int32       `json:"limit"`
-	Offset         int32       `json:"offset"`
-	Q              string      `json:"q"`
-	Locale         string      `json:"locale"`
-	Visibility     string      `json:"visibility"`
-	CollectionUuid pgtype.UUID `json:"collection_uuid"`
-	State          string      `json:"state"`
+	OrganizationID    int64       `json:"organization_id"`
+	Limit             int32       `json:"limit"`
+	Offset            int32       `json:"offset"`
+	Q                 string      `json:"q"`
+	Locale            string      `json:"locale"`
+	Visibility        string      `json:"visibility"`
+	CollectionUuid    pgtype.UUID `json:"collection_uuid"`
+	State             string      `json:"state"`
+	DeptRestrict      bool        `json:"dept_restrict"`
+	ViewerDepartments []int64     `json:"viewer_departments"`
+	DepartmentMode    string      `json:"department_mode"`
+	DepartmentID      pgtype.Int8 `json:"department_id"`
 }
 
 type KnowledgeArticlesRow struct {
@@ -129,6 +149,8 @@ type KnowledgeArticlesRow struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	CollectionUuid   pgtype.UUID        `json:"collection_uuid"`
+	DepartmentUuid   pgtype.UUID        `json:"department_uuid"`
+	DepartmentName   pgtype.Text        `json:"department_name"`
 	HelpfulCount     int64              `json:"helpful_count"`
 	NotHelpfulCount  int64              `json:"not_helpful_count"`
 }
@@ -144,6 +166,10 @@ func (q *Queries) KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesPa
 		arg.Visibility,
 		arg.CollectionUuid,
 		arg.State,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
+		arg.DepartmentMode,
+		arg.DepartmentID,
 	)
 	if err != nil {
 		return nil, err
@@ -165,6 +191,8 @@ func (q *Queries) KnowledgeArticles(ctx context.Context, arg KnowledgeArticlesPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CollectionUuid,
+			&i.DepartmentUuid,
+			&i.DepartmentName,
 			&i.HelpfulCount,
 			&i.NotHelpfulCount,
 		); err != nil {
@@ -332,7 +360,7 @@ func (q *Queries) KnowledgeDeleteCollection(ctx context.Context, arg KnowledgeDe
 
 const knowledgeInsertArticle = `-- name: KnowledgeInsertArticle :one
 INSERT INTO knowledge_articles(organization_id,uuid,collection_id,slug,locale,title,body,tags,visibility,author_id)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id, department_id
 `
 
 type KnowledgeInsertArticleParams struct {
@@ -381,6 +409,7 @@ func (q *Queries) KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInser
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BrandID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -453,7 +482,7 @@ func (q *Queries) KnowledgeInsertVersion(ctx context.Context, arg KnowledgeInser
 }
 
 const knowledgeLockArticle = `-- name: KnowledgeLockArticle :one
-SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id FROM knowledge_articles WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id, department_id FROM knowledge_articles WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type KnowledgeLockArticleParams struct {
@@ -483,6 +512,7 @@ func (q *Queries) KnowledgeLockArticle(ctx context.Context, arg KnowledgeLockArt
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BrandID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -571,15 +601,18 @@ SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.l
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
  WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version
  AND a.locale=$2 AND (NOT $4::boolean OR v.visibility='public')
+ AND (NOT $5::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$6::bigint[]))
  AND to_tsvector('simple',c.content) @@ plainto_tsquery('simple',$3::text)
  ORDER BY score DESC,c.id LIMIT 40
 `
 
 type KnowledgeSearchLexicalParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Locale         string `json:"locale"`
-	Q              string `json:"q"`
-	PublicOnly     bool   `json:"public_only"`
+	OrganizationID    int64   `json:"organization_id"`
+	Locale            string  `json:"locale"`
+	Q                 string  `json:"q"`
+	PublicOnly        bool    `json:"public_only"`
+	DeptRestrict      bool    `json:"dept_restrict"`
+	ViewerDepartments []int64 `json:"viewer_departments"`
 }
 
 type KnowledgeSearchLexicalRow struct {
@@ -600,6 +633,8 @@ func (q *Queries) KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearc
 		arg.Locale,
 		arg.Q,
 		arg.PublicOnly,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
 	)
 	if err != nil {
 		return nil, err
@@ -635,16 +670,19 @@ SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.l
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
  WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$2 AND (NOT $5::boolean OR v.visibility='public') AND c.embedding_model=$3
+ AND a.locale=$2 AND (NOT $5::boolean OR v.visibility='public')
+ AND (NOT $6::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$7::bigint[])) AND c.embedding_model=$3
  ORDER BY score DESC,c.id LIMIT 40
 `
 
 type KnowledgeSearchVectorParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	Locale         string    `json:"locale"`
-	EmbeddingModel string    `json:"embedding_model"`
-	Embedding      []float32 `json:"embedding"`
-	PublicOnly     bool      `json:"public_only"`
+	OrganizationID    int64     `json:"organization_id"`
+	Locale            string    `json:"locale"`
+	EmbeddingModel    string    `json:"embedding_model"`
+	Embedding         []float32 `json:"embedding"`
+	PublicOnly        bool      `json:"public_only"`
+	DeptRestrict      bool      `json:"dept_restrict"`
+	ViewerDepartments []int64   `json:"viewer_departments"`
 }
 
 type KnowledgeSearchVectorRow struct {
@@ -666,6 +704,8 @@ func (q *Queries) KnowledgeSearchVector(ctx context.Context, arg KnowledgeSearch
 		arg.EmbeddingModel,
 		arg.Embedding,
 		arg.PublicOnly,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
 	)
 	if err != nil {
 		return nil, err
@@ -771,7 +811,7 @@ func (q *Queries) KnowledgeSkippedArticles(ctx context.Context, organizationID i
 
 const knowledgeUpdateArticle = `-- name: KnowledgeUpdateArticle :one
 UPDATE knowledge_articles SET collection_id=$3,slug=$4,title=$5,body=$6,tags=$7,visibility=$8,author_id=$9,version=version+1
- WHERE organization_id=$1 AND uuid=$2 AND deleted_at IS NULL RETURNING id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id
+ WHERE organization_id=$1 AND uuid=$2 AND deleted_at IS NULL RETURNING id, uuid, organization_id, collection_id, slug, locale, title, body, tags, visibility, version, published_version, publication_revision, author_id, deleted_at, created_at, updated_at, brand_id, department_id
 `
 
 type KnowledgeUpdateArticleParams struct {
@@ -818,6 +858,7 @@ func (q *Queries) KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdat
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BrandID,
+		&i.DepartmentID,
 	)
 	return i, err
 }
@@ -828,13 +869,16 @@ SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.l
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
  WHERE c.organization_id=$1 AND c.uuid=ANY($3::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
  AND a.locale=$2 AND (NOT $4::boolean OR v.visibility='public')
+ AND (NOT $5::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$6::bigint[]))
 `
 
 type KnowledgeValidChunksParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	Locale         string      `json:"locale"`
-	Ids            []uuid.UUID `json:"ids"`
-	PublicOnly     bool        `json:"public_only"`
+	OrganizationID    int64       `json:"organization_id"`
+	Locale            string      `json:"locale"`
+	Ids               []uuid.UUID `json:"ids"`
+	PublicOnly        bool        `json:"public_only"`
+	DeptRestrict      bool        `json:"dept_restrict"`
+	ViewerDepartments []int64     `json:"viewer_departments"`
 }
 
 type KnowledgeValidChunksRow struct {
@@ -854,6 +898,8 @@ func (q *Queries) KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidCh
 		arg.Locale,
 		arg.Ids,
 		arg.PublicOnly,
+		arg.DeptRestrict,
+		arg.ViewerDepartments,
 	)
 	if err != nil {
 		return nil, err
