@@ -24,7 +24,7 @@ volume ve ağ adları `NAME_PREFIX=clickfix` ile başlar. Özel ağ adı `clickf
 
 | Servis | İmaj | Ağ | Dışarı açık mı |
 | --- | --- | --- | --- |
-| `postgres` | `postgres:18-alpine` | app | hayır |
+| `postgres` | `pgvector/pgvector:0.8.7-pg18-trixie` | app | hayır |
 | `redis` | `redis:8-alpine` (AOF açık) | app | hayır |
 | `seaweedfs` | `chrislusf/seaweedfs:4.47` (tek düğüm, S3 `:8333`) | app | hayır |
 | `meilisearch` | `getmeili/meilisearch:v1.11` | app | hayır |

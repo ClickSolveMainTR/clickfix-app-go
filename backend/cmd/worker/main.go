@@ -4,6 +4,7 @@ import (
 	appointmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/appointments/usecase"
 	authrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/repository"
 	authuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/usecase"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 
 	"context"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
@@ -40,6 +41,7 @@ import (
 	healthusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customerhealth/usecase"
 	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
+	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
 	historyusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/usecase"
@@ -183,6 +185,7 @@ func main() {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
 	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
 	agentSvc.Hours = slaSvc
+	agentSvc.Memory = aiCore.Memory
 	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
 	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
@@ -195,11 +198,13 @@ func main() {
 		SLA:                 slaSvc,
 		AutoReply:           autoReplySvc,
 		Knowledge:           aiCore.RAG,
+		Memory:              aiCore.Memory,
 		Agents:              agentSvc,
 		Analytics:           analyticsSvc,
 		Surveys:             surveysSvc,
 		Status:              statusSvc,
 		LiveActivities:      mobileextmodule.NewService(cfg.APNs, pool, queries, log),
+		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
 	})
 	if err != nil {
 		log.Error("event_consumers_init_failed", "error", err)
@@ -285,6 +290,10 @@ func main() {
 
 	supportoperations.RegisterEvents(eventBus, aiBilling, aiCore.AI, inboxCore.Conversations, notifSvc, publisher)
 	agentSvc.Sender = inboxCore.Conversations
+	// Departments (CF-215): AI routing of first messages and transfers.
+	departmentsSvc := departmentsusecase.New(pool, queries)
+	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
@@ -341,6 +350,7 @@ func main() {
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
+		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
 		Handle(eventdispatch.TaskConsume, eventProcessor.ProcessTask).
 		Handle(eventdispatch.TaskPurgeConsumptions, eventProcessor.PurgeConsumptions).
 		Handle(queue.TaskSLASweep, queue.SLASweepHandler(slaSvc.Sweep)).

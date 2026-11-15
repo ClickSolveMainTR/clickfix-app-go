@@ -190,7 +190,7 @@ INSERT INTO history_decisions(organization_id,suggestion_id,cluster_id,departmen
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *;
 
 -- name: HistoryNearestRejection :one
-SELECT uuid,reason,ai_cosine(embedding,sqlc.arg(embedding)::real[])::double precision AS score
+SELECT uuid,reason,(1-(embedding <=> sqlc.arg(embedding)::vector))::double precision AS score
 FROM history_decisions WHERE organization_id=$1 AND decision='rejected' AND embedding_model=$2
  AND department_id IS NOT DISTINCT FROM sqlc.narg(department_id)::bigint
 ORDER BY score DESC,id LIMIT 1;
@@ -204,7 +204,7 @@ WHERE d.organization_id=$1 ORDER BY d.id DESC LIMIT $2 OFFSET $3;
 SELECT count(*) FROM history_decisions WHERE organization_id=$1;
 
 -- name: HistoryNearestArticle :one
-SELECT a.id,a.uuid,v.title,ai_cosine(c.embedding,sqlc.arg(embedding)::real[])::double precision AS score
+SELECT a.id,a.uuid,v.title,(1-(c.embedding <=> sqlc.arg(embedding)::vector))::double precision AS score
 FROM knowledge_chunks c JOIN knowledge_articles a ON a.organization_id=c.organization_id AND a.id=c.article_id
 JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
 WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version AND c.embedding_model=$2

@@ -7,10 +7,11 @@
 -- knowledge_suggestions row; approvals, rejections and corrections are kept
 -- with their reason and embedding so a rejected suggestion does not return.
 --
--- Vectors use the portable REAL[] + ai_cosine fallback of 000060 until
--- pgvector (CF-214) lands; that change swaps the columns to vector(n).
--- department_id has no foreign key until departments (CF-215) land; NULL
--- means organization-wide.
+-- Vectors are pgvector vector(1536) (CF-214), compared with cosine distance
+-- (<=>).
+-- department_id on the history tables has no foreign key yet (follow-up to
+-- CF-215); NULL means organization-wide. knowledge_suggestions.department_id
+-- already comes from the departments migration (000226).
 
 -- Per-organization settings. Missing row = defaults below.
 CREATE TABLE history_settings (
@@ -89,7 +90,7 @@ CREATE TABLE history_clusters (
     department_id    BIGINT,
     category         TEXT NOT NULL DEFAULT '' CHECK (char_length(category) <= 100),
     label            TEXT NOT NULL DEFAULT '' CHECK (char_length(label) <= 300),
-    centroid         REAL[] NOT NULL CHECK (cardinality(centroid) > 0),
+    centroid         vector(1536) NOT NULL,
     embedding_model  TEXT NOT NULL,
     size             INTEGER NOT NULL DEFAULT 0 CHECK (size >= 0),
     evidence         INTEGER NOT NULL DEFAULT 0 CHECK (evidence >= 0),
@@ -122,8 +123,8 @@ CREATE TABLE history_cases (
     locale           TEXT NOT NULL DEFAULT 'tr' CHECK (locale IN ('tr', 'en')),
     training_allowed BOOLEAN NOT NULL DEFAULT false,
     category         TEXT NOT NULL DEFAULT '' CHECK (char_length(category) <= 100),
-    embedding        REAL[] NOT NULL CHECK (cardinality(embedding) > 0),
-    resolution_embedding REAL[],
+    embedding        vector(1536) NOT NULL,
+    resolution_embedding vector(1536),
     embedding_model  TEXT NOT NULL,
     cluster_id       BIGINT,
     opened_at        TIMESTAMPTZ,
@@ -155,7 +156,6 @@ ALTER TABLE knowledge_suggestions
     ADD COLUMN source TEXT NOT NULL DEFAULT 'conversation' CHECK (source IN ('conversation', 'history')),
     ADD COLUMN cluster_id BIGINT,
     ADD COLUMN import_id BIGINT,
-    ADD COLUMN department_id BIGINT,
     ADD COLUMN evidence_count INTEGER NOT NULL DEFAULT 0 CHECK (evidence_count >= 0),
     ADD COLUMN conflict_article_id BIGINT,
     ADD COLUMN conflict_score REAL NOT NULL DEFAULT 0 CHECK (conflict_score BETWEEN 0 AND 1),
@@ -180,7 +180,7 @@ CREATE TABLE history_decisions (
     title           TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 300),
     body            TEXT NOT NULL CHECK (char_length(body) <= 30000),
     correction      TEXT NOT NULL DEFAULT '' CHECK (char_length(correction) <= 30000),
-    embedding       REAL[] NOT NULL CHECK (cardinality(embedding) > 0),
+    embedding       vector(1536) NOT NULL,
     embedding_model TEXT NOT NULL,
     decided_by      BIGINT REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

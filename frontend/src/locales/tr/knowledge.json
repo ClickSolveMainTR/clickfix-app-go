@@ -182,5 +182,8 @@
   "history.hint.raw_retention_hours": "Ham dosya iş bitince silinir; iş takılırsa en geç bu süre sonunda.",
   "history.hint.archive_retention_days": "0: arşiv silinmez.",
   "history.nightly": "Her gece kapanan konuşmaları da işle",
-  "history.nightly_consent_analysis": "Organizasyon olarak kendi konuşmalarımızın analiz edilmesine onay veriyoruz. (Gece işi için zorunlu)"
+  "history.nightly_consent_analysis": "Organizasyon olarak kendi konuşmalarımızın analiz edilmesine onay veriyoruz. (Gece işi için zorunlu)",
+  "fields.department": "Departman",
+  "department_organization_wide": "Organizasyon geneli",
+  "department_hint": "Departmana ait makaleyi yalnızca o departman (ve paylaşılan departmanlar) görür; organizasyon geneli her departmanda geçerlidir."
 }

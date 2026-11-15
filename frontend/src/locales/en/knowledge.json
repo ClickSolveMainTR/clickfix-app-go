@@ -182,5 +182,8 @@
   "history.hint.raw_retention_hours": "The raw file is deleted when the run ends, at the latest after this long if a run is stuck.",
   "history.hint.archive_retention_days": "0 keeps the archive.",
   "history.nightly": "Also process conversations closed each night",
-  "history.nightly_consent_analysis": "As an organization we consent to our own conversations being analyzed. (Required for the nightly run)"
+  "history.nightly_consent_analysis": "As an organization we consent to our own conversations being analyzed. (Required for the nightly run)",
+  "fields.department": "Department",
+  "department_organization_wide": "Organization-wide",
+  "department_hint": "A department's article is seen by that department (and departments it is shared with); organization-wide articles apply everywhere."
 }

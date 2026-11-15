@@ -120,7 +120,15 @@ export type Bootstrap = {
   limits: { max_file_bytes: number; max_text_length: number };
   conversations: Conversation[];
   request_form?: RequestForm | null;
+  /** Departments the visitor may pick for a new conversation (CF-215). */
+  departments?: WidgetDepartment[];
   context?: BootstrapContext;
+};
+export type WidgetDepartment = {
+  uuid: string;
+  name: string;
+  description: string;
+  color: string;
 };
 export type Envelope<T> = {
   success: boolean;

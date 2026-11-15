@@ -121,6 +121,9 @@ export const Permission = {
   TenantChannelsRead: "tenant.channels.read",
   TenantTeamsRead: "tenant.teams.read",
   TenantTeamsWrite: "tenant.teams.write",
+  TenantDepartmentsRead: "tenant.departments.read",
+  TenantDepartmentsWrite: "tenant.departments.write",
+  TenantDepartmentsReadAll: "tenant.departments.read_all",
   TenantReportsRead: "tenant.reports.read",
   TenantReportsExport: "tenant.reports.export",
   TenantAiUse: "tenant.ai.use",
@@ -148,6 +151,11 @@ export const Permission = {
   TenantHistoryRead: "tenant.history.read",
   TenantHistoryManage: "tenant.history.manage",
   TenantHistoryReview: "tenant.history.review",
+  /** Category taxonomy and the label store (CF-218). */
+  TenantCategoriesRead: "tenant.categories.read",
+  TenantCategoriesManage: "tenant.categories.manage",
+  TenantCategoriesLabel: "tenant.categories.label",
+  TenantCategoriesExport: "tenant.categories.export",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];
@@ -330,6 +338,11 @@ export const permissions = {
       read: Permission.TenantTeamsRead,
       write: Permission.TenantTeamsWrite,
     },
+    departments: {
+      read: Permission.TenantDepartmentsRead,
+      write: Permission.TenantDepartmentsWrite,
+      readAll: Permission.TenantDepartmentsReadAll,
+    },
     appointments: {
       read: Permission.TenantAppointmentsRead,
       write: Permission.TenantAppointmentsWrite,
@@ -397,6 +410,12 @@ export const permissions = {
       read: Permission.TenantIntegrationsRead,
       manage: Permission.TenantIntegrationsManage,
       use: Permission.TenantIntegrationsUse,
+    },
+    categories: {
+      read: Permission.TenantCategoriesRead,
+      manage: Permission.TenantCategoriesManage,
+      label: Permission.TenantCategoriesLabel,
+      export: Permission.TenantCategoriesExport,
     },
   },
 } as const;

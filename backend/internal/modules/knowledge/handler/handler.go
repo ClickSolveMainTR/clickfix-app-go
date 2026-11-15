@@ -9,16 +9,23 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/apierror"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/deptweb"
+	deptmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/model"
+	deptusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/authctx"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/resourcemeta"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/apiquery"
 	"github.com/furkanmeclis/clickfix-app-go/backend/pkg/response"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Handler struct {
@@ -147,6 +154,33 @@ func (h *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 			}
 			filter.Collection = &c
 		}
+		// CF-215: the member's departments and the department filter
+		// ("none" = organization-wide, or a department uuid).
+		dscope, err := deptweb.Scope(r, h.Service.Repo.Q)
+		if err != nil {
+			Fail(w, r, err)
+			return
+		}
+		filter.Scope = dscope
+		switch raw := values.Get("department"); raw {
+		case "":
+		case "none":
+			filter.DepartmentMode = "none"
+		default:
+			d, err := uuid.Parse(raw)
+			if err != nil {
+				Fail(w, r, model.ErrInvalid)
+				return
+			}
+			dept, err := deptweb.Resolve(r, h.Service.Repo.Q, deptscope.All(), deptscope.Optional{Set: true, Value: &d})
+			if err != nil {
+				if !deptweb.Fail(w, r, err) {
+					Fail(w, r, err)
+				}
+				return
+			}
+			filter.DepartmentMode, filter.DepartmentID = "id", dept
+		}
 		rows, total, err := h.Service.Articles(r.Context(), scope.ID, filter, q.Limit, q.Offset)
 		if err != nil {
 			Fail(w, r, err)
@@ -156,7 +190,7 @@ func (h *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in model.ArticleInput
-	if !Decode(w, r, &in) {
+	if !Decode(w, r, &in) || !h.department(w, r, &in) {
 		return
 	}
 	key := uuid.New()
@@ -166,7 +200,7 @@ func (h *Handler) Articles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit(r, "article_created", key)
-	response.JSON(w, r, 201, row)
+	h.writeArticle(w, r, 201, row)
 }
 
 func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +209,9 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	org := orgctx.Must(r.Context()).ID
+	if !h.visible(w, r, key) {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		row, err := h.Service.Article(r.Context(), org, key)
@@ -182,7 +219,7 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 			Fail(w, r, err)
 			return
 		}
-		response.JSON(w, r, 200, row)
+		h.writeArticle(w, r, 200, row)
 	case http.MethodDelete:
 		if err := h.Service.DeleteArticle(r.Context(), org, key); err != nil {
 			Fail(w, r, err)
@@ -192,7 +229,7 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, r, 200, map[string]bool{"deleted": true})
 	case http.MethodPut:
 		var in model.ArticleInput
-		if !Decode(w, r, &in) {
+		if !Decode(w, r, &in) || !h.department(w, r, &in) {
 			return
 		}
 		row, err := h.Service.SaveArticle(r.Context(), org, authctx.MustPrincipal(r.Context()).UserInternal, key, in, false)
@@ -201,7 +238,7 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.audit(r, "article_updated", key)
-		response.JSON(w, r, 200, row)
+		h.writeArticle(w, r, 200, row)
 	}
 }
 
@@ -210,6 +247,9 @@ func (h *Handler) Article(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Audience(w http.ResponseWriter, r *http.Request) {
 	key, ok := id(w, r)
 	if !ok {
+		return
+	}
+	if !h.visible(w, r, key) {
 		return
 	}
 	org := orgctx.Must(r.Context()).ID
@@ -244,6 +284,9 @@ func (h *Handler) Versions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.visible(w, r, key) {
+		return
+	}
 	q := apiquery.Parse(r.URL.Query())
 	if len(apiquery.ForbiddenParams(r.URL.Query())) > 0 || len(q.Sort) > 0 || q.Q != "" {
 		Fail(w, r, model.ErrInvalid)
@@ -260,6 +303,9 @@ func (h *Handler) Versions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 	key, ok := id(w, r)
 	if !ok {
+		return
+	}
+	if !h.visible(w, r, key) {
 		return
 	}
 	var in struct {
@@ -282,10 +328,70 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	if locale == "" {
 		locale = "tr"
 	}
-	rows, err := h.RAG.Search(r.Context(), orgctx.Must(r.Context()).ID, r.URL.Query().Get("q"), locale, r.URL.Query().Get("public_only") == "true")
+	dscope, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err != nil {
+		Fail(w, r, err)
+		return
+	}
+	rows, err := h.RAG.Search(deptscope.With(r.Context(), dscope), orgctx.Must(r.Context()).ID, r.URL.Query().Get("q"), locale, r.URL.Query().Get("public_only") == "true")
 	if err != nil {
 		Fail(w, r, err)
 		return
 	}
 	response.JSON(w, r, 200, rows)
+}
+
+// visible answers 404 for an article of a department the member does not
+// see (CF-215).
+func (h *Handler) visible(w http.ResponseWriter, r *http.Request, key uuid.UUID) bool {
+	org := orgctx.Must(r.Context()).ID
+	a, err := h.Service.Repo.Q.KnowledgeArticleDepartment(r.Context(), db.KnowledgeArticleDepartmentParams{OrganizationID: org, Uuid: key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		Fail(w, r, model.ErrNotFound)
+		return false
+	}
+	if err != nil {
+		Fail(w, r, err)
+		return false
+	}
+	dscope, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err != nil {
+		Fail(w, r, err)
+		return false
+	}
+	seen, err := deptusecase.Sees(r.Context(), h.Service.Repo.Q, org, dscope, deptmodel.KindArticle, a.ID, a.DepartmentID)
+	if err != nil {
+		Fail(w, r, err)
+		return false
+	}
+	if !seen {
+		Fail(w, r, model.ErrNotFound)
+	}
+	return seen
+}
+
+// department resolves the department_uuid of an article write: members
+// without read_all file articles under their own departments only.
+func (h *Handler) department(w http.ResponseWriter, r *http.Request, in *model.ArticleInput) bool {
+	dscope, err := deptweb.Scope(r, h.Service.Repo.Q)
+	if err == nil {
+		in.DepartmentID, err = deptweb.Resolve(r, h.Service.Repo.Q, dscope, in.Department)
+	}
+	if err != nil {
+		if !deptweb.Fail(w, r, err) {
+			Fail(w, r, err)
+		}
+		return false
+	}
+	return true
+}
+
+// writeArticle answers an article with its department reference (CF-215).
+func (h *Handler) writeArticle(w http.ResponseWriter, r *http.Request, status int, row db.KnowledgeArticle) {
+	rows, err := deptweb.Annotate(r.Context(), h.Service.Repo.Q, orgctx.Must(r.Context()).ID, []db.KnowledgeArticle{row}, func(a db.KnowledgeArticle) pgtype.Int8 { return a.DepartmentID })
+	if err != nil {
+		Fail(w, r, err)
+		return
+	}
+	response.JSON(w, r, status, rows[0])
 }

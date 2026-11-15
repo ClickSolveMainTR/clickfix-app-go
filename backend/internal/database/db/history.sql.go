@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -100,8 +101,8 @@ type HistoryCaseInsertParams struct {
 	Locale              string             `json:"locale"`
 	TrainingAllowed     bool               `json:"training_allowed"`
 	Category            string             `json:"category"`
-	Embedding           []float32          `json:"embedding"`
-	ResolutionEmbedding []float32          `json:"resolution_embedding"`
+	Embedding           vectorstore.Vector `json:"embedding"`
+	ResolutionEmbedding vectorstore.Vector `json:"resolution_embedding"`
 	EmbeddingModel      string             `json:"embedding_model"`
 	OpenedAt            pgtype.Timestamptz `json:"opened_at"`
 	ClosedAt            pgtype.Timestamptz `json:"closed_at"`
@@ -327,9 +328,9 @@ type HistoryClusterCandidatesParams struct {
 }
 
 type HistoryClusterCandidatesRow struct {
-	ID       int64     `json:"id"`
-	Centroid []float32 `json:"centroid"`
-	Size     int32     `json:"size"`
+	ID       int64              `json:"id"`
+	Centroid vectorstore.Vector `json:"centroid"`
+	Size     int32              `json:"size"`
 }
 
 func (q *Queries) HistoryClusterCandidates(ctx context.Context, arg HistoryClusterCandidatesParams) ([]HistoryClusterCandidatesRow, error) {
@@ -369,12 +370,12 @@ type HistoryClusterCasesParams struct {
 }
 
 type HistoryClusterCasesRow struct {
-	ID                  int64     `json:"id"`
-	Subject             string    `json:"subject"`
-	Problem             string    `json:"problem"`
-	Resolution          string    `json:"resolution"`
-	ResolutionEmbedding []float32 `json:"resolution_embedding"`
-	Locale              string    `json:"locale"`
+	ID                  int64              `json:"id"`
+	Subject             string             `json:"subject"`
+	Problem             string             `json:"problem"`
+	Resolution          string             `json:"resolution"`
+	ResolutionEmbedding vectorstore.Vector `json:"resolution_embedding"`
+	Locale              string             `json:"locale"`
 }
 
 func (q *Queries) HistoryClusterCases(ctx context.Context, arg HistoryClusterCasesParams) ([]HistoryClusterCasesRow, error) {
@@ -421,13 +422,13 @@ VALUES($1,$2,$3,$4,$5,$6,$7,1) RETURNING id
 `
 
 type HistoryClusterCreateParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	BrandID        pgtype.UUID `json:"brand_id"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
-	Category       string      `json:"category"`
-	Label          string      `json:"label"`
-	Centroid       []float32   `json:"centroid"`
-	EmbeddingModel string      `json:"embedding_model"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Category       string             `json:"category"`
+	Label          string             `json:"label"`
+	Centroid       vectorstore.Vector `json:"centroid"`
+	EmbeddingModel string             `json:"embedding_model"`
 }
 
 func (q *Queries) HistoryClusterCreate(ctx context.Context, arg HistoryClusterCreateParams) (int64, error) {
@@ -506,10 +507,10 @@ UPDATE history_clusters SET centroid=$3,size=$4 WHERE organization_id=$1 AND id=
 `
 
 type HistoryClusterGrowParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	ID             int64     `json:"id"`
-	Centroid       []float32 `json:"centroid"`
-	Size           int32     `json:"size"`
+	OrganizationID int64              `json:"organization_id"`
+	ID             int64              `json:"id"`
+	Centroid       vectorstore.Vector `json:"centroid"`
+	Size           int32              `json:"size"`
 }
 
 func (q *Queries) HistoryClusterGrow(ctx context.Context, arg HistoryClusterGrowParams) error {
@@ -717,18 +718,18 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, uuid, organization_
 `
 
 type HistoryDecisionCreateParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	SuggestionID   pgtype.Int8 `json:"suggestion_id"`
-	ClusterID      pgtype.Int8 `json:"cluster_id"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
-	Decision       string      `json:"decision"`
-	Reason         string      `json:"reason"`
-	Title          string      `json:"title"`
-	Body           string      `json:"body"`
-	Correction     string      `json:"correction"`
-	Embedding      []float32   `json:"embedding"`
-	EmbeddingModel string      `json:"embedding_model"`
-	DecidedBy      pgtype.Int8 `json:"decided_by"`
+	OrganizationID int64              `json:"organization_id"`
+	SuggestionID   pgtype.Int8        `json:"suggestion_id"`
+	ClusterID      pgtype.Int8        `json:"cluster_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Decision       string             `json:"decision"`
+	Reason         string             `json:"reason"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Correction     string             `json:"correction"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
 }
 
 func (q *Queries) HistoryDecisionCreate(ctx context.Context, arg HistoryDecisionCreateParams) (HistoryDecision, error) {
@@ -1399,7 +1400,7 @@ func (q *Queries) HistoryImportRolledBack(ctx context.Context, arg HistoryImport
 }
 
 const historyNearestArticle = `-- name: HistoryNearestArticle :one
-SELECT a.id,a.uuid,v.title,ai_cosine(c.embedding,$3::real[])::double precision AS score
+SELECT a.id,a.uuid,v.title,(1-(c.embedding <=> $3::vector))::double precision AS score
 FROM knowledge_chunks c JOIN knowledge_articles a ON a.organization_id=c.organization_id AND a.id=c.article_id
 JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
 WHERE c.organization_id=$1 AND a.deleted_at IS NULL AND a.published_version=c.version AND c.embedding_model=$2
@@ -1407,9 +1408,9 @@ ORDER BY score DESC,c.id LIMIT 1
 `
 
 type HistoryNearestArticleParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	EmbeddingModel string    `json:"embedding_model"`
-	Embedding      []float32 `json:"embedding"`
+	OrganizationID int64              `json:"organization_id"`
+	EmbeddingModel string             `json:"embedding_model"`
+	Embedding      vectorstore.Vector `json:"embedding"`
 }
 
 type HistoryNearestArticleRow struct {
@@ -1432,17 +1433,17 @@ func (q *Queries) HistoryNearestArticle(ctx context.Context, arg HistoryNearestA
 }
 
 const historyNearestRejection = `-- name: HistoryNearestRejection :one
-SELECT uuid,reason,ai_cosine(embedding,$3::real[])::double precision AS score
+SELECT uuid,reason,(1-(embedding <=> $3::vector))::double precision AS score
 FROM history_decisions WHERE organization_id=$1 AND decision='rejected' AND embedding_model=$2
  AND department_id IS NOT DISTINCT FROM $4::bigint
 ORDER BY score DESC,id LIMIT 1
 `
 
 type HistoryNearestRejectionParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	EmbeddingModel string      `json:"embedding_model"`
-	Embedding      []float32   `json:"embedding"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
+	OrganizationID int64              `json:"organization_id"`
+	EmbeddingModel string             `json:"embedding_model"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type HistoryNearestRejectionRow struct {
@@ -1623,7 +1624,7 @@ func (q *Queries) HistorySuggestionCount(ctx context.Context, arg HistorySuggest
 
 const historySuggestionCreate = `-- name: HistorySuggestionCreate :one
 INSERT INTO knowledge_suggestions(organization_id,topic,title,body,source,cluster_id,import_id,department_id,evidence_count,conflict_article_id,conflict_score)
-VALUES($1,$2,$3,$4,'history',$5,$6,$7,$8,$9,$10) RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score
+VALUES($1,$2,$3,$4,'history',$5,$6,$7,$8,$9,$10) RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type HistorySuggestionCreateParams struct {
@@ -1666,10 +1667,10 @@ func (q *Queries) HistorySuggestionCreate(ctx context.Context, arg HistorySugges
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 		&i.Source,
 		&i.ClusterID,
 		&i.ImportID,
-		&i.DepartmentID,
 		&i.EvidenceCount,
 		&i.ConflictArticleID,
 		&i.ConflictScore,
@@ -1697,7 +1698,7 @@ func (q *Queries) HistorySuggestionDeletePendingByImport(ctx context.Context, ar
 }
 
 const historySuggestionGet = `-- name: HistorySuggestionGet :one
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 AND source='history'
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 AND source='history'
 `
 
 type HistorySuggestionGetParams struct {
@@ -1721,10 +1722,10 @@ func (q *Queries) HistorySuggestionGet(ctx context.Context, arg HistorySuggestio
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 		&i.Source,
 		&i.ClusterID,
 		&i.ImportID,
-		&i.DepartmentID,
 		&i.EvidenceCount,
 		&i.ConflictArticleID,
 		&i.ConflictScore,
@@ -1733,7 +1734,7 @@ func (q *Queries) HistorySuggestionGet(ctx context.Context, arg HistorySuggestio
 }
 
 const historySuggestionList = `-- name: HistorySuggestionList :many
-SELECT s.id, s.uuid, s.organization_id, s.topic, s.conversation_id, s.article_id, s.title, s.body, s.status, s.reviewed_by, s.created_at, s.updated_at, s.source, s.cluster_id, s.import_id, s.department_id, s.evidence_count, s.conflict_article_id, s.conflict_score,cl.uuid AS cluster_uuid,cl.size AS cluster_size,a.uuid AS conflict_article_uuid,a.title AS conflict_article_title
+SELECT s.id, s.uuid, s.organization_id, s.topic, s.conversation_id, s.article_id, s.title, s.body, s.status, s.reviewed_by, s.created_at, s.updated_at, s.department_id, s.source, s.cluster_id, s.import_id, s.evidence_count, s.conflict_article_id, s.conflict_score,cl.uuid AS cluster_uuid,cl.size AS cluster_size,a.uuid AS conflict_article_uuid,a.title AS conflict_article_title
 FROM knowledge_suggestions s
 LEFT JOIN history_clusters cl ON cl.organization_id=s.organization_id AND cl.id=s.cluster_id
 LEFT JOIN knowledge_articles a ON a.organization_id=s.organization_id AND a.id=s.conflict_article_id
@@ -1761,10 +1762,10 @@ type HistorySuggestionListRow struct {
 	ReviewedBy           pgtype.Int8        `json:"reviewed_by"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
 	Source               string             `json:"source"`
 	ClusterID            pgtype.Int8        `json:"cluster_id"`
 	ImportID             pgtype.Int8        `json:"import_id"`
-	DepartmentID         pgtype.Int8        `json:"department_id"`
 	EvidenceCount        int32              `json:"evidence_count"`
 	ConflictArticleID    pgtype.Int8        `json:"conflict_article_id"`
 	ConflictScore        float32            `json:"conflict_score"`
@@ -1801,10 +1802,10 @@ func (q *Queries) HistorySuggestionList(ctx context.Context, arg HistorySuggesti
 			&i.ReviewedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DepartmentID,
 			&i.Source,
 			&i.ClusterID,
 			&i.ImportID,
-			&i.DepartmentID,
 			&i.EvidenceCount,
 			&i.ConflictArticleID,
 			&i.ConflictScore,
@@ -1824,7 +1825,7 @@ func (q *Queries) HistorySuggestionList(ctx context.Context, arg HistorySuggesti
 }
 
 const historySuggestionLock = `-- name: HistorySuggestionLock :one
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 AND source='history' FOR UPDATE
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 AND source='history' FOR UPDATE
 `
 
 type HistorySuggestionLockParams struct {
@@ -1848,10 +1849,10 @@ func (q *Queries) HistorySuggestionLock(ctx context.Context, arg HistorySuggesti
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 		&i.Source,
 		&i.ClusterID,
 		&i.ImportID,
-		&i.DepartmentID,
 		&i.EvidenceCount,
 		&i.ConflictArticleID,
 		&i.ConflictScore,
@@ -1861,7 +1862,7 @@ func (q *Queries) HistorySuggestionLock(ctx context.Context, arg HistorySuggesti
 
 const historySuggestionReview = `-- name: HistorySuggestionReview :one
 UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5,title=$6,body=$7
-WHERE organization_id=$1 AND id=$2 AND status='pending' AND source='history' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score
+WHERE organization_id=$1 AND id=$2 AND status='pending' AND source='history' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, department_id, source, cluster_id, import_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type HistorySuggestionReviewParams struct {
@@ -1898,10 +1899,10 @@ func (q *Queries) HistorySuggestionReview(ctx context.Context, arg HistorySugges
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DepartmentID,
 		&i.Source,
 		&i.ClusterID,
 		&i.ImportID,
-		&i.DepartmentID,
 		&i.EvidenceCount,
 		&i.ConflictArticleID,
 		&i.ConflictScore,

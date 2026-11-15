@@ -16,3 +16,13 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
+          # pgvector (CF-214): text-format value, no connection type registration.
+          - db_type: "vector"
+            go_type:
+              import: "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
+              type: "Vector"
+          - db_type: "vector"
+            nullable: true
+            go_type:
+              import: "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
+              type: "Vector"

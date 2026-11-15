@@ -110,6 +110,8 @@ const tr = {
   requestSent: "Talebiniz alındı. Size kısa sürede dönüş yapacağız.",
   human: "Bir temsilciyle görüşmek istiyorum",
   humanButton: "Temsilciye bağlan",
+  department: "Konu",
+  departmentAny: "Emin değilim",
   consentTitle: "Gizliliğiniz",
   consentDefault:
     "Destek sohbeti için adınız, iletişim bilgileriniz ve mesajlarınız işlenir. Devam etmek için onaylayın.",
@@ -234,6 +236,8 @@ const en: Record<StringKey, string> = {
   requestSent: "Request received. We'll get back to you shortly.",
   human: "I'd like to talk to a person",
   humanButton: "Talk to a person",
+  department: "Topic",
+  departmentAny: "Not sure",
   consentTitle: "Your privacy",
   consentDefault:
     "To chat with support we process your name, contact details and messages. Please agree to continue.",

@@ -44,6 +44,8 @@ import (
 	agentusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
 	aimodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore"
 	aihandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/handler"
+	memorymodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory"
+	memoryhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/handler"
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/handler"
 	analyticsrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/repository"
@@ -74,6 +76,9 @@ import (
 	bulkmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk"
 	bulkhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk/handler"
 	bulkusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/bulk/usecase"
+	categoriesmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories"
+	categorieshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/handler"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/coaching"
 	compliancemodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/compliance"
@@ -94,6 +99,9 @@ import (
 	customfieldshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/handler"
 	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
+	departmentsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments"
+	departmentshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/handler"
+	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/enterprise"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports"
@@ -525,6 +533,11 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		slaSvc.WithResyncer(deps.Queue)
 	}
 	slamodule.RegisterRoutes(mux, slahandler.New(slaSvc, activityRec), tokens, loader, tenantResolver)
+	// Departments (CF-215): business units, knowledge visibility, widget
+	// pick, AI routing and transfers.
+	departmentsSvc := departmentsusecase.New(deps.DB, deps.Queries)
+	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	departmentsmodule.RegisterRoutes(mux, departmentshandler.New(departmentsSvc, deps.Queries, activityRec), tokens, loader, tenantResolver)
 	// The SLA schedule is the one working-hours source (CF-198): the inbox
 	// (automatic replies, AI delivery), the AI agent and the widget read it.
 	inboxCore.Conversations.WithHours(slaSvc)
@@ -562,6 +575,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Publisher: deps.Realtime, Issuer: rtIssuer, AppOrigin: cfg.Auth.FrontendURL, Forms: formsSvc, Hours: slaSvc, Log: log,
 	})
 	widgetService.WithReplay(deps.Storage, entitlementService, cfg.Encryption.Key)
+	widgetService.WithDepartments(departmentsSvc)
 	widgetH := widgethandler.New(widgetService, func(r *http.Request, action, subject string, limit int) (bool, time.Duration) {
 		return widgetLimiter.Allow(r.Context(), action, subject, limit, time.Minute)
 	}, log)
@@ -594,12 +608,15 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	channelsmodule.RegisterRoutes(mux, channelsHandler, tokens, loader, tenantResolver)
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
+	categoriesSvc := categoriesusecase.New(deps.DB, deps.Queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI})
 	aiCore.KB.Fields = customFieldsSvc
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
 	agentSvc.Fields = customFieldsSvc
 	agentSvc.Hours = slaSvc
+	agentSvc.Memory = aiCore.Memory
+	agentSvc.Departments, departmentsSvc.Classifier = departmentsSvc, agentSvc
 	// Automatic customer replies (CF-198): settings here, the consumer runs
 	// in the worker; the AI agent's handoff notice posts from the API too.
 	autoReplySvc := autoreply.New(deps.Queries, inboxCore.Conversations, slaSvc, slaSvc, log)
@@ -611,6 +628,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	agentSvc.Tools = &agentusecase.ToolService{Repo: agentSvc.Repo, Core: aiCore.AI, Conversations: inboxCore.Conversations, Box: agentBox}
 	agentmodule.RegisterRoutes(mux, &agenthandler.Handler{Service: agentSvc, Activity: activityRec}, tokens, loader, tenantResolver)
+	// Knowledge units, answer cache and case memory (CF-216).
+	memorymodule.RegisterRoutes(mux, &memoryhandler.Handler{Service: aiCore.Memory, Activity: activityRec}, tokens, loader, tenantResolver)
 	// Connected system, "Sistemini bağla" (CF-197): the AI agent reads its
 	// playbooks, concept data and AI-allowed actions.
 	systemsLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
@@ -808,6 +827,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Organization audit log (CF-12).
 	auditmodule.RegisterRoutes(mux, auditmodule.NewHandler(auditmodule.NewService(deps.Queries)), tokens, loader, tenantResolver)
 	// Teams and team membership (CF-5).
+	categoriesmodule.RegisterRoutes(mux, categorieshandler.New(categoriesSvc, activityRec), tokens, loader, tenantResolver)
 	teamsmodule.RegisterRoutes(mux, teamshandler.New(teamsusecase.New(deps.DB, deps.Queries), activityRec), tokens, loader, tenantResolver)
 
 	qrGeo, err := qrlogin.NewLocator(cfg.Auth.QRGeoIPDB, cfg.Auth.QRTrustGeoHeaders)
@@ -879,6 +899,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 			Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 			Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
+			Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ctx) }).
 			Handle(queue.TaskCustomerHealthSweep, queue.CustomerHealthSweepHandler(healthusecase.New(deps.DB, deps.Queries, activityRec, log).Sweep)).
 			Handle(queue.TaskNotificationDigest, func(ctx context.Context, _ *asynq.Task) error { _, err := notifSvc.ProcessDigests(ctx); return err }).
 			Handle(queue.TaskPresenceSweep, func(ctx context.Context, _ *asynq.Task) error { _, err := presenceSvc.SweepIdle(ctx); return err }).
@@ -949,8 +970,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		Status:              statusSvc,
 		Routing:             routingSvc,
 		Knowledge:           aiCore.RAG,
+		Memory:              aiCore.Memory,
 		Agents:              agentSvc,
 		LiveActivities:      mobileSvc,
+		Categories:          categoriesSvc,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("httpserver: event consumers: %w", err)

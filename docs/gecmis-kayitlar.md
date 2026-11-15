@@ -72,6 +72,6 @@ Tek bir JSON nesnesi:
 
 ## Bağımlılıklar
 
-- **pgvector (CF-214):** birleşene kadar vektörler `REAL[]` sütunlarında ve `ai_cosine` ile karşılaştırılır (000060'daki taşınabilir yedek). CF-214 sütunları `vector(n)` yapar.
+- **pgvector (CF-214):** vektörler `vector(1536)` sütunlarındadır ve kosinüs uzaklığıyla (`<=>`) karşılaştırılır.
 - **Kategori taksonomisi (CF-218):** `usecase.Taxonomy` arayüzü.
 - **Departman (CF-215):** `department_id` yabancı anahtarsız ve NULL olabilir (NULL = organizasyon geneli). `usecase.Directory` arayüzü departman doğrulamasını ve "departman lideri onaylar" kuralını taşır; CF-215 gelene kadar `tenant.history.review` yetkisi olan herkes (sahip, yönetici, süpervizör) onaylar.

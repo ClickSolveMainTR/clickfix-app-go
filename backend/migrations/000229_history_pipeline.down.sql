@@ -13,7 +13,6 @@ ALTER TABLE knowledge_suggestions
     DROP COLUMN IF EXISTS conflict_score,
     DROP COLUMN IF EXISTS conflict_article_id,
     DROP COLUMN IF EXISTS evidence_count,
-    DROP COLUMN IF EXISTS department_id,
     DROP COLUMN IF EXISTS import_id,
     DROP COLUMN IF EXISTS cluster_id,
     DROP COLUMN IF EXISTS source;
