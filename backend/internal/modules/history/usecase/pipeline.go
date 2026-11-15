@@ -350,7 +350,8 @@ func (s *Service) refreshEvidence(ctx context.Context, org, clusterID int64, set
 		resolutions[i] = r.ResolutionEmbedding
 	}
 	group := evidenceGroup(resolutions, float64(settings.ResolutionSimilarity))
-	if err := s.Q.HistoryClusterEvidence(ctx, db.HistoryClusterEvidenceParams{OrganizationID: org, ID: clusterID, Evidence: int32(len(group))}); err != nil { // #nosec G115 -- a group is at most one run's records (MaxTickets)
+	evidence := int32(len(group)) // #nosec G115 -- a group is at most one run's records (MaxTickets)
+	if err := s.Q.HistoryClusterEvidence(ctx, db.HistoryClusterEvidenceParams{OrganizationID: org, ID: clusterID, Evidence: evidence}); err != nil {
 		return nil, err
 	}
 	out := make([]db.HistoryClusterCasesRow, 0, len(group))
@@ -371,7 +372,8 @@ func (s *Service) evaluate(ctx context.Context, p *progress, settings db.History
 	if err != nil {
 		return err
 	}
-	if int32(len(group)) < settings.EvidenceThreshold { // #nosec G115 -- a group is at most one run's records (MaxTickets)
+	evidence := int32(len(group)) // #nosec G115 -- a group is at most one run's records (MaxTickets)
+	if evidence < settings.EvidenceThreshold {
 		return nil
 	}
 	state, err := s.Q.HistoryClusterSuggestionState(ctx, db.HistoryClusterSuggestionStateParams{OrganizationID: org, ClusterID: pgtype.Int8{Int64: clusterID, Valid: true}})

@@ -334,7 +334,7 @@ func TestCategoryRoutes(t *testing.T) {
 	}
 	first := lines[0]
 	if first["previous_category"].(map[string]any)["slug"] != "iade" || first["category"].(map[string]any)["slug"] != "kismi-iade" ||
-		first["previous_source"] != "ai" || first["embedding_model"] != "test-embed" || len(first["embedding"].([]any)) != 3 ||
+		first["previous_source"] != "ai" || first["embedding_model"] != "test-embed" || len(first["embedding"].([]any)) != ai.EmbeddingDimensions ||
 		first["labeled_by"] != users["owner"].Uuid.String() || first["department_uuid"] != nil {
 		t.Fatalf("export line = %v", first)
 	}
