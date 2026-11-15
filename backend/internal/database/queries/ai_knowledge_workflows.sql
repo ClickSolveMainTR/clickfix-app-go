@@ -14,10 +14,14 @@ SELECT s.organization_id,s.id,s.revision,s.kind,s.title,s.body,s.active,s.sort_o
 SELECT v.* FROM business_context_versions v JOIN business_context_sections s ON s.organization_id=v.organization_id AND s.id=v.section_id
 WHERE v.organization_id=$1 AND s.uuid=$2 ORDER BY v.revision DESC LIMIT $3 OFFSET $4;
 -- name: AISimilarConversations :many
+-- CF-214: same brand first, then brandless (organization-wide) conversations;
+-- another brand's conversations never match. A brandless conversation only
+-- matches brandless ones.
 SELECT c.id,c.uuid,c.subject,c.status,ts_rank_cd(to_tsvector('simple',c.subject||' '||c.last_message_preview),plainto_tsquery('simple',sqlc.arg(q)::text))::real AS score
 FROM conversations c WHERE c.organization_id=$1 AND c.id<>sqlc.arg(current_id) AND c.deleted_at IS NULL
+AND (c.brand_id IS NULL OR c.brand_id=sqlc.narg(brand_id)::uuid)
 AND to_tsvector('simple',c.subject||' '||c.last_message_preview) @@ plainto_tsquery('simple',sqlc.arg(q)::text)
-ORDER BY score DESC,c.id DESC LIMIT 10;
+ORDER BY (c.brand_id IS NOT NULL) DESC,score DESC,c.id DESC LIMIT 10;
 -- name: AISaveSimilarLink :exec
 INSERT INTO ai_conversation_links(organization_id,conversation_id,similar_id,score) VALUES($1,$2,$3,$4)
 ON CONFLICT(organization_id,conversation_id,similar_id) DO UPDATE SET score=excluded.score;

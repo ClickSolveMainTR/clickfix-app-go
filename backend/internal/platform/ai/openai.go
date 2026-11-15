@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
@@ -158,15 +159,25 @@ func (s *streamState) openaiChunk(data string) (string, error) {
 }
 
 func (p *HTTPProvider) Embed(ctx context.Context, input []string) (Embeddings, error) {
-	if p.Kind != ProviderOpenAI || p.EmbeddingModel == "" {
+	return p.EmbedModel(ctx, p.EmbeddingModel, input)
+}
+
+// EmbedModel embeds with the named model. text-embedding-3 models are asked
+// for the fixed EmbeddingDimensions so every stored vector has one size.
+func (p *HTTPProvider) EmbedModel(ctx context.Context, model string, input []string) (Embeddings, error) {
+	if p.Kind != ProviderOpenAI || model == "" {
 		return Embeddings{}, ErrUnavailable
 	}
 	if p.Key == "" {
 		return Embeddings{}, ErrNotConfigured
 	}
-	ctx = withCall(ctx, call{model: p.EmbeddingModel, limit: 16 << 20})
-	res, err := p.openaiEmbeddings().New(ctx, openai.EmbeddingNewParams{Model: p.EmbeddingModel,
-		Input: openai.EmbeddingNewParamsInputUnion{OfArrayOfStrings: input}, EncodingFormat: openai.EmbeddingNewParamsEncodingFormatFloat})
+	ctx = withCall(ctx, call{model: model, limit: 16 << 20})
+	params := openai.EmbeddingNewParams{Model: model,
+		Input: openai.EmbeddingNewParamsInputUnion{OfArrayOfStrings: input}, EncodingFormat: openai.EmbeddingNewParamsEncodingFormatFloat}
+	if strings.HasPrefix(model, "text-embedding-3") {
+		params.Dimensions = openai.Int(EmbeddingDimensions)
+	}
+	res, err := p.openaiEmbeddings().New(ctx, params)
 	if err != nil {
 		return Embeddings{}, providerError(err)
 	}
