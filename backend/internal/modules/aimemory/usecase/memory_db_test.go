@@ -469,3 +469,52 @@ func TestMeasureCallsAndCost(t *testing.T) {
 		t.Fatalf("unexpected mix: exact=%d semantic=%d miss=%d calls=%d", exact, semantic, miss, afterCalls)
 	}
 }
+
+// Probe answers like Lookup without counting the lookup or writing the
+// cache; department lookups are counted per department (CF-225).
+func TestProbeAndDepartmentCounters(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.engine.units = unitsJSON(Unit{Question: "Kargo ne zaman gelir", Variants: []string{"Siparişim kaç günde teslim edilir"}, Answer: "Siparişler 2 iş gününde teslim edilir.", Category: "kargo"})
+	articleUUID := f.article(t, nil, "public", "Siparişler 2 iş gününde teslim edilir.")
+	if err := f.svc.SyncArticle(ctx, f.org, articleUUID); err != nil {
+		t.Fatal(err)
+	}
+	q := model.Query{Organization: f.org, Audience: model.AudienceCustomer, Locale: "tr", Question: "Siparişim kaç günde teslim edilir?"}
+	if hit, err := f.svc.Probe(ctx, q); err != nil || !hit {
+		t.Fatalf("probe hit=%v err=%v", hit, err)
+	}
+	miss := q
+	miss.Question = "Faturamı nasıl indiririm"
+	if hit, err := f.svc.Probe(ctx, miss); err != nil || hit {
+		t.Fatalf("probe miss hit=%v err=%v", hit, err)
+	}
+	if n, _ := f.svc.Q.AnswerCacheCount(ctx, f.org); n != 0 {
+		t.Fatalf("probe wrote the cache: %d", n)
+	}
+	if stats, err := f.svc.Stats(ctx, f.org, f.svc.Now().AddDate(0, 0, -1)); err != nil || len(stats.Audiences) != 0 {
+		t.Fatalf("probe counted lookups %+v %v", stats, err)
+	}
+
+	var dept int64
+	if err := f.pool.QueryRow(ctx, "INSERT INTO departments(organization_id,name) VALUES($1,'Kargo') RETURNING id", f.org).Scan(&dept); err != nil {
+		t.Fatal(err)
+	}
+	scoped := q
+	scoped.Scope.DepartmentID = &dept
+	for _, query := range []model.Query{q, scoped, scoped} {
+		if _, err := f.svc.Lookup(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var orgWide, perDept int64
+	if err := f.pool.QueryRow(ctx, "SELECT coalesce(sum(exact_hits+semantic_hits+misses) FILTER (WHERE department_id IS NULL),0), coalesce(sum(exact_hits+semantic_hits+misses) FILTER (WHERE department_id=$2),0) FROM ai_answer_cache_stats WHERE organization_id=$1", f.org, dept).Scan(&orgWide, &perDept); err != nil {
+		t.Fatal(err)
+	}
+	if orgWide != 1 || perDept != 2 {
+		t.Fatalf("counters org=%d department=%d", orgWide, perDept)
+	}
+	if stats, err := f.svc.Stats(ctx, f.org, f.svc.Now().AddDate(0, 0, -1)); err != nil || len(stats.Audiences) != 1 || stats.Audiences[0].Lookups != 3 {
+		t.Fatalf("organization total %+v %v", stats, err)
+	}
+}

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Source describes one vector table. Table, Join and Filter are trusted SQL
+// Source describes one vector table. Table, Join, Filter and DepartmentVisible are trusted SQL
 // written in code (never user input); Filter may reference named args given
 // in Query.Args. The table must follow the package column convention.
 type Source struct {
@@ -23,6 +23,11 @@ type Source struct {
 	// TextColumn holds the (already masked) text the vector was built from;
 	// the re-embedding job embeds it again.
 	TextColumn string
+	// DepartmentVisible is the source's department rule for the vector alias
+	// "v", using the @scope_departments (bigint[]) arg. Empty means
+	// department_id IS NULL OR department_id=ANY(@scope_departments); sources
+	// with shares use department_visible(...) on their own department_id.
+	DepartmentVisible string
 }
 
 var identifier = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -89,7 +94,7 @@ func Search(ctx context.Context, db Beginner, src Source, scope Scope, q Query) 
 	for k, v := range q.Args {
 		args[k] = v
 	}
-	where, specific := scope.predicate("v", args)
+	where, specific := scope.predicate("v", src.DepartmentVisible, args)
 	if src.Filter != "" {
 		where += " AND (" + src.Filter + ")"
 	}

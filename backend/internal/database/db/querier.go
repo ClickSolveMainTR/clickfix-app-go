@@ -58,6 +58,14 @@ type Querier interface {
 	AIFinishRun(ctx context.Context, arg AIFinishRunParams) (int64, error)
 	AIGetRun(ctx context.Context, arg AIGetRunParams) (AiRun, error)
 	AIInsertRun(ctx context.Context, arg AIInsertRunParams) (AiRun, error)
+	// Answer cache lookups and hits (CF-216); the counters are daily, so the
+	// window is widened to whole days. With a department,
+	// only the lookups scoped to it.
+	AIInsightCacheStats(ctx context.Context, arg AIInsightCacheStatsParams) (AIInsightCacheStatsRow, error)
+	// Current category of the conversations classified in the window by the
+	// categorization layer (CF-218); with a department, that department's
+	// conversations only.
+	AIInsightCategoryAssignments(ctx context.Context, arg AIInsightCategoryAssignmentsParams) ([]AIInsightCategoryAssignmentsRow, error)
 	// Latest completed triage per conversation in the window; confidence -1 = none.
 	AIInsightClassifications(ctx context.Context, arg AIInsightClassificationsParams) ([]AIInsightClassificationsRow, error)
 	// Last two completed runs of the scope: the latest and the one before it.
@@ -66,6 +74,7 @@ type Querier interface {
 	// Terminal outcome per conversation = its latest reply job in the window.
 	AIInsightReplyOutcomes(ctx context.Context, arg AIInsightReplyOutcomesParams) (AIInsightReplyOutcomesRow, error)
 	AIInsightSuggestions(ctx context.Context, arg AIInsightSuggestionsParams) ([]AIInsightSuggestionsRow, error)
+	// With a department: only runs of that department's conversations (CF-225).
 	AIInsightUsage(ctx context.Context, arg AIInsightUsageParams) ([]AIInsightUsageRow, error)
 	AIKnowledgeGapTopicCount(ctx context.Context, arg AIKnowledgeGapTopicCountParams) (int64, error)
 	// CF-216: questions the agent assistant could not answer from a unit, case or
@@ -142,9 +151,11 @@ type Querier interface {
 	AnalyticsTimezone(ctx context.Context, id int64) (string, error)
 	AnswerCacheCount(ctx context.Context, organizationID int64) (int64, error)
 	// A cached row is valid only while its unit exists (source changes delete it)
-	// and still passes the audience's visibility rule.
+	// and still passes the audience's visibility rule. While re-embedding runs
+	// (CF-223) a unit still on the old model is not served.
 	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
 	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
+	// One row per day, audience and department (NULL = organization wide, CF-225).
 	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error
 	AnswerCacheStats(ctx context.Context, arg AnswerCacheStatsParams) ([]AnswerCacheStatsRow, error)
 	AnswerCacheTouch(ctx context.Context, arg AnswerCacheTouchParams) error
@@ -1454,7 +1465,7 @@ type Querier interface {
 	KnowledgeGapQuestionRecord(ctx context.Context, arg KnowledgeGapQuestionRecordParams) error
 	KnowledgeGapQuestions(ctx context.Context, arg KnowledgeGapQuestionsParams) ([]KnowledgeGapQuestionsRow, error)
 	KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInsertArticleParams) (KnowledgeArticle, error)
-	// brand_id comes from the article (trigger). While the organization is being
+	// brand_id and department_id come from the article (trigger, CF-222). While the organization is being
 	// re-embedded the vector goes to pending_* (CF-214).
 	KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error)
 	KnowledgeInsertVersion(ctx context.Context, arg KnowledgeInsertVersionParams) error
@@ -1469,6 +1480,8 @@ type Querier interface {
 	KnowledgeReviews(ctx context.Context, arg KnowledgeReviewsParams) ([]KnowledgeReviewsRow, error)
 	KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSaveCollectionParams) (KnowledgeCollection, error)
 	// Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
+	// Departments: department_visible on the article is the visibility rule; rows of
+	// the scope's department (department_id) rank as specific (CF-222).
 	KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error)
 	KnowledgeSetIndexState(ctx context.Context, arg KnowledgeSetIndexStateParams) error
 	KnowledgeSetPublished(ctx context.Context, arg KnowledgeSetPublishedParams) (int64, error)

@@ -3494,7 +3494,7 @@ export interface paths {
         };
         /**
          * List the category tree
-         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; until departments land (CF-215) it answers `400 VALIDATION_ERROR` (`department`, `unavailable`). Archived nodes only with `include_archived=true`.
+         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; a department of another organization answers `400 VALIDATION_ERROR` (`department_uuid`, `not_found`). Archived nodes only with `include_archived=true`.
          */
         get: operations["getTenantCategories"];
         put?: never;
@@ -13275,7 +13275,7 @@ export interface paths {
         };
         /**
          * AI knowledge panel of the organization or a department
-         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days.
+         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days. `departments` lists the organization's departments for the filter; categories come from the category store (CF-218) and fall back to the latest triage results while nothing is classified in the window.
          */
         get: operations["getAIKnowledgePanel"];
         put?: never;
@@ -59743,7 +59743,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                /** @description Department of the organization (CF-215). A department of another organization answers 404. */
                 department_uuid?: string;
             };
             header: {
@@ -60167,7 +60167,7 @@ export interface operations {
                 from?: string;
                 /** @description Exclusive end; at most 366 days after from. */
                 until?: string;
-                /** @description Department (CF-215). Before departments exist any value returns 400 DEPARTMENTS_UNAVAILABLE. */
+                /** @description Department of the organization (CF-215). An unknown department, or one of another organization, answers 400 VALIDATION_ERROR. Sections whose source carries a department (AI runs, reply and triage jobs by their conversation's current department, suggestions, answer cache counters, categories, evaluation runs) are narrowed to it (CF-225). */
                 department_uuid?: string;
             };
             header: {

@@ -53,23 +53,75 @@ func TestCheckFixedDimension(t *testing.T) {
 func TestScopePredicate(t *testing.T) {
 	brand := pgtype.UUID{Bytes: uuid.New(), Valid: true}
 	args := pgx.NamedArgs{}
-	where, specific := Conversation(7, brand, pgtype.UUID{}).predicate("v", args)
+	where, specific := Conversation(7, brand, pgtype.Int8{}).predicate("v", "", args)
 	if !strings.Contains(where, "v.organization_id=@scope_org") || !strings.Contains(where, "(v.brand_id=@scope_brand OR v.brand_id IS NULL)") ||
-		!strings.Contains(where, "v.department_id IS NULL") || specific != "(v.brand_id IS NOT NULL)" || args["scope_org"] != int64(7) {
+		!strings.Contains(where, "(v.department_id IS NULL OR v.department_id=ANY(@scope_departments::bigint[]))") ||
+		specific != "(v.brand_id IS NOT NULL)" || args["scope_org"] != int64(7) || len(args["scope_departments"].([]int64)) != 0 {
 		t.Fatalf("conversation scope %q %q %v", where, specific, args)
 	}
-	where, specific = Conversation(7, pgtype.UUID{}, pgtype.UUID{}).predicate("v", pgx.NamedArgs{})
+	where, specific = Conversation(7, pgtype.UUID{}, pgtype.Int8{}).predicate("v", "", pgx.NamedArgs{})
 	if !strings.Contains(where, "v.brand_id IS NULL") || strings.Contains(where, "@scope_brand") || specific != "false" {
 		t.Fatalf("brandless scope %q %q", where, specific)
 	}
-	where, specific = Organization(7).predicate("v", pgx.NamedArgs{})
+	where, specific = Organization(7).predicate("v", "", pgx.NamedArgs{})
 	if where != "v.organization_id=@scope_org" || specific != "false" {
 		t.Fatalf("organization scope %q %q", where, specific)
+	}
+}
+
+// CF-222: a department scope sees its own rows and organization-wide rows,
+// ranks its own rows first and uses the source's rule (shares) when given.
+func TestScopeDepartmentPredicate(t *testing.T) {
+	args := pgx.NamedArgs{}
+	where, specific := Conversation(7, pgtype.UUID{}, pgtype.Int8{Int64: 42, Valid: true}).predicate("v", "", args)
+	if !strings.Contains(where, "v.department_id=ANY(@scope_departments::bigint[])") ||
+		specific != "((v.department_id IS NOT NULL AND v.department_id=@scope_department))" ||
+		args["scope_department"] != int64(42) || args["scope_departments"].([]int64)[0] != 42 {
+		t.Fatalf("department scope %q %q %v", where, specific, args)
+	}
+	rule := "department_visible(v.organization_id,'article',v.article_id,v.department_id,@scope_departments::bigint[])"
+	where, _ = Conversation(7, pgtype.UUID{}, pgtype.Int8{Int64: 42, Valid: true}).predicate("v", rule, pgx.NamedArgs{})
+	if !strings.Contains(where, " AND "+rule) || strings.Contains(where, "ANY(@scope_departments::bigint[]))") {
+		t.Fatalf("source rule %q", where)
+	}
+	// A viewer that sees every department drops the filter but keeps ranking.
+	args = pgx.NamedArgs{}
+	where, specific = Conversation(7, pgtype.UUID{}, pgtype.Int8{Int64: 42, Valid: true}).WithDepartments(false, nil).predicate("v", rule, args)
+	if strings.Contains(where, "department") || !strings.Contains(specific, "@scope_department") {
+		t.Fatalf("all departments %q %q", where, specific)
+	}
+	// Organization scope narrowed to a member's departments.
+	args = pgx.NamedArgs{}
+	where, specific = Organization(7).WithDepartments(true, []int64{3, 4}).predicate("v", "", args)
+	if !strings.Contains(where, "@scope_departments") || specific != "false" || len(args["scope_departments"].([]int64)) != 2 {
+		t.Fatalf("member scope %q %q %v", where, specific, args)
 	}
 }
 
 func TestSourceValidation(t *testing.T) {
 	if (Source{Table: "knowledge_chunks; DROP", TextColumn: "content"}).valid() == nil {
 		t.Fatal("unsafe table accepted")
+	}
+}
+
+func TestTableValidation(t *testing.T) {
+	good := Table{Name: "x", Table: "history_cases", Vectors: []Column{{Column: "embedding", Text: "v.problem"}}}
+	if good.valid() != nil {
+		t.Fatal("valid table rejected")
+	}
+	for name, bad := range map[string]Table{
+		"no vectors":   {Name: "x", Table: "t"},
+		"two kinds":    {Name: "x", Table: "t", Vectors: good.Vectors, Centroid: &Centroid{Column: "c", Members: "m", Key: "k", Vector: "e"}},
+		"unsafe table": {Name: "x", Table: "t; DROP", Vectors: good.Vectors},
+		"unsafe child": {Name: "x", Table: "t", Child: &Child{Table: "c", Key: "k;", Column: "e", Text: "c.content"}},
+		"no text":      {Name: "x", Table: "t", Vectors: []Column{{Column: "embedding"}}},
+	} {
+		if bad.valid() == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+	centroid := Table{Name: "c", Table: "history_clusters", Centroid: &Centroid{Column: "centroid", Members: "history_cases", Key: "cluster_id", Vector: "embedding"}}
+	if centroid.valid() != nil || !strings.Contains(centroid.staleRow(), "<>''") {
+		t.Fatal("centroid table: invalid rows must wait for members")
 	}
 }

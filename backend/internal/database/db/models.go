@@ -117,6 +117,7 @@ type AiAnswerCacheStat struct {
 	ExactHits      int64       `json:"exact_hits"`
 	SemanticHits   int64       `json:"semantic_hits"`
 	Misses         int64       `json:"misses"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
 }
 
 type AiCaseMemory struct {
@@ -2958,7 +2959,7 @@ type KnowledgeChunk struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	Embedding        vectorstore.Vector `json:"embedding"`
 	BrandID          pgtype.UUID        `json:"brand_id"`
-	DepartmentID     pgtype.UUID        `json:"department_id"`
+	DepartmentID     pgtype.Int8        `json:"department_id"`
 	PendingEmbedding vectorstore.Vector `json:"pending_embedding"`
 	PendingModel     pgtype.Text        `json:"pending_model"`
 }

@@ -8,13 +8,12 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// conversationScope is the knowledge scope of a conversation: its brand (and,
-// once CF-215 lands, its department) plus organization-wide knowledge.
+// conversationScope is the knowledge scope of a conversation: its brand and
+// its department plus organization-wide knowledge.
 func conversationScope(org int64, conv db.Conversation) vectorstore.Scope {
-	return vectorstore.Conversation(org, conv.BrandID, pgtype.UUID{})
+	return vectorstore.Conversation(org, conv.BrandID, conv.DepartmentID)
 }
 
 // brandPersona is the ai_persona of the conversation's brand ("" without a

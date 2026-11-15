@@ -106,7 +106,7 @@ func (s *Service) Lookup(ctx context.Context, q model.Query) (model.Result, erro
 		slog.InfoContext(ctx, "ai_stage", "stage", "memory_lookup", "organization_id", q.Organization, "audience", q.Audience, "outcome", out.Outcome, "duration_ms", time.Since(started).Milliseconds())
 	}()
 
-	cached, err := s.Q.AnswerCacheGet(ctx, db.AnswerCacheGetParams{OrganizationID: q.Organization, Audience: q.Audience, Locale: q.Locale, ScopeKey: scopeKey, QuestionHash: hash})
+	cached, err := s.Q.AnswerCacheGet(ctx, db.AnswerCacheGetParams{OrganizationID: q.Organization, Audience: q.Audience, Locale: q.Locale, ScopeKey: scopeKey, QuestionHash: hash, EmbeddingModel: s.Embedder.Model()})
 	switch err = normalize(err); {
 	case err == nil:
 		if err = s.Q.AnswerCacheTouch(ctx, db.AnswerCacheTouchParams{OrganizationID: q.Organization, ID: cached.ID}); err != nil {
@@ -151,6 +151,49 @@ func (s *Service) Lookup(ctx context.Context, q model.Query) (model.Result, erro
 		return out, err
 	}
 	return out, s.count(ctx, q, model.OutcomeMiss)
+}
+
+// Probe reports whether the knowledge layer would answer the question
+// without a generation call (an exact cache entry, or a knowledge unit above
+// the threshold), without counting the lookup or writing the cache. The
+// measurement set (CF-220) uses it so its runs do not move the panel's hit
+// rate. It costs at most one embedding call.
+func (s *Service) Probe(ctx context.Context, q model.Query) (bool, error) {
+	if err := q.Validate(); err != nil {
+		return false, err
+	}
+	question := strings.TrimSpace(q.Question)
+	if question == "" || utf8.RuneCountInString(question) > maxQuestionRunes || !s.Ready() || ai.Guard(question) != nil {
+		return false, nil
+	}
+	ctx = orgctx.WithOrganizationID(ctx, q.Organization)
+	normalized := Normalize(question)
+	if normalized == "" {
+		return false, nil
+	}
+	_, err := s.Q.AnswerCacheGet(ctx, db.AnswerCacheGetParams{OrganizationID: q.Organization, Audience: q.Audience, Locale: q.Locale, ScopeKey: q.Scope.Key(), QuestionHash: questionHash(normalized)})
+	switch err = normalize(err); {
+	case err == nil:
+		return true, nil
+	case !errors.Is(err, model.ErrNotFound):
+		return false, err
+	}
+	embedded, err := s.Embedder.Embed(ctx, []string{question})
+	if err != nil {
+		return false, err
+	}
+	if len(embedded.Vectors) != 1 || len(embedded.Vectors[0]) == 0 {
+		return false, ai.ErrInvalidOutput
+	}
+	units, err := s.Q.KnowledgeUnitMatch(ctx, db.KnowledgeUnitMatchParams{
+		OrganizationID: q.Organization, Locale: q.Locale, Embedding: embedded.Vectors[0], EmbeddingModel: s.Embedder.Model(),
+		PublicOnly: q.Audience == model.AudienceCustomer, BrandID: brandArg(q.Scope), DepartmentID: departmentArg(q.Scope),
+	})
+	if err != nil {
+		return false, err
+	}
+	_, ok := pickUnit(units, s.UnitThreshold)
+	return ok, nil
 }
 
 // pickUnit prefers the most specific scope among matches above threshold
@@ -207,7 +250,7 @@ func (s *Service) cases(ctx context.Context, q model.Query, vector []float32, ou
 }
 
 func (s *Service) count(ctx context.Context, q model.Query, outcome string) error {
-	p := db.AnswerCacheStatParams{OrganizationID: q.Organization, Audience: q.Audience}
+	p := db.AnswerCacheStatParams{OrganizationID: q.Organization, Audience: q.Audience, DepartmentID: departmentArg(q.Scope)}
 	switch outcome {
 	case model.OutcomeExact:
 		p.Exact = 1

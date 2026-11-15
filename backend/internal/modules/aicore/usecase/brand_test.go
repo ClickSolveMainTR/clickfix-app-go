@@ -27,7 +27,7 @@ func TestRunAgentBrandPersonaAndScope(t *testing.T) {
 	rec := &scopeRecorder{}
 	svc.RAG = rec
 	brand := pgtype.UUID{Bytes: uuid.New(), Valid: true}
-	scope := vectorstore.Conversation(org+1000, brand, pgtype.UUID{})
+	scope := vectorstore.Conversation(org+1000, brand, pgtype.Int8{})
 	persona := "Adımız Acme Destek; samimi ve kısa yazarız."
 	_, err := svc.RunAgent(context.Background(), org, actor, model.RunInput{Task: "reply", Input: "Siparişim nerede?", Retrieve: true}, AgentOptions{Scope: &scope, BrandPersona: persona})
 	if err != nil {

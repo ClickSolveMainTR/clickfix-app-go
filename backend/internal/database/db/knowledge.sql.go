@@ -502,7 +502,7 @@ type KnowledgeInsertChunkParams struct {
 	PendingModel     pgtype.Text        `json:"pending_model"`
 }
 
-// brand_id comes from the article (trigger). While the organization is being
+// brand_id and department_id come from the article (trigger, CF-222). While the organization is being
 // re-embedded the vector goes to pending_* (CF-214).
 func (q *Queries) KnowledgeInsertChunk(ctx context.Context, arg KnowledgeInsertChunkParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, knowledgeInsertChunk,
@@ -664,27 +664,25 @@ func (q *Queries) KnowledgeSaveCollection(ctx context.Context, arg KnowledgeSave
 const knowledgeSearchLexical = `-- name: KnowledgeSearchLexical :many
 SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
  ts_rank_cd(to_tsvector('simple',c.content),plainto_tsquery('simple',$1::text))::double precision AS score,
- (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
+ ((NOT $2::boolean AND c.brand_id IS NOT NULL) OR COALESCE(c.department_id=$3::bigint,false))::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
- WHERE c.organization_id=$2 AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$3 AND (NOT $4::boolean OR v.visibility='public')
- AND ($5::boolean OR c.brand_id IS NULL OR c.brand_id=$6::uuid)
- AND ($7::boolean OR c.department_id IS NULL OR c.department_id=$8::uuid)
- AND (NOT $9::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$10::bigint[]))
+ WHERE c.organization_id=$4 AND a.deleted_at IS NULL AND a.published_version=c.version
+ AND a.locale=$5 AND (NOT $6::boolean OR v.visibility='public')
+ AND ($2::boolean OR c.brand_id IS NULL OR c.brand_id=$7::uuid)
+ AND (NOT $8::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$9::bigint[]))
  AND to_tsvector('simple',c.content) @@ plainto_tsquery('simple',$1::text)
  ORDER BY score DESC,c.id LIMIT 40
 `
 
 type KnowledgeSearchLexicalParams struct {
 	Q                 string      `json:"q"`
+	AllBrands         bool        `json:"all_brands"`
+	DepartmentID      pgtype.Int8 `json:"department_id"`
 	OrganizationID    int64       `json:"organization_id"`
 	Locale            string      `json:"locale"`
 	PublicOnly        bool        `json:"public_only"`
-	AllBrands         bool        `json:"all_brands"`
 	BrandID           pgtype.UUID `json:"brand_id"`
-	AllDepartments    bool        `json:"all_departments"`
-	DepartmentID      pgtype.UUID `json:"department_id"`
 	DeptRestrict      bool        `json:"dept_restrict"`
 	ViewerDepartments []int64     `json:"viewer_departments"`
 }
@@ -703,16 +701,17 @@ type KnowledgeSearchLexicalRow struct {
 }
 
 // Scope rules match vectorstore.Scope: the brand's rows and organization-wide rows.
+// Departments: department_visible on the article is the visibility rule; rows of
+// the scope's department (department_id) rank as specific (CF-222).
 func (q *Queries) KnowledgeSearchLexical(ctx context.Context, arg KnowledgeSearchLexicalParams) ([]KnowledgeSearchLexicalRow, error) {
 	rows, err := q.db.Query(ctx, knowledgeSearchLexical,
 		arg.Q,
+		arg.AllBrands,
+		arg.DepartmentID,
 		arg.OrganizationID,
 		arg.Locale,
 		arg.PublicOnly,
-		arg.AllBrands,
 		arg.BrandID,
-		arg.AllDepartments,
-		arg.DepartmentID,
 		arg.DeptRestrict,
 		arg.ViewerDepartments,
 	)
@@ -875,25 +874,23 @@ func (q *Queries) KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdat
 
 const knowledgeValidChunks = `-- name: KnowledgeValidChunks :many
 SELECT c.uuid,c.article_id,c.version,c.content,a.uuid AS article_uuid,a.slug,a.locale,v.title,
- (c.brand_id IS NOT NULL OR c.department_id IS NOT NULL)::boolean AS specific
+ ((NOT $1::boolean AND c.brand_id IS NOT NULL) OR COALESCE(c.department_id=$2::bigint,false))::boolean AS specific
  FROM knowledge_chunks c JOIN knowledge_articles a ON a.id=c.article_id AND a.organization_id=c.organization_id
  JOIN knowledge_article_versions v ON v.organization_id=c.organization_id AND v.article_id=c.article_id AND v.version=c.version
- WHERE c.organization_id=$1 AND c.uuid=ANY($2::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
- AND a.locale=$3 AND (NOT $4::boolean OR v.visibility='public')
- AND ($5::boolean OR c.brand_id IS NULL OR c.brand_id=$6::uuid)
- AND ($7::boolean OR c.department_id IS NULL OR c.department_id=$8::uuid)
- AND (NOT $9::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$10::bigint[]))
+ WHERE c.organization_id=$3 AND c.uuid=ANY($4::uuid[]) AND a.deleted_at IS NULL AND a.published_version=c.version
+ AND a.locale=$5 AND (NOT $6::boolean OR v.visibility='public')
+ AND ($1::boolean OR c.brand_id IS NULL OR c.brand_id=$7::uuid)
+ AND (NOT $8::boolean OR department_visible(a.organization_id,'article',a.id,a.department_id,$9::bigint[]))
 `
 
 type KnowledgeValidChunksParams struct {
+	AllBrands         bool        `json:"all_brands"`
+	DepartmentID      pgtype.Int8 `json:"department_id"`
 	OrganizationID    int64       `json:"organization_id"`
 	Ids               []uuid.UUID `json:"ids"`
 	Locale            string      `json:"locale"`
 	PublicOnly        bool        `json:"public_only"`
-	AllBrands         bool        `json:"all_brands"`
 	BrandID           pgtype.UUID `json:"brand_id"`
-	AllDepartments    bool        `json:"all_departments"`
-	DepartmentID      pgtype.UUID `json:"department_id"`
 	DeptRestrict      bool        `json:"dept_restrict"`
 	ViewerDepartments []int64     `json:"viewer_departments"`
 }
@@ -912,14 +909,13 @@ type KnowledgeValidChunksRow struct {
 
 func (q *Queries) KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidChunksParams) ([]KnowledgeValidChunksRow, error) {
 	rows, err := q.db.Query(ctx, knowledgeValidChunks,
+		arg.AllBrands,
+		arg.DepartmentID,
 		arg.OrganizationID,
 		arg.Ids,
 		arg.Locale,
 		arg.PublicOnly,
-		arg.AllBrands,
 		arg.BrandID,
-		arg.AllDepartments,
-		arg.DepartmentID,
 		arg.DeptRestrict,
 		arg.ViewerDepartments,
 	)

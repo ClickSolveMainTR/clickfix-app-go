@@ -76,7 +76,7 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 	aiStore := airepo.New(billing, ent)
 	kb := kbusecase.New(kbrepo.New(pool))
 	rag := &kbusecase.RAG{KB: kb}
-	reembed := &vectorstore.Reembedder{Pool: pool, Sources: []vectorstore.Source{kbusecase.ChunkSource}, Skip: func(err error) bool { return kbusecase.SkipReason(err) != "" }}
+	reembed := &vectorstore.Reembedder{Pool: pool, Sources: []vectorstore.Source{kbusecase.ChunkSource}, Tables: VectorTables, Skip: func(err error) bool { return kbusecase.SkipReason(err) != "" }}
 	if openai.Key != "" && openai.Model() != "" {
 		rag.Embedder = &aiusecase.MeteredEmbedder{Raw: openai, Repo: aiStore, InputPrice: price("AI_EMBEDDING_INPUT_PRICE_MICROS")}
 		reembed.Embedder = rag.Embedder

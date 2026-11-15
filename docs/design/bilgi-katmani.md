@@ -160,7 +160,7 @@ CF-215 bu bölüme departman tablosunu, görünürlük kurallarını ve devir ak
 
 ### 3.1 Departmanlar (CF-215)
 
-Not (birleştirme): departman kimlikleri iç `BIGINT` anahtardır. Bilgi aramasında departman görünürlüğü makale düzeyinde `department_visible` ile uygulanır (vektör araması `deptscope` süzgecini hidrasyon sorgusunda kullanır). `knowledge_chunks.department_id` (UUID, CF-214) şimdilik boş kalır; vektör tablolarının departman sütununu `BIGINT`'e çevirmek ayrı bir iştir.
+Not: departman kimlikleri iç `BIGINT` anahtardır. `knowledge_chunks.department_id` CF-222 ile (`000233_vector_department_bigint`) `BIGINT` olur ve bileşik yabancı anahtar alır; parça, makalesinin departmanını tetikleyiciyle kopyalar. Vektör aramasında departman süzgeci parça düzeyinde çalışır, makale düzeyindeki `department_visible` görünürlük kuralı olarak kalır (ayrıntı: 4. bölüm, Kapsam süzgeci).
 
 Departman bir iş birimidir (teknik destek, satış, faturalama); ekip değildir. Ekipler bir departmana bağlanır, insanlar ekiplere. Kapsam sırası **organizasyon → marka → departman → ekip**.
 
@@ -175,7 +175,17 @@ Departman bir iş birimidir (teknik destek, satış, faturalama); ekip değildir
 | `department_knowledge_shares` | Bir departmanın tek bir bilgisinin (`article`, `source`, `context`) başka bir departmanla paylaşımı. |
 | `conversation_department_transfers` | Departman değişiklikleri: kimden, kime, kim (`customer`, `ai`, `agent`), güven puanı, neden ve devralan ekibe bağlam özeti. |
 
-**Sütun tipi.** `department_id` her tabloda `BIGINT` ve `(organization_id, department_id) → departments(organization_id, id)` bileşik yabancı anahtarıdır (ekipler ve konuşma ekibiyle aynı kalıp). Paralel dallarda NULL olarak eklenen `department_id` sütunları bu tipe uyar ve birleşmeden sonra aynı yabancı anahtarı alır; `UUID` tipiyle eklenmiş olanlar (`000225_pgvector`) `BIGINT`'e çevrilir.
+**Sütun tipi.** `department_id` her tabloda `BIGINT` ve `(organization_id, department_id) → departments(organization_id, id)` bileşik yabancı anahtarıdır (ekipler ve konuşma ekibiyle aynı kalıp). Paralel dallarda NULL olarak eklenen `department_id` sütunları bu tipe uyar ve birleşmeden sonra aynı yabancı anahtarı alır. `UUID` tipiyle eklenmiş tek sütun (`knowledge_chunks.department_id`, `000225_pgvector`) `000233_vector_department_bigint` ile `BIGINT`'e çevrildi ve `fk_knowledge_chunks_department` aldı (CF-222); migration sütunun boş olduğunu doğrular, değilse durur.
+
+**Yabancı anahtarlar (CF-224, migration `000235_knowledge_department_fks`).** CF-216–CF-220 dallarında FK'siz eklenen `department_id` sütunları bu migration'la anahtarlandı: `history_imports`, `history_clusters`, `history_cases`, `history_decisions` (000229); `categories`, `category_assignments`, `category_labels` (000227); `ai_evaluation_cases`, `ai_evaluations`, `ai_evaluation_results` (000230); `knowledge_units`, `ai_case_memories`, `knowledge_gap_questions` (000228). Migration önce satırın organizasyonunda karşılığı olmayan değerleri `NULL` (organizasyon geneli) yapar, sonra anahtarı ekler; başka organizasyonun departmanı artık yazılamaz. 000227, 000228, 000229 ve 000230'daki "FK'yi CF-215 ekleyecek" yorumları geçersizdir: CF-215 bu anahtarları eklemedi, CF-224 ekledi (uygulanmış migration'lar değiştirilmez). Tek istisna `knowledge_chunks.department_id` (`UUID`); CF-222 çevirir. `departments` paketindeki şema testi FK'siz departman sütunu kalmadığını denetler.
+
+**Departman silinince.** İki sınıf vardır:
+
+| Sınıf | Tablolar | Silmede |
+|---|---|---|
+| Departmanın sahip olduğu bilgi | `knowledge_articles`, `knowledge_sources`, `business_context_sections`, `knowledge_suggestions` | `NO ACTION`: bilgi varken departman silinemez; silme isteği `?move_to=` ile bilgiyi önce taşır. |
+| Bilgi hakkındaki kayıtlar ve atamalar | `teams`, `conversations`, `conversation_department_transfers` ve CF-224'ün anahtarladığı tüm tablolar | `ON DELETE SET NULL (department_id)`: satır kalır, organizasyon geneline düşer. |
+| Paylaşım | `department_knowledge_shares` | `CASCADE`: paylaşım silinir. |
 
 #### Görünürlük kuralı
 
@@ -197,7 +207,7 @@ Sorgular iki argüman alır: `dept_restrict` (false = süzgeçsiz) ve `viewer_de
 
 Yazma: `read_all` olmayan üye bilgiyi yalnız kendi departmanlarına (ya da organizasyon geneline) kaydeder, aksi 403. Lexical (Meilisearch) adayları Postgres'te yeniden doğrulanır, departman süzgeci orada uygulanır.
 
-pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: paylaşımı olmayan tablolar için `department_id IS NULL OR department_id = ANY(viewer_departments)`, paylaşılan türler için `department_visible(...)`. Kapsam `deptscope.Effective(ctx).Args()` ile okunur.
+pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: paylaşımı olmayan tablolar için `department_id IS NULL OR department_id = ANY(viewer_departments)`, paylaşılan türler için `department_visible(...)`. Kapsam `deptscope.Effective(ctx).Args()` ile okunur. Bilgi parçalarında (`knowledge_chunks`) kural vektör sorgusunun içinde parçanın kendi `department_id`'sine uygulanır (`department_visible(org, 'article', article_id, department_id, viewer)`); hidrasyon sorgusu (`KnowledgeChunksByIDs`) aynı kuralı makaleye yeniden uygular.
 
 #### Departman belirleme
 
@@ -221,7 +231,7 @@ pgvector deposu (CF-214) ve bilgi birimleri (CF-216) aynı kuralı kullanır: pa
 
 - Postgres imajı `pgvector/pgvector:0.8.7-pg18-trixie` (PostgreSQL 18.7 + pgvector 0.8.7). Yerel, prod ve CI aynı imajı kullanır.
 - Migration `000225_pgvector`: `vector` eklentisi; `knowledge_chunks.embedding` artık `vector(1536)` ve HNSW (`vector_cosine_ops`) indeksli. Eski `REAL[]` vektörler 1536 boyutluysa olduğu gibi taşınır; başka boyuttakiler `NULL` kalır ve arka plan işi saklı (maskelenmiş) metinden yeniden üretir. `ai_cosine` kaldırıldı.
-- `knowledge_chunks` kapsam sütunları: `brand_id` (makaleden tetikleyiciyle kopyalanır, makalenin markası değişince parçalar da değişir), `department_id` (CF-215 gelene kadar `NULL`).
+- `knowledge_chunks` kapsam sütunları: `brand_id` (makaleden tetikleyiciyle kopyalanır, makalenin markası değişince parçalar da değişir), `department_id BIGINT` (CF-222: makaleden tetikleyiciyle kopyalanır, makalenin departmanı değişince parçalar da değişir; `(organization_id, department_id) → departments(organization_id, id)`, NO ACTION).
 
 ### Vektör tablosu sözleşmesi
 
@@ -230,18 +240,42 @@ Vektör tutan her tablo aynı sütunları taşır; böylece arama, yerleştirme 
 | Sütun | Anlamı |
 |-------|--------|
 | `id BIGINT`, `organization_id BIGINT` | Satır ve kiracı |
-| `brand_id UUID NULL`, `department_id UUID NULL` | Kapsam; `NULL` = organizasyon geneli |
+| `brand_id UUID NULL`, `department_id BIGINT NULL` | Kapsam; `NULL` = organizasyon geneli. `department_id` bileşik yabancı anahtarla `departments(organization_id, id)`'ye bağlanır |
 | `embedding vector(1536) NULL`, `embedding_model TEXT NOT NULL` | Aranan vektör ve modeli |
 | `pending_embedding vector(1536) NULL`, `pending_model TEXT NULL` | Model değişiminde hazırlanan yeni vektör |
 | metin sütunu | Vektörün üretildiği maskelenmiş metin (`Source.TextColumn`) |
 
-Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosine_ops)` indeksi; kodda bir `vectorstore.Source` tanımı ve `aisystem` içindeki `Reembedder.Sources` listesine ekleme.
+Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosine_ops)` indeksi; kodda bir `vectorstore.Source` tanımı ve `aisystem` içindeki `Reembedder.Sources` listesine ekleme. `pending_*` taşımayan tablolar `VectorTables` kaydına girer (aşağıda, CF-223).
 
 ### Tek model
 
 - Model ve boyut tek yerde: `platform/ai/embedding.go` (`DefaultEmbeddingModel = text-embedding-3-small`, `EmbeddingDimensions = 1536`). `AI_EMBEDDING_MODEL` başka bir 1536 boyutlu modeli seçebilir; `text-embedding-3-*` modellerinden 1536 boyut istenir.
 - Sağlayıcı çağrıları `platform/ai` arayüzünden geçer (`Embedder`, ek olarak `ModelEmbedder.EmbedModel`).
 - Model değişince `app:ai:vector_reembed` (5 dakikada bir, maintenance kuyruğu) eski modeldeki satırları organizasyon organizasyon `pending_*` sütunlarına yeniden vektörler. Bu sırada arama eski vektörlerle sürer: sorgu vektörü de eski modelle üretilir (`vectorstore.SearchModel`). Organizasyonun bütün satırları hazır olunca tek `UPDATE` ile yeni modele geçilir. Geçiş sırasında yayımlanan makalelerin vektörleri de `pending_*`'e yazılır (`vectorstore.Place`), geçişle birlikte aranır hale gelir. Embedding çağrıları ölçülü embedder'dan geçer (organizasyonun AI kredisi ve politikası); AI'ı kapalı organizasyon bekletilir.
+
+### Yeniden gömme kaydı: bütün vektör tabloları (CF-223)
+
+`knowledge_chunks` dışındaki vektör tabloları `pending_*` sütunu taşımaz; her satır kendi `embedding_model` değerini taşır ve bu tablolara giden her sorgu yalnız sorgu modelindeki satırları karşılaştırır (`embedding_model=@model`, sorgu modeli hedef model). Bu yüzden bu tablolar yerinde, satır satır yeniden gömülür: yeniden gömülen satır hemen aranır hale gelir, eski modelde kalan satır hedef model sorgusunda hiç dönmez. Karışık model karşılaştırması olmaz; geçiş bitene kadar bu katmanlar eksik sonuç verebilir (ör. bellek katmanı ıska döner, normal yol devam eder).
+
+Kayıt listesi `backend/internal/aisystem/vectors.go` (`VectorTables`), kod `vectorstore.Table`. Her kayıt tablosunu, vektör sütununu ve vektörün üretildiği metni (SQL ifadesi, yazan kodla aynı) bildirir:
+
+| Tablo | Vektör | Metin kaynağı |
+|-------|--------|---------------|
+| `knowledge_units` (model) + `knowledge_unit_questions` (vektör) | `embedding` | `content` (soru ve varyantları); birimin bütün soruları ve modeli tek işlemde güncellenir |
+| `ai_answer_cache` | vektörü yok | önbellek satırı birime bağlıdır; birim yeniden gömülünce satırları silinir (skor eski modelden), ilk eşleşmede yeniden dolar. `AnswerCacheGet` eski modeldeki birimi döndürmez |
+| `ai_case_memories` | `embedding` | `problem + '\n' + resolution` |
+| `category_examples` | `embedding` | `content`; hedef modelde aynı metin zaten yazılmışsa (tembel üretim) eski satır silinir |
+| `category_labels` | `embedding` | `left(btrim(content), 6000)`; vektörsüz kaydedilmiş etiket (`embedding_model=''`) de vektörlenir. Etiketler değişmez kalır; 000234 tetikleyicisi yalnız vektör ve model değişimine izin verir |
+| `history_cases` | `embedding`, `resolution_embedding` | `left(btrim(subject + '\n' + problem), 4000)` ve `resolution` (boş çözümün vektörü `NULL`) |
+| `history_clusters` | `centroid` | metni yok: **üyelerinden yeniden hesaplanır** (aşağıda) |
+| `history_decisions` | `embedding` | `left(btrim(title + '\n' + body), 6000)` |
+
+- **Sıra ve parça:** iş önce `knowledge_chunks`, sonra listeyi sırayla işler. Her tablo için organizasyon başına `Batch` satırlık (varsayılan 64) en fazla `MaxBatches` (varsayılan 20) embedding çağrısı yapılır. Seçim "hedef modelde olmayan satırlar, `id` sırasıyla" olduğundan bir sonraki çalışma kaldığı yerden devam eder; ayrı ilerleme kaydı gerekmez. Yazma eski modeli koşul olarak kullanır, arada sahibi tarafından yeniden yazılmış satır ezilmez.
+- **Maliyet:** embedding çağrıları ölçülü embedder'dan geçer, organizasyonun AI kredisine yazılır; AI'ı kapalı ya da kredisi bitmiş organizasyon bekletilir.
+- **Metni saklanmayan vektörler (küme merkezleri):** seçilen yol **üyelerden yeniden hesaplamadır**. Merkez, üye vakaların problem vektörlerinin ortalamasıdır (kümeleme kodu da artımlı ortalama tutar). Organizasyonun bütün `history_cases` satırları yeni modele geçince merkez `avg(embedding)` ile yeniden yazılır ve küme yeni modele geçer. Hiç üyesi kalmamış küme **geçersiz işaretlenir** (`embedding_model=''`): hiçbir sorgu onu eşleştirmez, yeni vakalar yeni kümeler açar. Bu iş AI çağrısı yapmaz.
+- Bilgi birimlerinin `source_hash` değeri modeli de içerir; makale bir sonraki yayımlanışında birimler yeniden çıkarılır (bu, yeni sürümde zaten olur).
+- Yeni vektör tablosu eklerken: tabloyu bu listeye ekle, metin ifadesini vektörü yazan kodla aynı tut, sorgularda `embedding_model` süzgecini koru.
+
 
 ### Kapsam süzgeci
 
@@ -250,7 +284,9 @@ Yeni tablo için: migration'da bu sütunlar + `USING hnsw (embedding vector_cosi
 - Markalı konuşma: o markanın bilgisi + markasız (organizasyon geneli) bilgi; markanın kendi bilgisi önce gelir, organizasyon geneli yedektir. Başka markanın bilgisi hiç gelmez.
 - Markasız konuşma: sadece organizasyon geneli bilgi.
 - `vectorstore.Organization(org)`: süzgeçsiz; sadece konuşmaya bağlı olmayan iç aramalar (yönetim araması, ekip sohbeti, yardım merkezi).
-- Departman aynı kuralla çalışır (CF-215 doldurur).
+- Departman (CF-222): `Scope.DepartmentID` (`pgtype.Int8`) konuşmanın departmanıdır, o departmanın parçaları önce gelir. `Scope.Departments` görünür departmanlardır; organizasyon geneli parçalar (`department_id IS NULL`) her zaman yedektir. `vectorstore.Conversation(org, brand, department)` ikisini konuşmanın departmanıyla doldurur; departmansız konuşma yalnız organizasyon geneli bilgiyi görür. Süzgeç vektör sorgusunun içinde, parçanın `department_id`'sine uygulanır; böylece başka departmanın parçaları aday sınırını (40) doldurmaz. Kaynak kendi kuralını `Source.DepartmentVisible` ile verir; bilgi parçaları paylaşımlar için `department_visible(...)` kullanır, verilmezse `department_id IS NULL OR department_id = ANY(@scope_departments)`.
+- RAG (`SearchScoped`) görünürlüğü bağlamdaki `deptscope`'tan alır (`Scope.WithDepartments`): yönetim araması üyenin departmanlarını, `read_all` sahibi tümünü görür. Bağlamda kapsam yoksa konuşma kapsamının departmanı kullanılır (yine kapalı: departman + organizasyon geneli). Makale düzeyindeki `department_visible` hidrasyonda ve lexical sorgularda görünürlük kuralı olarak kalır; parçadaki kopya eskimişse bile makalenin departmanı geçerlidir.
+- Testler: `TestSearchScopedDepartmentFallbackAndTenantIsolation` (departman kapsamı, paylaşım, organizasyon geneli yedek, kiracı ayrımı, departman taşıma, bileşik anahtar).
 
 `vectorstore.Search(ctx, pool, source, scope, Query{Vector, Model, MinSimilarity, Limit, Args})` kosinüs benzerliği eşiği geçen satırları döner (`Hit{ID, Similarity, Specific}`); çağıran satırları kendi sorgusuyla doldurur ve yeniden doğrular. HNSW `iterative_scan=relaxed_order` ile taranır, böylece kapsam süzgeci sonucu boş bırakmaz. Bilgi parçaları için eşik `KnowledgeMinSimilarity = 0.2`.
 
@@ -478,7 +514,7 @@ Bilgi katmanının işe yarayıp yaramadığını ölçer ve gösterir.
 |------|-------|
 | Doğru cevap oranı | Tamamlanan vakalarda: `expected` kontrollerinin hepsi geçer **ve** cevap, beklenen cevabın anlamlı kelimelerinin en az %60'ını içerir ve devir yoktur. Sadece kaynak verilmiş vakada: devirsiz, boş olmayan ve beklenen kaynağa atıf yapan cevap. |
 | Kaynak isabeti | Beklenen kaynağı olan vakalarda, cevabın atıf yaptığı makalelerden biri beklenenlerden biri mi. |
-| Önbellek isabeti | `AnswerCache.Lookup` (CF-216) soruyu cevaplayabilir mi. Önbellek bağlı değilse ölçülmez (null). |
+| Önbellek isabeti | `AnswerCache.Lookup` (CF-216) soruyu cevaplayabilir mi: müşteri kitlesi için tam önbellek kaydı ya da eşiği geçen bilgi birimi, vakanın departmanı kapsamında. Uyarlayıcı (`MemoryCache`) `aimemory` `Probe`'u kullanır; sayaç artmaz, önbelleğe yazılmaz, bu yüzden ölçüm çalıştırmaları paneldeki isabet oranını oynatmaz (en çok bir embedding çağrısı). Embedding modeli yoksa önbellek bağlanmaz ve ölçü null kalır. |
 | Ortalama gecikme | Tamamlanan vakalarda simülasyon süresi (ms). |
 | Soru başına maliyet | Çalıştırmanın toplam sağlayıcı maliyeti / vaka sayısı (mikro USD). |
 
@@ -501,19 +537,40 @@ Bilgi katmanının işe yarayıp yaramadığını ölçer ve gösterir.
 
 Her bölüm `available` ve gerekirse `reason` taşır:
 
-- `source_not_connected`: veriyi üreten katman henüz yok (önbellek, CF-216).
-- `department_scope_unavailable`: kaynak departman ayrımı yapamıyor. Konuşmalar, AI çalıştırmaları, triage ve öneriler henüz departman taşımadığı için yerleşik kaynaklar departman seçilince veri göstermez; organizasyon verisi departman verisi gibi gösterilmez.
+- `source_not_connected`: veriyi üreten katman bağlı değil (sağlayıcı alanı nil).
+- `department_scope_unavailable`: kaynak departman ayrımı yapamıyor; organizasyon verisi departman verisi gibi gösterilmez. CF-225'ten sonra yerleşik kaynakların hepsi departmana göre süzülür, bu neden yalnız departmansız yeni bir kaynak için kalır.
+
+Departman seçilince süzgeç (CF-225):
+
+| Bölüm | Departman nereden gelir |
+|-------|-------------------------|
+| AI çağrıları ve maliyet (`ai_runs`) | Çalıştırmanın konuşmasının **şu anki** departmanı. Konuşmasız çalıştırmalar (embedding, içe aktarma) yalnız organizasyon toplamında sayılır. |
+| Devir oranı, bilgi açıkları, triage kategorileri (`ai_agent_jobs`) | İşin konuşmasının şu anki departmanı. |
+| Öneri hattı (`knowledge_suggestions`) | Önerinin kendi `department_id`'si (konuşmasından devralınır). |
+| Kategori dağılımı (`category_assignments`) | Kaydın konuşmasının şu anki departmanı. |
+| Önbellek isabeti (`ai_answer_cache_stats`) | Aramanın kapsamındaki departman (aşağıya bakın). |
+| Son ölçüm (`ai_evaluations`) | Çalıştırmanın `department_id`'si. |
+
+Önbellek sayaçları (migration `000237`): `ai_answer_cache_stats` her gün, kitle ve departman için bir satır tutar (`department_id` NULL = departmansız arama, `UNIQUE NULLS NOT DISTINCT`). Organizasyon toplamı tüm satırların toplamıdır. Departman silinince sayaçları da silinir (`ON DELETE CASCADE`; `SET NULL` aynı günün organizasyon satırıyla çakışırdı). Sayaçlar günlük olduğu için panelde pencere tam günlere genişler.
+
+Kategori bölümü: kategori deposu (CF-218) pencerede konuşma sınıflandırmışsa ondan okunur; hiç sınıflandırma yoksa (kategori ağacı kurulmamış) son tamamlanan triage sonucu kullanılır.
 
 Sağlayıcı arayüzleri (`analytics/usecase/knowledge.go`, `aiagents/usecase/measurement.go`):
 
 | Arayüz | Kim bağlar | Yokken |
 |--------|------------|--------|
-| `DepartmentSource`, `DepartmentDirectory` | CF-215 | Departman listesi boş; `department_uuid` 400 `DEPARTMENTS_UNAVAILABLE` |
-| `CacheSource`, `AnswerCache` | CF-216 | Önbellek bölümü "veri yok", ölçümde önbellek isabeti null |
-| `ClassificationSource` | CF-218 | Kategori ve güven son tamamlanan triage sonucundan okunur |
-| `KnowledgeStore` (yerleşik) | CF-215 sonrası departman süzgeci | Departman kapsamında `ErrDepartmentScope` |
+| Arayüz | Uyarlayıcı (CF-225) | Yokken |
+|--------|---------------------|--------|
+| `DepartmentSource` (panel) | `analytics/repository.DepartmentStore` (`departments` tablosu) | Departman listesi boş; `department_uuid` 400 `DEPARTMENTS_UNAVAILABLE` |
+| `DepartmentDirectory` (ölçüm), kategoriler `Departments` | `departments/usecase.Directory` | Departmanlı vaka ve çalıştırma 400 `DEPARTMENTS_UNAVAILABLE`; kategori ağacında departman kapsamı reddedilir |
+| `CacheSource` (panel) | `analytics/repository.CacheStore` (`ai_answer_cache_stats`) | Önbellek bölümü "veri yok" |
+| `AnswerCache` (ölçüm) | `aiagents/usecase.MemoryCache` (`aimemory` `Probe`) | Ölçümde önbellek isabeti null |
+| `ClassificationSource` | `analytics/repository.CategoryStore` (`category_assignments`) | Kategori ve güven son tamamlanan triage sonucundan okunur |
+| `KnowledgeStore` (yerleşik) | `analytics/repository.KnowledgeStore` | Departman kapsamında `ErrDepartmentScope` |
 
-Birleştirme notu: CF-215 ve CF-216 `cf-toplu`'ya girdi ama bu arayüzler henüz bağlanmadı (alanlar nil). `aiagents` içinde CF-220 alanı, CF-215'in `Departments` (yönlendirici) alanıyla çakışmasın diye `DepartmentSets` adını aldı. Bağlama ayrı iş olarak izlenir.
+Bağlantı: API sunucusu (`httpserver/server.go`) paneli, ölçüm setini ve kategori servisini; worker (`cmd/worker`) otomatik ölçüm taramasının (`app:ai:evaluation_sweep`) kullandığı AI ajanı servisini ve kategori servisini aynı uyarlayıcılarla kurar (`agentusecase.WireMeasurement`).
+
+Birleştirme notu: CF-215 ve CF-216 `cf-toplu`'ya girdiğinde bu arayüzler bağlanmamıştı (alanlar nil); CF-225 bağladı. `aiagents` içinde CF-220 alanı, CF-215'in `Departments` (yönlendirici) alanıyla çakışmasın diye `DepartmentSets` adını aldı.
 
 ### Yetki
 

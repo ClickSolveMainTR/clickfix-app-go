@@ -205,7 +205,7 @@ func main() {
 		Surveys:             surveysSvc,
 		Status:              statusSvc,
 		LiveActivities:      mobileextmodule.NewService(cfg.APNs, pool, queries, log),
-		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
+		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Departments: departmentsusecase.NewDirectory(queries), Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
 	})
 	if err != nil {
 		log.Error("event_consumers_init_failed", "error", err)
@@ -295,6 +295,9 @@ func main() {
 	departmentsSvc := departmentsusecase.New(pool, queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
 	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
+	// Measurement set (CF-220) of the evaluation sweep: department sets and
+	// cache hit rate (CF-225).
+	agentusecase.WireMeasurement(agentSvc, departmentsusecase.NewDirectory(queries), aiCore.Memory)
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)

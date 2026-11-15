@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestAnswerMatchCountsContentWords(t *testing.T) {
@@ -122,6 +124,22 @@ func (f fakeDepartments) DepartmentUUIDs(_ context.Context, org int64, ids []int
 	return out, nil
 }
 
+// testDepartment creates a department of org and returns its id.
+func testDepartment(t *testing.T, org int64, name string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, os.Getenv("TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var id int64
+	if err := pool.QueryRow(ctx, "INSERT INTO departments(organization_id,name) VALUES($1,$2) RETURNING id", org, name).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 // One run measures accuracy, sources, cache, latency and cost per
 // department; the next run of the same scope carries it as "before".
 func TestEvaluationMetricsBeforeAfterAndDepartments(t *testing.T) {
@@ -141,13 +159,15 @@ func TestEvaluationMetricsBeforeAfterAndDepartments(t *testing.T) {
 	if _, err := svc.SaveEvaluationCase(ctx, org, actor, EvaluationCaseInput{Name: "Refund", Question: "When can I return?", Locale: "en", Department: &billingDept, ExpectedAnswer: "refund 14 days"}); !errors.Is(err, ErrDepartmentsUnavailable) {
 		t.Fatalf("department before CF-215: %v", err)
 	}
-	svc.DepartmentSets = fakeDepartments{org: org, ids: map[uuid.UUID]int64{billingDept: 7}}
+	// A real department of the organization: department_id is a foreign key (CF-224).
+	billingDeptID := testDepartment(t, org, "Billing")
+	svc.DepartmentSets = fakeDepartments{org: org, ids: map[uuid.UUID]int64{billingDept: billingDeptID}}
 	svc.Cache = fakeCache{hit: map[string]bool{"Customer: When can I return?": true}}
 	refund, err := svc.SaveEvaluationCase(ctx, org, actor, EvaluationCaseInput{Name: "Refund", Question: "When can I return?", Category: "billing", Locale: "en", Department: &billingDept, ExpectedAnswer: "refund 14 days", ExpectedArticles: []uuid.UUID{article}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if refund.Transcript != "Customer: When can I return?" || !refund.DepartmentID.Valid || refund.DepartmentID.Int64 != 7 || len(refund.ExpectedArticleUuids) != 1 {
+	if refund.Transcript != "Customer: When can I return?" || !refund.DepartmentID.Valid || refund.DepartmentID.Int64 != billingDeptID || len(refund.ExpectedArticleUuids) != 1 {
 		t.Fatalf("case %+v", refund)
 	}
 	if _, err = svc.SaveEvaluationCase(ctx, org, actor, EvaluationCaseInput{Name: "Shipping", Question: "Where is my parcel?", Locale: "en", ExpectedArticles: []uuid.UUID{uuid.New()}}); err != nil {
