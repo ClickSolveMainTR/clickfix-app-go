@@ -22,6 +22,11 @@ import {
   type OAuthConfigPayload,
 } from "@/lib/auth/go-adapter-client";
 import { logAuthError } from "@/lib/observability/auth-logger";
+import {
+  appleDisplayName,
+  toGuardProvider,
+  type GuardProvider,
+} from "@/lib/server/auth-callback-guard";
 import { clientIpFromHeaders } from "@/lib/server/upstream";
 import { fetchAppPublicConfig } from "@/services/app-config.service";
 
@@ -312,6 +317,18 @@ async function _doBuildProviders(): Promise<Provider[]> {
       Apple({
         clientId: apple.client_id,
         clientSecret: apple.client_secret,
+        // Apple sends the `user` field (with the name) only on the first
+        // sign-in and the default profile reads `user.name.firstName`
+        // unguarded; fall back to the email when any part is missing.
+        profile(profile) {
+          const name = appleDisplayName(profile.user);
+          return {
+            id: profile.sub,
+            name: name ?? profile.email ?? null,
+            email: profile.email ?? null,
+            image: null,
+          };
+        },
       }),
     );
   }
@@ -346,6 +363,17 @@ async function buildProviders(): Promise<Provider[]> {
       });
   }
   return _providersBuildPromise;
+}
+
+/**
+ * Id, type and checks of the configured providers, for the callback guard in
+ * the Auth.js route (CF-227). Uses the same cached build as NextAuth.
+ */
+export async function callbackGuardProviders(): Promise<GuardProvider[]> {
+  const providers = await buildProviders();
+  return providers
+    .map(toGuardProvider)
+    .filter((p): p is GuardProvider => p !== null);
 }
 
 // Apple answers with response_mode=form_post: a cross-site POST to

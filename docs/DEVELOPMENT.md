@@ -129,7 +129,9 @@ Networks: Compose creates a private bridge network per app (`${APP_NETWORK_NAME:
 
 ## Error tracking (optional, Sentry protocol)
 
-The tracker is a self-hosted, Sentry-protocol endpoint (events only; it has no `sentry-cli` API, so nothing is uploaded at build time: no source maps, no releases, no auth token). Every variable is optional; an empty DSN turns reporting off.
+The tracker speaks the Sentry protocol. Every runtime variable is optional; an empty DSN turns reporting off.
+
+Source maps (CF-227) are uploaded only by the `publish-images` CI job on `main`, and only when the repository has the `SENTRY_AUTH_TOKEN` Actions secret plus the `SENTRY_ORG` and `SENTRY_PROJECT` Actions variables. The frontend image build then injects debug IDs into the server and browser chunks and uploads the maps. The token reaches only the `pnpm build` step, as a BuildKit secret (never a build arg, env var or image layer), and `.next/static` maps are deleted before the runtime stage, so none are served. Local, PR and Dokploy builds have no token: no upload, no release, nothing sent at build time. A failed upload is logged and does not fail the build.
 
 | Env (Dokploy / `.env.server`) | Passed as | Read by |
 |---|---|---|

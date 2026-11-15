@@ -121,7 +121,9 @@ export function LoginForm() {
       : oauthError === "Configuration" ||
           oauthError === "AccessDenied" ||
           oauthError === "AdapterError" ||
-          oauthError === "CallbackRouteError"
+          oauthError === "CallbackRouteError" ||
+          oauthError === "OAuthCallbackError" ||
+          oauthError === "InvalidProvider"
         ? t("auth.oauth.sign_in_error")
         : null;
   const displayError = formError ?? oauthFormError;

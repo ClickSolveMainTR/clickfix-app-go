@@ -161,17 +161,36 @@ const nextConfig: NextConfig = {
 };
 
 /**
- * The error tracker is a self-hosted Sentry-protocol endpoint without the
- * sentry-cli API, so nothing is uploaded at build time: no source maps, no
- * release creation, no telemetry. The build needs no Sentry env or token;
- * DSNs are read at runtime (SENTRY_DSN).
+ * Source maps for Sentry (CF-227). Uploaded only when the CI image build
+ * passes SENTRY_AUTH_TOKEN as a BuildKit secret (plus SENTRY_ORG and
+ * SENTRY_PROJECT as build args): debug IDs are injected into the server and
+ * browser chunks, the maps are uploaded, then deleted so none ship in the
+ * image or are served (the Dockerfile also deletes any browser map left in
+ * .next/static). Local and PR builds have no token and keep the old
+ * behaviour: no upload, no release, no telemetry. DSNs are read at runtime
+ * (SENTRY_DSN).
  */
+const sentryUpload = Boolean(
+  process.env.SENTRY_AUTH_TOKEN &&
+  process.env.SENTRY_ORG &&
+  process.env.SENTRY_PROJECT,
+);
+
 export default createMDX()(
   withSentryConfig(nextConfig, {
-    silent: true,
+    silent: !sentryUpload,
     telemetry: false,
-    authToken: undefined,
-    sourcemaps: { disable: true },
+    ...(sentryUpload
+      ? {
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          sourcemaps: { deleteSourcemapsAfterUpload: true },
+        }
+      : {
+          authToken: undefined,
+          sourcemaps: { disable: true },
+        }),
     release: { create: false, finalize: false },
   }),
 );
