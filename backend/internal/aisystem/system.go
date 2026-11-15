@@ -15,6 +15,7 @@ import (
 	kbrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/repository"
 	kbusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,6 +26,8 @@ type System struct {
 	Speech *aiusecase.MeteredTranscriber
 	// Memory is the CF-216 knowledge layer (units, answer cache, case memory).
 	Memory *memusecase.Service
+	// Reembed rebuilds stored vectors after an embedding model change (CF-214).
+	Reembed *vectorstore.Reembedder
 }
 
 func price(key string) int64 {
@@ -40,7 +43,8 @@ func price(key string) int64 {
 // No hard-coded live rates: operators must configure effective prices before execution.
 func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.Service, search config.SearchConfig) *System {
 	anthropic := ai.NewAnthropic(os.Getenv("ANTHROPIC_API_KEY"))
-	openai := ai.NewOpenAI(os.Getenv("OPENAI_API_KEY"), os.Getenv("OPENAI_BASE_URL"), os.Getenv("AI_EMBEDDING_MODEL"))
+	// One embedding model for every vector (CF-214); empty = ai.DefaultEmbeddingModel.
+	openai := ai.NewOpenAI(os.Getenv("OPENAI_API_KEY"), os.Getenv("OPENAI_BASE_URL"), ai.EmbeddingModel(strings.TrimSpace(os.Getenv("AI_EMBEDDING_MODEL"))))
 	routes := map[string]ai.Route{}
 	for _, task := range []string{"triage", "reply", "complex"} {
 		prefix := "AI_" + strings.ToUpper(task)
@@ -72,8 +76,10 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 	aiStore := airepo.New(billing, ent)
 	kb := kbusecase.New(kbrepo.New(pool))
 	rag := &kbusecase.RAG{KB: kb}
+	reembed := &vectorstore.Reembedder{Pool: pool, Sources: []vectorstore.Source{kbusecase.ChunkSource}, Skip: func(err error) bool { return kbusecase.SkipReason(err) != "" }}
 	if openai.Key != "" && openai.Model() != "" {
 		rag.Embedder = &aiusecase.MeteredEmbedder{Raw: openai, Repo: aiStore, InputPrice: price("AI_EMBEDDING_INPUT_PRICE_MICROS")}
+		reembed.Embedder = rag.Embedder
 	}
 	if meili := kbusecase.NewMeili(search); meili != nil {
 		rag.Lexical = meili
@@ -83,5 +89,5 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 		speech.Raw = nil
 	}
 	core := &aiusecase.Service{Repo: aiStore, Routes: routes, RAG: rag}
-	return &System{Speech: speech, KB: kb, RAG: rag, AI: core, Memory: memusecase.New(pool, core, rag.Embedder)}
+	return &System{Reembed: reembed, Speech: speech, KB: kb, RAG: rag, AI: core, Memory: memusecase.New(pool, core, rag.Embedder)}
 }

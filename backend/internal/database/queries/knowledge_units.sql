@@ -30,7 +30,7 @@ INSERT INTO knowledge_unit_questions(organization_id,unit_id,ordinal,content,emb
 -- brand/department. The caller prefers the most specific match.
 SELECT u.id,u.uuid,u.question,u.answer,u.category,u.visibility,u.brand_id,u.department_id,
  a.uuid AS article_uuid,
- max(ai_cosine(q.embedding,sqlc.arg(embedding)::real[]))::double precision AS score
+ max((1-(q.embedding <=> sqlc.arg(embedding)::vector)))::double precision AS score
 FROM knowledge_unit_questions q
 JOIN knowledge_units u ON u.organization_id=q.organization_id AND u.id=q.unit_id
 LEFT JOIN knowledge_articles a ON a.organization_id=u.organization_id AND a.id=u.article_id
@@ -110,7 +110,7 @@ SELECT count(*) FROM ai_case_memories WHERE organization_id=$1 AND (sqlc.narg(st
 SELECT m.uuid,m.conversation_id,m.problem,m.resolution,m.category,m.status,c.uuid AS conversation_uuid,
  coalesce(ct.name,'')::text AS contact_name,coalesce(ct.email,'')::text AS contact_email,coalesce(ct.phone,'')::text AS contact_phone,
  coalesce(co.name,'')::text AS company_name,coalesce(co.domain,'')::text AS company_domain,
- ai_cosine(m.embedding,sqlc.arg(embedding)::real[])::double precision AS score
+ (1-(m.embedding <=> sqlc.arg(embedding)::vector))::double precision AS score
 FROM ai_case_memories m
 JOIN conversations c ON c.organization_id=m.organization_id AND c.id=m.conversation_id
 LEFT JOIN contacts ct ON ct.organization_id=c.organization_id AND ct.id=c.contact_id

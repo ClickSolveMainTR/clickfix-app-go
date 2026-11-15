@@ -5,6 +5,7 @@ import { Hash, Mail, Phone } from "lucide-react";
 
 import { CustomerFieldsPanel } from "@/features/contacts/components/customer-fields";
 import { IdentityBadge } from "@/features/contacts/components/identity-badge";
+import { ConversationDepartmentPanel } from "@/features/departments";
 import { ConversationIssuesPanel } from "@/features/engineering";
 import { ConversationToTopic } from "@/features/forum/components/conversation-to-topic";
 import { ConversationFormPanel } from "@/features/request-forms/components/conversation-form-panel";
@@ -148,6 +149,7 @@ export function ContextPanel({
         conversationUuid={c.uuid}
         channelType={c.channel_type}
       />
+      <ConversationDepartmentPanel conversationUuid={c.uuid} />
       <SlaPanel conversation={c} />
       <ConversationLinksPanel conversation={c} onOpen={onOpen} />
       <ConversationIssuesPanel conversationUuid={c.uuid} />

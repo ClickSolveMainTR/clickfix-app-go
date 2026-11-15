@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -336,7 +337,7 @@ const caseMemoryMatch = `-- name: CaseMemoryMatch :many
 SELECT m.uuid,m.conversation_id,m.problem,m.resolution,m.category,m.status,c.uuid AS conversation_uuid,
  coalesce(ct.name,'')::text AS contact_name,coalesce(ct.email,'')::text AS contact_email,coalesce(ct.phone,'')::text AS contact_phone,
  coalesce(co.name,'')::text AS company_name,coalesce(co.domain,'')::text AS company_domain,
- ai_cosine(m.embedding,$3::real[])::double precision AS score
+ (1-(m.embedding <=> $3::vector))::double precision AS score
 FROM ai_case_memories m
 JOIN conversations c ON c.organization_id=m.organization_id AND c.id=m.conversation_id
 LEFT JOIN contacts ct ON ct.organization_id=c.organization_id AND ct.id=c.contact_id
@@ -349,14 +350,14 @@ ORDER BY score DESC,m.id LIMIT 5
 `
 
 type CaseMemoryMatchParams struct {
-	OrganizationID        int64       `json:"organization_id"`
-	Locale                string      `json:"locale"`
-	Embedding             []float32   `json:"embedding"`
-	EmbeddingModel        string      `json:"embedding_model"`
-	ExcludeConversationID int64       `json:"exclude_conversation_id"`
-	ApprovedOnly          bool        `json:"approved_only"`
-	BrandID               pgtype.UUID `json:"brand_id"`
-	DepartmentID          pgtype.Int8 `json:"department_id"`
+	OrganizationID        int64              `json:"organization_id"`
+	Locale                string             `json:"locale"`
+	Embedding             vectorstore.Vector `json:"embedding"`
+	EmbeddingModel        string             `json:"embedding_model"`
+	ExcludeConversationID int64              `json:"exclude_conversation_id"`
+	ApprovedOnly          bool               `json:"approved_only"`
+	BrandID               pgtype.UUID        `json:"brand_id"`
+	DepartmentID          pgtype.Int8        `json:"department_id"`
 }
 
 type CaseMemoryMatchRow struct {
@@ -508,17 +509,17 @@ ON CONFLICT(organization_id,conversation_id) DO UPDATE SET brand_id=excluded.bra
 `
 
 type CaseMemoryUpsertParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	ConversationID int64       `json:"conversation_id"`
-	BrandID        pgtype.UUID `json:"brand_id"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
-	Locale         string      `json:"locale"`
-	Category       string      `json:"category"`
-	Problem        string      `json:"problem"`
-	Resolution     string      `json:"resolution"`
-	Anonymized     bool        `json:"anonymized"`
-	Embedding      []float32   `json:"embedding"`
-	EmbeddingModel string      `json:"embedding_model"`
+	OrganizationID int64              `json:"organization_id"`
+	ConversationID int64              `json:"conversation_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Locale         string             `json:"locale"`
+	Category       string             `json:"category"`
+	Problem        string             `json:"problem"`
+	Resolution     string             `json:"resolution"`
+	Anonymized     bool               `json:"anonymized"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
 }
 
 // A re-summarized conversation goes back to pending review.
@@ -853,11 +854,11 @@ INSERT INTO knowledge_unit_questions(organization_id,unit_id,ordinal,content,emb
 `
 
 type KnowledgeUnitInsertQuestionParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	UnitID         int64     `json:"unit_id"`
-	Ordinal        int32     `json:"ordinal"`
-	Content        string    `json:"content"`
-	Embedding      []float32 `json:"embedding"`
+	OrganizationID int64              `json:"organization_id"`
+	UnitID         int64              `json:"unit_id"`
+	Ordinal        int32              `json:"ordinal"`
+	Content        string             `json:"content"`
+	Embedding      vectorstore.Vector `json:"embedding"`
 }
 
 func (q *Queries) KnowledgeUnitInsertQuestion(ctx context.Context, arg KnowledgeUnitInsertQuestionParams) error {
@@ -939,7 +940,7 @@ func (q *Queries) KnowledgeUnitList(ctx context.Context, arg KnowledgeUnitListPa
 const knowledgeUnitMatch = `-- name: KnowledgeUnitMatch :many
 SELECT u.id,u.uuid,u.question,u.answer,u.category,u.visibility,u.brand_id,u.department_id,
  a.uuid AS article_uuid,
- max(ai_cosine(q.embedding,$3::real[]))::double precision AS score
+ max((1-(q.embedding <=> $3::vector)))::double precision AS score
 FROM knowledge_unit_questions q
 JOIN knowledge_units u ON u.organization_id=q.organization_id AND u.id=q.unit_id
 LEFT JOIN knowledge_articles a ON a.organization_id=u.organization_id AND a.id=u.article_id
@@ -952,13 +953,13 @@ ORDER BY score DESC,u.id LIMIT 10
 `
 
 type KnowledgeUnitMatchParams struct {
-	OrganizationID int64       `json:"organization_id"`
-	Locale         string      `json:"locale"`
-	Embedding      []float32   `json:"embedding"`
-	EmbeddingModel string      `json:"embedding_model"`
-	PublicOnly     bool        `json:"public_only"`
-	BrandID        pgtype.UUID `json:"brand_id"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
+	OrganizationID int64              `json:"organization_id"`
+	Locale         string             `json:"locale"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	PublicOnly     bool               `json:"public_only"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeUnitMatchRow struct {

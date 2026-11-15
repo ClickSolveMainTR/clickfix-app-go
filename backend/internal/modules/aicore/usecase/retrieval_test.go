@@ -6,11 +6,12 @@ import (
 	"time"
 
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 )
 
 type blockingRetrieval struct{ started, release chan struct{} }
 
-func (r *blockingRetrieval) Search(ctx context.Context, _ int64, _ string, _ string, publicOnly bool) ([]kbmodel.Citation, error) {
+func (r *blockingRetrieval) SearchScoped(ctx context.Context, _ vectorstore.Scope, _ string, _ string, publicOnly bool) ([]kbmodel.Citation, error) {
 	if !publicOnly {
 		panic("prefetch must be public only")
 	}
@@ -31,7 +32,7 @@ func TestPrefetchReplyCanOverlapTriageAndJoinCancellation(t *testing.T) {
 	r := &blockingRetrieval{started: make(chan struct{}), release: make(chan struct{})}
 	svc.RAG = r
 	ctx, cancel := context.WithCancel(context.Background())
-	result := svc.PrefetchReply(ctx, org, "Siparişim gelmedi", "tr")
+	result := svc.PrefetchReply(ctx, vectorstore.Organization(org), "Siparişim gelmedi", "tr")
 	if result == nil {
 		t.Fatal("prefetch not started")
 	}
@@ -60,7 +61,7 @@ func TestPrefetchReplyRespectsSingleCallPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc.RAG = &blockingRetrieval{}
-	if result := svc.PrefetchReply(context.Background(), org, "help", "tr"); result != nil {
+	if result := svc.PrefetchReply(context.Background(), vectorstore.Organization(org), "help", "tr"); result != nil {
 		t.Fatal("concurrency=1 must keep sequential retrieval")
 	}
 }

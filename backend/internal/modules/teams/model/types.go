@@ -4,7 +4,9 @@ package model
 import (
 	"time"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Resource is the activity / meta slug of teams.
@@ -63,8 +65,18 @@ type Team struct {
 	MemberCount  int64         `json:"member_count"`
 	Leads        []MemberUser  `json:"leads"`
 	Members      []TeamMember  `json:"members,omitempty"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
+	// Department is the business unit the team belongs to (CF-215).
+	Department   *DepartmentRef `json:"department"`
+	DepartmentID pgtype.Int8    `json:"-"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
+// DepartmentRef is the department of a team (CF-215).
+type DepartmentRef struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
 }
 
 // TeamInput creates or patches a team. On patch nil fields keep their
@@ -81,6 +93,9 @@ type TeamInput struct {
 	Skills       []string `json:"skills"`
 	// Members replaces the member list on create (optional).
 	Members []MemberInput `json:"members"`
+	// Department moves the team into a department (CF-215); null takes it
+	// out, omitted keeps it.
+	Department deptscope.Optional `json:"department_uuid"`
 }
 
 // MemberInput adds a member or changes its team role.

@@ -348,6 +348,8 @@ type sendBody struct {
 	Intent     string         `json:"intent"`
 	Attributes map[string]any `json:"attributes"`
 	Phone      string         `json:"phone"`
+	// DepartmentUUID is the visitor's department pick (CF-215).
+	DepartmentUUID *uuid.UUID `json:"department_uuid"`
 }
 
 // readSend reads a JSON or multipart (text + one "file") message.
@@ -389,6 +391,14 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 			}
 			in.ClientID = id
 		}
+		if v := r.FormValue("department_uuid"); v != "" {
+			id, err := uuid.Parse(v)
+			if err != nil {
+				response.BadRequest(w, r, response.CodeValidationError, "department_uuid must be a uuid")
+				return in, false
+			}
+			in.DepartmentUUID = &id
+		}
 		if f, hdr, err := r.FormFile("file"); err == nil {
 			defer func() { _ = f.Close() }()
 			data, err := io.ReadAll(io.LimitReader(f, usecase.MaxUploadBytes+1))
@@ -422,6 +432,7 @@ func (h *Handler) readSend(w http.ResponseWriter, r *http.Request) (usecase.Send
 		in.ClientID = *body.ClientID
 	}
 	in.Form = body.Form
+	in.DepartmentUUID = body.DepartmentUUID
 	return in, true
 }
 

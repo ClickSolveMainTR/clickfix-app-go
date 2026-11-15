@@ -230,7 +230,7 @@ x-backend-environment: &backend-environment
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     container_name: ${NAME_PREFIX:?NAME_PREFIX is required}-postgres
     restart: unless-stopped
     environment:

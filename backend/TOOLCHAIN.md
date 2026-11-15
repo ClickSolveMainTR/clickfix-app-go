@@ -66,6 +66,6 @@ Infra is started from the **repo root**: `make infra` / `make local-dev`.
 
 - Migrations: **golang-migrate** only; create with **`-seq`** via `make migrate-create`.
 - SQL access: **sqlc** + pgx — see [`DATABASE_RULES.md`](DATABASE_RULES.md).
-- Postgres image is **`postgres:18-alpine`**. `000001` enables `pgcrypto`.
+- Postgres image is **`pgvector/pgvector:0.8.7-pg18-trixie`** (PostgreSQL 18 + pgvector, CF-214). `000001` enables `pgcrypto`, `000225` enables `vector`.
 - Queue: in-process by default (`QUEUE_WORKER_INPROCESS=true`) or `make worker`.
 - Storage: SeaweedFS via Compose (`STORAGE_DRIVER=s3`).

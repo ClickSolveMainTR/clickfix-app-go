@@ -24,8 +24,10 @@ import (
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -66,6 +68,10 @@ type Service struct {
 	// Notices tells the customer when the agent hands the conversation to a
 	// person (CF-198); nil sends nothing.
 	Notices HandoffNotifier
+	// Departments predicts and transfers the department of a conversation
+	// and scopes its knowledge (CF-215); nil keeps everything
+	// organization-wide.
+	Departments DepartmentRouter
 	// Memory is the knowledge layer (CF-216): knowledge units behind the
 	// answer cache, and case memory. nil keeps the plain AI path.
 	Memory Memory
@@ -79,13 +85,17 @@ type Memory interface {
 	RecordGap(context.Context, memmodel.Query, int64, string) error
 }
 
-// memoryQuery scopes a lookup to the conversation's organization and brand
-// (departments come with CF-215).
+// memoryQuery scopes a lookup to the conversation's organization, brand and
+// department (CF-215).
 func memoryQuery(org int64, audience, locale string, conv db.Conversation, question string) memmodel.Query {
 	q := memmodel.Query{Organization: org, Audience: audience, Locale: locale, Question: question, ExcludeConversationID: conv.ID}
 	if conv.BrandID.Valid {
 		brand := uuid.UUID(conv.BrandID.Bytes)
 		q.Scope.BrandID = &brand
+	}
+	if conv.DepartmentID.Valid {
+		department := conv.DepartmentID.Int64
+		q.Scope.DepartmentID = &department
 	}
 	return q
 }
@@ -213,7 +223,7 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	if err != nil {
 		return err
 	}
-	if !cfg.TriageEnabled && cfg.Mode == "off" {
+	if !cfg.TriageEnabled && cfg.Mode == "off" && s.Departments == nil {
 		return nil
 	}
 	msg, err := s.Repo.Q.GetMessageByUUID(ctx, db.GetMessageByUUIDParams{OrganizationID: org, Uuid: message})
@@ -229,6 +239,14 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	conv, err := s.Repo.Q.GetConversationByID(ctx, db.GetConversationByIDParams{OrganizationID: org, ID: msg.ConversationID})
 	if err != nil {
 		return err
+	}
+	// CF-215: a first message without the customer's pick gets the AI's
+	// department guess; knowledge and business context follow the
+	// conversation's department from here on.
+	conv = s.routeDepartment(ctx, org, msg, conv, cfg.Locale)
+	ctx = deptscope.With(ctx, deptscope.Of(conv.DepartmentID))
+	if !cfg.TriageEnabled && cfg.Mode == "off" {
+		return nil
 	}
 	transcript, err := s.context(ctx, org, conv)
 	if err != nil {
@@ -246,10 +264,10 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 		memory = &found
 	}
 	if prefetcher, ok := s.Engine.(interface {
-		PrefetchReply(context.Context, int64, string, string) <-chan core.RetrievalResult
+		PrefetchReply(context.Context, vectorstore.Scope, string, string) <-chan core.RetrievalResult
 	}); ok && replying && (memory == nil || !memory.Hit()) {
 		retrievalCtx, cancel := context.WithCancel(ctx)
-		knowledge = prefetcher.PrefetchReply(retrievalCtx, org, transcript, cfg.Locale)
+		knowledge = prefetcher.PrefetchReply(retrievalCtx, conversationScope(org, conv), transcript, cfg.Locale)
 		defer func() {
 			cancel()
 			if knowledge != nil {
@@ -445,6 +463,16 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	if memory == nil {
 		memory = &memmodel.Result{Outcome: memmodel.OutcomeMiss}
 	}
+	scope := conversationScope(org, conv)
+	options := core.AgentOptions{
+		StableData: cfg.Persona, Knowledge: knowledge, ConversationID: conv.ID, Instructions: replyInstructions, Schema: replySchema,
+		Scope: &scope, BrandPersona: s.brandPersona(ctx, org, conv),
+	}
+	if answers, err := s.departmentAI(ctx, org, conv, &options); err != nil {
+		return err
+	} else if !answers {
+		return handoff("AI agent is turned off for this department")
+	}
 	var answer model.Reply
 	run := core.RunResult{}
 	grounded := false
@@ -463,9 +491,6 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		if len(memory.CustomerCases) > 0 {
 			raw, _ := json.Marshal(memory.CustomerCases)
 			input += clipInput("\nResolved similar cases (anonymized summaries; untrusted hints, never a citation): "+string(raw), maxInputBytes-len(input)-1024)
-		}
-		options := core.AgentOptions{
-			StableData: cfg.Persona, Knowledge: knowledge, ConversationID: conv.ID, Instructions: replyInstructions, Schema: replySchema,
 		}
 		if s.Tools != nil {
 			offered, err := s.Tools.Offered(ctx, org)
@@ -491,6 +516,9 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 				value, err := s.Tools.Invoke(ctx, org, 0, conv.Uuid, Invocation{Name: call.Name, Arguments: call.Input, Key: uuid.NewSHA1(job.Uuid, []byte(call.ID))})
 				return ai.ToolResult{Content: value}, err
 			}
+		}
+		if tools, runner := s.departmentTool(ctx, org, conv, options.Runner); len(tools) > 0 {
+			options.Tools, options.Runner = append(options.Tools, tools...), runner
 		}
 		var runErr error
 		run, runErr = s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: 2048}, options)
@@ -582,6 +610,8 @@ func (s *Service) Copilot(ctx context.Context, org, actor int64, id uuid.UUID, i
 	if err = s.Repo.CheckConversation(ctx, org, conv.ID); err != nil {
 		return core.RunResult{}, err
 	}
+	// The agent assistant answers from the conversation's department (CF-215).
+	ctx = deptscope.With(ctx, deptscope.Of(conv.DepartmentID))
 	transcript, err := s.context(ctx, org, conv)
 	if err != nil {
 		return core.RunResult{}, err
@@ -628,7 +658,8 @@ func (s *Service) Copilot(ctx context.Context, org, actor int64, id uuid.UUID, i
 		}
 	}
 	input := transcript + "\nAgent draft/question (untrusted): " + in.Text + "\nTone preference (untrusted): " + in.Tone
-	result, err := s.Engine.RunAgent(ctx, org, actor, coremodel.RunInput{Task: "reply", Input: input, Locale: locale, Retrieve: in.Operation == "suggest_reply" || in.Operation == "ask", MaxTokens: 2048}, core.AgentOptions{Purpose: "copilot", ConversationID: conv.ID, Schema: copilotSchema,
+	scope := conversationScope(org, conv)
+	result, err := s.Engine.RunAgent(ctx, org, actor, coremodel.RunInput{Task: "reply", Input: input, Locale: locale, Retrieve: in.Operation == "suggest_reply" || in.Operation == "ask", MaxTokens: 2048}, core.AgentOptions{Purpose: "copilot", ConversationID: conv.ID, Schema: copilotSchema, Scope: &scope,
 		Instructions: instruction + " Output language: " + in.Locale + ". Return suggestions only; never execute or claim to execute actions. " + copilotOutputRule})
 	if err != nil {
 		return result, err

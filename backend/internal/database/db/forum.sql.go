@@ -176,7 +176,7 @@ const forumCreateConversation = `-- name: ForumCreateConversation :one
 INSERT INTO conversations(organization_id,number,channel_type,channel_instance_id,contact_id,subject,source,assignee_user_id,last_message_preview,message_count)
 SELECT p.organization_id,$3::bigint,i.channel_type,i.id,p.contact_id,p.title,'inbound',$4::bigint,left(p.body,500),1
 FROM forum_posts p JOIN channel_instances i ON i.organization_id=p.organization_id AND i.uuid=$5::uuid AND i.status='active' AND i.deleted_at IS NULL
-WHERE p.organization_id=$1 AND p.id=$2 AND p.topic_id IS NULL RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+WHERE p.organization_id=$1 AND p.id=$2 AND p.topic_id IS NULL RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type ForumCreateConversationParams struct {
@@ -238,6 +238,10 @@ func (q *Queries) ForumCreateConversation(ctx context.Context, arg ForumCreateCo
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }

@@ -110,5 +110,8 @@
   "audience.targeted": "The widget suggests the article only to contacts that match every condition. Saving applies at once.",
   "audience.save": "Save targeting",
   "audience.saved": "Targeting saved.",
-  "audience.failed": "Targeting could not be saved."
+  "audience.failed": "Targeting could not be saved.",
+  "fields.department": "Department",
+  "department_organization_wide": "Organization-wide",
+  "department_hint": "A department's article is seen by that department (and departments it is shared with); organization-wide articles apply everywhere."
 }

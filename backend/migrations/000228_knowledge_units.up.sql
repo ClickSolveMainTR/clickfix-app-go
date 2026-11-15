@@ -1,6 +1,6 @@
 -- CF-216: knowledge units, answer cache, case memory and unanswered questions.
--- Vectors use the portable REAL[] + ai_cosine helper from 000060 so the stock
--- postgres image keeps working; CF-214 moves every vector column to pgvector.
+-- Vectors are pgvector vector(1536) (CF-214), compared with cosine distance
+-- (<=>).
 -- department_id has no foreign key until departments land (CF-215); NULL means
 -- organization wide. brand_id NULL also means organization wide.
 
@@ -41,7 +41,7 @@ CREATE TABLE knowledge_unit_questions (
  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
  unit_id BIGINT NOT NULL, ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 0 AND 8),
  content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 500),
- embedding REAL[] NOT NULL CHECK(cardinality(embedding)>0),
+ embedding vector(1536) NOT NULL,
  FOREIGN KEY(organization_id,unit_id) REFERENCES knowledge_units(organization_id,id) ON DELETE CASCADE,
  UNIQUE(organization_id,unit_id,ordinal)
 );
@@ -88,7 +88,7 @@ CREATE TABLE ai_case_memories (
  resolution TEXT NOT NULL CHECK(length(resolution) BETWEEN 1 AND 2000),
  anonymized BOOLEAN NOT NULL DEFAULT false,
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
- embedding REAL[] NOT NULL CHECK(cardinality(embedding)>0),
+ embedding vector(1536) NOT NULL,
  embedding_model TEXT NOT NULL CHECK(length(embedding_model) BETWEEN 1 AND 200),
  reviewed_by BIGINT REFERENCES users(id), reviewed_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

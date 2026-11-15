@@ -18,6 +18,7 @@ import (
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 )
 
 // sequenceAI answers each call with the next response and records inputs.
@@ -44,7 +45,7 @@ func (f *sequenceAI) Stream(ctx context.Context, req ai.Request, _ ai.Delta) (ai
 
 type noSources struct{}
 
-func (noSources) Search(context.Context, int64, string, string, bool) ([]kbmodel.Citation, error) {
+func (noSources) SearchScoped(context.Context, vectorstore.Scope, string, string, bool) ([]kbmodel.Citation, error) {
 	return nil, nil
 }
 

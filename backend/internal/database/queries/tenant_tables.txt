@@ -16,6 +16,10 @@ onboarding_setup_runs
 onboarding_setup_items
 teams
 team_members
+# Departments (CF-215)
+departments
+department_knowledge_shares
+conversation_department_transfers
 support_access_grants
 agent_presence
 attachments
@@ -316,3 +320,9 @@ ai_case_memories
 knowledge_gap_questions
 knowledge_unit_questions
 knowledge_units
+
+# Categories (CF-218)
+categories
+category_examples
+category_assignments
+category_labels

@@ -183,5 +183,14 @@
   "labels.platform.product_feedback.read": "Read product feedback",
   "groups.tenant_assistant": "ClickFix assistant",
   "labels.tenant.widgets.publish": "Publish web widget settings",
-  "groups.tenant_widgets": "Web widget"
+  "groups.tenant_widgets": "Web widget",
+  "labels.tenant.categories.read": "View categories",
+  "labels.tenant.categories.manage": "Manage the category tree",
+  "labels.tenant.categories.label": "Confirm or correct record categories",
+  "labels.tenant.categories.export": "Export category labels",
+  "groups.tenant_categories": "Categories",
+  "labels.tenant.departments.read": "View departments",
+  "labels.tenant.departments.write": "Manage departments",
+  "labels.tenant.departments.read_all": "See every department's knowledge",
+  "groups.tenant_departments": "Departments"
 }
