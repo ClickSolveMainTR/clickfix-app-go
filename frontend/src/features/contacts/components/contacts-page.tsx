@@ -7,7 +7,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Building2,
+  Eye,
   GitMerge,
+  Maximize2,
   Plus,
   ShieldCheck,
   Trash2,
@@ -217,8 +219,35 @@ export function ContactsPage() {
               ? shortAgo(row.original.last_seen_at, locale)
               : "—",
         }),
+        // CF-221: the row opens the contact page; this keeps the side sheet
+        // as a quick look.
+        createColumn<Contact>({
+          id: "quick_look",
+          labelKey: "contacts.profile.quick_look",
+          enableSorting: false,
+          enableHiding: false,
+          meta: { headerClassName: "w-10", cellClassName: "w-10 text-right" },
+          header: () => (
+            <span className="sr-only">{t("contacts.profile.quick_look")}</span>
+          ),
+          cell: ({ row }) => (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              aria-label={t("contacts.profile.quick_look")}
+              title={t("contacts.profile.quick_look")}
+              onClick={(e) => {
+                e.stopPropagation();
+                select(row.original.uuid);
+              }}
+            >
+              <Eye className="size-4" />
+            </Button>
+          ),
+        }),
       ] as ColumnDef<Contact, unknown>[],
-    [locale, t],
+    [locale, t, select],
   );
 
   if (!scope.canRead) {
@@ -254,7 +283,7 @@ export function ContactsPage() {
         columns={columns}
         data={list.data?.items ?? []}
         getRowId={(row) => row.uuid}
-        onRowClick={(row) => select(row.uuid)}
+        onRowClick={(row) => router.push(routes.cms.contacts.detail(row.uuid))}
         isLoading={list.isLoading}
         isError={list.isError}
         onRetry={() => void list.refetch()}
@@ -277,7 +306,7 @@ export function ContactsPage() {
       <CreateContactDialog
         open={creating}
         onOpenChange={setCreating}
-        onCreated={(uuid) => select(uuid)}
+        onCreated={(uuid) => router.push(routes.cms.contacts.detail(uuid))}
       />
     </div>
   );
@@ -304,6 +333,14 @@ function ContactSheet({
           <SheetDescription>
             {t("contacts.detail_description")}
           </SheetDescription>
+          {uuid ? (
+            <Button size="sm" className="w-fit" asChild>
+              <Link href={routes.cms.contacts.detail(uuid)}>
+                <Maximize2 className="size-4" />
+                {t("contacts.profile.open_full")}
+              </Link>
+            </Button>
+          ) : null}
           {uuid && can(permissions.tenant.settings.write) ? (
             <Button variant="outline" size="sm" className="w-fit" asChild>
               <Link
@@ -334,7 +371,7 @@ function ContactSheet({
   );
 }
 
-function ContactForm({
+export function ContactForm({
   contact,
   onDeleted,
 }: {
@@ -575,7 +612,7 @@ function CompanyPicker({
   );
 }
 
-function MergeDialog({
+export function MergeDialog({
   open,
   onOpenChange,
   into,

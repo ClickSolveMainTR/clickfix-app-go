@@ -26495,6 +26495,155 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/contacts/{uuid}/overview:
+    get:
+      tags: [Tenant]
+      operationId: getTenantContactOverview
+      summary: Contact page (CF-221)
+      description: "Everything the contact page shows above its timeline, in a fixed number of queries: the contact with identities and custom fields, its company (owner, health, revenue), health stats (open conversations, last contact, CSAT, SLA), conversations with tags, files, appointments, consents and KVKK requests, roadmap feedback, forum posts, status notices and the cached AI summary. Requires `tenant.contacts.read`; each section is filtered by the member's permissions (`sections` says which ones are visible, hidden ones are empty): conversations, tags, files and status notices need `tenant.conversations.read` and follow the inbox team visibility rule (without `tenant.conversations.read_all` only the member's teams, assignments, unrouted and joined conversations); NPS / CES need `tenant.conversations.read_all`; appointments `tenant.appointments.read`; consents and KVKK requests `tenant.settings.write`; feedback and forum `tenant.feedback.read` (pending forum posts `tenant.feedback.manage`); the AI summary `tenant.ai.use`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContactOverview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/contacts/{uuid}/timeline:
+    get:
+      tags: [Tenant]
+      operationId: getTenantContactTimeline
+      summary: Unified contact timeline (CF-221)
+      description: "Newest first, one stream over conversations opened and resolved, CSAT and NPS / CES answers, notes, appointments, consent changes, KVKK requests, in-product events, roadmap votes and comments, forum posts, status notices and system events (contact created, channel identity added, edited, merged). Kinds the member may not see (same rules as the overview sections) are dropped; `timeline_kinds` of the overview lists the visible ones. Page backwards with `before` = the previous page's `next_before`. Requires `tenant.contacts.read`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: kinds
+          in: query
+          description: Comma-separated kinds to include (default every visible kind).
+          schema: { type: string, example: "note,csat" }
+        - name: q
+          in: query
+          description: Case-insensitive literal search in title, body and actor.
+          schema: { type: string, maxLength: 200 }
+        - name: from
+          in: query
+          description: Only items at or after this time (RFC 3339).
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Only items before this time (RFC 3339).
+          schema: { type: string, format: date-time }
+        - name: before
+          in: query
+          description: Opaque cursor; the previous page's `next_before`.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContactTimeline" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/contacts/{uuid}/notes:
+    post:
+      tags: [Tenant]
+      operationId: postTenantContactNote
+      summary: Add a note to a contact (CF-221)
+      description: "Requires `tenant.contacts.write`. Notes follow the contact on merge, are part of the KVKK export and are deleted on erase."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [body]
+              properties:
+                body: { type: string, minLength: 1, maxLength: 10000 }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContactNote" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/contact-notes/{uuid}:
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantContactNote
+      summary: Delete a contact note (CF-221)
+      description: "Requires `tenant.contacts.write`; only the author may delete unless the member also holds `tenant.contacts.delete`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/contacts/{uuid}/ai-summary:
+    post:
+      tags: [Tenant]
+      operationId: postTenantContactAISummary
+      summary: Generate the AI summary of a contact (CF-221)
+      description: "Requires `tenant.contacts.read` and `tenant.ai.use`. Runs through the AI engine (policy, plan, credits, PII masking and guard apply; billed like other AI runs) over what the member may see: visible conversations (latest public messages) and notes. The result is cached and returned by the overview as `ai_summary`; members who see every conversation share one summary, a member limited by team visibility gets their own."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - name: locale
+          in: query
+          schema: { type: string, enum: [tr, en], default: tr }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeContactAISummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { description: "Missing permission, AI turned off (`AI_DISABLED`) or not in the plan (`AI_NOT_ENTITLED`).", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: "The AI guard rejected the input or output (`AI_GUARD_REJECTED`).", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { description: "The AI provider did not return a usable answer (`AI_PROVIDER_UNAVAILABLE`).", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/contacts/export:
     get:
       tags: [Tenant]
@@ -56551,6 +56700,247 @@ components:
         body: { type: string }
         author: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
         created_at: { type: string, format: date-time }
+
+    ContactProfileSections:
+      type: object
+      description: "Which sections the member may see (CF-221); a hidden section is returned empty."
+      required: [conversations, surveys, appointments, compliance, feedback, ai]
+      properties:
+        conversations: { type: boolean }
+        surveys: { type: boolean }
+        appointments: { type: boolean }
+        compliance: { type: boolean }
+        feedback: { type: boolean }
+        ai: { type: boolean }
+
+    ContactProfileStats:
+      type: object
+      description: "Counts over the conversations the member may see; csat_* over the last 90 days (csat_total all time); nps_latest / ces_latest the latest answer."
+      required: [open_conversations, closed_conversations, sla_breached, sla_at_risk, message_count, first_conversation_at, last_conversation_at, last_inbound_at, csat_average, csat_count, csat_total, nps_latest, ces_latest, attachment_count, note_count]
+      properties:
+        open_conversations: { type: integer, format: int64 }
+        closed_conversations: { type: integer, format: int64 }
+        sla_breached: { type: integer, format: int64, description: "Open conversations past an SLA target." }
+        sla_at_risk: { type: integer, format: int64, description: "Open, not breached, a target falls due within an hour." }
+        message_count: { type: integer, format: int64 }
+        first_conversation_at: { type: [string, "null"], format: date-time }
+        last_conversation_at: { type: [string, "null"], format: date-time }
+        last_inbound_at: { type: [string, "null"], format: date-time }
+        csat_average: { type: [number, "null"] }
+        csat_count: { type: integer, format: int64 }
+        csat_total: { type: integer, format: int64 }
+        nps_latest: { type: [integer, "null"], minimum: 0, maximum: 10 }
+        ces_latest: { type: [integer, "null"], minimum: 1, maximum: 7 }
+        attachment_count: { type: integer, format: int64 }
+        note_count: { type: integer, format: int64 }
+
+    ContactProfileConversation:
+      type: object
+      required: [uuid, number, subject, status, channel_type, priority, last_message_at, last_message_preview, created_at, message_count, sla_breached_at, sla_due_at, assignee, team, tags]
+      properties:
+        uuid: { type: string, format: uuid }
+        number: { type: integer, format: int64 }
+        subject: { type: string }
+        status: { type: string }
+        channel_type: { type: string }
+        priority: { type: string }
+        last_message_at: { type: string, format: date-time }
+        last_message_preview: { type: string }
+        created_at: { type: string, format: date-time }
+        message_count: { type: integer }
+        sla_breached_at: { type: [string, "null"], format: date-time }
+        sla_due_at: { type: [string, "null"], format: date-time, description: "Next SLA target (first response, next response or resolution)." }
+        assignee: { type: string, description: "Assigned teammate; empty when none." }
+        team: { type: string, description: "Assigned team; empty when none." }
+        tags: { type: array, items: { type: string } }
+
+    ContactProfileTag:
+      type: object
+      required: [uuid, name, color, conversations]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        conversations: { type: integer, format: int64 }
+
+    ContactProfileAttachment:
+      type: object
+      description: "A file of one of the contact's conversations; it opens from its conversation, which owns the download URL."
+      required: [uuid, filename, content_type, size_bytes, created_at, conversation_uuid, conversation_number]
+      properties:
+        uuid: { type: string, format: uuid }
+        filename: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        conversation_uuid: { type: string, format: uuid }
+        conversation_number: { type: integer, format: int64 }
+
+    ContactProfileAppointment:
+      type: object
+      required: [uuid, title, status, starts_at, ends_at, timezone, location_kind, type, host]
+      properties:
+        uuid: { type: string, format: uuid }
+        title: { type: string }
+        status: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        timezone: { type: string }
+        location_kind: { type: string }
+        type: { type: string, description: "Appointment type name." }
+        host: { type: string }
+
+    ContactProfileConsent:
+      type: object
+      description: "The latest decision for one purpose."
+      required: [uuid, purpose, granted, notice_version, source, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        purpose: { type: string }
+        granted: { type: boolean }
+        notice_version: { type: string }
+        source: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ContactProfilePrivacyRequest:
+      type: object
+      required: [uuid, kind, status, requested_by, created_at, completed_at, expires_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        kind: { type: string, enum: [export, erase] }
+        status: { type: string, enum: [pending, processing, completed] }
+        requested_by: { type: string }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+
+    ContactProfileFeedback:
+      type: object
+      required: [kind, request_uuid, title, status, body, created_at]
+      properties:
+        kind: { type: string, enum: [vote, comment] }
+        request_uuid: { type: string, format: uuid }
+        title: { type: string }
+        status: { type: string }
+        body: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ContactProfileForumPost:
+      type: object
+      required: [uuid, slug, title, excerpt, status, is_topic, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string }
+        status: { type: string, enum: [pending, published, rejected] }
+        is_topic: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    ContactProfileStatusNotice:
+      type: object
+      required: [uuid, title, severity, status, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        title: { type: string }
+        severity: { type: string }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+
+    ContactAISummary:
+      type: object
+      required: [summary, open_topics, sentiment, locale, generated_at, stale]
+      properties:
+        summary: { type: string }
+        open_topics: { type: array, items: { type: string } }
+        sentiment: { type: string, enum: [positive, neutral, negative, unknown] }
+        locale: { type: string, enum: [tr, en] }
+        generated_at: { type: string, format: date-time }
+        stale: { type: boolean, description: "New activity happened after the summary was generated." }
+
+    ContactTimelineKind:
+      type: string
+      enum: [conversation_opened, conversation_resolved, csat, survey, note, appointment, consent, privacy_request, event, feedback, forum, status_notice, system]
+
+    ContactOverview:
+      type: object
+      required: [contact, company, stats, conversations, tags, attachments, appointments, consents, privacy_requests, feedback, forum_posts, status_notices, ai_summary, sections, timeline_kinds]
+      properties:
+        contact: { $ref: "#/components/schemas/Contact" }
+        company: { oneOf: [{ $ref: "#/components/schemas/Company" }, { type: "null" }] }
+        stats: { $ref: "#/components/schemas/ContactProfileStats" }
+        conversations: { type: array, items: { $ref: "#/components/schemas/ContactProfileConversation" }, description: "Open ones first, then recent closed ones (up to 50)." }
+        tags: { type: array, items: { $ref: "#/components/schemas/ContactProfileTag" } }
+        attachments: { type: array, items: { $ref: "#/components/schemas/ContactProfileAttachment" } }
+        appointments: { type: array, items: { $ref: "#/components/schemas/ContactProfileAppointment" }, description: "Upcoming first (soonest), then past ones." }
+        consents: { type: array, items: { $ref: "#/components/schemas/ContactProfileConsent" } }
+        privacy_requests: { type: array, items: { $ref: "#/components/schemas/ContactProfilePrivacyRequest" } }
+        feedback: { type: array, items: { $ref: "#/components/schemas/ContactProfileFeedback" } }
+        forum_posts: { type: array, items: { $ref: "#/components/schemas/ContactProfileForumPost" } }
+        status_notices: { type: array, items: { $ref: "#/components/schemas/ContactProfileStatusNotice" } }
+        ai_summary: { oneOf: [{ $ref: "#/components/schemas/ContactAISummary" }, { type: "null" }] }
+        sections: { $ref: "#/components/schemas/ContactProfileSections" }
+        timeline_kinds: { type: array, items: { $ref: "#/components/schemas/ContactTimelineKind" }, description: "Timeline kinds the member may see." }
+
+    ContactTimelineItem:
+      type: object
+      required: [kind, ref, occurred_at, title, body, actor, data]
+      properties:
+        kind: { $ref: "#/components/schemas/ContactTimelineKind" }
+        ref: { type: [string, "null"], format: uuid, description: "Conversation, rating, survey answer, note, appointment, consent, request, event, feature request, forum post or incident uuid; null for system events." }
+        occurred_at: { type: string, format: date-time }
+        title: { type: string, description: "Conversation subject, survey question, appointment title, consent purpose, request kind, event name, feature request or forum topic title, incident title, or the system action (contact.created, identity.added, contacts.updated, contacts.merged)." }
+        body: { type: string, description: "Note text, rating / survey comment, appointment notes, feedback comment or forum excerpt." }
+        actor: { type: string, description: "Teammate name; empty when unknown." }
+        data: { type: object, additionalProperties: true, description: "Kind-specific fields (number, status, channel_type, score, survey_kind, starts_at, granted, request_kind, feedback_kind, slug, severity, properties, ...)." }
+
+    ContactTimelinePage:
+      type: object
+      required: [items, next_before]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ContactTimelineItem" } }
+        next_before: { type: [string, "null"], description: "Opaque cursor for the next (older) page; null on the last page." }
+
+    ContactNote:
+      type: object
+      required: [uuid, body, author, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        body: { type: string }
+        author: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
+        created_at: { type: string, format: date-time }
+
+    EnvelopeContactOverview:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ContactOverview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeContactTimeline:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ContactTimelinePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeContactNote:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ContactNote" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeContactAISummary:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ContactAISummary" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     CompanyEventInput:
       type: object

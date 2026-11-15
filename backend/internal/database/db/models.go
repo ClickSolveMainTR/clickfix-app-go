@@ -1657,6 +1657,22 @@ type Contact struct {
 	CompanyVerifiedAt pgtype.Timestamptz `json:"company_verified_at"`
 }
 
+type ContactAiSummary struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	Audience       string             `json:"audience"`
+	Summary        string             `json:"summary"`
+	OpenTopics     []byte             `json:"open_topics"`
+	Sentiment      string             `json:"sentiment"`
+	Locale         string             `json:"locale"`
+	RunUuid        pgtype.UUID        `json:"run_uuid"`
+	SourceAt       pgtype.Timestamptz `json:"source_at"`
+	GeneratedBy    pgtype.Int8        `json:"generated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ContactConsent struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`
@@ -1682,6 +1698,17 @@ type ContactIdentity struct {
 	Meta              []byte             `json:"meta"`
 	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
+type ContactNote struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	AuthorUserID   pgtype.Int8        `json:"author_user_id"`
+	Body           string             `json:"body"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Conversation struct {

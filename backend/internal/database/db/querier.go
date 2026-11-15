@@ -604,6 +604,12 @@ type Querier interface {
 	ConsumeOTP(ctx context.Context, id int64) (int64, error)
 	ContactAndCompanyCustomFields(ctx context.Context, arg ContactAndCompanyCustomFieldsParams) (ContactAndCompanyCustomFieldsRow, error)
 	ContactCustomFieldsByID(ctx context.Context, arg ContactCustomFieldsByIDParams) ([]byte, error)
+	// Newest moment anything happened for the contact; the AI summary is
+	// stale when this is later than its source_at.
+	ContactLatestActivityAt(ctx context.Context, arg ContactLatestActivityAtParams) (pgtype.Timestamptz, error)
+	// What the AI summary reads: the latest conversations with their opening
+	// and latest customer / agent messages (public messages only), newest first.
+	ContactSummarySource(ctx context.Context, arg ContactSummarySourceParams) ([]ContactSummarySourceRow, error)
 	ContactUnknownValues(ctx context.Context, arg ContactUnknownValuesParams) ([]ContactUnknownValuesRow, error)
 	ContactsWithUnknownField(ctx context.Context, arg ContactsWithUnknownFieldParams) ([]ContactsWithUnknownFieldRow, error)
 	// Whether the AI agent answered the customer in this conversation.
@@ -689,6 +695,11 @@ type Querier interface {
 	CreateCompanyEvent(ctx context.Context, arg CreateCompanyEventParams) (CompanyEvent, error)
 	// CF-85: account screen and unified company timeline.
 	CreateCompanyNote(ctx context.Context, arg CreateCompanyNoteParams) (CompanyNote, error)
+	// CF-221: contact detail page. Every query is bound to one contact of one
+	// organization. Conversation-derived rows apply the inbox team visibility
+	// rule (see ConversationVisibleTo): see_all, viewer_id and viewer_team_ids;
+	// can_conversations is false when the member may not read conversations.
+	CreateContactNote(ctx context.Context, arg CreateContactNoteParams) (ContactNote, error)
 	CreateCustomFieldDefinition(ctx context.Context, arg CreateCustomFieldDefinitionParams) (CustomFieldDefinition, error)
 	CreateCustomObjectRecord(ctx context.Context, arg CreateCustomObjectRecordParams) (CustomObjectRecord, error)
 	CreateCustomObjectType(ctx context.Context, arg CreateCustomObjectTypeParams) (CustomObjectType, error)
@@ -740,8 +751,13 @@ type Querier interface {
 	DeleteCapacityLimits(ctx context.Context, arg DeleteCapacityLimitsParams) error
 	DeleteCompanyNote(ctx context.Context, arg DeleteCompanyNoteParams) (int64, error)
 	DeleteCompanyRevenue(ctx context.Context, arg DeleteCompanyRevenueParams) (int64, error)
+	// Erase and merge drop the cached summaries (they name the person).
+	DeleteContactAISummaries(ctx context.Context, arg DeleteContactAISummariesParams) (int64, error)
 	DeleteContactIdentities(ctx context.Context, arg DeleteContactIdentitiesParams) error
 	DeleteContactIdentity(ctx context.Context, arg DeleteContactIdentityParams) (int64, error)
+	DeleteContactNote(ctx context.Context, arg DeleteContactNoteParams) (int64, error)
+	// KVKK erase: notes are free text about the person.
+	DeleteContactNotes(ctx context.Context, arg DeleteContactNotesParams) (int64, error)
 	DeleteContactUnknownField(ctx context.Context, arg DeleteContactUnknownFieldParams) error
 	DeleteConversationLink(ctx context.Context, arg DeleteConversationLinkParams) (int64, error)
 	DeleteConversationSLAMetric(ctx context.Context, arg DeleteConversationSLAMetricParams) error
@@ -989,10 +1005,13 @@ type Querier interface {
 	// CF-86: the customer's revenue plan and MRR feed the company_plans and
 	// min_company_mrr_minor conditions.
 	GetCompanySLA(ctx context.Context, arg GetCompanySLAParams) (GetCompanySLARow, error)
+	GetContactAISummary(ctx context.Context, arg GetContactAISummaryParams) (ContactAiSummary, error)
 	// CF-195: the customer's own user id (unique per organization).
 	GetContactByExternalID(ctx context.Context, arg GetContactByExternalIDParams) (Contact, error)
 	GetContactByID(ctx context.Context, arg GetContactByIDParams) (Contact, error)
 	GetContactByUUID(ctx context.Context, arg GetContactByUUIDParams) (Contact, error)
+	GetContactNoteByUUID(ctx context.Context, arg GetContactNoteByUUIDParams) (ContactNote, error)
+	GetContactProfileStats(ctx context.Context, arg GetContactProfileStatsParams) (GetContactProfileStatsRow, error)
 	GetConversationBrief(ctx context.Context, arg GetConversationBriefParams) (GetConversationBriefRow, error)
 	GetConversationBulkOp(ctx context.Context, arg GetConversationBulkOpParams) (ConversationBulkOp, error)
 	GetConversationByID(ctx context.Context, arg GetConversationByIDParams) (Conversation, error)
@@ -1347,6 +1366,29 @@ type Querier interface {
 	// are neither skipped nor repeated across pages.
 	ListCompanyTimeline(ctx context.Context, arg ListCompanyTimelineParams) ([]ListCompanyTimelineRow, error)
 	ListContactIdentities(ctx context.Context, arg ListContactIdentitiesParams) ([]ListContactIdentitiesRow, error)
+	// KVKK export: every note about the contact, oldest first.
+	ListContactNotesForExport(ctx context.Context, arg ListContactNotesForExportParams) ([]ListContactNotesForExportRow, error)
+	// Upcoming appointments first (soonest), then past ones (latest).
+	ListContactProfileAppointments(ctx context.Context, arg ListContactProfileAppointmentsParams) ([]ListContactProfileAppointmentsRow, error)
+	// Files the contact sent or received; they open in their conversation.
+	ListContactProfileAttachments(ctx context.Context, arg ListContactProfileAttachmentsParams) ([]ListContactProfileAttachmentsRow, error)
+	// The latest decision for each purpose.
+	ListContactProfileConsents(ctx context.Context, arg ListContactProfileConsentsParams) ([]ListContactProfileConsentsRow, error)
+	// Open conversations first, then the most recent closed ones.
+	ListContactProfileConversations(ctx context.Context, arg ListContactProfileConversationsParams) ([]ListContactProfileConversationsRow, error)
+	// Roadmap votes and comments of the contact.
+	ListContactProfileFeedback(ctx context.Context, arg ListContactProfileFeedbackParams) ([]ListContactProfileFeedbackRow, error)
+	// Topics and replies; only published ones unless the member moderates.
+	ListContactProfileForumPosts(ctx context.Context, arg ListContactProfileForumPostsParams) ([]ListContactProfileForumPostsRow, error)
+	ListContactProfileRequests(ctx context.Context, arg ListContactProfileRequestsParams) ([]ListContactProfileRequestsRow, error)
+	// Status incidents the contact was notified about.
+	ListContactProfileStatusNotices(ctx context.Context, arg ListContactProfileStatusNoticesParams) ([]ListContactProfileStatusNoticesRow, error)
+	ListContactProfileTags(ctx context.Context, arg ListContactProfileTagsParams) ([]ListContactProfileTagsRow, error)
+	// One ordered stream over every source of a contact. kinds is the set the
+	// caller may and wants to see (never NULL); q searches title and body;
+	// from / to bound occurred_at; before pages backwards in time.
+	// Keyset paging on (occurred_at, kind, sort_key) like the company timeline.
+	ListContactTimeline(ctx context.Context, arg ListContactTimelineParams) ([]ListContactTimelineRow, error)
 	ListContacts(ctx context.Context, arg ListContactsParams) ([]ListContactsRow, error)
 	ListContractedCompanies(ctx context.Context, organizationID int64) ([]ListContractedCompaniesRow, error)
 	// Members who may see a conversation without read_all: the assignee, the
@@ -1644,6 +1686,8 @@ type Querier interface {
 	// DeleteContactIdentities).
 	MoveContactIdentities(ctx context.Context, arg MoveContactIdentitiesParams) (int64, error)
 	MoveContactMessages(ctx context.Context, arg MoveContactMessagesParams) (int64, error)
+	// A merge keeps the notes of the merged contact on the survivor.
+	MoveContactNotes(ctx context.Context, arg MoveContactNotesParams) (int64, error)
 	// Links of a merged conversation are dropped: the target keeps its own and
 	// the source stays reachable through merged_into_id.
 	MoveConversationLinks(ctx context.Context, arg MoveConversationLinksParams) error
@@ -2162,6 +2206,7 @@ type Querier interface {
 	UpsertCompanyHealth(ctx context.Context, arg UpsertCompanyHealthParams) (CompanyHealth, error)
 	UpsertCompanyHealthSettings(ctx context.Context, arg UpsertCompanyHealthSettingsParams) (CompanyHealthSetting, error)
 	UpsertCompanyRevenue(ctx context.Context, arg UpsertCompanyRevenueParams) (CompanyRevenue, error)
+	UpsertContactAISummary(ctx context.Context, arg UpsertContactAISummaryParams) (ContactAiSummary, error)
 	UpsertContactIdentity(ctx context.Context, arg UpsertContactIdentityParams) (ContactIdentity, error)
 	UpsertConversationSLAMetric(ctx context.Context, arg UpsertConversationSLAMetricParams) error
 	UpsertEventDeadLetter(ctx context.Context, arg UpsertEventDeadLetterParams) (EventDeadLetter, error)

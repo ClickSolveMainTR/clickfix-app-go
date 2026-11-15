@@ -229,10 +229,14 @@ func (s *Service) export(ctx context.Context, q *db.Queries, r db.DataSubjectReq
 	if err != nil {
 		return "", err
 	}
+	notes, err := q.ListContactNotesForExport(ctx, db.ListContactNotesForExportParams{OrganizationID: r.OrganizationID, ContactID: c.ID})
+	if err != nil {
+		return "", err
+	}
 	for _, entry := range []struct {
 		name string
 		data any
-	}{{"contact.json", c}, {"conversations.json", convs}, {"ai_runs.json", ai}, {"consents.json", consents}} {
+	}{{"contact.json", c}, {"conversations.json", convs}, {"ai_runs.json", ai}, {"consents.json", consents}, {"notes.json", notes}} {
 		if err = z.JSON(entry.name, entry.data); err != nil {
 			return "", err
 		}
@@ -380,6 +384,13 @@ func (s *Service) erase(ctx context.Context, q *db.Queries, org int64, c db.Cont
 		}
 	}
 	if err = q.ComplianceEraseIdentities(ctx, db.ComplianceEraseIdentitiesParams{OrganizationID: org, ContactID: c.ID}); err != nil {
+		return err
+	}
+	// CF-221: agent notes and cached AI summaries are free text about the person.
+	if _, err = q.DeleteContactNotes(ctx, db.DeleteContactNotesParams{OrganizationID: org, ContactID: c.ID}); err != nil {
+		return err
+	}
+	if _, err = q.DeleteContactAISummaries(ctx, db.DeleteContactAISummariesParams{OrganizationID: org, ContactID: c.ID}); err != nil {
 		return err
 	}
 	return q.ComplianceEraseContact(ctx, db.ComplianceEraseContactParams{OrganizationID: org, ID: c.ID})

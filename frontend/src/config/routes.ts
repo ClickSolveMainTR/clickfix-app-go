@@ -72,6 +72,15 @@ export const routes = {
     smartSetup: "/getting-started",
     /** Shared inbox. */
     inbox: "/inbox",
+    /** Contacts and their detail page (CF-221); companies keep their own. */
+    contacts: {
+      root: "/contacts",
+      detail: (uuid: string) => `/contacts/${encodeURIComponent(uuid)}`,
+    },
+    companies: {
+      root: "/companies",
+      detail: (uuid: string) => `/companies/${encodeURIComponent(uuid)}`,
+    },
     /** Channel management (CF-61); Meta logins return to connect/{type}. */
     channels: "/channels",
     /** ClickFix Asistan as a full page (CF-200). */
