@@ -119,11 +119,11 @@ WHERE e.organization_id = $1 AND c.organization_id = e.organization_id AND c.id 
 -- Best cosine score per candidate category over its example vectors and the
 -- organization's labelled texts (human labels are examples too).
 SELECT s.category_id::bigint AS category_id, max(s.score)::double precision AS score FROM (
-  SELECT e.category_id, ai_cosine(e.embedding, sqlc.arg(embedding)::real[]) AS score
+  SELECT e.category_id, (1-(e.embedding <=> sqlc.arg(embedding)::vector)) AS score
   FROM category_examples e
   WHERE e.organization_id = sqlc.arg(organization_id) AND e.embedding_model = sqlc.arg(embedding_model)
   UNION ALL
-  SELECT l.category_id, ai_cosine(l.embedding, sqlc.arg(embedding)::real[]) AS score
+  SELECT l.category_id, (1-(l.embedding <=> sqlc.arg(embedding)::vector)) AS score
   FROM category_labels l
   WHERE l.organization_id = sqlc.arg(organization_id) AND l.embedding_model = sqlc.arg(embedding_model) AND l.embedding IS NOT NULL
     AND (sqlc.narg(department_id)::bigint IS NULL OR l.department_id IS NULL OR l.department_id = sqlc.narg(department_id)::bigint)

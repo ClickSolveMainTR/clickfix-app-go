@@ -5,9 +5,8 @@
 -- with CF-215; until it lands department_id has no foreign key and NULL means
 -- organization-wide. CF-215 adds the FK to departments(organization_id,id).
 --
--- Vectors: REAL[] + ai_cosine, the same portable representation as
--- knowledge_chunks. CF-214 moves every vector column (this one included) to
--- pgvector vector(N) with an HNSW index in one migration.
+-- Vectors: pgvector vector(1536) (CF-214), compared with cosine distance
+-- (<=>). The tables are small per organization, so no HNSW index.
 
 CREATE TABLE categories (
  id BIGSERIAL PRIMARY KEY, uuid UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
@@ -36,7 +35,7 @@ CREATE TABLE category_examples (
  organization_id BIGINT NOT NULL REFERENCES organizations(id),
  category_id BIGINT NOT NULL,
  content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 4000),
- embedding REAL[] NOT NULL CHECK(cardinality(embedding)>0),
+ embedding vector(1536) NOT NULL,
  embedding_model TEXT NOT NULL,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  FOREIGN KEY(organization_id,category_id) REFERENCES categories(organization_id,id) ON DELETE CASCADE,
@@ -81,7 +80,7 @@ CREATE TABLE category_labels (
  subject_uuid UUID NOT NULL,
  action TEXT NOT NULL CHECK(action IN ('confirm','correct')),
  content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 24000),
- embedding REAL[] CHECK(embedding IS NULL OR cardinality(embedding)>0),
+ embedding vector(1536),
  embedding_model TEXT NOT NULL DEFAULT '',
  previous_category_id BIGINT,
  previous_source TEXT CHECK(previous_source IS NULL OR previous_source IN ('embedding','ai','human','model')),

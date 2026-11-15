@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -240,11 +241,11 @@ func (q *Queries) CategoryInUse(ctx context.Context, arg CategoryInUseParams) (b
 
 const categorySimilarity = `-- name: CategorySimilarity :many
 SELECT s.category_id::bigint AS category_id, max(s.score)::double precision AS score FROM (
-  SELECT e.category_id, ai_cosine(e.embedding, $1::real[]) AS score
+  SELECT e.category_id, (1-(e.embedding <=> $1::vector)) AS score
   FROM category_examples e
   WHERE e.organization_id = $2 AND e.embedding_model = $3
   UNION ALL
-  SELECT l.category_id, ai_cosine(l.embedding, $1::real[]) AS score
+  SELECT l.category_id, (1-(l.embedding <=> $1::vector)) AS score
   FROM category_labels l
   WHERE l.organization_id = $2 AND l.embedding_model = $3 AND l.embedding IS NOT NULL
     AND ($4::bigint IS NULL OR l.department_id IS NULL OR l.department_id = $4::bigint)
@@ -257,10 +258,10 @@ LIMIT 10
 `
 
 type CategorySimilarityParams struct {
-	Embedding      []float32   `json:"embedding"`
-	OrganizationID int64       `json:"organization_id"`
-	EmbeddingModel string      `json:"embedding_model"`
-	DepartmentID   pgtype.Int8 `json:"department_id"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	OrganizationID int64              `json:"organization_id"`
+	EmbeddingModel string             `json:"embedding_model"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type CategorySimilarityRow struct {
@@ -494,7 +495,7 @@ type ExportCategoryLabelsRow struct {
 	SubjectType          string             `json:"subject_type"`
 	Action               string             `json:"action"`
 	Content              string             `json:"content"`
-	Embedding            []float32          `json:"embedding"`
+	Embedding            vectorstore.Vector `json:"embedding"`
 	EmbeddingModel       string             `json:"embedding_model"`
 	PreviousSource       pgtype.Text        `json:"previous_source"`
 	PreviousConfidence   pgtype.Float4      `json:"previous_confidence"`
@@ -744,11 +745,11 @@ ON CONFLICT (organization_id, category_id, embedding_model, content) DO NOTHING
 `
 
 type InsertCategoryExampleParams struct {
-	OrganizationID int64     `json:"organization_id"`
-	CategoryID     int64     `json:"category_id"`
-	Content        string    `json:"content"`
-	Embedding      []float32 `json:"embedding"`
-	EmbeddingModel string    `json:"embedding_model"`
+	OrganizationID int64              `json:"organization_id"`
+	CategoryID     int64              `json:"category_id"`
+	Content        string             `json:"content"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
 }
 
 func (q *Queries) InsertCategoryExample(ctx context.Context, arg InsertCategoryExampleParams) error {
@@ -770,19 +771,19 @@ RETURNING id, uuid, organization_id, department_id, subject_type, subject_uuid, 
 `
 
 type InsertCategoryLabelParams struct {
-	OrganizationID     int64         `json:"organization_id"`
-	DepartmentID       pgtype.Int8   `json:"department_id"`
-	SubjectType        string        `json:"subject_type"`
-	SubjectUuid        uuid.UUID     `json:"subject_uuid"`
-	Action             string        `json:"action"`
-	Content            string        `json:"content"`
-	Embedding          []float32     `json:"embedding"`
-	EmbeddingModel     string        `json:"embedding_model"`
-	PreviousCategoryID pgtype.Int8   `json:"previous_category_id"`
-	PreviousSource     pgtype.Text   `json:"previous_source"`
-	PreviousConfidence pgtype.Float4 `json:"previous_confidence"`
-	CategoryID         int64         `json:"category_id"`
-	LabeledBy          int64         `json:"labeled_by"`
+	OrganizationID     int64              `json:"organization_id"`
+	DepartmentID       pgtype.Int8        `json:"department_id"`
+	SubjectType        string             `json:"subject_type"`
+	SubjectUuid        uuid.UUID          `json:"subject_uuid"`
+	Action             string             `json:"action"`
+	Content            string             `json:"content"`
+	Embedding          vectorstore.Vector `json:"embedding"`
+	EmbeddingModel     string             `json:"embedding_model"`
+	PreviousCategoryID pgtype.Int8        `json:"previous_category_id"`
+	PreviousSource     pgtype.Text        `json:"previous_source"`
+	PreviousConfidence pgtype.Float4      `json:"previous_confidence"`
+	CategoryID         int64              `json:"category_id"`
+	LabeledBy          int64              `json:"labeled_by"`
 }
 
 func (q *Queries) InsertCategoryLabel(ctx context.Context, arg InsertCategoryLabelParams) (CategoryLabel, error) {

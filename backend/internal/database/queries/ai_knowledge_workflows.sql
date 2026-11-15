@@ -46,11 +46,19 @@ VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT uuid FROM ai_runs WHERE organization_id=$1 A
 -- name: AIEvaluationResults :many
 SELECT * FROM ai_evaluation_results WHERE organization_id=$1 AND evaluation_uuid=$2 ORDER BY id LIMIT $3 OFFSET $4;
 -- name: AIKnowledgeGapTopics :many
+-- CF-216: questions the agent assistant could not answer from a unit, case or
+-- source (knowledge_gap_questions) count as gaps too, under the triage topic.
 WITH latest AS (
  SELECT DISTINCT ON (j.conversation_id) j.conversation_id,j.status,coalesce(nullif(t.result->>'category',''), 'uncategorized') AS topic
  FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
  WHERE j.organization_id=$1 AND j.task='reply' AND j.created_at>=sqlc.arg(since)::timestamptz ORDER BY j.conversation_id,j.id DESC
-) SELECT topic,count(*)::bigint AS conversations,(array_agg(conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM latest WHERE status IN ('handoff','unknown') GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3;
+), gaps AS (
+ SELECT conversation_id,topic FROM latest WHERE status IN ('handoff','unknown')
+ UNION
+ SELECT g.conversation_id,coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=sqlc.arg(since)::timestamptz
+) SELECT topic::text AS topic,count(DISTINCT conversation_id)::bigint AS conversations,(array_agg(DISTINCT conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM gaps GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3;
 -- name: AIKnowledgeSuggestionCreate :one
 INSERT INTO knowledge_suggestions(organization_id,topic,conversation_id,title,body) VALUES($1,$2,$3,$4,$5)
 ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING *;
@@ -136,10 +144,16 @@ SELECT count(*) FROM ai_evaluations WHERE organization_id=$1;
 -- name: AIEvaluationResultCount :one
 SELECT count(*) FROM ai_evaluation_results WHERE organization_id=$1 AND evaluation_uuid=$2;
 -- name: AIKnowledgeGapTopicCount :one
-SELECT count(DISTINCT coalesce(nullif(t.result->>'category',''),'uncategorized'))
-FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
-WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=sqlc.arg(since)::timestamptz
-AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply');
+SELECT count(*) FROM (
+ SELECT coalesce(nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=sqlc.arg(since)::timestamptz
+ AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply' AND n.created_at>=sqlc.arg(since)::timestamptz)
+ UNION
+ SELECT coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized')
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=sqlc.arg(since)::timestamptz
+) topics;
 -- name: KnowledgeReviewDueOrganizations :many
 SELECT DISTINCT a.organization_id FROM knowledge_articles a WHERE a.deleted_at IS NULL AND a.updated_at<now()-interval '6 months'
 AND NOT EXISTS(SELECT 1 FROM knowledge_reviews r WHERE r.organization_id=a.organization_id AND r.article_id=a.id AND r.article_version=a.version AND r.reason='age')

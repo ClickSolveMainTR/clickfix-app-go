@@ -9,6 +9,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/config"
 	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
 	aiusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/usecase"
+	memusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/usecase"
 	billingrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/billing/repository"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	kbrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/repository"
@@ -23,6 +24,8 @@ type System struct {
 	KB     *kbusecase.Service
 	RAG    *kbusecase.RAG
 	Speech *aiusecase.MeteredTranscriber
+	// Memory is the CF-216 knowledge layer (units, answer cache, case memory).
+	Memory *memusecase.Service
 	// Reembed rebuilds stored vectors after an embedding model change (CF-214).
 	Reembed *vectorstore.Reembedder
 }
@@ -85,5 +88,6 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 	if openai.Key == "" {
 		speech.Raw = nil
 	}
-	return &System{Reembed: reembed, Speech: speech, KB: kb, RAG: rag, AI: &aiusecase.Service{Repo: aiStore, Routes: routes, RAG: rag}}
+	core := &aiusecase.Service{Repo: aiStore, Routes: routes, RAG: rag}
+	return &System{Reembed: reembed, Speech: speech, KB: kb, RAG: rag, AI: core, Memory: memusecase.New(pool, core, rag.Embedder)}
 }

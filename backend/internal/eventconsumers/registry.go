@@ -5,6 +5,7 @@ package eventconsumers
 
 import (
 	agentusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/usecase"
+	memusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aimemory/usecase"
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
@@ -33,6 +34,8 @@ type Deps struct {
 	Reports   *reportsuc.Service
 	Agents    *agentusecase.Service
 	Knowledge *kbusecase.RAG
+	// Memory builds knowledge units and case memory (CF-216).
+	Memory    *memusecase.Service
 	Status    *statususecase.Service
 	Surveys   *surveysusecase.Service
 	Analytics *analyticsusecase.Service
@@ -69,6 +72,9 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 	}
 	if deps.Knowledge != nil {
 		consumers = append(consumers, deps.Knowledge.Consumer())
+	}
+	if deps.Memory != nil {
+		consumers = append(consumers, deps.Memory.Consumer())
 	}
 	if deps.Status != nil {
 		consumers = append(consumers, statusmodule.EventConsumer(deps.Status))

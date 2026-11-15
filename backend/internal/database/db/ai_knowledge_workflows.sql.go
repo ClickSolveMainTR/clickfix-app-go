@@ -398,10 +398,16 @@ func (q *Queries) AIEvaluationStart(ctx context.Context, arg AIEvaluationStartPa
 }
 
 const aIKnowledgeGapTopicCount = `-- name: AIKnowledgeGapTopicCount :one
-SELECT count(DISTINCT coalesce(nullif(t.result->>'category',''),'uncategorized'))
-FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
-WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=$2::timestamptz
-AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply')
+SELECT count(*) FROM (
+ SELECT coalesce(nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE j.organization_id=$1 AND j.task='reply' AND j.status IN ('handoff','unknown') AND j.created_at>=$2::timestamptz
+ AND j.id=(SELECT max(n.id) FROM ai_agent_jobs n WHERE n.organization_id=j.organization_id AND n.conversation_id=j.conversation_id AND n.task='reply' AND n.created_at>=$2::timestamptz)
+ UNION
+ SELECT coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized')
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=$2::timestamptz
+) topics
 `
 
 type AIKnowledgeGapTopicCountParams struct {
@@ -421,7 +427,13 @@ WITH latest AS (
  SELECT DISTINCT ON (j.conversation_id) j.conversation_id,j.status,coalesce(nullif(t.result->>'category',''), 'uncategorized') AS topic
  FROM ai_agent_jobs j LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=j.organization_id AND t.conversation_id=j.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
  WHERE j.organization_id=$1 AND j.task='reply' AND j.created_at>=$4::timestamptz ORDER BY j.conversation_id,j.id DESC
-) SELECT topic,count(*)::bigint AS conversations,(array_agg(conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM latest WHERE status IN ('handoff','unknown') GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3
+), gaps AS (
+ SELECT conversation_id,topic FROM latest WHERE status IN ('handoff','unknown')
+ UNION
+ SELECT g.conversation_id,coalesce(nullif(g.category,''),nullif(t.result->>'category',''),'uncategorized') AS topic
+ FROM knowledge_gap_questions g LEFT JOIN LATERAL (SELECT result FROM ai_agent_jobs t WHERE t.organization_id=g.organization_id AND t.conversation_id=g.conversation_id AND t.task='triage' AND t.status='completed' ORDER BY t.id DESC LIMIT 1) t ON true
+ WHERE g.organization_id=$1 AND g.conversation_id IS NOT NULL AND g.last_seen_at>=$4::timestamptz
+) SELECT topic::text AS topic,count(DISTINCT conversation_id)::bigint AS conversations,(array_agg(DISTINCT conversation_id ORDER BY conversation_id))[1:20]::bigint[] AS conversation_ids FROM gaps GROUP BY topic ORDER BY conversations DESC,topic LIMIT $2 OFFSET $3
 `
 
 type AIKnowledgeGapTopicsParams struct {
@@ -432,11 +444,13 @@ type AIKnowledgeGapTopicsParams struct {
 }
 
 type AIKnowledgeGapTopicsRow struct {
-	Topic           interface{} `json:"topic"`
-	Conversations   int64       `json:"conversations"`
-	ConversationIds []int64     `json:"conversation_ids"`
+	Topic           string  `json:"topic"`
+	Conversations   int64   `json:"conversations"`
+	ConversationIds []int64 `json:"conversation_ids"`
 }
 
+// CF-216: questions the agent assistant could not answer from a unit, case or
+// source (knowledge_gap_questions) count as gaps too, under the triage topic.
 func (q *Queries) AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTopicsParams) ([]AIKnowledgeGapTopicsRow, error) {
 	rows, err := q.db.Query(ctx, aIKnowledgeGapTopics,
 		arg.OrganizationID,

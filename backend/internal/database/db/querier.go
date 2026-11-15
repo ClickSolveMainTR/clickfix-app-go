@@ -46,6 +46,8 @@ type Querier interface {
 	AIGetRun(ctx context.Context, arg AIGetRunParams) (AiRun, error)
 	AIInsertRun(ctx context.Context, arg AIInsertRunParams) (AiRun, error)
 	AIKnowledgeGapTopicCount(ctx context.Context, arg AIKnowledgeGapTopicCountParams) (int64, error)
+	// CF-216: questions the agent assistant could not answer from a unit, case or
+	// source (knowledge_gap_questions) count as gaps too, under the triage topic.
 	AIKnowledgeGapTopics(ctx context.Context, arg AIKnowledgeGapTopicsParams) ([]AIKnowledgeGapTopicsRow, error)
 	AIKnowledgeSourceClaim(ctx context.Context, arg AIKnowledgeSourceClaimParams) (KnowledgeSource, error)
 	AIKnowledgeSourceCount(ctx context.Context, arg AIKnowledgeSourceCountParams) (int64, error)
@@ -115,6 +117,14 @@ type Querier interface {
 	AnalyticsBackfillIDs(ctx context.Context, arg AnalyticsBackfillIDsParams) ([]int64, error)
 	AnalyticsDashboard(ctx context.Context, arg AnalyticsDashboardParams) ([]byte, error)
 	AnalyticsTimezone(ctx context.Context, id int64) (string, error)
+	AnswerCacheCount(ctx context.Context, organizationID int64) (int64, error)
+	// A cached row is valid only while its unit exists (source changes delete it)
+	// and still passes the audience's visibility rule.
+	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
+	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
+	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error
+	AnswerCacheStats(ctx context.Context, arg AnswerCacheStatsParams) ([]AnswerCacheStatsRow, error)
+	AnswerCacheTouch(ctx context.Context, arg AnswerCacheTouchParams) error
 	// A contact wrote: activity moves up, the conversation waits for an answer
 	// and a snoozed or resolved conversation wakes up.
 	ApplyInboundToConversation(ctx context.Context, arg ApplyInboundToConversationParams) (Conversation, error)
@@ -498,6 +508,18 @@ type Querier interface {
 	CalibrationScore(ctx context.Context, arg CalibrationScoreParams) (CalibrationScoreRow, error)
 	CalibrationScores(ctx context.Context, arg CalibrationScoresParams) ([]CalibrationScoresRow, error)
 	CancelConversationReminder(ctx context.Context, arg CancelConversationReminderParams) (int64, error)
+	CaseMemoryConversation(ctx context.Context, arg CaseMemoryConversationParams) (CaseMemoryConversationRow, error)
+	CaseMemoryCount(ctx context.Context, arg CaseMemoryCountParams) (int64, error)
+	CaseMemoryExists(ctx context.Context, arg CaseMemoryExistsParams) (bool, error)
+	CaseMemoryList(ctx context.Context, arg CaseMemoryListParams) ([]CaseMemoryListRow, error)
+	// approved_only is true for the customer AI. The source contact and company
+	// names come back only so the caller can scrub them once more; they are never
+	// returned to a customer.
+	CaseMemoryMatch(ctx context.Context, arg CaseMemoryMatchParams) ([]CaseMemoryMatchRow, error)
+	CaseMemoryMessages(ctx context.Context, arg CaseMemoryMessagesParams) ([]CaseMemoryMessagesRow, error)
+	CaseMemoryReview(ctx context.Context, arg CaseMemoryReviewParams) (AiCaseMemory, error)
+	// A re-summarized conversation goes back to pending review.
+	CaseMemoryUpsert(ctx context.Context, arg CaseMemoryUpsertParams) (AiCaseMemory, error)
 	// The node itself and every ancestor (cycle checks on re-parenting).
 	CategoryAncestorIDs(ctx context.Context, arg CategoryAncestorIDsParams) ([]int64, error)
 	CategoryCategoryRef(ctx context.Context, arg CategoryCategoryRefParams) (CategoryCategoryRefRow, error)
@@ -1329,6 +1351,9 @@ type Querier interface {
 	KnowledgeDeleteArticle(ctx context.Context, arg KnowledgeDeleteArticleParams) error
 	KnowledgeDeleteChunks(ctx context.Context, arg KnowledgeDeleteChunksParams) error
 	KnowledgeDeleteCollection(ctx context.Context, arg KnowledgeDeleteCollectionParams) (int64, error)
+	KnowledgeGapQuestionCount(ctx context.Context, arg KnowledgeGapQuestionCountParams) (int64, error)
+	KnowledgeGapQuestionRecord(ctx context.Context, arg KnowledgeGapQuestionRecordParams) error
+	KnowledgeGapQuestions(ctx context.Context, arg KnowledgeGapQuestionsParams) ([]KnowledgeGapQuestionsRow, error)
 	KnowledgeInsertArticle(ctx context.Context, arg KnowledgeInsertArticleParams) (KnowledgeArticle, error)
 	// brand_id comes from the article (trigger). While the organization is being
 	// re-embedded the vector goes to pending_* (CF-214).
@@ -1356,6 +1381,20 @@ type Querier interface {
 	KnowledgeSuggestionDepartment(ctx context.Context, arg KnowledgeSuggestionDepartmentParams) (KnowledgeSuggestionDepartmentRow, error)
 	KnowledgeTranslationReviewSweep(ctx context.Context, organizationID int64) error
 	KnowledgeTranslationSave(ctx context.Context, arg KnowledgeTranslationSaveParams) error
+	KnowledgeUnitArticleID(ctx context.Context, arg KnowledgeUnitArticleIDParams) (int64, error)
+	// CF-216: knowledge units, answer cache, case memory, unanswered questions.
+	KnowledgeUnitArticleSource(ctx context.Context, arg KnowledgeUnitArticleSourceParams) (KnowledgeUnitArticleSourceRow, error)
+	KnowledgeUnitCount(ctx context.Context, organizationID int64) (int64, error)
+	KnowledgeUnitDeleteArticle(ctx context.Context, arg KnowledgeUnitDeleteArticleParams) (int64, error)
+	KnowledgeUnitDeleteSuggestion(ctx context.Context, arg KnowledgeUnitDeleteSuggestionParams) (int64, error)
+	KnowledgeUnitInsert(ctx context.Context, arg KnowledgeUnitInsertParams) (KnowledgeUnit, error)
+	KnowledgeUnitInsertQuestion(ctx context.Context, arg KnowledgeUnitInsertQuestionParams) error
+	KnowledgeUnitList(ctx context.Context, arg KnowledgeUnitListParams) ([]KnowledgeUnitListRow, error)
+	// Scope: org-wide rows always qualify, brand/department rows only for the same
+	// brand/department. The caller prefers the most specific match.
+	KnowledgeUnitMatch(ctx context.Context, arg KnowledgeUnitMatchParams) ([]KnowledgeUnitMatchRow, error)
+	KnowledgeUnitSourceHash(ctx context.Context, arg KnowledgeUnitSourceHashParams) (string, error)
+	KnowledgeUnitSuggestionSource(ctx context.Context, arg KnowledgeUnitSuggestionSourceParams) (KnowledgeUnitSuggestionSourceRow, error)
 	KnowledgeUpdateArticle(ctx context.Context, arg KnowledgeUpdateArticleParams) (KnowledgeArticle, error)
 	KnowledgeValidChunks(ctx context.Context, arg KnowledgeValidChunksParams) ([]KnowledgeValidChunksRow, error)
 	KnowledgeVersions(ctx context.Context, arg KnowledgeVersionsParams) ([]KnowledgeArticleVersion, error)

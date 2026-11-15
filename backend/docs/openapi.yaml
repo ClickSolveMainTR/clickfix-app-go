@@ -32097,6 +32097,611 @@ paths:
       }
     }
   }
+  "/v1/tenant/ai/memory/search": {
+    "post": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "searchAIMemory",
+      "summary": "Agent assistant: answer from knowledge units (answer cache) or similar resolved cases (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "locale": {
+                  "type": "string",
+                  "enum": [
+                    "tr",
+                    "en"
+                  ],
+                  "default": "tr"
+                },
+                "conversation_uuid": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Scopes the lookup to the conversation's brand and leaves it out of case results."
+                }
+              },
+              "required": [
+                "question"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIMemoryResult"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "description": "Conversation not found or not visible"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/case-memories": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAICaseMemories",
+      "summary": "Anonymized case summaries of resolved conversations (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        {
+          "name": "status",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ]
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AICaseMemory"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/case-memories/{uuid}/review": {
+    "post": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "reviewAICaseMemory",
+      "summary": "Approve (customer AI may use it) or reject a case summary; only anonymized summaries can be approved",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "uuid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "approve": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "approve"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AICaseMemoryReview"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        },
+        "404": {
+          "description": "Case summary not found"
+        },
+        "409": {
+          "description": "Summary is not anonymized and cannot be approved"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/knowledge-units": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAIKnowledgeUnits",
+      "summary": "Question/answer units extracted from published articles and approved suggestions (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AIKnowledgeUnit"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/answer-cache/stats": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "getAIAnswerCacheStats",
+      "summary": "Answer cache hit rate per audience (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "since",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": "Defaults to 30 days ago; at most 366 days back."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/AIAnswerCacheStats"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
+  "/v1/tenant/ai/knowledge-gaps/questions": {
+    "get": {
+      "tags": [
+        "AI"
+      ],
+      "operationId": "listAIKnowledgeGapQuestions",
+      "summary": "Questions no knowledge unit, case or source answered (CF-216)",
+      "security": [
+        {
+          "bearerAuth": []
+        }
+      ],
+      "parameters": [
+        {
+          "name": "X-Organization",
+          "in": "header",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "Organization slug or UUID; authenticated membership required."
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        {
+          "name": "since",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": "Defaults to 30 days ago; at most 366 days back."
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Success",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AIKnowledgeGapQuestion"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      },
+                      "limit": {
+                        "type": "integer"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "total",
+                      "limit",
+                      "offset"
+                    ]
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "success",
+                  "data",
+                  "meta"
+                ]
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid input"
+        },
+        "401": {
+          "$ref": "#/components/responses/Unauthenticated"
+        },
+        "403": {
+          "$ref": "#/components/responses/Forbidden"
+        }
+      }
+    }
+  }
   "/v1/tenant/conversations/{uuid}/ai/knowledge-suggestion": {
     "post": {
       "tags": [
@@ -45772,6 +46377,16 @@ components:
         "handoff": {
           "type": "boolean"
         },
+        "unit_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Knowledge unit that answered without a generation call (CF-216)"
+        },
+        "memory": {
+          "type": "string",
+          "enum": ["exact", "semantic"],
+          "description": "Answer cache outcome when a knowledge unit answered (CF-216)"
+        },
         "citation_ids": {
           "type": "array",
           "items": {
@@ -46034,6 +46649,440 @@ components:
         "topic",
         "conversations",
         "conversation_ids"
+      ]
+    }
+    "AIMemoryUnitHit": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal"
+          ]
+        },
+        "article_uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "uuid",
+        "question",
+        "answer",
+        "category",
+        "visibility",
+        "score"
+      ]
+    }
+    "AIMemoryCase": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved"
+          ]
+        },
+        "score": {
+          "type": "number"
+        },
+        "conversation_uuid": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Present only when the caller may open the source conversation."
+        }
+      },
+      "required": [
+        "uuid",
+        "problem",
+        "resolution",
+        "category",
+        "status",
+        "score"
+      ]
+    }
+    "AIMemoryResult": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "semantic",
+            "miss"
+          ],
+          "description": "exact: cached repeat, no AI call; semantic: one embedding call; miss: no unit matched."
+        },
+        "unit": {
+          "$ref": "#/components/schemas/AIMemoryUnitHit"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AIMemoryCase"
+          }
+        },
+        "embedding_calls": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "outcome",
+        "cases",
+        "embedding_calls"
+      ]
+    }
+    "AICaseMemory": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "anonymized": {
+          "type": "boolean"
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "conversation_uuid": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "locale",
+        "category",
+        "problem",
+        "resolution",
+        "status",
+        "anonymized",
+        "brand_id",
+        "department_id",
+        "created_at",
+        "reviewed_at",
+        "conversation_uuid"
+      ]
+    }
+    "AICaseMemoryReview": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "anonymized": {
+          "type": "boolean"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "status",
+        "anonymized",
+        "problem",
+        "resolution",
+        "category"
+      ]
+    }
+    "AIKnowledgeUnit": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question": {
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "answer": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal"
+          ]
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_version": {
+          "type": "integer"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "article_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "suggestion_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "uuid",
+        "question",
+        "variants",
+        "answer",
+        "category",
+        "locale",
+        "visibility",
+        "brand_id",
+        "department_id",
+        "source_version",
+        "created_at",
+        "article_uuid",
+        "suggestion_uuid"
+      ]
+    }
+    "AIAnswerCacheAudienceStats": {
+      "type": "object",
+      "properties": {
+        "audience": {
+          "type": "string",
+          "enum": [
+            "customer",
+            "agent"
+          ]
+        },
+        "exact_hits": {
+          "type": "integer"
+        },
+        "semantic_hits": {
+          "type": "integer"
+        },
+        "misses": {
+          "type": "integer"
+        },
+        "lookups": {
+          "type": "integer"
+        },
+        "hit_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "audience",
+        "exact_hits",
+        "semantic_hits",
+        "misses",
+        "lookups",
+        "hit_rate"
+      ]
+    }
+    "AIAnswerCacheStats": {
+      "type": "object",
+      "properties": {
+        "since": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/AIAnswerCacheAudienceStats"
+          }
+        },
+        "units": {
+          "type": "integer"
+        },
+        "cached_questions": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "since",
+        "audiences",
+        "units",
+        "cached_questions"
+      ]
+    }
+    "AIKnowledgeGapQuestion": {
+      "type": "object",
+      "properties": {
+        "audience": {
+          "type": "string",
+          "enum": [
+            "customer",
+            "agent"
+          ]
+        },
+        "locale": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string",
+          "description": "PII masked"
+        },
+        "category": {
+          "type": "string"
+        },
+        "occurrences": {
+          "type": "integer"
+        },
+        "first_seen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_seen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "brand_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "department_id": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "conversation_uuid": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "audience",
+        "locale",
+        "question",
+        "category",
+        "occurrences",
+        "first_seen_at",
+        "last_seen_at",
+        "brand_id",
+        "department_id",
+        "conversation_uuid"
       ]
     }
     "AIKnowledgeSuggestion": {
