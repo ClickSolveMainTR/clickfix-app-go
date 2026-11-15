@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"regexp"
 	"sort"
 	"strings"
@@ -16,13 +15,16 @@ import (
 	aimodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/orgctx"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/safeconv"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/net/html"
 )
 
@@ -166,34 +168,32 @@ var (
 	blank     = regexp.MustCompile(`\s+`)
 )
 
+// validVectors accepts exactly n finite, non-zero vectors of the fixed
+// embedding dimension (CF-214: the column is vector(ai.EmbeddingDimensions)).
 func validVectors(vectors [][]float32, n int) bool {
 	if len(vectors) != n {
 		return false
 	}
-	dim := 0
 	for _, v := range vectors {
-		if len(v) == 0 || len(v) > 8192 {
-			return false
-		}
-		if dim == 0 {
-			dim = len(v)
-		}
-		if len(v) != dim {
-			return false
-		}
-		norm := float64(0)
-		for _, x := range v {
-			if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
-				return false
-			}
-			norm += float64(x) * float64(x)
-		}
-		if norm == 0 {
+		if vectorstore.Check(v) != nil {
 			return false
 		}
 	}
 	return true
 }
+
+// ChunkSource is the knowledge chunk table for the shared vector helper.
+// Filter args: locale, public_only.
+var ChunkSource = vectorstore.Source{
+	Name: "knowledge_chunks", Table: "knowledge_chunks", TextColumn: "content",
+	Join: `JOIN knowledge_articles a ON a.organization_id=v.organization_id AND a.id=v.article_id
+ JOIN knowledge_article_versions kv ON kv.organization_id=v.organization_id AND kv.article_id=v.article_id AND kv.version=v.version`,
+	Filter: `a.deleted_at IS NULL AND a.published_version=v.version AND a.locale=@locale AND (NOT @public_only::boolean OR kv.visibility='public')`,
+}
+
+// KnowledgeMinSimilarity is the cosine similarity a chunk needs to become a
+// vector candidate (lexical candidates are separate).
+const KnowledgeMinSimilarity = 0.2
 
 func (r *RAG) Index(ctx context.Context, org int64, id uuid.UUID) error {
 	ctx = orgctx.WithOrganizationID(ctx, org)
@@ -231,6 +231,18 @@ func (r *RAG) Index(ctx context.Context, org int64, id uuid.UUID) error {
 			}
 		}
 	}
+	// While the organization is being re-embedded, new vectors wait in
+	// pending_* with the others and switch together (CF-214). Checked outside
+	// the transaction: if the switch lands in between, the chunk stays pending
+	// until the next re-embed run swaps it (it selects pending_model=target).
+	transition := false
+	if len(vectors) > 0 {
+		searchModel, err := vectorstore.SearchModel(ctx, r.KB.Repo.Pool, ChunkSource, org, r.Embedder.Model())
+		if err != nil {
+			return err
+		}
+		transition = searchModel != r.Embedder.Model()
+	}
 	return r.KB.Repo.Within(ctx, func(q *db.Queries) error {
 		current, err := q.KnowledgeLockArticle(ctx, db.KnowledgeLockArticleParams{OrganizationID: org, Uuid: id})
 		if err != nil {
@@ -246,11 +258,15 @@ func (r *RAG) Index(ctx context.Context, org int64, id uuid.UUID) error {
 		docs := []Document{}
 		if !missing {
 			for i, part := range parts {
-				c, err := q.KnowledgeInsertChunk(ctx, db.KnowledgeInsertChunkParams{OrganizationID: org, ArticleID: current.ID, Version: current.PublishedVersion.Int32, Ordinal: safeconv.ToInt32(i), Content: part, Embedding: vectors[i], EmbeddingModel: r.Embedder.Model()})
+				in := db.KnowledgeInsertChunkParams{OrganizationID: org, ArticleID: current.ID, Version: current.PublishedVersion.Int32, Ordinal: safeconv.ToInt32(i), Content: part, Embedding: vectorstore.Vector(vectors[i]), EmbeddingModel: r.Embedder.Model()}
+				if transition {
+					in.Embedding, in.PendingEmbedding, in.PendingModel = nil, vectorstore.Vector(vectors[i]), pgtype.Text{String: r.Embedder.Model(), Valid: true}
+				}
+				chunkUUID, err := q.KnowledgeInsertChunk(ctx, in)
 				if err != nil {
 					return err
 				}
-				docs = append(docs, Document{ID: c.Uuid.String(), OrganizationID: org, ArticleUUID: id.String(), Locale: current.Locale, Visibility: published.Visibility, Content: part})
+				docs = append(docs, Document{ID: chunkUUID.String(), OrganizationID: org, ArticleUUID: id.String(), Locale: current.Locale, Visibility: published.Visibility, Content: part})
 			}
 		}
 		if missing {
@@ -267,9 +283,25 @@ func (r *RAG) Index(ctx context.Context, org int64, id uuid.UUID) error {
 	})
 }
 
-func (r *RAG) vectorCandidates(ctx context.Context, org int64, query, locale string, publicOnly bool) ([]model.Citation, error) {
+func (r *RAG) vectorCandidates(ctx context.Context, scope vectorstore.Scope, query, locale string, publicOnly bool) ([]model.Citation, error) {
+	org := scope.OrganizationID
+	target := r.Embedder.Model()
+	searchModel, err := vectorstore.SearchModel(ctx, r.KB.Repo.Pool, ChunkSource, org, target)
+	if err != nil {
+		return nil, err
+	}
 	started := time.Now()
-	embedded, err := r.Embedder.Embed(ctx, []string{query})
+	var embedded ai.Embeddings
+	switch named, ok := r.Embedder.(ai.ModelEmbedder); {
+	case searchModel == target:
+		embedded, err = r.Embedder.Embed(ctx, []string{query})
+	case ok:
+		// Re-embedding in progress: the query uses the stored vectors' model.
+		embedded, err = named.EmbedModel(ctx, searchModel, []string{query})
+	default:
+		slog.WarnContext(ctx, "knowledge_vector_search_skipped", "organization_id", org, "reason", "embedder cannot use the stored vectors' model", "model", searchModel)
+		return []model.Citation{}, nil
+	}
 	slog.InfoContext(ctx, "ai_stage", "stage", "embeddings", "organization_id", org, "duration_ms", time.Since(started).Milliseconds(), "failed", err != nil)
 	if err != nil {
 		return nil, err
@@ -277,14 +309,30 @@ func (r *RAG) vectorCandidates(ctx context.Context, org int64, query, locale str
 	if !validVectors(embedded.Vectors, 1) {
 		return nil, ai.ErrInvalidOutput
 	}
-	rows, err := r.KB.Repo.Q.KnowledgeSearchVector(ctx, db.KnowledgeSearchVectorParams{OrganizationID: org, Locale: locale, Embedding: embedded.Vectors[0], PublicOnly: publicOnly, EmbeddingModel: r.Embedder.Model()})
+	restrict, viewer := deptscope.Effective(ctx).Args()
+	hits, err := vectorstore.Search(ctx, r.KB.Repo.Pool, ChunkSource, scope, vectorstore.Query{
+		Vector: embedded.Vectors[0], Model: searchModel, MinSimilarity: KnowledgeMinSimilarity, Limit: 40,
+		Args: pgx.NamedArgs{"locale": locale, "public_only": publicOnly},
+	})
+	if err != nil || len(hits) == 0 {
+		return []model.Citation{}, err
+	}
+	ids := make([]int64, len(hits))
+	for i, h := range hits {
+		ids[i] = h.ID
+	}
+	rows, err := r.KB.Repo.Q.KnowledgeChunksByIDs(ctx, db.KnowledgeChunksByIDsParams{OrganizationID: org, Ids: ids, Locale: locale, PublicOnly: publicOnly, DeptRestrict: restrict, ViewerDepartments: viewer})
 	if err != nil {
 		return nil, err
 	}
-	list := []model.Citation{}
+	byID := map[int64]db.KnowledgeChunksByIDsRow{}
 	for _, c := range rows {
-		if c.Score > 0 {
-			list = append(list, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale})
+		byID[c.ID] = c
+	}
+	list := []model.Citation{}
+	for _, h := range hits {
+		if c, ok := byID[h.ID]; ok {
+			list = append(list, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: h.Specific})
 		}
 	}
 	return list, nil
@@ -327,8 +375,24 @@ func (r *RAG) skip(ctx context.Context, org int64, a db.KnowledgePublishedRow, r
 	})
 }
 
+// Search is the organization-wide (all brands) search for internal callers:
+// admin search, team chat, help center. It follows the department scope of
+// ctx (CF-215, deptscope): without one only organization-wide articles are
+// candidates.
 func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publicOnly bool) ([]model.Citation, error) {
+	return r.SearchScoped(ctx, vectorstore.Organization(org), query, locale, publicOnly)
+}
+
+// SearchScoped searches inside a scope (CF-214). With a conversation scope the
+// brand's chunks rank first and organization-wide chunks are the fallback;
+// another brand's chunks never match.
+func (r *RAG) SearchScoped(ctx context.Context, scope vectorstore.Scope, query, locale string, publicOnly bool) ([]model.Citation, error) {
+	org := scope.OrganizationID
+	if org <= 0 {
+		return nil, model.ErrInvalid
+	}
 	ctx = orgctx.WithOrganizationID(ctx, org)
+	restrict, viewer := deptscope.Effective(ctx).Args()
 	if len(query) == 0 || len(query) > 4000 || (locale != "tr" && locale != "en") {
 		return nil, model.ErrInvalid
 	}
@@ -342,7 +406,7 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 	}()
 	lists := [][]model.Citation{}
 	if r.Embedder != nil {
-		list, err := r.vectorCandidates(ctx, org, query, locale, publicOnly)
+		list, err := r.vectorCandidates(ctx, scope, query, locale, publicOnly)
 		switch {
 		case err == nil:
 			lists = append(lists, list)
@@ -361,13 +425,15 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 		if err != nil {
 			return nil, err
 		}
-		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly})
+		rows, err := r.KB.Repo.Q.KnowledgeValidChunks(ctx, db.KnowledgeValidChunksParams{OrganizationID: org, Locale: locale, Ids: ids, PublicOnly: publicOnly,
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
 		byID := map[uuid.UUID]model.Citation{}
 		for _, c := range rows {
-			byID[c.Uuid] = model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale}
+			byID[c.Uuid] = model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific && !scope.AllBrands}
 		}
 		for _, id := range ids {
 			if c, ok := byID[id]; ok {
@@ -375,12 +441,14 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 			}
 		}
 	} else {
-		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly})
+		rows, err := r.KB.Repo.Q.KnowledgeSearchLexical(ctx, db.KnowledgeSearchLexicalParams{OrganizationID: org, Locale: locale, Q: query, PublicOnly: publicOnly,
+			AllBrands: scope.AllBrands, BrandID: scope.BrandID, AllDepartments: scope.AllDepartments, DepartmentID: scope.DepartmentID,
+			DeptRestrict: restrict, ViewerDepartments: viewer})
 		if err != nil {
 			return nil, err
 		}
 		for _, c := range rows {
-			lexical = append(lexical, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale})
+			lexical = append(lexical, model.Citation{ChunkUUID: c.Uuid, ArticleUUID: c.ArticleUuid, Version: c.Version, Title: c.Title, Content: c.Content, Slug: c.Slug, Locale: c.Locale, Specific: c.Specific && !scope.AllBrands})
 		}
 	}
 	slog.InfoContext(ctx, "ai_stage", "stage", "lexical_search", "organization_id", org, "duration_ms", time.Since(lexicalStarted).Milliseconds())
@@ -390,6 +458,7 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 		for rank, c := range list {
 			old := merged[c.ChunkUUID]
 			c.Score = old.Score + 1/float64(60+rank+1)
+			c.Specific = c.Specific || old.Specific
 			merged[c.ChunkUUID] = c
 		}
 	}
@@ -402,6 +471,10 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		// Brand/department knowledge first; organization-wide knowledge is the fallback.
+		if out[i].Specific != out[j].Specific {
+			return out[i].Specific
+		}
 		if out[i].Score == out[j].Score {
 			return out[i].ChunkUUID.String() < out[j].ChunkUUID.String()
 		}
@@ -427,6 +500,8 @@ func (r *RAG) Search(ctx context.Context, org int64, query, locale string, publi
 				delete(byID, c.ChunkUUID)
 			}
 		}
+		// The reranker orders within a tier; it cannot lift a fallback above the brand's own knowledge.
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Specific && !out[j].Specific })
 	}
 	return out, nil
 }

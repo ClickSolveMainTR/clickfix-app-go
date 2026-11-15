@@ -25,5 +25,12 @@ func Capabilities() []*capability.Capability {
 			Input: capability.Object(nil, capability.Paged(map[string]any{"since": rfc})),
 			Run:   capability.Get("/v1/tenant/ai/knowledge-gaps", "since", "limit", "offset"),
 		},
+		{
+			Name: "ai.knowledge_panel", Module: "ai", Kind: capability.Read, Permission: rbac.PermTenantAIInsightsRead, Surfaces: s, Routes: routes,
+			Title:       capability.T("AI bilgi paneli", "AI knowledge panel"),
+			Description: "Knowledge layer panel (default last 30 days): answer cache hit rate, AI calls and cost, knowledge gaps, suggestion pipeline (pending/approved/rejected), category distribution and classification confidence, handoff rate, latest evaluation run vs the previous one. A section with available=false has no data yet (reason says why).",
+			Input:       capability.Object(nil, map[string]any{"from": rfc, "until": rfc, "department_uuid": map[string]any{"type": "string", "format": "uuid"}}),
+			Run:         capability.Get("/v1/tenant/analytics/ai-knowledge", "from", "until", "department_uuid"),
+		},
 	}
 }

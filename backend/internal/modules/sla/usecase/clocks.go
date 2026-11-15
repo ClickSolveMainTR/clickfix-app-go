@@ -171,6 +171,22 @@ func (s *Service) match(ctx context.Context, q *db.Queries, conv db.Conversation
 	if err != nil || len(policies) == 0 {
 		return nil, err
 	}
+	// A department's policy (CF-215) is more specific than the brand's.
+	if conv.DepartmentID.Valid {
+		d, err := q.GetDepartmentWorkingHours(ctx, db.GetDepartmentWorkingHoursParams{OrganizationID: conv.OrganizationID, ID: conv.DepartmentID.Int64})
+		if err != nil && !isNoRows(err) {
+			return nil, err
+		}
+		if err == nil && d.SlaPolicyID.Valid {
+			for _, p := range policies {
+				if p.Uuid == uuid.UUID(d.SlaPolicyID.Bytes) {
+					if out, err := s.policyFor(ctx, q, conv, p); err != nil || out != nil {
+						return out, err
+					}
+				}
+			}
+		}
+	}
 	if conv.BrandID.Valid {
 		b, err := q.GetBrand(ctx, db.GetBrandParams{OrganizationID: conv.OrganizationID, Uuid: uuid.UUID(conv.BrandID.Bytes)})
 		if err != nil {
@@ -308,6 +324,19 @@ func (s *Service) calendarFor(ctx context.Context, q *db.Queries, conv db.Conver
 				}
 			}
 		}
+	case conv.DepartmentID.Valid:
+		// No team yet: the department's own hours (CF-215) over the
+		// organization's schedule.
+		bh, err = q.GetDefaultBusinessHours(ctx, conv.OrganizationID)
+		if isNoRows(err) {
+			bh, err = db.BusinessHour{OrganizationID: conv.OrganizationID, Timezone: "Europe/Istanbul", UsePublicHolidays: true, HolidayCountry: "TR"}, nil
+		}
+		if err == nil {
+			var own bool
+			if bh, own, err = s.departmentHours(ctx, q, conv, bh); err == nil && !own && bh.ID == 0 {
+				return nil, nil
+			}
+		}
 	default:
 		bh, err = q.GetDefaultBusinessHours(ctx, conv.OrganizationID)
 	}
@@ -357,6 +386,50 @@ func (s *Service) teamHours(ctx context.Context, q *db.Queries, conv db.Conversa
 	base.WorkingHours = raw
 	if row.Timezone.Valid && row.Timezone.String != "" {
 		base.Timezone = row.Timezone.String
+	}
+	return base, true, nil
+}
+
+// departmentHours applies a department's own working hours (CF-215, the
+// teams.working_hours shape) onto base, like teamHours.
+func (s *Service) departmentHours(ctx context.Context, q *db.Queries, conv db.Conversation, base db.BusinessHour) (db.BusinessHour, bool, error) {
+	row, err := q.GetDepartmentWorkingHours(ctx, db.GetDepartmentWorkingHoursParams{OrganizationID: conv.OrganizationID, ID: conv.DepartmentID.Int64})
+	if err != nil {
+		if isNoRows(err) {
+			return base, false, nil
+		}
+		return base, false, err
+	}
+	return overlayHours(base, row.WorkingHours, row.Timezone)
+}
+
+// overlayHours puts {"days": [...]} hours and a timezone onto base.
+func overlayHours(base db.BusinessHour, hours []byte, tz pgtype.Text) (db.BusinessHour, bool, error) {
+	if len(hours) == 0 {
+		return base, false, nil
+	}
+	var own struct {
+		Days []struct {
+			Day   string `json:"day"`
+			Open  bool   `json:"open"`
+			Start string `json:"start"`
+			End   string `json:"end"`
+		} `json:"days"`
+	}
+	if err := json.Unmarshal(hours, &own); err != nil || len(own.Days) == 0 {
+		return base, false, nil
+	}
+	week := businesshours.Week{}
+	for _, d := range own.Days {
+		week[d.Day] = businesshours.Day{Closed: !d.Open, Open: d.Start, Close: d.End}
+	}
+	raw, err := json.Marshal(week)
+	if err != nil {
+		return base, false, err
+	}
+	base.WorkingHours = raw
+	if tz.Valid && tz.String != "" {
+		base.Timezone = tz.String
 	}
 	return base, true, nil
 }

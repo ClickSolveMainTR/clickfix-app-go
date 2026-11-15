@@ -55,7 +55,7 @@ cd backend && make migrate-up && go build ./... && go test ./...
 Round-trip on a throwaway database before shipping:
 
 ```bash
-docker run -d --rm --name mig-test -e POSTGRES_PASSWORD=t -p 55439:5432 postgres:17-alpine
+docker run -d --rm --name mig-test -e POSTGRES_PASSWORD=t -p 55439:5432 pgvector/pgvector:0.8.7-pg18-trixie
 migrate -path migrations -database "postgres://postgres:t@127.0.0.1:55439/postgres?sslmode=disable" up
 migrate -path migrations -database "postgres://postgres:t@127.0.0.1:55439/postgres?sslmode=disable" down 1
 migrate -path migrations -database "postgres://postgres:t@127.0.0.1:55439/postgres?sslmode=disable" up

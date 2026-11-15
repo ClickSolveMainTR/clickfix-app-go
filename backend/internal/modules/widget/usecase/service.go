@@ -29,6 +29,7 @@ import (
 	convmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	convrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/repository"
 	convusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
+	deptmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/model"
 	formsengine "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/engine"
 	formsmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/forms/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
@@ -111,6 +112,7 @@ type Service struct {
 	issuer       TokenIssuer
 	appOrigin    string
 	forms        FormSource
+	departments  DepartmentSource
 	fields       FieldSource
 	hours        businesshours.Source
 	log          *slog.Logger
@@ -391,6 +393,27 @@ type Bootstrap struct {
 	// RequestForm is the start form of a new conversation (CF-52); null
 	// when the organization offers none on the widget.
 	RequestForm *formsmodel.PublicForm `json:"request_form"`
+	// Departments the visitor may pick for a new conversation (CF-215);
+	// empty hides the picker and the AI routes the first message.
+	Departments []deptmodel.WidgetDepartment `json:"departments"`
+}
+
+// DepartmentSource is the departments use case (CF-215): the widget's
+// picker and the visitor's pick on a new conversation.
+type DepartmentSource interface {
+	Widget(ctx context.Context, org int64, brand pgtype.UUID) ([]deptmodel.WidgetDepartment, error)
+	PickFromWidget(ctx context.Context, org, conversationID int64, department uuid.UUID) error
+}
+
+// WithDepartments adds the department picker (CF-215).
+func (s *Service) WithDepartments(d DepartmentSource) *Service { s.departments = d; return s }
+
+// brandOf is the widget's brand as a query argument.
+func brandOf(w Widget) pgtype.UUID {
+	if w.Instance.BrandID == nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: *w.Instance.BrandID, Valid: true}
 }
 
 // Bootstrap starts or resumes a visitor session. A valid (or recently
@@ -436,6 +459,14 @@ func (s *Service) Bootstrap(ctx context.Context, w Widget, token string, in Boot
 			return Bootstrap{}, err
 		}
 		out.RequestForm = form
+	}
+	out.Departments = []deptmodel.WidgetDepartment{}
+	if s.departments != nil {
+		list, err := s.departments.Widget(ctx, w.Instance.OrganizationID, brandOf(w))
+		if err != nil {
+			return Bootstrap{}, err
+		}
+		out.Departments = list
 	}
 	out.Realtime.Enabled = s.issuer != nil && s.issuer.Enabled()
 	out.Limits.MaxTextLength = widget.MaxTextLength
@@ -998,6 +1029,9 @@ type SendInput struct {
 	Intent string
 	// Attributes are SDK attributes set before the contact existed.
 	Attributes map[string]any
+	// DepartmentUUID is the department the visitor picked for a new
+	// conversation (CF-215); nil lets the AI route the first message.
+	DepartmentUUID *uuid.UUID
 }
 
 // Intents of a visitor message.
@@ -1154,6 +1188,11 @@ func (s *Service) Send(ctx context.Context, w Widget, claims widget.Claims, in S
 	if form != nil && created && conv.MessageCount <= 1 {
 		if err := s.forms.Apply(ctx, org, conv.ID, formUUID, *form); err != nil {
 			s.log.Warn("widget_request_form_apply_failed", "instance", inst.UUID, "error", err)
+		}
+	}
+	if in.DepartmentUUID != nil && created && conv.MessageCount <= 1 && s.departments != nil {
+		if err := s.departments.PickFromWidget(ctx, org, conv.ID, *in.DepartmentUUID); err != nil {
+			s.log.Warn("widget_department_pick_failed", "instance", inst.UUID, "error", err)
 		}
 	}
 	if in.Profile != (ProfileInput{}) {

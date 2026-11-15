@@ -81,6 +81,10 @@ type Reply struct {
 	Confidence float64     `json:"confidence"`
 	Handoff    bool        `json:"handoff"`
 	Citations  []uuid.UUID `json:"citation_ids"`
+	// UnitUUID is the knowledge unit that answered without a generation
+	// call, Memory the cache outcome ("exact" or "semantic"; CF-216).
+	UnitUUID *uuid.UUID `json:"unit_uuid,omitempty"`
+	Memory   string     `json:"memory,omitempty"`
 }
 
 type CopilotInput struct {

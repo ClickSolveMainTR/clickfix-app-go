@@ -128,6 +128,7 @@ var cf211Cases = map[string]cf211Case{
 	"status.incidents":   {`{}`, "GET /v1/tenant/status/incidents", nil},
 	"ai.performance":     {`{}`, "GET /v1/tenant/ai/performance", nil},
 	"ai.knowledge_gaps":  {`{"limit":10}`, "GET /v1/tenant/ai/knowledge-gaps?limit=10", nil},
+	"ai.knowledge_panel": {`{"from":"2030-01-01T00:00:00Z"}`, "GET /v1/tenant/analytics/ai-knowledge?from=2030-01-01T00%3A00%3A00Z", nil},
 }
 
 func params(t *testing.T, raw string) capability.Params {

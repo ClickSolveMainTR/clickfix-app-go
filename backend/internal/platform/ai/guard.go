@@ -28,6 +28,9 @@ func Guard(text string) error {
 type piiRule struct {
 	kind    string
 	pattern *regexp.Regexp
+	// group, when set, is the capture group that holds the personal data;
+	// the rest of the match is context (a keyword or a word boundary) kept as is.
+	group int
 }
 
 // uuidPattern marks spans the PII rules must leave alone: a random UUID whose
@@ -35,9 +38,20 @@ type piiRule struct {
 // rules below, which broke tool params that carry resource ids (CF-183).
 var uuidPattern = regexp.MustCompile(`(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b`)
 
-// replaceOutsideUUIDs applies fn to every match of pattern that does not overlap a UUID.
-func replaceOutsideUUIDs(text string, pattern *regexp.Regexp, fn func(string) string) string {
-	matches := pattern.FindAllStringIndex(text, -1)
+// replaceRule applies fn to the personal-data span (the whole match or the
+// rule's capture group) of every match that does not overlap a UUID.
+func replaceRule(text string, rule piiRule, fn func(string) string) string {
+	found := rule.pattern.FindAllStringSubmatchIndex(text, -1)
+	matches := make([][]int, 0, len(found))
+	for _, m := range found {
+		a, b := m[0], m[1]
+		if rule.group > 0 {
+			a, b = m[2*rule.group], m[2*rule.group+1]
+		}
+		if a >= 0 && b > a {
+			matches = append(matches, []int{a, b})
+		}
+	}
 	if len(matches) == 0 {
 		return text
 	}
@@ -71,6 +85,16 @@ var piiRules = []piiRule{
 	{kind: "CARD", pattern: regexp.MustCompile(`\b(?:[0-9][ -]?){12,18}[0-9]\b`)},
 	{kind: "TCKN", pattern: regexp.MustCompile(`\b[1-9][0-9]{10}\b`)},
 	{kind: "PHONE", pattern: regexp.MustCompile(`(?:\+?90[ .()-]*)?\b0?[2-5][0-9]{2}[ .()-]*[0-9]{3}[ .()-]*[0-9]{2}[ .()-]*[0-9]{2}\b`)},
+	// CF-217: the history pipeline sends old tickets to a provider, so the
+	// shared rules also cover tax numbers, companies, addresses and names.
+	// RE2 has no Unicode \b; a leading non-letter group stands in for it.
+	{kind: "TAXNO", group: 1, pattern: regexp.MustCompile(`(?i)(?:vkn|v\.k\.n\.?|vergi\s*(?:kimlik\s*)?(?:no|numaras[ıi])|tax\s*(?:id|no|number))\s*[:#=.]?\s*([0-9]{10})(?:[^0-9]|$)`)},
+	{kind: "COMPANY", group: 1, pattern: regexp.MustCompile(`(?:^|[^\p{L}0-9])((?:\p{Lu}[\p{L}0-9&'\-]*\s+){1,5}(?:A\.\s?Ş\.|AŞ|Ltd\.?\s*Şti\.?|Limited\s+Şirketi|Anonim\s+Şirketi|LLC|Inc\.|GmbH|Ltd\.|Corp\.))`)},
+	{kind: "ADDRESS", group: 1, pattern: regexp.MustCompile(`(?:^|[^\p{L}0-9])((?:[\p{L}0-9.'\-]+\s+){1,3}(?:Mahallesi|Mah\.|Mh\.|Caddesi|Cad\.|Cd\.|Sokağı|Sokak|Sok\.|Sk\.|Bulvarı|Blv\.)(?:[\s,]*(?:No|Kat|Daire|D)\s*[:.]?\s*[0-9]+[/0-9A-Za-z]*)*)`)},
+	{kind: "ADDRESS", pattern: regexp.MustCompile(`\b[0-9]{1,5}\s+(?:[A-Z][a-z]+\s+){1,3}(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Boulevard|Blvd\.)`)},
+	{kind: "NAME", group: 1, pattern: regexp.MustCompile(`(?:^|[^\p{L}])(?:Sayın|Sn\.|Mr\.?|Mrs\.?|Ms\.?|Dr\.)\s+(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+){0,2})`)},
+	{kind: "NAME", group: 1, pattern: regexp.MustCompile(`(?:^|[^\p{L}])(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+)?)\s+(?:Bey|Hanım|Hn\.)(?:[^\p{L}]|$)`)},
+	{kind: "NAME", group: 1, pattern: regexp.MustCompile(`(?:^|[^\p{L}])(?:[Aa]dım|[İi]smim|[Bb]enim adım|[Mm]y name is)\s+(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+){0,2})`)},
 }
 
 // Masker is per run. Its reversible map never enters persistence or a provider request.
@@ -91,7 +115,7 @@ func NewMasker() *Masker {
 
 func (m *Masker) Mask(text string) string {
 	for _, rule := range piiRules {
-		text = replaceOutsideUUIDs(text, rule.pattern, func(value string) string {
+		text = replaceRule(text, rule, func(value string) string {
 			if old, ok := m.byValue[value]; ok {
 				return old
 			}
@@ -123,7 +147,7 @@ func (m *Masker) Render(text string, allowed bool) string {
 func RedactPII(text string) string {
 	for _, rule := range piiRules {
 		kind := rule.kind
-		text = replaceOutsideUUIDs(text, rule.pattern, func(string) string { return "[PII_" + kind + "]" })
+		text = replaceRule(text, rule, func(string) string { return "[PII_" + kind + "]" })
 	}
 	return text
 }

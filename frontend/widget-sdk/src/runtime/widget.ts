@@ -127,6 +127,8 @@ export class Widget {
   private draft = "";
   private profile = { name: "", email: "", phone: "" };
   private consentChecked = false;
+  /** Department the visitor picked for a new conversation (CF-215). */
+  private department = "";
   private formValues: Record<string, unknown> = {};
   private error = "";
   private ready = false;
@@ -1228,6 +1230,11 @@ export class Widget {
       if (this.profile.name) fields.name = this.profile.name;
       if (this.profile.email) fields.email = this.profile.email;
       if (this.profile.phone) fields.phone = this.profile.phone;
+      if (
+        this.department &&
+        this.boot?.departments?.some((d) => d.uuid === this.department)
+      )
+        fields.department_uuid = this.department;
       if (this.s!.prechat.enabled && this.s!.prechat.consent.enabled)
         consent = this.consentChecked;
     }
@@ -1268,6 +1275,7 @@ export class Widget {
       if (attributes)
         for (const k of Object.keys(attributes)) delete this.pendingAttrs[k];
       if (form) this.formValues = {};
+      if (first) this.department = "";
       const i = this.messages.indexOf(optimistic);
       if (i >= 0) this.messages[i] = sent.message;
       if (!this.active || this.active.uuid !== sent.conversation_uuid) {
@@ -2936,6 +2944,8 @@ export class Widget {
       const form = this.boot!.request_form;
       if (form?.description)
         fields.push(el("div", { class: "notice", text: form.description }));
+      const departments = this.departmentField();
+      if (departments) fields.push(departments);
       for (const f of this.formFields()) fields.push(this.renderFormField(f));
       fields.push(...this.preChatFields());
     }
@@ -3107,6 +3117,25 @@ export class Widget {
       s.appearance.show_branding
         ? el("div", { class: "powered", text: this.t("poweredBy") })
         : null,
+    ]);
+  }
+
+  /**
+   * Department picker of a new conversation (CF-215). Optional: without a
+   * pick the AI routes the first message.
+   */
+  private departmentField(): Node | null {
+    const list = this.boot?.departments ?? [];
+    if (!list.length) return null;
+    const sel = el("select", {}, [
+      el("option", { value: "", text: this.t("departmentAny") }),
+      ...list.map((d) => el("option", { value: d.uuid, text: d.name })),
+    ]);
+    sel.value = this.department;
+    sel.addEventListener("change", () => (this.department = sel.value));
+    return el("label", { class: "field" }, [
+      el("span", { text: this.t("department") }),
+      sel,
     ]);
   }
 
