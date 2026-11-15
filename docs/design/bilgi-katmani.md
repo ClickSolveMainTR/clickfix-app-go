@@ -177,6 +177,16 @@ Departman bir iş birimidir (teknik destek, satış, faturalama); ekip değildir
 
 **Sütun tipi.** `department_id` her tabloda `BIGINT` ve `(organization_id, department_id) → departments(organization_id, id)` bileşik yabancı anahtarıdır (ekipler ve konuşma ekibiyle aynı kalıp). Paralel dallarda NULL olarak eklenen `department_id` sütunları bu tipe uyar ve birleşmeden sonra aynı yabancı anahtarı alır. `UUID` tipiyle eklenmiş tek sütun (`knowledge_chunks.department_id`, `000225_pgvector`) `000233_vector_department_bigint` ile `BIGINT`'e çevrildi ve `fk_knowledge_chunks_department` aldı (CF-222); migration sütunun boş olduğunu doğrular, değilse durur.
 
+**Yabancı anahtarlar (CF-224, migration `000235_knowledge_department_fks`).** CF-216–CF-220 dallarında FK'siz eklenen `department_id` sütunları bu migration'la anahtarlandı: `history_imports`, `history_clusters`, `history_cases`, `history_decisions` (000229); `categories`, `category_assignments`, `category_labels` (000227); `ai_evaluation_cases`, `ai_evaluations`, `ai_evaluation_results` (000230); `knowledge_units`, `ai_case_memories`, `knowledge_gap_questions` (000228). Migration önce satırın organizasyonunda karşılığı olmayan değerleri `NULL` (organizasyon geneli) yapar, sonra anahtarı ekler; başka organizasyonun departmanı artık yazılamaz. 000227, 000228, 000229 ve 000230'daki "FK'yi CF-215 ekleyecek" yorumları geçersizdir: CF-215 bu anahtarları eklemedi, CF-224 ekledi (uygulanmış migration'lar değiştirilmez). Tek istisna `knowledge_chunks.department_id` (`UUID`); CF-222 çevirir. `departments` paketindeki şema testi FK'siz departman sütunu kalmadığını denetler.
+
+**Departman silinince.** İki sınıf vardır:
+
+| Sınıf | Tablolar | Silmede |
+|---|---|---|
+| Departmanın sahip olduğu bilgi | `knowledge_articles`, `knowledge_sources`, `business_context_sections`, `knowledge_suggestions` | `NO ACTION`: bilgi varken departman silinemez; silme isteği `?move_to=` ile bilgiyi önce taşır. |
+| Bilgi hakkındaki kayıtlar ve atamalar | `teams`, `conversations`, `conversation_department_transfers` ve CF-224'ün anahtarladığı tüm tablolar | `ON DELETE SET NULL (department_id)`: satır kalır, organizasyon geneline düşer. |
+| Paylaşım | `department_knowledge_shares` | `CASCADE`: paylaşım silinir. |
+
 #### Görünürlük kuralı
 
 Varsayılan kapalıdır. Kural tek yerde, SQL fonksiyonu `department_visible(org, kind, id, department_id, viewer_departments)`:
