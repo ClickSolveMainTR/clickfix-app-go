@@ -11326,6 +11326,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/contacts/{uuid}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contact page (CF-221)
+         * @description Everything the contact page shows above its timeline, in a fixed number of queries: the contact with identities and custom fields, its company (owner, health, revenue), health stats (open conversations, last contact, CSAT, SLA), conversations with tags, files, appointments, consents and KVKK requests, roadmap feedback, forum posts, status notices and the cached AI summary. Requires `tenant.contacts.read`; each section is filtered by the member's permissions (`sections` says which ones are visible, hidden ones are empty): conversations, tags, files and status notices need `tenant.conversations.read` and follow the inbox team visibility rule (without `tenant.conversations.read_all` only the member's teams, assignments, unrouted and joined conversations); NPS / CES need `tenant.conversations.read_all`; appointments `tenant.appointments.read`; consents and KVKK requests `tenant.settings.write`; feedback and forum `tenant.feedback.read` (pending forum posts `tenant.feedback.manage`); the AI summary `tenant.ai.use`.
+         */
+        get: operations["getTenantContactOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unified contact timeline (CF-221)
+         * @description Newest first, one stream over conversations opened and resolved, CSAT and NPS / CES answers, notes, appointments, consent changes, KVKK requests, in-product events, roadmap votes and comments, forum posts, status notices and system events (contact created, channel identity added, edited, merged). Kinds the member may not see (same rules as the overview sections) are dropped; `timeline_kinds` of the overview lists the visible ones. Page backwards with `before` = the previous page's `next_before`. Requires `tenant.contacts.read`.
+         */
+        get: operations["getTenantContactTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a note to a contact (CF-221)
+         * @description Requires `tenant.contacts.write`. Notes follow the contact on merge, are part of the KVKK export and are deleted on erase.
+         */
+        post: operations["postTenantContactNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contact-notes/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a contact note (CF-221)
+         * @description Requires `tenant.contacts.write`; only the author may delete unless the member also holds `tenant.contacts.delete`.
+         */
+        delete: operations["deleteTenantContactNote"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/ai-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the AI summary of a contact (CF-221)
+         * @description Requires `tenant.contacts.read` and `tenant.ai.use`. Runs through the AI engine (policy, plan, credits, PII masking and guard apply; billed like other AI runs) over what the member may see: visible conversations (latest public messages) and notes. The result is cached and returned by the overview as `ai_summary`; members who see every conversation share one summary, a member limited by team visibility gets their own.
+         */
+        post: operations["postTenantContactAISummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/contacts/export": {
         parameters: {
             query?: never;
@@ -26848,6 +26948,266 @@ export interface components {
             author: components["schemas"]["InboxRef"] | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description Which sections the member may see (CF-221); a hidden section is returned empty. */
+        ContactProfileSections: {
+            conversations: boolean;
+            surveys: boolean;
+            appointments: boolean;
+            compliance: boolean;
+            feedback: boolean;
+            ai: boolean;
+        };
+        /** @description Counts over the conversations the member may see; csat_* over the last 90 days (csat_total all time); nps_latest / ces_latest the latest answer. */
+        ContactProfileStats: {
+            /** Format: int64 */
+            open_conversations: number;
+            /** Format: int64 */
+            closed_conversations: number;
+            /**
+             * Format: int64
+             * @description Open conversations past an SLA target.
+             */
+            sla_breached: number;
+            /**
+             * Format: int64
+             * @description Open, not breached, a target falls due within an hour.
+             */
+            sla_at_risk: number;
+            /** Format: int64 */
+            message_count: number;
+            /** Format: date-time */
+            first_conversation_at: string | null;
+            /** Format: date-time */
+            last_conversation_at: string | null;
+            /** Format: date-time */
+            last_inbound_at: string | null;
+            csat_average: number | null;
+            /** Format: int64 */
+            csat_count: number;
+            /** Format: int64 */
+            csat_total: number;
+            nps_latest: number | null;
+            ces_latest: number | null;
+            /** Format: int64 */
+            attachment_count: number;
+            /** Format: int64 */
+            note_count: number;
+        };
+        ContactProfileConversation: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            subject: string;
+            status: string;
+            channel_type: string;
+            priority: string;
+            /** Format: date-time */
+            last_message_at: string;
+            last_message_preview: string;
+            /** Format: date-time */
+            created_at: string;
+            message_count: number;
+            /** Format: date-time */
+            sla_breached_at: string | null;
+            /**
+             * Format: date-time
+             * @description Next SLA target (first response, next response or resolution).
+             */
+            sla_due_at: string | null;
+            /** @description Assigned teammate; empty when none. */
+            assignee: string;
+            /** @description Assigned team; empty when none. */
+            team: string;
+            tags: string[];
+        };
+        ContactProfileTag: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+            /** Format: int64 */
+            conversations: number;
+        };
+        /** @description A file of one of the contact's conversations; it opens from its conversation, which owns the download URL. */
+        ContactProfileAttachment: {
+            /** Format: uuid */
+            uuid: string;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            conversation_uuid: string;
+            /** Format: int64 */
+            conversation_number: number;
+        };
+        ContactProfileAppointment: {
+            /** Format: uuid */
+            uuid: string;
+            title: string;
+            status: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            timezone: string;
+            location_kind: string;
+            /** @description Appointment type name. */
+            type: string;
+            host: string;
+        };
+        /** @description The latest decision for one purpose. */
+        ContactProfileConsent: {
+            /** Format: uuid */
+            uuid: string;
+            purpose: string;
+            granted: boolean;
+            notice_version: string;
+            source: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfilePrivacyRequest: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "export" | "erase";
+            /** @enum {string} */
+            status: "pending" | "processing" | "completed";
+            requested_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            expires_at: string | null;
+        };
+        ContactProfileFeedback: {
+            /** @enum {string} */
+            kind: "vote" | "comment";
+            /** Format: uuid */
+            request_uuid: string;
+            title: string;
+            status: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfileForumPost: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            /** @enum {string} */
+            status: "pending" | "published" | "rejected";
+            is_topic: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfileStatusNotice: {
+            /** Format: uuid */
+            uuid: string;
+            title: string;
+            severity: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactAISummary: {
+            summary: string;
+            open_topics: string[];
+            /** @enum {string} */
+            sentiment: "positive" | "neutral" | "negative" | "unknown";
+            /** @enum {string} */
+            locale: "tr" | "en";
+            /** Format: date-time */
+            generated_at: string;
+            /** @description New activity happened after the summary was generated. */
+            stale: boolean;
+        };
+        /** @enum {string} */
+        ContactTimelineKind: "conversation_opened" | "conversation_resolved" | "csat" | "survey" | "note" | "appointment" | "consent" | "privacy_request" | "event" | "feedback" | "forum" | "status_notice" | "system";
+        ContactOverview: {
+            contact: components["schemas"]["Contact"];
+            company: components["schemas"]["Company"] | null;
+            stats: components["schemas"]["ContactProfileStats"];
+            /** @description Open ones first, then recent closed ones (up to 50). */
+            conversations: components["schemas"]["ContactProfileConversation"][];
+            tags: components["schemas"]["ContactProfileTag"][];
+            attachments: components["schemas"]["ContactProfileAttachment"][];
+            /** @description Upcoming first (soonest), then past ones. */
+            appointments: components["schemas"]["ContactProfileAppointment"][];
+            consents: components["schemas"]["ContactProfileConsent"][];
+            privacy_requests: components["schemas"]["ContactProfilePrivacyRequest"][];
+            feedback: components["schemas"]["ContactProfileFeedback"][];
+            forum_posts: components["schemas"]["ContactProfileForumPost"][];
+            status_notices: components["schemas"]["ContactProfileStatusNotice"][];
+            ai_summary: components["schemas"]["ContactAISummary"] | null;
+            sections: components["schemas"]["ContactProfileSections"];
+            /** @description Timeline kinds the member may see. */
+            timeline_kinds: components["schemas"]["ContactTimelineKind"][];
+        };
+        ContactTimelineItem: {
+            kind: components["schemas"]["ContactTimelineKind"];
+            /**
+             * Format: uuid
+             * @description Conversation, rating, survey answer, note, appointment, consent, request, event, feature request, forum post or incident uuid; null for system events.
+             */
+            ref: string | null;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @description Conversation subject, survey question, appointment title, consent purpose, request kind, event name, feature request or forum topic title, incident title, or the system action (contact.created, identity.added, contacts.updated, contacts.merged). */
+            title: string;
+            /** @description Note text, rating / survey comment, appointment notes, feedback comment or forum excerpt. */
+            body: string;
+            /** @description Teammate name; empty when unknown. */
+            actor: string;
+            /** @description Kind-specific fields (number, status, channel_type, score, survey_kind, starts_at, granted, request_kind, feedback_kind, slug, severity, properties, ...). */
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        ContactTimelinePage: {
+            items: components["schemas"]["ContactTimelineItem"][];
+            /** @description Opaque cursor for the next (older) page; null on the last page. */
+            next_before: string | null;
+        };
+        ContactNote: {
+            /** Format: uuid */
+            uuid: string;
+            body: string;
+            author: components["schemas"]["InboxRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EnvelopeContactOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactTimeline: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactTimelinePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactNote: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactNote"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactAISummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactAISummary"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CompanyEventInput: {
             /** Format: uuid */
@@ -55108,6 +55468,222 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantContactOverview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactOverview"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantContactTimeline: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated kinds to include (default every visible kind). */
+                kinds?: string;
+                /** @description Case-insensitive literal search in title, body and actor. */
+                q?: string;
+                /** @description Only items at or after this time (RFC 3339). */
+                from?: string;
+                /** @description Only items before this time (RFC 3339). */
+                to?: string;
+                /** @description Opaque cursor; the previous page's `next_before`. */
+                before?: string;
+                limit?: number;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactTimeline"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantContactNote: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactNote"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantContactNote: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantContactAISummary: {
+        parameters: {
+            query?: {
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactAISummary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Missing permission, AI turned off (`AI_DISABLED`) or not in the plan (`AI_NOT_ENTITLED`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description The AI guard rejected the input or output (`AI_GUARD_REJECTED`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            /** @description The AI provider did not return a usable answer (`AI_PROVIDER_UNAVAILABLE`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     exportTenantContacts: {

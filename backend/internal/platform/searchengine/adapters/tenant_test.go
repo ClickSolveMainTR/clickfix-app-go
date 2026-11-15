@@ -74,7 +74,7 @@ func TestContactAndCompanyDocuments(t *testing.T) {
 	if c.Title != "x@example.test · +90555" || c.Subtitle != "x@example.test · +90555 · Acme" || c.OrganizationID != 3 {
 		t.Fatalf("contact = %+v", c)
 	}
-	if c.Href != "/inbox?status=all&contact="+cid.String() {
+	if c.Href != "/contacts/"+cid.String() {
 		t.Fatalf("contact href = %q", c.Href)
 	}
 	co := CompanyDocument(db.SearchCompanyDocsRow{Uuid: cid, OrganizationID: 3, Name: " Acme ", Domain: txt("acme.test")})

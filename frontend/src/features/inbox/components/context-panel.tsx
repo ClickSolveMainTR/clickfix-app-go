@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Hash, Mail, Phone } from "lucide-react";
 
+import { routes } from "@/config/routes";
 import { CustomerFieldsPanel } from "@/features/contacts/components/customer-fields";
 import { IdentityBadge } from "@/features/contacts/components/identity-badge";
 import { ConversationDepartmentPanel } from "@/features/departments";
@@ -55,7 +56,7 @@ export function ContextPanel({
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-1.5">
               <Link
-                href={`/contacts?c=${c.contact.uuid}`}
+                href={routes.cms.contacts.detail(c.contact.uuid)}
                 className="block truncate font-semibold hover:underline"
               >
                 {name}

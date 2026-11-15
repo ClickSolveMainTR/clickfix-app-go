@@ -218,6 +218,9 @@ roadmap_entries
 # Account screen and timeline (CF-85)
 company_notes
 company_events
+# Contact detail page (CF-221)
+contact_notes
+contact_ai_summaries
 
 channel_voice_calls
 retention_policies

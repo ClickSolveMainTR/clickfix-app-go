@@ -5,6 +5,7 @@ import { createElement, useMemo, useState } from "react";
 
 import type { AppLayoutVariant } from "@/components/layout/app-layout";
 import { useShellNav } from "@/components/layout/use-shell-nav";
+import { routes } from "@/config/routes";
 import { buildNavPageItems } from "@/features/search-engine/lib/nav-pages";
 import { parsePaletteQuery } from "@/features/search-engine/lib/parse-query";
 import { readRecentItems } from "@/features/search-engine/lib/recent";
@@ -170,7 +171,12 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
         label: hit.title,
         description:
           hit.private && text ? `${t("search.private_note")} · ${text}` : text,
-        href: hit.href,
+        // CF-221: contacts open their detail page, also for documents
+        // indexed before the index stored that link.
+        href:
+          hit.spec === "contacts"
+            ? routes.cms.contacts.detail(hit.id)
+            : hit.href,
         iconKey: hit.icon,
         group: t(`search.specs_${hit.spec}`),
       };

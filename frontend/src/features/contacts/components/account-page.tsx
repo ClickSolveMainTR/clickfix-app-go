@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { routes } from "@/config/routes";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatMinor } from "@/features/billing/lib/money";
 import {
@@ -506,10 +507,15 @@ function CompanyContacts({ uuid }: { uuid: string }) {
       <ul className="flex flex-col gap-1.5">
         {items.map((c) => (
           <li key={c.uuid} className="min-w-0 text-sm">
-            <p className="truncate font-medium">{c.name || c.email}</p>
-            <p className="text-muted-foreground truncate text-xs">
-              {[c.job_title, c.email ?? c.phone].filter(Boolean).join(" · ")}
-            </p>
+            <Link
+              href={routes.cms.contacts.detail(c.uuid)}
+              className="hover:bg-muted focus-visible:ring-ring -mx-2 block rounded-md px-2 py-1 outline-none focus-visible:ring-2"
+            >
+              <p className="truncate font-medium">{c.name || c.email}</p>
+              <p className="text-muted-foreground truncate text-xs">
+                {[c.job_title, c.email ?? c.phone].filter(Boolean).join(" · ")}
+              </p>
+            </Link>
           </li>
         ))}
       </ul>

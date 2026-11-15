@@ -613,6 +613,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	aiCore := aisystem.New(deps.DB, billingRepository, entitlementService, cfg.Search)
 	categoriesSvc := categoriesusecase.New(deps.DB, deps.Queries, categoriesusecase.Options{Embedder: aiCore.RAG.Embedder, AI: aiCore.AI})
 	aiCore.KB.Fields = customFieldsSvc
+	// CF-221: contact page AI summary runs through the AI engine.
+	contactsSvc.WithAI(aiCore.AI)
 	agentSvc := agentusecase.New(&agentrepo.Store{Repository: billingRepository}, aiCore.AI, inboxCore.Conversations)
 	aiCore.AI.Context = agentSvc
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}

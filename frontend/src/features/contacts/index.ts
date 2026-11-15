@@ -1,6 +1,7 @@
 export { ContactsPage } from "./components/contacts-page";
 export { CompaniesPage } from "./components/companies-page";
 export { AccountPage } from "./components/account-page";
+export { ContactPage } from "./components/contact-page/contact-page";
 export { CompanyRevenueCard } from "./components/company-revenue-card";
 export type { CompanyRevenueCardProps } from "./components/company-revenue-card";
 export { CompanyHealthBadge } from "./components/company-health-badge";

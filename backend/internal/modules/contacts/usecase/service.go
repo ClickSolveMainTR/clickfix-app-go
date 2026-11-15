@@ -110,6 +110,8 @@ type Company struct {
 type Service struct {
 	q     *db.Queries
 	store *repository.Store
+	// ai generates contact summaries (CF-221); nil disables them.
+	ai Summarizer
 }
 
 // New builds the service.
@@ -445,8 +447,21 @@ func (s *Service) Merge(ctx context.Context, orgID int64, into, from uuid.UUID) 
 	var res repository.MergeResult
 	err = s.store.InTx(ctx, func(ctx context.Context, tx *repository.Tx) error {
 		var err error
-		res, err = tx.MergeContacts(ctx, orgID, b.ID, a.ID)
-		return err
+		if res, err = tx.MergeContacts(ctx, orgID, b.ID, a.ID); err != nil {
+			return err
+		}
+		// CF-221: notes follow the survivor; both cached summaries are
+		// out of date.
+		q := tx.Q
+		if _, err = q.MoveContactNotes(ctx, db.MoveContactNotesParams{OrganizationID: orgID, FromID: b.ID, IntoID: a.ID}); err != nil {
+			return err
+		}
+		for _, id := range []int64{a.ID, b.ID} {
+			if _, err = q.DeleteContactAISummaries(ctx, db.DeleteContactAISummariesParams{OrganizationID: orgID, ContactID: id}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if errors.Is(err, repository.ErrInvalidMerge) {
 		return MergeResult{}, fmt.Errorf("%w: these contacts cannot be merged", ErrInvalid)
