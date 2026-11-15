@@ -16998,6 +16998,256 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/history/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List history runs
+         * @description Runs of the history pipeline (CF-217), newest first: uploads, nightly runs over closed conversations and
+         *     future connectors, with progress counters, consent and whether the raw file is gone.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryImports"];
+        put?: never;
+        /**
+         * Upload a history export
+         * @description Multipart form: `file` (.json or .zip in the documented schema, see docs/gecmis-kayitlar.md; at most 50 MB),
+         *     `consent_analysis` (must be `true`: the data owner's consent to analysis), `consent_training` (optional,
+         *     recorded separately), optional `brand_uuid` and `department_id`. The file is validated now, kept in private
+         *     storage and deleted when the run ends or its retention passes. Processing happens in the worker.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["uploadTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a history run
+         * @description One run with its progress.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistoryImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a history run
+         * @description A waiting run is cancelled at once, a running one at its next batch. What was archived before the stop stays
+         *     until the run is rolled back.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["cancelTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a history run
+         * @description Removes the run's archived cases, the pending suggestions only its cases supported and clusters left empty.
+         *     Approved suggestions (article drafts) and the decision memory stay. Cancel a running run first.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["rollbackTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the history archive
+         * @description The read-only archive: anonymized cases, never inbox conversations. Filter by run or cluster.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List case clusters
+         * @description Groups of similar cases, strongest evidence first. Evidence is how many cases share one resolution.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryClusters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List suggestions from history
+         * @description knowledge_suggestions rows the pipeline produced once a cluster reached the evidence threshold. A suggestion
+         *     close to a published article carries it as `conflict_article_*`.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistorySuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/suggestions/{uuid}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review a suggestion
+         * @description Approve, reject or correct a pending suggestion; a reason is required. Approve and correct create an internal
+         *     article draft (publishing stays a separate step). Every decision is kept with its reason and an embedding, so
+         *     a rejected idea is not suggested again. Department leads review their department's suggestions.
+         *     Requires `tenant.history.review`.
+         */
+        post: operations["decideTenantHistorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the decision memory
+         * @description Approvals, rejections and corrections with their reasons, newest first.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get history settings
+         * @description Evidence threshold, similarity thresholds, retention and the nightly run.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistorySettings"];
+        /**
+         * Save history settings
+         * @description The nightly run needs the organization's analysis consent; training consent is recorded separately.
+         *     Requires `tenant.history.manage`.
+         */
+        put: operations["putTenantHistorySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the sample export
+         * @description The documented example file (docs/examples/gecmis-ornek.json). Every value in it is invented.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistorySample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export interface components {
     schemas: {
@@ -18883,13 +19133,24 @@ export interface components {
             uuid: string;
             organization_id: number;
             topic: string;
-            conversation_id: number;
+            conversation_id: number | null;
             article_id: number | null;
             title: string;
             body: string;
             /** @enum {string} */
             status: "pending" | "approved" | "rejected";
             reviewed_by: number | null;
+            /**
+             * @description history: produced by the history pipeline (CF-217); conversation_id is then null.
+             * @enum {string}
+             */
+            source?: "conversation" | "history";
+            cluster_id?: number | null;
+            import_id?: number | null;
+            department_id?: number | null;
+            evidence_count?: number;
+            conflict_article_id?: number | null;
+            conflict_score?: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -28593,6 +28854,313 @@ export interface components {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["SystemPreview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        HistoryImport: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            source: "upload" | "nightly" | "connector";
+            connector: string;
+            file_name: string;
+            /** @enum {string} */
+            status: "pending" | "running" | "completed" | "failed" | "cancelled" | "rolled_back";
+            /** @enum {string} */
+            stage: "queued" | "reading" | "anonymizing" | "embedding" | "clustering" | "suggesting" | "done";
+            total_records: number;
+            processed_records: number;
+            skipped_records: number;
+            clusters_touched: number;
+            suggestions_created: number;
+            /** @description Candidates not suggested because a reviewer rejected the same idea. */
+            suggestions_suppressed: number;
+            consent_analysis: boolean;
+            consent_training: boolean;
+            /** Format: date-time */
+            consent_at: string;
+            consent_version: string;
+            raw_deleted: boolean;
+            /** Format: date-time */
+            raw_retain_until: string | null;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            window_start: string | null;
+            /** Format: date-time */
+            window_end: string | null;
+            cancel_requested: boolean;
+            error: string;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        HistoryCase: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            source: "upload" | "nightly" | "connector";
+            subject: string;
+            /** @description Anonymized customer messages. */
+            problem: string;
+            /** @description Anonymized resolution. */
+            resolution: string;
+            message_count: number;
+            /** @enum {string} */
+            locale: "tr" | "en";
+            category: string;
+            training_allowed: boolean;
+            /** Format: uuid */
+            brand_id: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            opened_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            import_uuid: string;
+            /** Format: uuid */
+            cluster_uuid: string | null;
+        };
+        HistoryCluster: {
+            /** Format: uuid */
+            uuid: string;
+            category: string;
+            label: string;
+            size: number;
+            evidence: number;
+            /** Format: uuid */
+            brand_id: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+            /** @enum {string|null} */
+            suggestion_status: "pending" | "approved" | "rejected" | null;
+        };
+        HistorySuggestion: {
+            /** Format: uuid */
+            uuid: string;
+            topic: string;
+            title: string;
+            body: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            /** @enum {string} */
+            source: "conversation" | "history";
+            evidence_count: number;
+            /** Format: uuid */
+            cluster_uuid: string | null;
+            cluster_size: number | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: uuid */
+            conflict_article_uuid: string | null;
+            conflict_article_title: string | null;
+            conflict_score: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HistoryDecisionInput: {
+            /** @enum {string} */
+            decision: "approve" | "reject" | "correct";
+            reason: string;
+            /** @description Required for correct. */
+            title?: string;
+            /** @description Required for correct. */
+            body?: string;
+            /**
+             * @description Locale of the article draft.
+             * @enum {string}
+             */
+            locale: "tr" | "en";
+        };
+        HistoryDecisionResult: {
+            /** Format: uuid */
+            suggestion_uuid: string;
+            /** @enum {string} */
+            status: "approved" | "rejected";
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "corrected";
+            /** Format: uuid */
+            decision_uuid: string;
+        };
+        HistoryDecision: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "corrected";
+            reason: string;
+            title: string;
+            correction: string;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+            decided_by_name: string | null;
+        };
+        HistorySettingsInput: {
+            /** @description Cases that must share one resolution before a suggestion. */
+            evidence_threshold: number;
+            cluster_similarity: number;
+            resolution_similarity: number;
+            /** @description A draft this close to a rejected one is not suggested. */
+            rejection_similarity: number;
+            /** @description The raw file is deleted when the run ends or after this many hours. */
+            raw_retention_hours: number;
+            /** @description 0 keeps the archive. */
+            archive_retention_days: number;
+            nightly_enabled: boolean;
+            nightly_consent_analysis: boolean;
+            nightly_consent_training: boolean;
+        };
+        HistorySettings: components["schemas"]["HistorySettingsInput"] & {
+            /** Format: date-time */
+            nightly_watermark: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        /** @description The history export schema clickfix.history/v1 (docs/gecmis-kayitlar.md). */
+        HistoryBundle: {
+            /** @enum {string} */
+            schema?: "clickfix.history/v1";
+            source_system?: string;
+            /** @enum {string} */
+            locale?: "tr" | "en";
+            agents?: {
+                id: string;
+                name?: string;
+            }[];
+            contacts?: {
+                id: string;
+                name?: string;
+                email?: string;
+                phone?: string;
+                company?: string;
+                tax_number?: string;
+                address?: string;
+            }[];
+            tickets: {
+                id: string;
+                contact_id?: string;
+                subject?: string;
+                /** @description solved, closed or resolved are processed; anything else is skipped. */
+                status?: string;
+                category?: string;
+                resolution?: string;
+                /** @enum {string} */
+                locale?: "tr" | "en";
+                /** Format: date-time */
+                created_at?: string;
+                /** Format: date-time */
+                closed_at?: string;
+            }[];
+            messages?: {
+                ticket_id: string;
+                /** @enum {string} */
+                author?: "customer" | "agent" | "system";
+                agent_id?: string;
+                body: string;
+                /** Format: date-time */
+                created_at?: string;
+            }[];
+        };
+        HistoryImportPage: {
+            items: components["schemas"]["HistoryImport"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryCasePage: {
+            items: components["schemas"]["HistoryCase"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryClusterPage: {
+            items: components["schemas"]["HistoryCluster"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistorySuggestionPage: {
+            items: components["schemas"]["HistorySuggestion"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryDecisionPage: {
+            items: components["schemas"]["HistoryDecision"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeHistoryImport: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryImport"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryImportPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryImportPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryCasePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryCasePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryClusterPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryClusterPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistorySuggestionPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistorySuggestionPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryDecisionPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryDecisionPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryDecisionResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryDecisionResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistorySettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistorySettings"];
             meta: components["schemas"]["ResponseMeta"];
         };
     };
@@ -67930,6 +68498,487 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listTenantHistoryImports: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImportPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @enum {string} */
+                    consent_analysis: "true";
+                    /** @enum {string} */
+                    consent_training?: "true" | "false";
+                    /** Format: uuid */
+                    brand_uuid?: string;
+                    /** Format: int64 */
+                    department_id?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            /** @description Storage or AI embedding is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    rollbackTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistoryCases: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description Run uuid */
+                import?: string;
+                /** @description Cluster uuid */
+                cluster?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryCasePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistoryClusters: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryClusterPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistorySuggestions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description Review status */
+                status?: "pending" | "approved" | "rejected";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySuggestionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    decideTenantHistorySuggestion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryDecisionResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            /** @description Storage or AI embedding is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listTenantHistoryDecisions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryDecisionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantHistorySettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantHistorySettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistorySettingsInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantHistorySample: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryBundle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
         };
     };
 }

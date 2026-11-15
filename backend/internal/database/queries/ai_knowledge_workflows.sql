@@ -54,7 +54,7 @@ SELECT count(*) FROM knowledge_suggestions WHERE organization_id=$1;
 -- name: AIKnowledgeSuggestionLock :one
 SELECT * FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE;
 -- name: AIKnowledgeSuggestionReview :one
-UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING *;
+UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' AND source='conversation' RETURNING *;
 -- name: KnowledgeTranslationSave :exec
 INSERT INTO knowledge_translations(organization_id,source_article_id,target_article_id,source_version) VALUES($1,$2,$3,$4);
 -- name: KnowledgeReviewCreate :one

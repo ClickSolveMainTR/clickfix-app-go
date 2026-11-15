@@ -173,4 +173,8 @@ const (
 	PermTenantIntegrationsRead   = "tenant.integrations.read"
 	PermTenantIntegrationsManage = "tenant.integrations.manage"
 	PermTenantIntegrationsUse    = "tenant.integrations.use"
+	// History pipeline (CF-217): archive and runs, uploads/settings, reviews.
+	PermTenantHistoryRead   = "tenant.history.read"
+	PermTenantHistoryManage = "tenant.history.manage"
+	PermTenantHistoryReview = "tenant.history.review"
 )

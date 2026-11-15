@@ -42,6 +42,7 @@ import (
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
+	historyusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
 	systemsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	logsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/logs/usecase"
@@ -298,6 +299,9 @@ func main() {
 	complianceSvc := &complianceuc.Service{Search: searchClient, Repo: compliancerepo.New(pool, queries), Store: store, Jobs: queueClient, Activity: activityRec}
 	accountRepo := authrepo.NewPostgres(pool, queries)
 	accountRepo.SetDeletionSearch(searchClient)
+	// History pipeline (CF-217): runs, raw-file retention and the nightly run.
+	historySvc := historyusecase.New(pool, queries, store, aiCore.RAG.Embedder, historyusecase.EngineDrafter{Engine: aiCore.AI})
+	historySvc.Log = log
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithConversationSend(inboxCore.Deliver).
 		WithNetgsm(inboxCore.EnqueueNetgsm, inboxCore.PollNetgsm, inboxCore.ArchiveNetgsm).
@@ -332,6 +336,8 @@ func main() {
 		}).
 		Handle(queue.TaskIntegrationTriggerPurge, func(ctx context.Context, _ *asynq.Task) error { return queries.IntegrationPurgeTriggers(ctx) }).
 		Handle(queue.TaskKnowledgeSync, func(ctx context.Context, _ *asynq.Task) error { return agentSvc.Sources.Sweep(ctx) }).
+		Handle(queue.TaskHistorySweep, func(ctx context.Context, _ *asynq.Task) error { return historySvc.Sweep(ctx) }).
+		Handle(queue.TaskHistoryNightly, func(ctx context.Context, _ *asynq.Task) error { return historySvc.Nightly(ctx) }).
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).

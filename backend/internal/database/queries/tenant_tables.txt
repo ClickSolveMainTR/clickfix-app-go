@@ -310,3 +310,9 @@ integration_calls
 custom_field_unknown_keys
 custom_field_unknown_values
 knowledge_article_audiences
+# CF-217 history pipeline
+history_settings
+history_imports
+history_clusters
+history_cases
+history_decisions

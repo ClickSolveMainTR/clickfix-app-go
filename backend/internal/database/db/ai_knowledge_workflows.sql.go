@@ -827,15 +827,15 @@ func (q *Queries) AIKnowledgeSuggestionCount(ctx context.Context, organizationID
 
 const aIKnowledgeSuggestionCreate = `-- name: AIKnowledgeSuggestionCreate :one
 INSERT INTO knowledge_suggestions(organization_id,topic,conversation_id,title,body) VALUES($1,$2,$3,$4,$5)
-ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at
+ON CONFLICT(organization_id,conversation_id) DO UPDATE SET topic=knowledge_suggestions.topic RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type AIKnowledgeSuggestionCreateParams struct {
-	OrganizationID int64  `json:"organization_id"`
-	Topic          string `json:"topic"`
-	ConversationID int64  `json:"conversation_id"`
-	Title          string `json:"title"`
-	Body           string `json:"body"`
+	OrganizationID int64       `json:"organization_id"`
+	Topic          string      `json:"topic"`
+	ConversationID pgtype.Int8 `json:"conversation_id"`
+	Title          string      `json:"title"`
+	Body           string      `json:"body"`
 }
 
 func (q *Queries) AIKnowledgeSuggestionCreate(ctx context.Context, arg AIKnowledgeSuggestionCreateParams) (KnowledgeSuggestion, error) {
@@ -860,12 +860,19 @@ func (q *Queries) AIKnowledgeSuggestionCreate(ctx context.Context, arg AIKnowled
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.DepartmentID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestionLock = `-- name: AIKnowledgeSuggestionLock :one
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 AND uuid=$2 FOR UPDATE
 `
 
 type AIKnowledgeSuggestionLockParams struct {
@@ -889,12 +896,19 @@ func (q *Queries) AIKnowledgeSuggestionLock(ctx context.Context, arg AIKnowledge
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.DepartmentID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestionReview = `-- name: AIKnowledgeSuggestionReview :one
-UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at
+UPDATE knowledge_suggestions SET status=$3,reviewed_by=$4,article_id=$5 WHERE organization_id=$1 AND uuid=$2 AND status='pending' AND source='conversation' RETURNING id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score
 `
 
 type AIKnowledgeSuggestionReviewParams struct {
@@ -927,12 +941,19 @@ func (q *Queries) AIKnowledgeSuggestionReview(ctx context.Context, arg AIKnowled
 		&i.ReviewedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Source,
+		&i.ClusterID,
+		&i.ImportID,
+		&i.DepartmentID,
+		&i.EvidenceCount,
+		&i.ConflictArticleID,
+		&i.ConflictScore,
 	)
 	return i, err
 }
 
 const aIKnowledgeSuggestions = `-- name: AIKnowledgeSuggestions :many
-SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at FROM knowledge_suggestions WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, topic, conversation_id, article_id, title, body, status, reviewed_by, created_at, updated_at, source, cluster_id, import_id, department_id, evidence_count, conflict_article_id, conflict_score FROM knowledge_suggestions WHERE organization_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3
 `
 
 type AIKnowledgeSuggestionsParams struct {
@@ -963,6 +984,13 @@ func (q *Queries) AIKnowledgeSuggestions(ctx context.Context, arg AIKnowledgeSug
 			&i.ReviewedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Source,
+			&i.ClusterID,
+			&i.ImportID,
+			&i.DepartmentID,
+			&i.EvidenceCount,
+			&i.ConflictArticleID,
+			&i.ConflictScore,
 		); err != nil {
 			return nil, err
 		}

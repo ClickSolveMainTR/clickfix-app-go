@@ -144,6 +144,10 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** History pipeline (CF-217): archive, uploads and suggestion reviews. */
+  TenantHistoryRead: "tenant.history.read",
+  TenantHistoryManage: "tenant.history.manage",
+  TenantHistoryReview: "tenant.history.review",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];

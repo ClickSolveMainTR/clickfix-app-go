@@ -1156,6 +1156,60 @@ type Querier interface {
 	HelpSearchArticles(ctx context.Context, arg HelpSearchArticlesParams) ([]HelpSearchArticlesRow, error)
 	HelpSitemap(ctx context.Context, organizationID int64) ([]HelpSitemapRow, error)
 	HelpUpsertFeedback(ctx context.Context, arg HelpUpsertFeedbackParams) error
+	HistoryCaseAssign(ctx context.Context, arg HistoryCaseAssignParams) error
+	HistoryCaseCount(ctx context.Context, arg HistoryCaseCountParams) (int64, error)
+	HistoryCaseDeleteByImport(ctx context.Context, arg HistoryCaseDeleteByImportParams) (int64, error)
+	HistoryCaseExpire(ctx context.Context) (int64, error)
+	HistoryCaseInsert(ctx context.Context, arg HistoryCaseInsertParams) (int64, error)
+	HistoryCaseList(ctx context.Context, arg HistoryCaseListParams) ([]HistoryCaseListRow, error)
+	HistoryCaseRefsExisting(ctx context.Context, arg HistoryCaseRefsExistingParams) ([]string, error)
+	HistoryClosedConversations(ctx context.Context, arg HistoryClosedConversationsParams) ([]HistoryClosedConversationsRow, error)
+	HistoryClusterCandidates(ctx context.Context, arg HistoryClusterCandidatesParams) ([]HistoryClusterCandidatesRow, error)
+	HistoryClusterCases(ctx context.Context, arg HistoryClusterCasesParams) ([]HistoryClusterCasesRow, error)
+	HistoryClusterCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryClusterCreate(ctx context.Context, arg HistoryClusterCreateParams) (int64, error)
+	HistoryClusterDeleteEmpty(ctx context.Context, organizationID int64) error
+	HistoryClusterEvidence(ctx context.Context, arg HistoryClusterEvidenceParams) error
+	HistoryClusterGet(ctx context.Context, arg HistoryClusterGetParams) (HistoryCluster, error)
+	HistoryClusterGrow(ctx context.Context, arg HistoryClusterGrowParams) error
+	HistoryClusterList(ctx context.Context, arg HistoryClusterListParams) ([]HistoryClusterListRow, error)
+	HistoryClusterRecount(ctx context.Context, arg HistoryClusterRecountParams) error
+	HistoryClusterRejected(ctx context.Context, arg HistoryClusterRejectedParams) (int64, error)
+	HistoryClusterSuggestionState(ctx context.Context, arg HistoryClusterSuggestionStateParams) (HistoryClusterSuggestionStateRow, error)
+	HistoryClustersOfImport(ctx context.Context, arg HistoryClustersOfImportParams) ([]int64, error)
+	HistoryConversationMessages(ctx context.Context, arg HistoryConversationMessagesParams) ([]HistoryConversationMessagesRow, error)
+	HistoryDecisionCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryDecisionCreate(ctx context.Context, arg HistoryDecisionCreateParams) (HistoryDecision, error)
+	HistoryDecisionList(ctx context.Context, arg HistoryDecisionListParams) ([]HistoryDecisionListRow, error)
+	HistoryImportActive(ctx context.Context, organizationID int64) (int64, error)
+	HistoryImportClaim(ctx context.Context, arg HistoryImportClaimParams) (HistoryImport, error)
+	HistoryImportCount(ctx context.Context, organizationID int64) (int64, error)
+	HistoryImportCreate(ctx context.Context, arg HistoryImportCreateParams) (HistoryImport, error)
+	HistoryImportDue(ctx context.Context, limit int32) ([]HistoryImportDueRow, error)
+	HistoryImportExpireStale(ctx context.Context) (int64, error)
+	HistoryImportFinish(ctx context.Context, arg HistoryImportFinishParams) error
+	HistoryImportGet(ctx context.Context, arg HistoryImportGetParams) (HistoryImport, error)
+	HistoryImportList(ctx context.Context, arg HistoryImportListParams) ([]HistoryImport, error)
+	HistoryImportLock(ctx context.Context, arg HistoryImportLockParams) (HistoryImport, error)
+	HistoryImportProgress(ctx context.Context, arg HistoryImportProgressParams) (bool, error)
+	HistoryImportRawDeleted(ctx context.Context, arg HistoryImportRawDeletedParams) error
+	HistoryImportRawExpired(ctx context.Context, limit int32) ([]HistoryImportRawExpiredRow, error)
+	HistoryImportRequestCancel(ctx context.Context, arg HistoryImportRequestCancelParams) (HistoryImport, error)
+	HistoryImportRolledBack(ctx context.Context, arg HistoryImportRolledBackParams) (HistoryImport, error)
+	HistoryNearestArticle(ctx context.Context, arg HistoryNearestArticleParams) (HistoryNearestArticleRow, error)
+	HistoryNearestRejection(ctx context.Context, arg HistoryNearestRejectionParams) (HistoryNearestRejectionRow, error)
+	HistoryNightlyOrganizations(ctx context.Context) ([]HistorySetting, error)
+	// CF-217: history pipeline (archive, runs, clusters, decision memory).
+	HistorySettingsGet(ctx context.Context, organizationID int64) (HistorySetting, error)
+	HistorySettingsSave(ctx context.Context, arg HistorySettingsSaveParams) (HistorySetting, error)
+	HistorySettingsWatermark(ctx context.Context, arg HistorySettingsWatermarkParams) error
+	HistorySuggestionCount(ctx context.Context, arg HistorySuggestionCountParams) (int64, error)
+	HistorySuggestionCreate(ctx context.Context, arg HistorySuggestionCreateParams) (KnowledgeSuggestion, error)
+	HistorySuggestionDeletePendingByImport(ctx context.Context, arg HistorySuggestionDeletePendingByImportParams) (int64, error)
+	HistorySuggestionGet(ctx context.Context, arg HistorySuggestionGetParams) (KnowledgeSuggestion, error)
+	HistorySuggestionList(ctx context.Context, arg HistorySuggestionListParams) ([]HistorySuggestionListRow, error)
+	HistorySuggestionLock(ctx context.Context, arg HistorySuggestionLockParams) (KnowledgeSuggestion, error)
+	HistorySuggestionReview(ctx context.Context, arg HistorySuggestionReviewParams) (KnowledgeSuggestion, error)
 	IncrementOTPAttempts(ctx context.Context, id int64) (OtpCode, error)
 	// organization_id is set for events recorded inside an organization scope
 	// (CF-12 org audit log); NULL = platform event.

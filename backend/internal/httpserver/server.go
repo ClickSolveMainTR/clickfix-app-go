@@ -107,6 +107,10 @@ import (
 	helpmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/helpcenter"
 	helphandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/helpcenter/handler"
 	helpusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/helpcenter/usecase"
+	historymodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history"
+	historyhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/handler"
+	historysample "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/sample"
+	historyusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/usecase"
 	importmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports"
 	importhandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/handler"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
@@ -616,6 +620,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ok, _ := systemsLimiter.Allow(r.Context(), "integration_api", strconv.FormatInt(org, 10), 120, time.Minute)
 		return ok
 	}), tokens, loader, tenantResolver)
+	// History pipeline (CF-217): uploads and reviews here, processing in the worker.
+	historySvc := historyusecase.New(deps.DB, deps.Queries, deps.Storage, aiCore.RAG.Embedder, historyusecase.EngineDrafter{Engine: aiCore.AI})
+	historySvc.Log = log
+	historymodule.RegisterRoutes(mux, &historyhandler.Handler{Svc: historySvc, Activity: activityRec, Sample: historysample.File}, tokens, loader, tenantResolver)
 	aimodule.RegisterRoutes(mux, &aihandler.Handler{Service: aiCore.AI, Activity: activityRec}, tokens, loader, tenantResolver)
 	kbmodule.RegisterRoutes(mux, &kbhandler.Handler{Service: aiCore.KB, RAG: aiCore.RAG, Activity: activityRec}, tokens, loader, tenantResolver)
 	// AI-assisted set-up and use-case template gallery (CF-140).

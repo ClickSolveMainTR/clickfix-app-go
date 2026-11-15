@@ -2400,6 +2400,120 @@ type GuideProgress struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type HistoryCase struct {
+	ID                  int64              `json:"id"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	OrganizationID      int64              `json:"organization_id"`
+	ImportID            int64              `json:"import_id"`
+	BrandID             pgtype.UUID        `json:"brand_id"`
+	DepartmentID        pgtype.Int8        `json:"department_id"`
+	Source              string             `json:"source"`
+	ExternalRef         string             `json:"external_ref"`
+	ConversationID      pgtype.Int8        `json:"conversation_id"`
+	Subject             string             `json:"subject"`
+	Problem             string             `json:"problem"`
+	Resolution          string             `json:"resolution"`
+	MessageCount        int32              `json:"message_count"`
+	Locale              string             `json:"locale"`
+	TrainingAllowed     bool               `json:"training_allowed"`
+	Category            string             `json:"category"`
+	Embedding           []float32          `json:"embedding"`
+	ResolutionEmbedding []float32          `json:"resolution_embedding"`
+	EmbeddingModel      string             `json:"embedding_model"`
+	ClusterID           pgtype.Int8        `json:"cluster_id"`
+	OpenedAt            pgtype.Timestamptz `json:"opened_at"`
+	ClosedAt            pgtype.Timestamptz `json:"closed_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
+type HistoryCluster struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Category       string             `json:"category"`
+	Label          string             `json:"label"`
+	Centroid       []float32          `json:"centroid"`
+	EmbeddingModel string             `json:"embedding_model"`
+	Size           int32              `json:"size"`
+	Evidence       int32              `json:"evidence"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HistoryDecision struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	SuggestionID   pgtype.Int8        `json:"suggestion_id"`
+	ClusterID      pgtype.Int8        `json:"cluster_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Decision       string             `json:"decision"`
+	Reason         string             `json:"reason"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Correction     string             `json:"correction"`
+	Embedding      []float32          `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type HistoryImport struct {
+	ID                    int64              `json:"id"`
+	Uuid                  uuid.UUID          `json:"uuid"`
+	OrganizationID        int64              `json:"organization_id"`
+	BrandID               pgtype.UUID        `json:"brand_id"`
+	DepartmentID          pgtype.Int8        `json:"department_id"`
+	Source                string             `json:"source"`
+	Connector             string             `json:"connector"`
+	FileName              string             `json:"file_name"`
+	Status                string             `json:"status"`
+	Stage                 string             `json:"stage"`
+	TotalRecords          int32              `json:"total_records"`
+	ProcessedRecords      int32              `json:"processed_records"`
+	SkippedRecords        int32              `json:"skipped_records"`
+	ClustersTouched       int32              `json:"clusters_touched"`
+	SuggestionsCreated    int32              `json:"suggestions_created"`
+	SuggestionsSuppressed int32              `json:"suggestions_suppressed"`
+	ConsentAnalysis       bool               `json:"consent_analysis"`
+	ConsentTraining       bool               `json:"consent_training"`
+	ConsentBy             pgtype.Int8        `json:"consent_by"`
+	ConsentAt             pgtype.Timestamptz `json:"consent_at"`
+	ConsentVersion        string             `json:"consent_version"`
+	RawKey                string             `json:"raw_key"`
+	RawRetainUntil        pgtype.Timestamptz `json:"raw_retain_until"`
+	RawDeletedAt          pgtype.Timestamptz `json:"raw_deleted_at"`
+	WindowStart           pgtype.Timestamptz `json:"window_start"`
+	WindowEnd             pgtype.Timestamptz `json:"window_end"`
+	CancelRequested       bool               `json:"cancel_requested"`
+	LeaseUntil            pgtype.Timestamptz `json:"lease_until"`
+	Error                 string             `json:"error"`
+	CreatedBy             pgtype.Int8        `json:"created_by"`
+	StartedAt             pgtype.Timestamptz `json:"started_at"`
+	FinishedAt            pgtype.Timestamptz `json:"finished_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HistorySetting struct {
+	OrganizationID         int64              `json:"organization_id"`
+	EvidenceThreshold      int32              `json:"evidence_threshold"`
+	ClusterSimilarity      float32            `json:"cluster_similarity"`
+	ResolutionSimilarity   float32            `json:"resolution_similarity"`
+	RejectionSimilarity    float32            `json:"rejection_similarity"`
+	RawRetentionHours      int32              `json:"raw_retention_hours"`
+	ArchiveRetentionDays   int32              `json:"archive_retention_days"`
+	NightlyEnabled         bool               `json:"nightly_enabled"`
+	NightlyConsentAnalysis bool               `json:"nightly_consent_analysis"`
+	NightlyConsentTraining bool               `json:"nightly_consent_training"`
+	NightlyWatermark       pgtype.Timestamptz `json:"nightly_watermark"`
+	UpdatedBy              pgtype.Int8        `json:"updated_by"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ImportChange struct {
 	ID           int64              `json:"id"`
 	Uuid         uuid.UUID          `json:"uuid"`
@@ -2693,18 +2807,25 @@ type KnowledgeSourceDocument struct {
 }
 
 type KnowledgeSuggestion struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Topic          string             `json:"topic"`
-	ConversationID int64              `json:"conversation_id"`
-	ArticleID      pgtype.Int8        `json:"article_id"`
-	Title          string             `json:"title"`
-	Body           string             `json:"body"`
-	Status         string             `json:"status"`
-	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	Topic             string             `json:"topic"`
+	ConversationID    pgtype.Int8        `json:"conversation_id"`
+	ArticleID         pgtype.Int8        `json:"article_id"`
+	Title             string             `json:"title"`
+	Body              string             `json:"body"`
+	Status            string             `json:"status"`
+	ReviewedBy        pgtype.Int8        `json:"reviewed_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Source            string             `json:"source"`
+	ClusterID         pgtype.Int8        `json:"cluster_id"`
+	ImportID          pgtype.Int8        `json:"import_id"`
+	DepartmentID      pgtype.Int8        `json:"department_id"`
+	EvidenceCount     int32              `json:"evidence_count"`
+	ConflictArticleID pgtype.Int8        `json:"conflict_article_id"`
+	ConflictScore     float32            `json:"conflict_score"`
 }
 
 type KnowledgeTranslation struct {
