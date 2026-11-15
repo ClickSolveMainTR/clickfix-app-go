@@ -360,11 +360,30 @@ Eşleşen birim yoksa ve AI yolu da geçerli bir kaynağa dayanamazsa soru (kiş
 
 ## 8. Geçmiş kayıt hattı (CF-217)
 
-Kaynaklar: dosya yükleme (CSV/JSON dökümler), bağlayıcılar (dış yardım masası), gece işi (kendi kapanmış konuşmalarımız).
+Ayrıntılı şema ve akış: [docs/gecmis-kayitlar.md](../gecmis-kayitlar.md).
 
-Aşamalar: içe al → anonimleştir (PII maskeleme, `ai.RedactPII`) → böl → kategorize et (bölüm 9) → kanıt eşiği → bilgi birimi. Eşiğin altındaki adaylar temsilci onayına düşer; onaylar pgvector'da saklanır (**onay hafızası**) ve aynı soru bir daha geldiğinde kanıt sayılır.
+**Amaç.** Başka sistemlerden dışa aktarımlar ve kendi kapanan konuşmalarımız tek seferlik içe aktarma değil, sürekli çalışan bir hattan geçip bilgi önerisine dönüşür.
 
-Her aşama idempotent bir iş (`asynq`) ve organizasyon kapsamında; maliyet her embedding/sohbet çağrısında ölçülür.
+**Bileşenler** (`backend/internal/modules/history`):
+
+| Parça | Görev |
+|-------|-------|
+| `usecase.Source` | Kaynak adaptörü. `FileSource` (yüklenen dosya), `ConversationSource` (gece işi). Bağlayıcılar `Service.Connectors` haritasına adıyla eklenir. |
+| `usecase.BuildCase` | Sunucuda anonimleştirme; sağlayıcıya ve arşive giden metnin tek çıkış noktası. `ai.Anonymizer` kayıttaki yapılandırılmış alanları da siler. |
+| `usecase.Taxonomy` | Kategori (CF-218 arayüzü). |
+| Kümeleme | Kapsam başına (organizasyon, marka, departman, kategori, model) merkez vektörlü açgözlü kümeleme; kümeler işler arasında kalıcı. |
+| Kanıt | Kümedeki çözüm embedding'lerinden birbirine benzeyen en büyük grup. |
+| `usecase.Drafter` | Taslak yazımı; varsayılanı AI çekirdeğinden (`aicore` → `platform/ai`) geçer, bütçe ve politika uygulanır. |
+| Karar hafızası | `history_decisions`: karar, gerekçe, düzeltme ve embedding. Red, aynı kümeyi ve benzer taslakları bastırır. |
+| `usecase.Directory` | Departman doğrulama ve "departman lideri onaylar" kuralı (CF-215 arayüzü). |
+
+**Veri.** `history_settings`, `history_imports` (iş, onay, ham dosya, ilerleme), `history_clusters`, `history_cases` (salt okunur arşiv), `history_decisions`; `knowledge_suggestions` tablosuna `source`, `cluster_id`, `import_id`, `evidence_count`, `conflict_article_id`, `conflict_score` eklendi (`department_id` CF-215'in 000226'sından gelir) ve `conversation_id` NULL olabilir oldu.
+
+**Gizlilik.** Analiz onayı olmadan iş açılmaz (veritabanı kısıtı). Eğitim onayı ayrı alanda ve vaka başına `training_allowed` olarak saklanır. Ham dosya iş bitince silinir. Arşivde kaynak talep numarası yerine özeti tutulur. Kurallar `platform/ai` içinde olduğu için tüm AI çalıştırmalarında maskeleme genişledi (vergi no, firma, adres, isim).
+
+**İş.** Worker'da dakikalık `app:history:sweep` (ham dosya ve arşiv saklama, sıradaki işler) ve her gece 01:17 UTC `app:history:nightly`. İşler kaldığı yerden devam eder: arşivlenmiş vakalar (aynı özet) atlanır.
+
+**Sonraki adımlar.** Vektörler `vector(1536)` ve `<=>` sorgularıyla çalışır (birleştirmede taşındı). Geçmiş tablolarındaki `department_id` için departman FK'si; CF-218 ile `Taxonomy`; CF-215 ile `Directory` (departman lideri) bağlanır.
 
 ## 9. Kategorizasyon (CF-218)
 

@@ -24,6 +24,13 @@ func ImportSourceObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("imports/%s/source.%s", jobUUID, trimExt(ext))
 }
 
+// HistoryRawObjectKey builds orgs/{org}/history/{run}/raw.{ext}: the uploaded
+// history export (CF-217). It is private and deleted when the run ends or its
+// retention passes, whichever comes first.
+func HistoryRawObjectKey(org int64, runUUID, ext string) string {
+	return fmt.Sprintf("orgs/%d/history/%s/raw.%s", org, runUUID, trimExt(ext))
+}
+
 // AttachmentObjectKey builds orgs/{org}/attachments/{attachment}/original.
 // The object is private; the API streams it after an organization check. The
 // original filename lives in the database, never in the key.

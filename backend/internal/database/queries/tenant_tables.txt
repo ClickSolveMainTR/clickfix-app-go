@@ -326,3 +326,10 @@ categories
 category_examples
 category_assignments
 category_labels
+
+# CF-217 history pipeline
+history_settings
+history_imports
+history_clusters
+history_cases
+history_decisions

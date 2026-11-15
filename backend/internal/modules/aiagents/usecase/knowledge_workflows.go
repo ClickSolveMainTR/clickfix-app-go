@@ -66,7 +66,7 @@ func (s *Service) SuggestKnowledge(ctx context.Context, org, actor int64, conver
 		runes = runes[:200]
 	}
 	topic = string(runes)
-	return s.Repo.Q.AIKnowledgeSuggestionCreate(ctx, db.AIKnowledgeSuggestionCreateParams{OrganizationID: org, Topic: topic, ConversationID: c.ID, Title: draft.Title, Body: draft.Body})
+	return s.Repo.Q.AIKnowledgeSuggestionCreate(ctx, db.AIKnowledgeSuggestionCreateParams{OrganizationID: org, Topic: topic, ConversationID: pgtype.Int8{Int64: c.ID, Valid: true}, Title: draft.Title, Body: draft.Body})
 }
 
 // ReviewSuggestion atomically creates a draft + immutable version and closes the
@@ -80,7 +80,9 @@ func (s *Service) ReviewSuggestion(ctx context.Context, org, actor int64, id uui
 		if e != nil {
 			return e
 		}
-		if suggestion.Status != "pending" {
+		// History suggestions (CF-217) need a reason and feed the decision
+		// memory; they are reviewed only through /v1/tenant/history.
+		if suggestion.Status != "pending" || suggestion.Source != "conversation" {
 			return model.ErrConflict
 		}
 		status, article := "rejected", pgtype.Int8{}

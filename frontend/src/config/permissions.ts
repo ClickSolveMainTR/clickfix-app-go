@@ -147,6 +147,10 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** History pipeline (CF-217): archive, uploads and suggestion reviews. */
+  TenantHistoryRead: "tenant.history.read",
+  TenantHistoryManage: "tenant.history.manage",
+  TenantHistoryReview: "tenant.history.review",
   /** Category taxonomy and the label store (CF-218). */
   TenantCategoriesRead: "tenant.categories.read",
   TenantCategoriesManage: "tenant.categories.manage",

@@ -43213,6 +43213,378 @@ webhooks:
         "429": { description: "Rate limit, retried with backoff" }
         "500": { description: "Temporary receiver failure, retried with backoff" }
 
+  /v1/tenant/history/imports:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryImports
+      summary: List history runs
+      description: |
+        Runs of the history pipeline (CF-217), newest first: uploads, nightly runs over closed conversations and
+        future connectors, with progress counters, consent and whether the raw file is gone.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImportPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: uploadTenantHistoryImport
+      summary: Upload a history export
+      description: |
+        Multipart form: `file` (.json or .zip in the documented schema, see docs/gecmis-kayitlar.md; at most 50 MB),
+        `consent_analysis` (must be `true`: the data owner's consent to analysis), `consent_training` (optional,
+        recorded separately), optional `brand_uuid` and `department_id`. The file is validated now, kept in private
+        storage and deleted when the run ends or its retention passes. Processing happens in the worker.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, consent_analysis]
+              properties:
+                file: { type: string, format: binary }
+                consent_analysis: { type: string, enum: ["true"] }
+                consent_training: { type: string, enum: ["true", "false"] }
+                brand_uuid: { type: string, format: uuid }
+                department_id: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "202":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Storage or AI embedding is not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistoryImport
+      summary: Get a history run
+      description: |
+        One run with its progress.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}/cancel:
+    post:
+      tags: [Tenant]
+      operationId: cancelTenantHistoryImport
+      summary: Cancel a history run
+      description: |
+        A waiting run is cancelled at once, a running one at its next batch. What was archived before the stop stays
+        until the run is rolled back.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/imports/{uuid}/rollback:
+    post:
+      tags: [Tenant]
+      operationId: rollbackTenantHistoryImport
+      summary: Roll back a history run
+      description: |
+        Removes the run's archived cases, the pending suggestions only its cases supported and clusters left empty.
+        Approved suggestions (article drafts) and the decision memory stay. Cancel a running run first.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryImport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/cases:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryCases
+      summary: List the history archive
+      description: |
+        The read-only archive: anonymized cases, never inbox conversations. Filter by run or cluster.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: import
+          in: query
+          required: false
+          description: Run uuid
+          schema: { type: string, format: uuid }
+        - name: cluster
+          in: query
+          required: false
+          description: Cluster uuid
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryCasePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/clusters:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryClusters
+      summary: List case clusters
+      description: |
+        Groups of similar cases, strongest evidence first. Evidence is how many cases share one resolution.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryClusterPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/suggestions:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistorySuggestions
+      summary: List suggestions from history
+      description: |
+        knowledge_suggestions rows the pipeline produced once a cluster reached the evidence threshold. A suggestion
+        close to a published article carries it as `conflict_article_*`.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: status
+          in: query
+          required: false
+          description: Review status
+          schema: { type: string, enum: [pending, approved, rejected] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySuggestionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/suggestions/{uuid}/decision:
+    post:
+      tags: [Tenant]
+      operationId: decideTenantHistorySuggestion
+      summary: Review a suggestion
+      description: |
+        Approve, reject or correct a pending suggestion; a reason is required. Approve and correct create an internal
+        article draft (publishing stays a separate step). Every decision is kept with its reason and an embedding, so
+        a rejected idea is not suggested again. Department leads review their department's suggestions.
+        Requires `tenant.history.review`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HistoryDecisionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryDecisionResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503":
+          description: Storage or AI embedding is not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/decisions:
+    get:
+      tags: [Tenant]
+      operationId: listTenantHistoryDecisions
+      summary: List the decision memory
+      description: |
+        Approvals, rejections and corrections with their reasons, newest first.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistoryDecisionPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/settings:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistorySettings
+      summary: Get history settings
+      description: |
+        Evidence threshold, similarity thresholds, retention and the nightly run.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      tags: [Tenant]
+      operationId: putTenantHistorySettings
+      summary: Save history settings
+      description: |
+        The nightly run needs the organization's analysis consent; training consent is recorded separately.
+        Requires `tenant.history.manage`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HistorySettingsInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeHistorySettings" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/tenant/history/sample:
+    get:
+      tags: [Tenant]
+      operationId: getTenantHistorySample
+      summary: Download the sample export
+      description: |
+        The documented example file (docs/examples/gecmis-ornek.json). Every value in it is invented.
+        Requires `tenant.history.read`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryBundle" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
 components:
   securitySchemes:
     scimBearer: {"type":"http","scheme":"bearer","description":"Organization-scoped SCIM provisioning token"}
@@ -47109,7 +47481,14 @@ components:
           "type": "string"
         },
         "conversation_id": {
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "article_id": {
           "anyOf": [
@@ -47144,6 +47523,60 @@ components:
               "type": "null"
             }
           ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "conversation",
+            "history"
+          ],
+          "description": "history: produced by the history pipeline (CF-217); conversation_id is then null."
+        },
+        "cluster_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "import_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "department_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_count": {
+          "type": "integer"
+        },
+        "conflict_article_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conflict_score": {
+          "type": "number"
         },
         "created_at": {
           "type": "string",
@@ -63162,4 +63595,303 @@ components:
       properties:
         success: { type: boolean, enum: [true] }
         data: { $ref: "#/components/schemas/SystemPreview" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    HistoryImport:
+      type: object
+      required: [uuid, source, connector, file_name, status, stage, total_records, processed_records, skipped_records, clusters_touched, suggestions_created, suggestions_suppressed, consent_analysis, consent_training, consent_at, consent_version, raw_deleted, raw_retain_until, brand_uuid, department_id, window_start, window_end, cancel_requested, error, started_at, finished_at, created_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        source: { type: string, enum: [upload, nightly, connector] }
+        connector: { type: string }
+        file_name: { type: string }
+        status: { type: string, enum: [pending, running, completed, failed, cancelled, rolled_back] }
+        stage: { type: string, enum: [queued, reading, anonymizing, embedding, clustering, suggesting, done] }
+        total_records: { type: integer }
+        processed_records: { type: integer }
+        skipped_records: { type: integer }
+        clusters_touched: { type: integer }
+        suggestions_created: { type: integer }
+        suggestions_suppressed: { type: integer, description: Candidates not suggested because a reviewer rejected the same idea. }
+        consent_analysis: { type: boolean }
+        consent_training: { type: boolean }
+        consent_at: { type: string, format: date-time }
+        consent_version: { type: string }
+        raw_deleted: { type: boolean }
+        raw_retain_until: { type: [string, "null"], format: date-time }
+        brand_uuid: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        window_start: { type: [string, "null"], format: date-time }
+        window_end: { type: [string, "null"], format: date-time }
+        cancel_requested: { type: boolean }
+        error: { type: string }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    HistoryCase:
+      type: object
+      required: [uuid, source, subject, problem, resolution, message_count, locale, category, training_allowed, brand_id, department_id, opened_at, closed_at, created_at, import_uuid, cluster_uuid]
+      properties:
+        uuid: { type: string, format: uuid }
+        source: { type: string, enum: [upload, nightly, connector] }
+        subject: { type: string }
+        problem: { type: string, description: Anonymized customer messages. }
+        resolution: { type: string, description: Anonymized resolution. }
+        message_count: { type: integer }
+        locale: { type: string, enum: [tr, en] }
+        category: { type: string }
+        training_allowed: { type: boolean }
+        brand_id: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        opened_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        import_uuid: { type: string, format: uuid }
+        cluster_uuid: { type: [string, "null"], format: uuid }
+    HistoryCluster:
+      type: object
+      required: [uuid, category, label, size, evidence, brand_id, department_id, created_at, updated_at, suggestion_uuid, suggestion_status]
+      properties:
+        uuid: { type: string, format: uuid }
+        category: { type: string }
+        label: { type: string }
+        size: { type: integer }
+        evidence: { type: integer }
+        brand_id: { type: [string, "null"], format: uuid }
+        department_id: { type: [integer, "null"], format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        suggestion_uuid: { type: [string, "null"], format: uuid }
+        suggestion_status: { type: [string, "null"], enum: [pending, approved, rejected, null] }
+    HistorySuggestion:
+      type: object
+      required: [uuid, topic, title, body, status, source, evidence_count, cluster_uuid, cluster_size, department_id, conflict_article_uuid, conflict_article_title, conflict_score, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        topic: { type: string }
+        title: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        source: { type: string, enum: [conversation, history] }
+        evidence_count: { type: integer }
+        cluster_uuid: { type: [string, "null"], format: uuid }
+        cluster_size: { type: [integer, "null"] }
+        department_id: { type: [integer, "null"], format: int64 }
+        conflict_article_uuid: { type: [string, "null"], format: uuid }
+        conflict_article_title: { type: [string, "null"] }
+        conflict_score: { type: number }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    HistoryDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision, reason, locale]
+      properties:
+        decision: { type: string, enum: [approve, reject, correct] }
+        reason: { type: string, minLength: 3, maxLength: 2000 }
+        title: { type: string, maxLength: 300, description: Required for correct. }
+        body: { type: string, maxLength: 30000, description: Required for correct. }
+        locale: { type: string, enum: [tr, en], description: Locale of the article draft. }
+    HistoryDecisionResult:
+      type: object
+      required: [suggestion_uuid, status, decision, decision_uuid]
+      properties:
+        suggestion_uuid: { type: string, format: uuid }
+        status: { type: string, enum: [approved, rejected] }
+        decision: { type: string, enum: [approved, rejected, corrected] }
+        decision_uuid: { type: string, format: uuid }
+    HistoryDecision:
+      type: object
+      required: [uuid, decision, reason, title, correction, department_id, created_at, suggestion_uuid, decided_by_name]
+      properties:
+        uuid: { type: string, format: uuid }
+        decision: { type: string, enum: [approved, rejected, corrected] }
+        reason: { type: string }
+        title: { type: string }
+        correction: { type: string }
+        department_id: { type: [integer, "null"], format: int64 }
+        created_at: { type: string, format: date-time }
+        suggestion_uuid: { type: [string, "null"], format: uuid }
+        decided_by_name: { type: [string, "null"] }
+    HistorySettingsInput:
+      type: object
+      additionalProperties: false
+      required: [evidence_threshold, cluster_similarity, resolution_similarity, rejection_similarity, raw_retention_hours, archive_retention_days, nightly_enabled, nightly_consent_analysis, nightly_consent_training]
+      properties:
+        evidence_threshold: { type: integer, minimum: 2, maximum: 100, description: Cases that must share one resolution before a suggestion. }
+        cluster_similarity: { type: number, minimum: 0.5, maximum: 0.99 }
+        resolution_similarity: { type: number, minimum: 0.5, maximum: 0.99 }
+        rejection_similarity: { type: number, minimum: 0.5, maximum: 0.99, description: A draft this close to a rejected one is not suggested. }
+        raw_retention_hours: { type: integer, minimum: 1, maximum: 720, description: The raw file is deleted when the run ends or after this many hours. }
+        archive_retention_days: { type: integer, minimum: 0, maximum: 3650, description: 0 keeps the archive. }
+        nightly_enabled: { type: boolean }
+        nightly_consent_analysis: { type: boolean }
+        nightly_consent_training: { type: boolean }
+    HistorySettings:
+      allOf:
+        - $ref: "#/components/schemas/HistorySettingsInput"
+        - type: object
+          required: [nightly_watermark, updated_at]
+          properties:
+            nightly_watermark: { type: [string, "null"], format: date-time }
+            updated_at: { type: [string, "null"], format: date-time }
+    HistoryBundle:
+      type: object
+      description: The history export schema clickfix.history/v1 (docs/gecmis-kayitlar.md).
+      required: [tickets]
+      properties:
+        schema: { type: string, enum: [clickfix.history/v1] }
+        source_system: { type: string }
+        locale: { type: string, enum: [tr, en] }
+        agents:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
+              name: { type: string }
+        contacts:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              email: { type: string }
+              phone: { type: string }
+              company: { type: string }
+              tax_number: { type: string }
+              address: { type: string }
+        tickets:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string, maxLength: 200 }
+              contact_id: { type: string }
+              subject: { type: string }
+              status: { type: string, description: "solved, closed or resolved are processed; anything else is skipped." }
+              category: { type: string }
+              resolution: { type: string }
+              locale: { type: string, enum: [tr, en] }
+              created_at: { type: string, format: date-time }
+              closed_at: { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            type: object
+            required: [ticket_id, body]
+            properties:
+              ticket_id: { type: string }
+              author: { type: string, enum: [customer, agent, system] }
+              agent_id: { type: string }
+              body: { type: string }
+              created_at: { type: string, format: date-time }
+    HistoryImportPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryImport" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryCasePage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryCase" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryClusterPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryCluster" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistorySuggestionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistorySuggestion" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    HistoryDecisionPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/HistoryDecision" }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    EnvelopeHistoryImport:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryImport" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryImportPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryImportPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryCasePage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryCasePage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryClusterPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryClusterPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistorySuggestionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistorySuggestionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryDecisionPage:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryDecisionPage" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistoryDecisionResult:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistoryDecisionResult" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+    EnvelopeHistorySettings:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/HistorySettings" }
         meta: { $ref: "#/components/schemas/ResponseMeta" }

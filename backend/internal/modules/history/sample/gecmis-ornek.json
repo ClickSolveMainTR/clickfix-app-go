@@ -1,0 +1,96 @@
+{
+  "schema": "clickfix.history/v1",
+  "source_system": "ornek-yardim-masasi",
+  "locale": "tr",
+  "agents": [
+    { "id": "a-1", "name": "Deneme Temsilci" },
+    { "id": "a-2", "name": "Örnek Destekçi" }
+  ],
+  "contacts": [
+    {
+      "id": "c-1",
+      "name": "Sahte Müşteri Bir",
+      "email": "musteri1@example.test",
+      "phone": "+90 555 000 00 01",
+      "company": "Örnek Kırtasiye Ltd. Şti.",
+      "tax_number": "0000000001",
+      "address": "Deneme Mah. Örnek Sok. No: 1 Kadıköy İstanbul"
+    },
+    {
+      "id": "c-2",
+      "name": "Sahte Müşteri İki",
+      "email": "musteri2@example.test",
+      "phone": "+90 555 000 00 02",
+      "company": "Deneme Yazılım A.Ş."
+    },
+    {
+      "id": "c-3",
+      "name": "Sahte Müşteri Üç",
+      "email": "musteri3@example.test"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "t-1001",
+      "contact_id": "c-1",
+      "subject": "Fatura PDF olarak inmiyor",
+      "status": "solved",
+      "category": "Fatura",
+      "created_at": "2026-01-05T09:12:00Z",
+      "closed_at": "2026-01-05T10:02:00Z"
+    },
+    {
+      "id": "t-1002",
+      "contact_id": "c-2",
+      "subject": "Faturayı indiremiyorum",
+      "status": "closed",
+      "category": "Fatura",
+      "created_at": "2026-01-09T13:40:00Z",
+      "closed_at": "2026-01-09T14:05:00Z"
+    },
+    {
+      "id": "t-1003",
+      "contact_id": "c-3",
+      "subject": "PDF fatura boş sayfa açılıyor",
+      "status": "solved",
+      "category": "Fatura",
+      "resolution": "Tarayıcı önbelleği temizlenip fatura Faturalar > İndir menüsünden yeniden indirildi.",
+      "created_at": "2026-02-02T08:01:00Z",
+      "closed_at": "2026-02-02T08:30:00Z"
+    },
+    {
+      "id": "t-1004",
+      "contact_id": "c-1",
+      "subject": "Şifremi unuttum",
+      "status": "solved",
+      "category": "Hesap",
+      "created_at": "2026-02-10T11:00:00Z",
+      "closed_at": "2026-02-10T11:10:00Z"
+    },
+    {
+      "id": "t-1005",
+      "contact_id": "c-2",
+      "subject": "Yeni özellik isteği",
+      "status": "open",
+      "category": "Öneri",
+      "created_at": "2026-03-01T15:00:00Z"
+    }
+  ],
+  "messages": [
+    { "ticket_id": "t-1001", "author": "customer", "body": "Merhaba, ben Sahte Müşteri Bir. Ocak faturamı PDF olarak indiremiyorum, buton bir şey yapmıyor. Numaram 0555 000 00 01.", "created_at": "2026-01-05T09:12:00Z" },
+    { "ticket_id": "t-1001", "author": "agent", "agent_id": "a-1", "body": "Merhaba, kontrol ediyorum.", "created_at": "2026-01-05T09:20:00Z" },
+    { "ticket_id": "t-1001", "author": "agent", "agent_id": "a-1", "body": "Tarayıcı önbelleğini temizleyip Faturalar > İndir menüsünden tekrar dener misiniz? Sorun bu şekilde çözülüyor.", "created_at": "2026-01-05T09:45:00Z" },
+    { "ticket_id": "t-1001", "author": "customer", "body": "Oldu, teşekkürler.", "created_at": "2026-01-05T10:00:00Z" },
+
+    { "ticket_id": "t-1002", "author": "customer", "body": "Faturayı indir dediğimde dosya inmiyor. Deneme Yazılım A.Ş. adına kesilen fatura.", "created_at": "2026-01-09T13:40:00Z" },
+    { "ticket_id": "t-1002", "author": "agent", "agent_id": "a-2", "body": "Tarayıcınızın önbelleğini temizleyip faturayı Faturalar > İndir menüsünden yeniden indirmeniz yeterli olacaktır.", "created_at": "2026-01-09T13:58:00Z" },
+
+    { "ticket_id": "t-1003", "author": "customer", "body": "PDF faturayı açınca boş sayfa geliyor. musteri3@example.test adresime de gönderebilir misiniz?", "created_at": "2026-02-02T08:01:00Z" },
+    { "ticket_id": "t-1003", "author": "agent", "agent_id": "a-1", "body": "Önbelleği temizleyip Faturalar > İndir menüsünden tekrar indirin; boş sayfa sorunu bu şekilde gider.", "created_at": "2026-02-02T08:20:00Z" },
+
+    { "ticket_id": "t-1004", "author": "customer", "body": "Şifremi unuttum, giriş yapamıyorum.", "created_at": "2026-02-10T11:00:00Z" },
+    { "ticket_id": "t-1004", "author": "agent", "agent_id": "a-2", "body": "Giriş ekranındaki Şifremi unuttum bağlantısından yeni şifre alabilirsiniz.", "created_at": "2026-02-10T11:05:00Z" },
+
+    { "ticket_id": "t-1005", "author": "customer", "body": "Raporlara Excel dışa aktarımı eklenebilir mi?", "created_at": "2026-03-01T15:00:00Z" }
+  ]
+}
