@@ -19,7 +19,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN pnpm build
+# Sentry source maps (CF-227): only the CI image build passes the token, as a
+# BuildKit secret mounted for this one command, so it is never an image
+# layer, build arg or env var of the image; org/project are not secret.
+# Without the token next.config.ts skips the upload. Browser maps left in
+# .next/static are deleted so the runtime image never serves one.
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+RUN --mount=type=secret,id=sentry_auth_token \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    SENTRY_ORG="$SENTRY_ORG" SENTRY_PROJECT="$SENTRY_PROJECT" pnpm build \
+    && find .next/static -name '*.map' -type f -delete
 
 FROM node:22.22.0-alpine3.23 AS runtime
 
