@@ -182,10 +182,14 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 		if rich {
 			title, body = msg.Title, msg.Summary()
 			if ch == model.ChannelEmail {
-				body = msg.EmailText(s.appURL)
+				email := msg
+				if in.UserID != nil && s.hasDesktopSession(ctx, *in.UserID) {
+					email = msg.WithDesktopAction()
+				}
+				body = email.EmailText(s.appURL)
 				// The layout shows the primary action as its button.
 				if a, ok := msg.Primary(); ok && actionURL != nil && *actionURL == a.URL {
-					body = msg.EmailBody(s.appURL)
+					body = email.EmailBody(s.appURL)
 				}
 			}
 		} else if in.TemplateCode != "" {
@@ -282,6 +286,28 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 		out = append(out, s.project(row))
 	}
 	return out, nil
+}
+
+// desktopSessions is implemented by db.Queries (CF-236); test fakes may
+// leave it out, then no desktop link is added.
+type desktopSessions interface {
+	UserHasDesktopSession(ctx context.Context, userID int64) (bool, error)
+}
+
+// hasDesktopSession reports whether the user is signed in to ClickFix
+// Masaüstü, so the e-mail can offer "Masaüstünde aç". Lookup errors only
+// drop the link.
+func (s *Service) hasDesktopSession(ctx context.Context, userID int64) bool {
+	q, ok := s.q.(desktopSessions)
+	if !ok {
+		return false
+	}
+	has, err := q.UserHasDesktopSession(ctx, userID)
+	if err != nil {
+		s.log.Debug("desktop_session_lookup_failed", "error", err)
+		return false
+	}
+	return has
 }
 
 // scheduleDeliverAt delivers now or, for e-mail held by quiet hours, at a

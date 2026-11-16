@@ -234,3 +234,23 @@ func (q *Queries) RevokeRefreshTokenByUUIDForUser(ctx context.Context, arg Revok
 	}
 	return result.RowsAffected(), nil
 }
+
+const userHasDesktopSession = `-- name: UserHasDesktopSession :one
+SELECT EXISTS (
+  SELECT 1
+  FROM refresh_tokens
+  WHERE user_id = $1
+    AND client = 'desktop'
+    AND revoked_at IS NULL
+    AND expires_at > NOW()
+)::boolean AS has_session
+`
+
+// True while the user has an active ClickFix Masaüstü session (CF-236);
+// notification e-mails then carry a "Masaüstünde aç" link.
+func (q *Queries) UserHasDesktopSession(ctx context.Context, userID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, userHasDesktopSession, userID)
+	var has_session bool
+	err := row.Scan(&has_session)
+	return has_session, err
+}

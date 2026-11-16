@@ -22,7 +22,7 @@
     "review:build": "NEXT_PUBLIC_DEFAULT_LOCALE=en NEXT_PUBLIC_REALTIME_ENABLED=false pnpm build",
     "review:videos": "playwright test -c e2e/meta-review/playwright.config.ts && node e2e/meta-review/collect.mjs",
     "widget:test": "node --test widget-sdk/tests/*.test.mjs widget-sdk/privacy.test.mjs",
-    "test": "node --test widget-sdk/tests/*.test.mjs widget-sdk/privacy.test.mjs src/features/widget/lib/*.test.mjs src/features/softphone/*.test.mjs src/features/engineering/lib/*.test.mjs src/features/forum/lib/*.test.mjs src/features/mcp/lib/*.test.mjs src/features/desktop/lib/*.test.mjs src/features/mcp/components/*.test.mjs src/features/assistant/lib/*.test.mjs src/features/assistant/services/*.test.mjs src/config/*.test.mjs src/lib/server/*.test.mjs src/lib/web-push/*.test.mjs src/components/tables/*.test.mjs",
+    "test": "node --test widget-sdk/tests/*.test.mjs widget-sdk/privacy.test.mjs src/features/widget/lib/*.test.mjs src/features/softphone/*.test.mjs src/features/engineering/lib/*.test.mjs src/features/forum/lib/*.test.mjs src/features/mcp/lib/*.test.mjs src/features/desktop/lib/*.test.mjs src/lib/desktop/*.test.mjs src/features/mcp/components/*.test.mjs src/features/assistant/lib/*.test.mjs src/features/assistant/services/*.test.mjs src/config/*.test.mjs src/lib/server/*.test.mjs src/lib/web-push/*.test.mjs src/components/tables/*.test.mjs",
     "docs:sync": "node scripts/sync-docs-spec.mjs",
     "docs:check": "node scripts/sync-docs-spec.mjs --check",
     "docs:generate": "node scripts/generate-api-docs.mjs && fumadocs-mdx",

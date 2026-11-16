@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { onDesktopCommand } from "@/lib/desktop/bridge";
+
 type CommandPaletteContextValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -30,7 +32,14 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    // ClickFix Masaüstü global shortcut (Ctrl/Cmd+Shift+K) opens the palette.
+    const offDesktop = onDesktopCommand((command) => {
+      if (command.type === "command-palette") setOpen(true);
+    });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      offDesktop();
+    };
   }, []);
 
   const setOpenStable = useCallback((next: boolean) => setOpen(next), []);

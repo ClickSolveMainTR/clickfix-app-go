@@ -18,7 +18,20 @@ serde_json = "1"
 tauri = "2.12"
 tauri-build = "2.7"
 tauri-plugin-log = "2"
-tauri-plugin-single-instance = "2.5"
+tauri-plugin-single-instance = { version = "=2.5.5", features = ["deep-link"] }
+# ClickFix Masaüstü eklentileri (CF-236). Sürümler sabittir; yükseltme ayrı
+# bir değişiklikle ve elle denemeyle yapılır.
+tauri-plugin-autostart = "=2.7.0"
+tauri-plugin-deep-link = "=2.6.3"
+tauri-plugin-global-shortcut = "=2.4.1"
+tauri-plugin-notification = "=2.8.1"
+tauri-plugin-opener = "=2.7.3"
+tauri-plugin-window-state = "=2.5.0"
+base64 = "0.22"
+keyring = { version = "=3.6.3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust", "vendored"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls", "http2"] }
+sha2 = "0.10"
+getrandom = "0.3"
 thiserror = "2"
 tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "sync", "time"] }
 url = "2"
