@@ -77,7 +77,31 @@ Konuşmanın içinden açmanın ürün avantajı:
    - **B:** Go sidecar içinde yerel yakalama (ScreenCaptureKit / Windows Graphics Capture, cgo) ve VP8/H.264 kodlama, LiveKit Go istemcisiyle (Pion).
    - **C:** Rust `scap` ile yakalama ve LiveKit Rust SDK.
 
-   Ölçütler: gecikme (hedef 200 ms altı), CPU, paket boyutu, izin akışı, imzalama karmaşıklığı. Karar bu belgeye eklenir.
+   Ölçütler: gecikme (hedef 200 ms altı), CPU, paket boyutu, izin akışı, imzalama karmaşıklığı.
+
+   **Karar (CF-235, 16 Kas 2026): B, Go sidecar.** Ekran yakalama, kodlama, LiveKit yayını ve girdi enjeksiyonu aynı Go sidecar sürecindedir. Ölçümler `desktop/spikes/OLCUMLER.md` belgesindedir (MacBook Air M2, macOS 27.2, yerel LiveKit):
+
+   | | A: webview | B: Go sidecar | C: Rust |
+   |---|---|---|---|
+   | Uçtan uca gecikme | ~133 ms | **~67 ms** | ~100 ms |
+   | Kare hızı | ~15 fps | 25-29 fps | ~29 fps |
+   | Kodlama | VP8 (WebKit) | H.264, donanım (VideoToolbox) | VP8, yazılım (libwebrtc) |
+   | CPU / bellek | %0,2-6 / 60-130 MB | **%3-6 / 64 MB** | ~%60 / 450-670 MB |
+   | Boyut | .app 3 MB | 29 MB ikili (sıkıştırılmamış, ek dylib yok) | 16 MB; derleme 9 dk |
+
+   Neden:
+   - B en düşük gecikmeyi ve en düşük kaynak kullanımını verdi. Bunun nedeni donanım H.264 kodlayıcısıdır.
+   - A yalnız WebKit'in gizli tercihleriyle çalıştı. Varsayılan WKWebView'de `navigator.mediaDevices` yok; gizli API'ye bağımlı olmak her macOS sürümünde kırılma ve inceleme riski taşır.
+   - C, yazılım VP8 kodlamasıyla bir çekirdeği doldurdu. Üstelik libwebrtc derlemesi ağır.
+   - Girdi enjeksiyonu zaten Go sidecar'da olacaktı. B ile tek süreç, tek LiveKit bağlantısı ve tek izin sahibi kalır.
+
+   Girdi: `control` veri kanalından gelen olaylar yerel ölçümde medyan 2 ms, p95 4 ms ile ulaştı (60/60, kayıp yok). Tıklama müşteri ekranında uygulandı (robotgo, Erişilebilirlik izni).
+
+   CF-238 ve CF-239'a kalan riskler:
+   - **Boyut:** sidecar ikilisi 29 MB; Destek uygulaması için hedef 15 MB altı. `-ldflags "-s -w"`, kullanılmayan robotgo parçalarının çıkarılması ve DMG/MSI sıkıştırmasıyla ölçülecek; hedef gerekirse güncellenir.
+   - **Windows ölçülmedi** (makine yok). Windows Graphics Capture ve Media Foundation H.264 yolu CF-238'de ayrıca denenir.
+   - 4K ekran ve macOS'un ekran kaydı iznini aylık yeniden sorması denenmedi.
+   - İzin sahibi: izinler sidecar'ı başlatan uygulamaya bağlanır. İmzalı uygulamada izin, imza değişmedikçe korunur; imzasız denemelerde her derlemede yeniden istenir.
 
    Hangi yol seçilirse seçilsin, **girdi enjeksiyonu Go sidecar'dadır**: robotgo; macOS'ta Accessibility, Windows'ta kullanıcı oturumu düzeyinde.
 6. **RustDesk kodu kullanılmaz.** AGPL-3.0 lisanslıdır; ürüne gömmek kaynak açmayı gerektirir. Yalnız mimari fikir olarak okunabilir; kod kopyalanmaz. `docs/REFERANSLAR.md` "Sadece fikir" satırına eklenir.
