@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "support-overlay",
+  "description": "Paylaşım çubuğu ve çerçeve: yalnız durum okuma, Durdur / Kontrolü geri al ve sürükleme.",
+  "local": true,
+  "windows": ["bar", "frame"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "allow-overlay-state",
+    "allow-bar-action"
+  ]
+}

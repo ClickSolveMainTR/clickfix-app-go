@@ -191,10 +191,14 @@ Sapmalar (CF-236):
    - **Kontrol onayı.** Temsilci kontrol istediyse ayrı bir evet gerekir.
    - **Kayıt onayı.** Organizasyon kaydı açtıysa ayrı bir evettir. Hayır derse oturum kayıtsız sürer.
 7. macOS'ta ilk kullanımda izin ekranları gösterilir: Ekran Kaydı ve, kontrol için, Erişilebilirlik. Hangi düğmeye basılacağı adım adım anlatılır ve izin verilince uygulama yeniden başlar.
+   - Uygulamadaki sıra (CF-239): Ekran Kaydı izni kod **çözülmeden önce** denetlenir. İzin yeniden başlatma ister, çözülen oturum ise tek kullanımlıktır; bu yüzden girilen kod ya da bağlantı en çok 15 dakika yerelde tutulur ve yeniden açılışta kendiliğinden kullanılır.
+   - Erişilebilirlik kontrol onayından sonra istenir. Müşteri bu adımı atlarsa kontrol onayı geri çekilir (`session.consent {control:false}`) ve oturum yalnız izlemeyle başlar.
+   - Kayıt, müşteri katılınca başladığı için kontrol ve kayıt onayları da yayın başlamadan (`session.start` öncesi) alınır. Tasarımdaki "görüyor 00:42" şeridi yalnız yayın sürerken görünür.
 8. Oturum sürerken:
    - Ekranın kenarında her zaman görünen bir çerçeve ve "<Temsilci> ekranınızı görüyor / kontrol ediyor" çubuğu durur.
    - Çubukta tek tıkla **Durdur** ve **Kontrolü geri al** vardır.
    - Kısayol `Ctrl+Alt+Shift+S` oturumu hemen bitirir.
+   - Çerçeve ve çubuk ayrı, şeffaf, her zaman üstte pencerelerdir; Rust kabuğu bunları sidecar'ın `state` olayından açar ve kapatır (`phase` `active` ya da `reconnecting`). Çubuktaki düğmeler ve kısayol sidecar'ı doğrudan çağırır; ana pencere takılsa da çalışır.
 9. Bitiş:
    - Müşteri durdurur, temsilci bitirir, süre dolar (varsayılan en çok 60 dakika) ya da konuşma kapanır.
    - LiveKit odası silinir, sidecar girdi enjeksiyonunu kapatır, uygulama bir özet gösterir.
