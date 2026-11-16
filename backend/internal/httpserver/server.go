@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	appsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/apps"
 	automationmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/automation"
@@ -160,6 +161,7 @@ import (
 	presenceusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/presence/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/qrlogin"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/quality"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/remotesupport"
 	reportsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports"
 	reportsrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/repository"
 	reportsuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/usecase"
@@ -687,6 +689,16 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		ok, _ := videoLimiter.Allow(r.Context(), action, subject, limit, window)
 		return ok
 	})
+	// Remote support (CF-233): agent views (and, with consent, controls) the
+	// customer's screen through LiveKit rs_ rooms; webhooks arrive on the
+	// video endpoint.
+	remoteSupportSvc := remotesupport.New(deps.Queries, cfg, entitlementService, inboxCore.Conversations, deps.Realtime, activityRec, deps.Storage, log)
+	videoSvc.RemoteSupportEvent = remoteSupportSvc.HandleEvent
+	remoteSupportLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
+	remotesupport.RegisterRoutes(operationsRouter, remoteSupportSvc, func(r *http.Request, action, subject string, limit int, window time.Duration) bool {
+		ok, _ := remoteSupportLimiter.AllowStrict(r.Context(), action, subject, limit, window)
+		return ok
+	})
 	reportsmodule.RegisterRoutes(operationsRouter, reportsSvc)
 	complianceSvc := &complianceuc.Service{Search: searchClient, Repo: compliancerepo.New(deps.DB, deps.Queries), Store: deps.Storage, Jobs: deps.Queue, Activity: activityRec}
 	compliancemodule.RegisterRoutes(operationsRouter, complianceSvc)
@@ -819,7 +831,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			Presence: http.HandlerFunc(presenceH.SetStatus),
 			Counts:   convH.WithViewer(http.HandlerFunc(convH.Counts)),
 		})
-	rtHandler := realtime.NewHandler(rtIssuer, presencemodule.Authorizer{Next: inbox.Authorizer{Next: uc, Resolver: tenantResolver, Queries: deps.Queries}, Resolver: tenantResolver, Queries: deps.Queries}).
+	rtAuthz := presencemodule.Authorizer{Next: inbox.Authorizer{Next: uc, Resolver: tenantResolver, Queries: deps.Queries}, Resolver: tenantResolver, Queries: deps.Queries}
+	rtHandler := realtime.NewHandler(rtIssuer, remotesupport.Authorizer{Next: rtAuthz, Resolver: tenantResolver, Queries: deps.Queries}).
 		WithConnInfo(func(ctx context.Context, userID int64) map[string]any {
 			u, err := deps.Queries.GetUserByID(ctx, userID)
 			if err != nil {
@@ -901,7 +914,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 			Handle(queue.TaskUptimeSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepMonitors(ctx) }).
 			Handle(queue.TaskOncallSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepAlerts(ctx) }).
 			Handle(queue.TaskVideoSweep, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.Sweep(ctx) }).
-			Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.PurgeExpired(ctx) }).
+			Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error {
+				return errors.Join(videoSvc.PurgeExpired(ctx), remoteSupportSvc.PurgeRecordings(ctx))
+			}).
+			Handle(queue.TaskRemoteSupportSweep, func(ctx context.Context, _ *asynq.Task) error { return remoteSupportSvc.Sweep(ctx) }).
 			Handle(queue.TaskReportsSweep, func(ctx context.Context, _ *asynq.Task) error { return reportsSvc.Sweep(ctx) }).
 			Handle(retention.Task, func(ctx context.Context, _ *asynq.Task) error {
 				return (retention.Service{Q: deps.Queries, Store: deps.Storage}).Purge(ctx)

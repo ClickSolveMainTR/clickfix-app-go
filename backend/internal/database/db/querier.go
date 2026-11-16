@@ -2107,6 +2107,43 @@ type Querier interface {
 	// Rebuilds the counters a message move changes from the messages left.
 	RecountConversation(ctx context.Context, arg RecountConversationParams) (Conversation, error)
 	ReleaseMessageClaim(ctx context.Context, arg ReleaseMessageClaimParams) error
+	RemoteSupportActivate(ctx context.Context, arg RemoteSupportActivateParams) (RemoteSupportSession, error)
+	// A wrong code charged to the pending session that owns its lookup prefix.
+	RemoteSupportCodeAttempt(ctx context.Context, arg RemoteSupportCodeAttemptParams) (int32, error)
+	RemoteSupportCreateSession(ctx context.Context, arg RemoteSupportCreateSessionParams) (RemoteSupportSession, error)
+	RemoteSupportEnd(ctx context.Context, arg RemoteSupportEndParams) (RemoteSupportSession, error)
+	RemoteSupportExpiredRecordings(ctx context.Context) ([]RemoteSupportSession, error)
+	RemoteSupportMarkRecordingDeleted(ctx context.Context, arg RemoteSupportMarkRecordingDeletedParams) error
+	RemoteSupportMinutesSince(ctx context.Context, arg RemoteSupportMinutesSinceParams) (int64, error)
+	RemoteSupportOpenForConversation(ctx context.Context, arg RemoteSupportOpenForConversationParams) (int64, error)
+	// Sweep: every open session, with the conversation status so a closed
+	// conversation ends its session.
+	RemoteSupportOpenSessions(ctx context.Context) ([]RemoteSupportOpenSessionsRow, error)
+	RemoteSupportOpenSessionsForOrg(ctx context.Context, organizationID int64) ([]RemoteSupportSession, error)
+	RemoteSupportPendingByCode(ctx context.Context, codeLookup string) (RemoteSupportSession, error)
+	// Platform view: organizations that use remote support, were reported or
+	// are not active, with their report counts of the last 30 days.
+	RemoteSupportPlatformOrganizations(ctx context.Context, arg RemoteSupportPlatformOrganizationsParams) ([]RemoteSupportPlatformOrganizationsRow, error)
+	RemoteSupportPlatformReports(ctx context.Context, arg RemoteSupportPlatformReportsParams) ([]RemoteSupportPlatformReportsRow, error)
+	RemoteSupportRecentReports(ctx context.Context, arg RemoteSupportRecentReportsParams) (int64, error)
+	RemoteSupportReport(ctx context.Context, arg RemoteSupportReportParams) (RemoteSupportSession, error)
+	// Single use: the code and the join link stop working once resolved.
+	RemoteSupportResolve(ctx context.Context, arg RemoteSupportResolveParams) (RemoteSupportSession, error)
+	RemoteSupportSaveSettings(ctx context.Context, arg RemoteSupportSaveSettingsParams) (RemoteSupportSetting, error)
+	RemoteSupportSession(ctx context.Context, arg RemoteSupportSessionParams) (RemoteSupportSession, error)
+	RemoteSupportSessionByEgress(ctx context.Context, egressID string) (RemoteSupportSession, error)
+	RemoteSupportSessionByJoinToken(ctx context.Context, joinTokenHash string) (RemoteSupportSession, error)
+	RemoteSupportSessionByRoom(ctx context.Context, roomName string) (RemoteSupportSession, error)
+	RemoteSupportSessionByUUID(ctx context.Context, argUuid uuid.UUID) (RemoteSupportSession, error)
+	RemoteSupportSessionsForConversation(ctx context.Context, arg RemoteSupportSessionsForConversationParams) ([]RemoteSupportSession, error)
+	RemoteSupportSetBilled(ctx context.Context, arg RemoteSupportSetBilledParams) error
+	RemoteSupportSetConsent(ctx context.Context, arg RemoteSupportSetConsentParams) (RemoteSupportSession, error)
+	RemoteSupportSetEgress(ctx context.Context, arg RemoteSupportSetEgressParams) error
+	RemoteSupportSetPlatformState(ctx context.Context, arg RemoteSupportSetPlatformStateParams) (RemoteSupportSetting, error)
+	RemoteSupportSetRecordingStatus(ctx context.Context, arg RemoteSupportSetRecordingStatusParams) error
+	// CF-233 remote support sessions (internal/modules/remotesupport).
+	RemoteSupportSettings(ctx context.Context, organizationID int64) (RemoteSupportSetting, error)
+	RemoteSupportStartRecording(ctx context.Context, arg RemoteSupportStartRecordingParams) (RemoteSupportSession, error)
 	RemoveConversationParticipant(ctx context.Context, arg RemoveConversationParticipantParams) (int64, error)
 	RemoveConversationTag(ctx context.Context, arg RemoveConversationTagParams) (int64, error)
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
