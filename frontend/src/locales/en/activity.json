@@ -186,6 +186,8 @@
   "resources.appointment_type": "Appointment type",
   "resources.appointment_settings": "Appointment settings",
   "actions.video.room_created": "Video room created",
+  "actions.desktop_release.published": "Desktop release published",
+  "actions.desktop_release.withdrawn": "Desktop release withdrawn",
   "actions.remote_support.created": "Remote support session started",
   "actions.remote_support.resolved": "Remote support code redeemed by the customer",
   "actions.remote_support.code_invalidated": "Remote support code invalidated after wrong attempts",

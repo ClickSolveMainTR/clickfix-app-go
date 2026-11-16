@@ -15,6 +15,7 @@ import { setAuthFailureHandler } from "@/lib/api";
 import { useAuthStore, type AuthUser } from "@/lib/auth/session-store";
 import { mapMeToAuthUser } from "@/lib/auth/types";
 import { setClientSessionFlag } from "@/lib/routing/guards";
+import { signOut as desktopSignOut } from "@/lib/desktop/bridge";
 import { authService } from "@/services/auth.service";
 
 type AuthContextValue = {
@@ -115,6 +116,8 @@ function AuthContextBridge({ children }: { children: ReactNode }) {
     await authService.logout();
     applySession(false);
     await signOut({ redirect: false });
+    // ClickFix Masaüstü: close the app's own session too (no-op elsewhere).
+    await desktopSignOut();
   }, [applySession]);
 
   const value = useMemo<AuthContextValue>(

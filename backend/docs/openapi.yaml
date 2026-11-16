@@ -75,6 +75,8 @@ tags:
     description: LiveKit video rooms, guest join links, lobby, recordings and minute metering (CF-139)
   - name: RemoteSupport
     description: Remote support sessions - agent views (and with consent controls) the customer screen through LiveKit; codes, consents, kill switch (CF-233)
+  - name: Desktop
+    description: Desktop app releases - Tauri updater manifest, download page, packages, publish and withdraw (CF-240)
   - name: Widget
     description: Public web widget visitor API (CORS, visitor token; called by the embeddable SDK)
   - name: Mobile
@@ -42380,6 +42382,215 @@ paths:
   "/v1/platform/remote-support/organizations": {"get": {"operationId": "listPlatformRemoteSupportOrganizations", "summary": "Organizations using remote support", "tags": ["RemoteSupport"], "description": "Requires platform.remote_support.manage. Sorted by reports of the last 30 days.", "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthenticated"}, "403": {"description": "Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled)."}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"description": "REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet)."}, "410": {"description": "REMOTE_SUPPORT_ENDED: the session has ended."}, "422": {"$ref": "#/components/responses/ValidationError"}, "200": {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean", "const": true}, "data": {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/RemoteSupportPlatformOrganization"}}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, "required": ["items", "limit", "offset"]}, "meta": {"$ref": "#/components/schemas/ResponseMeta"}}, "required": ["success", "data", "meta"], "additionalProperties": false}}}}}, "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}, {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 2147483647}}, {"name": "state", "in": "query", "schema": {"type": "string", "enum": ["active", "disabled", "suspended"]}}], "security": [{"bearerAuth": []}]}}
   "/v1/platform/remote-support/organizations/{uuid}/state": {"put": {"operationId": "setPlatformRemoteSupportState", "summary": "Kill switch for an organization", "tags": ["RemoteSupport"], "description": "Requires platform.remote_support.manage. disabled (reason required) ends every open session of the organization at once; active lifts a kill switch or an automatic suspension.", "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthenticated"}, "403": {"description": "Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled)."}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"description": "REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet)."}, "410": {"description": "REMOTE_SUPPORT_ENDED: the session has ended."}, "422": {"$ref": "#/components/responses/ValidationError"}, "200": {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean", "const": true}, "data": {"$ref": "#/components/schemas/RemoteSupportSettings"}, "meta": {"$ref": "#/components/schemas/ResponseMeta"}}, "required": ["success", "data", "meta"], "additionalProperties": false}}}}}, "parameters": [{"name": "uuid", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}], "security": [{"bearerAuth": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RemoteSupportPlatformStateInput"}}}}}}
   "/v1/platform/remote-support/reports": {"get": {"operationId": "listPlatformRemoteSupportReports", "summary": "Reported remote support sessions", "tags": ["RemoteSupport"], "description": "Requires platform.remote_support.manage. Newest first.", "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthenticated"}, "403": {"description": "Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled)."}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"description": "REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet)."}, "410": {"description": "REMOTE_SUPPORT_ENDED: the session has ended."}, "422": {"$ref": "#/components/responses/ValidationError"}, "200": {"description": "Success", "content": {"application/json": {"schema": {"type": "object", "properties": {"success": {"type": "boolean", "const": true}, "data": {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/RemoteSupportPlatformReport"}}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, "required": ["items", "limit", "offset"]}, "meta": {"$ref": "#/components/schemas/ResponseMeta"}}, "required": ["success", "data", "meta"], "additionalProperties": false}}}}}, "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}, {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 2147483647}}], "security": [{"bearerAuth": []}]}}
+  /v1/public/desktop/releases/{app}/{target}/{current_version}:
+    get:
+      tags: [Desktop]
+      operationId: getDesktopUpdate
+      summary: Tauri updater check
+      description: >-
+        Public (desktop app, no login, no organization). Answers in the Tauri
+        updater dynamic server format, not the envelope: 200 with the newest
+        published release of the app for the target that is newer than
+        current_version (semver precedence), or 204 when the client is up to
+        date. A beta client also receives stable releases; a stable client
+        never receives beta. Withdrawn releases are never offered.
+      security: []
+      parameters:
+        - { name: app, in: path, required: true, schema: { type: string, enum: [agent, support] } }
+        - name: target
+          in: path
+          required: true
+          description: "Tauri {{target}}-{{arch}}, e.g. darwin-aarch64, darwin-x86_64, windows-x86_64."
+          schema: { type: string, pattern: "^(darwin|windows|linux)-(x86_64|aarch64|i686|armv7)$" }
+        - { name: current_version, in: path, required: true, schema: { type: string, example: 0.1.0 } }
+        - { name: channel, in: query, required: false, schema: { type: string, enum: [stable, beta], default: stable } }
+      responses:
+        "200":
+          description: An update is available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesktopUpdateManifest" }
+        "204": { description: Up to date }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/public/desktop/downloads:
+    get:
+      tags: [Desktop]
+      operationId: listDesktopDownloads
+      summary: Download page entries
+      description: >-
+        Public. The newest published release of each app per target with its
+        file name, size, SHA-256 and a same-origin download path. macOS
+        entries offer the .dmg; Windows entries offer the NSIS installer.
+        os_signed false marks an unsigned internal test build.
+      security: []
+      parameters:
+        - { name: channel, in: query, required: false, schema: { type: string, enum: [stable, beta], default: stable } }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/DesktopDownload" } }
+                  meta: { $ref: "#/components/schemas/ResponseMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/public/desktop/files/{uuid}/{kind}/{name}:
+    get:
+      tags: [Desktop]
+      operationId: downloadDesktopFile
+      summary: Download a desktop package
+      description: >-
+        Public. Streams a package of a published release from object storage
+        (the bucket stays private). The name must match the stored file name.
+        Withdrawn releases answer 404.
+      security: []
+      parameters:
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [updater, installer] } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Package bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/platform/desktop/releases:
+    get:
+      tags: [Desktop]
+      operationId: listPlatformDesktopReleases
+      summary: List desktop releases
+      description: Requires `platform.desktop_releases.manage`. Newest first.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: app, in: query, required: false, schema: { type: string, enum: [agent, support] } }
+        - { name: channel, in: query, required: false, schema: { type: string, enum: [stable, beta] } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [published, withdrawn] } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [items, total, limit, offset]
+                    properties:
+                      items: { type: array, items: { $ref: "#/components/schemas/DesktopRelease" } }
+                      total: { type: integer, format: int64 }
+                      limit: { type: integer }
+                      offset: { type: integer }
+                  meta: { $ref: "#/components/schemas/ResponseMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Desktop]
+      operationId: publishPlatformDesktopRelease
+      summary: Publish a desktop release
+      description: >-
+        Requires `platform.desktop_releases.manage`. Multipart form, at most
+        1 GiB. The files go to object storage and the SHA-256 is computed
+        server-side. Stable versions have no pre-release part; beta versions
+        must have one. Version, app, channel and target are unique together
+        (409 DESKTOP_RELEASE_EXISTS). Used by desktop/scripts/publish-release.mjs.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [app, channel, version, target, signature, os_signed, updater]
+              properties:
+                app: { type: string, enum: [agent, support] }
+                channel: { type: string, enum: [stable, beta] }
+                version: { type: string, description: "Canonical semver, e.g. 0.2.0 or 0.3.0-beta.1" }
+                target: { type: string, example: darwin-aarch64 }
+                notes: { type: string, maxLength: 10000 }
+                signature: { type: string, description: Content of the Tauri updater .sig file }
+                os_signed: { type: boolean, description: "true: macOS Developer ID + notarized / Windows Authenticode; false: unsigned internal test build" }
+                updater: { type: string, format: binary, description: ".app.tar.gz (macOS), .exe or .msi (Windows), .AppImage (Linux)" }
+                installer: { type: string, format: binary, description: "Optional download page file (.dmg on macOS)" }
+      responses:
+        "201":
+          description: Published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: "#/components/schemas/DesktopRelease" }
+                  meta: { $ref: "#/components/schemas/ResponseMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /v1/platform/desktop/releases/{uuid}/withdraw:
+    post:
+      tags: [Desktop]
+      operationId: withdrawPlatformDesktopRelease
+      summary: Withdraw a desktop release
+      description: >-
+        Requires `platform.desktop_releases.manage`. The release leaves the
+        updater and the download page; its files stay in storage. Clients
+        already on it move off when a higher version is published. 409
+        DESKTOP_RELEASE_WITHDRAWN when already withdrawn.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: uuid, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              additionalProperties: false
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200":
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data, meta]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: "#/components/schemas/DesktopRelease" }
+                  meta: { $ref: "#/components/schemas/ResponseMeta" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
   /v1/tenant/guides:
     get:
       tags:
@@ -53823,6 +54034,57 @@ components:
           items:
             $ref: "#/components/schemas/ErrorDetail"
 
+    DesktopUpdateManifest:
+      type: object
+      description: Tauri updater dynamic server response (CF-240).
+      required: [version, notes, pub_date, url, signature]
+      properties:
+        version: { type: string }
+        notes: { type: string }
+        pub_date: { type: string, format: date-time }
+        url: { type: string, format: uri, description: Absolute package URL served by the API }
+        signature: { type: string, description: Tauri updater signature (.sig content) }
+    DesktopReleaseFile:
+      type: object
+      required: [name, size, sha256, url]
+      properties:
+        name: { type: string }
+        size: { type: integer, format: int64 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        url: { type: string, description: Same-origin download path (/api/v1/public/desktop/files/...) }
+    DesktopRelease:
+      type: object
+      required: [uuid, app, channel, version, target, status, notes, os_signed, updater, installer, published_at, withdrawn_at, withdrawn_reason]
+      properties:
+        uuid: { type: string, format: uuid }
+        app: { type: string, enum: [agent, support] }
+        channel: { type: string, enum: [stable, beta] }
+        version: { type: string }
+        target: { type: string }
+        status: { type: string, enum: [published, withdrawn] }
+        notes: { type: string }
+        os_signed: { type: boolean }
+        updater: { $ref: "#/components/schemas/DesktopReleaseFile" }
+        installer:
+          oneOf:
+            - { $ref: "#/components/schemas/DesktopReleaseFile" }
+            - { type: "null" }
+        published_at: { type: string, format: date-time }
+        withdrawn_at: { type: [string, "null"], format: date-time }
+        withdrawn_reason: { type: string }
+    DesktopDownload:
+      type: object
+      required: [app, target, os, arch, version, channel, os_signed, file, published_at]
+      properties:
+        app: { type: string, enum: [agent, support] }
+        target: { type: string }
+        os: { type: string, enum: [darwin, windows, linux] }
+        arch: { type: string }
+        version: { type: string }
+        channel: { type: string, enum: [stable, beta] }
+        os_signed: { type: boolean, description: false marks an unsigned internal test build }
+        file: { $ref: "#/components/schemas/DesktopReleaseFile" }
+        published_at: { type: string, format: date-time }
     ResponseMeta:
       type: object
       required: [request_id]

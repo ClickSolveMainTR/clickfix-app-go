@@ -104,6 +104,7 @@ import (
 	departmentshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/handler"
 	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/desktoplogin"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/desktopreleases"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/enterprise"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports"
@@ -872,6 +873,10 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	// Desktop app sign-in through the system browser (CF-234).
 	desktopSvc := desktoplogin.NewService(desktoplogin.NewStore(deps.Redis, cfg.App.Env), uc)
 	desktoplogin.RegisterRoutes(mux, desktoplogin.NewHandler(desktopSvc, ratelimit.New(deps.Redis, cfg.App.Env), activityRec), tokens, loader)
+	// Desktop app releases (CF-240): Tauri updater manifest, download page,
+	// package files (object storage, streamed by the API), publish/withdraw.
+	desktopreleases.RegisterRoutes(mux, &desktopreleases.Service{Q: deps.Queries, Store: deps.Storage, BaseURL: cfg.Auth.FrontendURL},
+		desktopreleases.Deps{Tokens: tokens, Loader: loader, Activity: activityRec, Log: log})
 
 	nh := notifhandler.New(notifSvc)
 	nh.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))

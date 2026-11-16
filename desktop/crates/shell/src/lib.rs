@@ -7,6 +7,7 @@
 //! - [`config`]: ortam değişkenlerinden yapılandırma.
 //! - [`net`]: uzak köke erişilebilirlik denetimi.
 //! - [`plugins`]: tek örnek ve günlük dosyası eklentileri.
+//! - [`updates`]: Tauri updater ile kendini güncelleme (kapanışta kurulum).
 
 pub mod backoff;
 pub mod config;
@@ -14,6 +15,7 @@ pub mod net;
 pub mod plugins;
 pub mod rpc;
 pub mod sidecar;
+pub mod updates;
 
 pub use backoff::Backoff;
 pub use config::AppConfig;

@@ -80,11 +80,51 @@ CLICKFIX_APP_URL=http://localhost:3000 make desktop-dev-agent
 
 ## Güvenlik
 
-- **Temsilci:** IPC uzak köke yalnız çalışma anında `CLICKFIX_APP_URL`'den üretilen `remote-app` capability'si ile açılır (`remote.urls` = `<kök>/*`). Şimdilik yalnız `core:app:allow-version` izni vardır; köprü komutları CF-236 ile eklenir. Yerel sayfa yalnız `connect` komutunu çağırabilir. Ana pencere kök dışındaki adreslere gidemez.
+- **Temsilci:** IPC uzak köke yalnız çalışma anında `CLICKFIX_APP_URL`'den üretilen `remote-app` capability'si ile açılır (`remote.urls` = `<kök>/*`, yalnız ana pencere). Uzak kök yalnız köprü komutlarını çağırabilir: `notify`, `set_badge`, `set_presence`, `open_external`, `version`, `sign_out`. Yerel sayfa (`capabilities/local.json`) yalnız `connect`, `start_login`, `cancel_login`. Komut listesi tek yerdedir (`apps/agent/src-tauri/src/commands.rs`; `build.rs` ve `capability.rs` buradan okur, testler capability dosyalarını denetler). Çekirdek ve eklenti izinleri hiçbir pencereye verilmez. Ana pencere kök dışındaki adreslere gidemez; `target=_blank` / `window.open` ile açılan dış bağlantılar sistem tarayıcısında açılır.
+- **Oturum:** refresh token işletim sisteminin anahtar zincirinde (macOS Keychain, Windows Credential Manager, Linux Secret Service) uygulama köküne göre ayrı kayıttadır; erişim token'ı yalnız bellektedir. Token, kod ve verifier günlüğe yazılmaz.
 - **Destek:** yerel arayüz yalnız `sidecar_version` komutunu çağırabilir; uzak kök yüklenmez.
 - Uygulama komutları `AppManifest` ile tanımlanır, bu yüzden capability'de izin verilmeyen pencere onları çağıramaz.
 - Webview'e shell izni verilmez; sidecar'ı yalnız Rust tarafı başlatır.
 - İmza ve güncelleyici anahtarları repoda durmaz (CF-240).
+
+## ClickFix Masaüstü (CF-236)
+
+Tasarım: [docs/design/masaustu.md](../docs/design/masaustu.md) §4 ve §6 (uygulama notları ve sapmalar orada).
+
+| Özellik | Nasıl |
+|---|---|
+| Giriş | Yerel sayfa "Tarayıcıda giriş yap": sistem tarayıcısında `<kök>/desktop/login?state&challenge` (PKCE S256), dönüş `clickfix://auth/callback`, takas `/api/mobile/v1/auth/desktop/exchange`. Webview oturumu `/desktop/session` ile kurulur |
+| Derin bağlantı | `clickfix://conversation/<uuid>`, `clickfix://open?path=/...`; ikinci açılış ilk örneğe iletilir (tek örnek + `deep-link`) |
+| Bildirim | Web köprüsü `notify`; pencere öndeyse gösterilmez. Masaüstünde web push aboneliği açılmaz |
+| Rozet | Okunmamış atanmış konuşma sayısı: dock / başlatıcı sayısı, Windows görev çubuğu kaplaması, tepsi ipucu |
+| Tepsi | Göster/gizle, durum, "Kapatınca tepside kalsın", "Oturum açılışında başlat", oturumu kapat, çık |
+| Menü | Hakkında, "Güncellemeleri denetle…" (CF-240'a kadar yer tutucu), "Günlükleri aç", Düzen, Pencere |
+| Kısayol | Varsayılan `CommandOrControl+Shift+K`: pencereyi öne getirir, Cmd+K paletini açar |
+| Pencere | Konum ve boyut korunur (`window-state`, görünürlük hariç) |
+
+Ayarlar, uygulama yapılandırma dizininde `settings.json`'dadır (macOS `~/Library/Application Support/com.getclickfix.desktop/`, Windows `%APPDATA%\com.getclickfix.desktop\`, Linux `~/.config/com.getclickfix.desktop/`):
+
+```json
+{ "close_to_tray": true, "autostart": false, "shortcut": "CommandOrControl+Shift+K" }
+```
+
+Tepsi menüsü ilk ikisini değiştirir. Kısayol şimdilik yalnız bu dosyadan değişir; boş değer kısayolu kapatır, kaydedilemeyen değerde varsayılan denenir.
+
+Eklenti sürümleri `Cargo.toml` içinde `=` ile sabittir (`tauri-plugin-deep-link`, `-single-instance`, `-notification`, `-global-shortcut`, `-autostart`, `-window-state`, `-opener`, `keyring`). Yükseltme ayrı bir değişiklikle ve aşağıdaki elle denemeyle yapılır.
+
+### Elle deneme (macOS, yerel)
+
+Linux CI derler ve birim testlerini çalıştırır; şunlar gerçek bir Mac'te elle denenir (ekran görüntülerinde kişisel veri olmamalı):
+
+1. `CLICKFIX_APP_URL=http://localhost:3000 make desktop-dev-agent`; yerel sayfada "Tarayıcıda giriş yap", tarayıcıda giriş, uygulamaya dönüş ve panelin açılması. Keychain Access'te `com.getclickfix.desktop` kaydı.
+2. Uygulamayı kapatıp açınca yeniden giriş istenmemesi; çıkışta Keychain kaydının silinmesi ve cihaz listesinden oturumun düşmesi.
+3. Pencere arkadayken gelen bildirimin yerel bildirim olarak görünmesi, tıklayınca ilgili konuşmanın açılması; pencere öndeyken yerel bildirimin çıkmaması.
+4. Dock rozeti ve tepsi ipucunda okunmamış atanmış konuşma sayısı.
+5. `open "clickfix://conversation/<uuid>"` ile konuşmanın açılması; uygulama kapalıyken aynı komutla açılış.
+6. `Cmd+Shift+K` ile pencerenin öne gelmesi ve paletin açılması.
+7. Tepsi: durum seçimi web'deki durumla eşleşir; "Kapatınca tepside kalsın" kapalıyken pencereyi kapatmak uygulamayı kapatır; "Oturum açılışında başlat".
+
+Paketli derlemede `clickfix://` şemasını işletim sistemi kurulumda kaydeder; `tauri dev` ile macOS'ta şema yalnız `.app` paketiyle çalışır (`tauri build --debug --bundles app`).
 
 ## Tek örnek ve günlük
 
@@ -99,3 +139,11 @@ macOS ve Windows derlemeleri, imzalama ve dağıtım CF-240 ile `desktop-release
 ## Sürüm
 
 `VERSION` tek kaynaktır. Değiştirince `Cargo.toml` (`workspace.package.version`), iki `tauri.conf.json` ve iki `package.json` de güncellenir; `scripts/check.sh` uyuşmazlığı yakalar.
+
+## Release ve güncelleme (CF-240)
+
+- İmzalı paketler yalnız elle tetiklenen `desktop-release` iş akışında derlenir (macOS arm64 + x64, Windows x64). Sürüm `VERSION`'dan okunur, git etiketi basılmaz.
+- Paketler Actions artefaktı olarak çıkar; API'ye `node scripts/publish-release.mjs <dizin>...` ile yayınlanır, `/indir` sayfası ve güncelleyici oradan okur.
+- Uygulamalar açılışta `GET /api/v1/public/desktop/releases/{app}/{target}/{current_version}` ucunu sorar, yeni paketi indirip imzasını doğrular ve kapanışta kurar (`crates/shell/src/updates.rs`). Geliştirme derlemesinde ve `plugins.updater.pubkey` boşken denetim yapılmaz.
+- `bundle.createUpdaterArtifacts` açık olduğundan yerelde paketli derleme (`tauri build`, `--no-bundle` olmadan) updater anahtarı ister. Anahtarsız yerel deneme: `pnpm --filter @clickfix-desktop/support tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'`.
+- Anahtarlar, gizli değerler, döndürme ve iptal: [docs/security/masaustu-imzalama.md](../docs/security/masaustu-imzalama.md).

@@ -14,6 +14,7 @@ import {
 import { AssistantButton } from "@/features/assistant/components/assistant-button";
 import { AssistantDock } from "@/features/assistant/components/assistant-dock";
 import { AssistantProvider } from "@/features/assistant/components/assistant-provider";
+import { DesktopBridgeHost } from "@/features/desktop/components/desktop-bridge-host";
 import { GuidesProvider } from "@/features/guides/components/guides-provider";
 import { PageHelpButton } from "@/features/guides/components/page-help-button";
 import { ImpersonationBanner } from "@/features/auth/components/impersonation-banner";
@@ -68,6 +69,7 @@ export function AppLayout({
         </SidebarInset>
         {variant === "cms" ? <AssistantDock /> : null}
         <NotificationLiveBridge />
+        <DesktopBridgeHost />
         <CommandPalette variant={variant} />
       </SidebarProvider>
     </CommandPaletteProvider>

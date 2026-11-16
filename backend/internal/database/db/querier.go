@@ -732,6 +732,7 @@ type Querier interface {
 	CountCustomFieldDefinitions(ctx context.Context, arg CountCustomFieldDefinitionsParams) (int64, error)
 	CountCustomObjectTypes(ctx context.Context, organizationID int64) (int64, error)
 	CountDepartments(ctx context.Context, arg CountDepartmentsParams) (int64, error)
+	CountDesktopReleases(ctx context.Context, arg CountDesktopReleasesParams) (int64, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountIntegrationCompanies(ctx context.Context, arg CountIntegrationCompaniesParams) (int64, error)
@@ -790,6 +791,8 @@ type Querier interface {
 	// Departments (CF-215). Every query is scoped by organization_id.
 	CreateDepartment(ctx context.Context, arg CreateDepartmentParams) (Department, error)
 	CreateDepartmentShare(ctx context.Context, arg CreateDepartmentShareParams) (DepartmentKnowledgeShare, error)
+	// Masaüstü sürümleri (CF-240). Platform tablosu: organization_id yoktur.
+	CreateDesktopRelease(ctx context.Context, arg CreateDesktopReleaseParams) (DesktopRelease, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
 	CreateIntegrationKey(ctx context.Context, arg CreateIntegrationKeyParams) (PublicApiKey, error)
@@ -1141,6 +1144,7 @@ type Querier interface {
 	GetDepartmentShare(ctx context.Context, arg GetDepartmentShareParams) (DepartmentKnowledgeShare, error)
 	// A department's own hours (CF-215); NULL working_hours means the organization's.
 	GetDepartmentWorkingHours(ctx context.Context, arg GetDepartmentWorkingHoursParams) (GetDepartmentWorkingHoursRow, error)
+	GetDesktopReleaseByUUID(ctx context.Context, argUuid uuid.UUID) (DesktopRelease, error)
 	GetEmailDomain(ctx context.Context, arg GetEmailDomainParams) (ChannelEmailDomain, error)
 	GetEmailIMAPState(ctx context.Context, arg GetEmailIMAPStateParams) (ChannelEmailImapState, error)
 	GetEventDeadLetter(ctx context.Context, id int64) (EventDeadLetter, error)
@@ -1535,6 +1539,8 @@ type Querier interface {
 	ListAllExportJobs(ctx context.Context, arg ListAllExportJobsParams) ([]ExportJob, error)
 	ListAllImportJobs(ctx context.Context, arg ListAllImportJobsParams) ([]ImportJob, error)
 	ListAllPermissionSlugs(ctx context.Context) ([]string, error)
+	// İndirme sayfası: tüm uygulama ve hedeflerin yayındaki sürümleri.
+	ListAllPublishedDesktopReleases(ctx context.Context, channels []string) ([]DesktopRelease, error)
 	ListAppLogSources(ctx context.Context) ([]string, error)
 	ListAppLogs(ctx context.Context, arg ListAppLogsParams) ([]AppLog, error)
 	ListAttachments(ctx context.Context, arg ListAttachmentsParams) ([]Attachment, error)
@@ -1632,6 +1638,7 @@ type Querier interface {
 	ListDepartmentTeams(ctx context.Context, arg ListDepartmentTeamsParams) ([]ListDepartmentTeamsRow, error)
 	ListDepartmentTransfers(ctx context.Context, arg ListDepartmentTransfersParams) ([]ListDepartmentTransfersRow, error)
 	ListDepartments(ctx context.Context, arg ListDepartmentsParams) ([]ListDepartmentsRow, error)
+	ListDesktopReleases(ctx context.Context, arg ListDesktopReleasesParams) ([]DesktopRelease, error)
 	// Users with held digest items; the caller decides who is due.
 	ListDigestCandidates(ctx context.Context) ([]NotificationPreference, error)
 	ListDomainEventLogByOrganization(ctx context.Context, arg ListDomainEventLogByOrganizationParams) ([]DomainEventLog, error)
@@ -1723,6 +1730,9 @@ type Querier interface {
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
 	ListPublicHolidays(ctx context.Context, arg ListPublicHolidaysParams) ([]PublicHoliday, error)
+	// Bir uygulamanın bir hedefteki yayındaki sürümleri; en yenisi Go'da semver
+	// ile seçilir (metin sıralaması 0.10.0 < 0.9.0 yapar).
+	ListPublishedDesktopReleases(ctx context.Context, arg ListPublishedDesktopReleasesParams) ([]DesktopRelease, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
 	ListPushToStartLiveActivityTokens(ctx context.Context, arg ListPushToStartLiveActivityTokensParams) ([]LiveActivityToken, error)
 	// Unassigned open conversations of organizations with routing on.
@@ -2518,6 +2528,9 @@ type Querier interface {
 	UpsertWidgetDraft(ctx context.Context, arg UpsertWidgetDraftParams) (WidgetDraft, error)
 	// Marking the code used is the claim; an expired or used code returns no row.
 	UseMCPOAuthCode(ctx context.Context, arg UseMCPOAuthCodeParams) (McpOauthCode, error)
+	// True while the user has an active ClickFix Masaüstü session (CF-236);
+	// notification e-mails then carry a "Masaüstünde aç" link.
+	UserHasDesktopSession(ctx context.Context, userID int64) (bool, error)
 	UserHasPlatformPermission(ctx context.Context, arg UserHasPlatformPermissionParams) (bool, error)
 	UserHasRoleSlug(ctx context.Context, arg UserHasRoleSlugParams) (bool, error)
 	VideoActiveRecording(ctx context.Context, arg VideoActiveRecordingParams) (VideoRecording, error)
@@ -2584,6 +2597,7 @@ type Querier interface {
 	// 14 days; -1 without answered conversations.
 	WidgetMedianFirstResponse(ctx context.Context, arg WidgetMedianFirstResponseParams) (float64, error)
 	WidgetReplayUsage(ctx context.Context, organizationID int64) (int64, error)
+	WithdrawDesktopRelease(ctx context.Context, arg WithdrawDesktopReleaseParams) (DesktopRelease, error)
 	WorkflowCount(ctx context.Context, organizationID int64) (int64, error)
 	WorkflowCreate(ctx context.Context, arg WorkflowCreateParams) (Workflow, error)
 	WorkflowDailyRuns(ctx context.Context, organizationID int64) (int64, error)

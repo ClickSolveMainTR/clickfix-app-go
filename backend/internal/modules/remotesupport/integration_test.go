@@ -264,7 +264,7 @@ func TestFlowCreateResolveConsentTokenEnd(t *testing.T) {
 	if len(created.Code) != 9 || !strings.HasPrefix(created.JoinURL, "clickfix-support://join?t=") || !created.MessagePosted {
 		t.Fatalf("unexpected create %+v", created)
 	}
-	if len(f.post.texts) != 1 || !strings.Contains(f.post.texts[0], remotesupport.FormatCode(created.Code)) || !strings.Contains(f.post.texts[0], "/download/support") {
+	if len(f.post.texts) != 1 || !strings.Contains(f.post.texts[0], remotesupport.FormatCode(created.Code)) || !strings.Contains(f.post.texts[0], "/indir?app=support") {
 		t.Fatalf("customer message missing code or download link: %v", f.post.texts)
 	}
 	row := f.session(t, f.a, created.Session.UUID)

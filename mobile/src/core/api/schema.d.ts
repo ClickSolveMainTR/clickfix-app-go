@@ -17176,6 +17176,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/desktop/releases/{app}/{target}/{current_version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tauri updater check
+         * @description Public (desktop app, no login, no organization). Answers in the Tauri updater dynamic server format, not the envelope: 200 with the newest published release of the app for the target that is newer than current_version (semver precedence), or 204 when the client is up to date. A beta client also receives stable releases; a stable client never receives beta. Withdrawn releases are never offered.
+         */
+        get: operations["getDesktopUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download page entries
+         * @description Public. The newest published release of each app per target with its file name, size, SHA-256 and a same-origin download path. macOS entries offer the .dmg; Windows entries offer the NSIS installer. os_signed false marks an unsigned internal test build.
+         */
+        get: operations["listDesktopDownloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/files/{uuid}/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a desktop package
+         * @description Public. Streams a package of a published release from object storage (the bucket stays private). The name must match the stored file name. Withdrawn releases answer 404.
+         */
+        get: operations["downloadDesktopFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List desktop releases
+         * @description Requires `platform.desktop_releases.manage`. Newest first.
+         */
+        get: operations["listPlatformDesktopReleases"];
+        put?: never;
+        /**
+         * Publish a desktop release
+         * @description Requires `platform.desktop_releases.manage`. Multipart form, at most 1 GiB. The files go to object storage and the SHA-256 is computed server-side. Stable versions have no pre-release part; beta versions must have one. Version, app, channel and target are unique together (409 DESKTOP_RELEASE_EXISTS). Used by desktop/scripts/publish-release.mjs.
+         */
+        post: operations["publishPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases/{uuid}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a desktop release
+         * @description Requires `platform.desktop_releases.manage`. The release leaves the updater and the download page; its files stay in storage. Clients already on it move off when a higher version is published. 409 DESKTOP_RELEASE_WITHDRAWN when already withdrawn.
+         */
+        post: operations["withdrawPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/guides": {
         parameters: {
             query?: never;
@@ -22315,6 +22419,65 @@ export interface components {
             code: string;
             message: string;
             details?: components["schemas"]["ErrorDetail"][];
+        };
+        /** @description Tauri updater dynamic server response (CF-240). */
+        DesktopUpdateManifest: {
+            version: string;
+            notes: string;
+            /** Format: date-time */
+            pub_date: string;
+            /**
+             * Format: uri
+             * @description Absolute package URL served by the API
+             */
+            url: string;
+            /** @description Tauri updater signature (.sig content) */
+            signature: string;
+        };
+        DesktopReleaseFile: {
+            name: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            /** @description Same-origin download path (/api/v1/public/desktop/files/...) */
+            url: string;
+        };
+        DesktopRelease: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            app: "agent" | "support";
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            version: string;
+            target: string;
+            /** @enum {string} */
+            status: "published" | "withdrawn";
+            notes: string;
+            os_signed: boolean;
+            updater: components["schemas"]["DesktopReleaseFile"];
+            installer: components["schemas"]["DesktopReleaseFile"] | null;
+            /** Format: date-time */
+            published_at: string;
+            /** Format: date-time */
+            withdrawn_at: string | null;
+            withdrawn_reason: string;
+        };
+        DesktopDownload: {
+            /** @enum {string} */
+            app: "agent" | "support";
+            target: string;
+            /** @enum {string} */
+            os: "darwin" | "windows" | "linux";
+            arch: string;
+            version: string;
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            /** @description false marks an unsigned internal test build */
+            os_signed: boolean;
+            file: components["schemas"]["DesktopReleaseFile"];
+            /** Format: date-time */
+            published_at: string;
         };
         ResponseMeta: {
             request_id: string;
@@ -71585,6 +71748,237 @@ export interface operations {
                 content?: never;
             };
             422: components["responses"]["ValidationError"];
+        };
+    };
+    getDesktopUpdate: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path: {
+                app: "agent" | "support";
+                /** @description Tauri {{target}}-{{arch}}, e.g. darwin-aarch64, darwin-x86_64, windows-x86_64. */
+                target: string;
+                current_version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An update is available */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopUpdateManifest"];
+                };
+            };
+            /** @description Up to date */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listDesktopDownloads: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopDownload"][];
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    downloadDesktopFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+                kind: "updater" | "installer";
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPlatformDesktopReleases: {
+        parameters: {
+            query?: {
+                app?: "agent" | "support";
+                channel?: "stable" | "beta";
+                status?: "published" | "withdrawn";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopRelease"][];
+                            /** Format: int64 */
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    publishPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @enum {string} */
+                    app: "agent" | "support";
+                    /** @enum {string} */
+                    channel: "stable" | "beta";
+                    /** @description Canonical semver, e.g. 0.2.0 or 0.3.0-beta.1 */
+                    version: string;
+                    /** @example darwin-aarch64 */
+                    target: string;
+                    notes?: string;
+                    /** @description Content of the Tauri updater .sig file */
+                    signature: string;
+                    /** @description true: macOS Developer ID + notarized / Windows Authenticode; false: unsigned internal test build */
+                    os_signed: boolean;
+                    /**
+                     * Format: binary
+                     * @description .app.tar.gz (macOS), .exe or .msi (Windows), .AppImage (Linux)
+                     */
+                    updater: string;
+                    /**
+                     * Format: binary
+                     * @description Optional download page file (.dmg on macOS)
+                     */
+                    installer?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    withdrawPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
         };
     };
     listTenantGuides: {
