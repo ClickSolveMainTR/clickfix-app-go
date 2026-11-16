@@ -12,6 +12,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/config"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	convmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
+	convusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/livekit"
@@ -35,6 +36,13 @@ type Entitlements interface {
 // conversation through its channel.
 type Poster interface {
 	PostAuto(ctx context.Context, org, conversationID int64, kind, content string) (uuid.UUID, error)
+}
+
+// Timeline writes a system event into the conversation timeline. The
+// conversations usecase (the Poster in production) implements it; the
+// session summary is written there when a session ends (CF-237).
+type Timeline interface {
+	SystemEvent(ctx context.Context, orgID, convID int64, actor convusecase.Actor, attrs map[string]any) error
 }
 
 type Service struct {
@@ -573,8 +581,32 @@ func (s *Service) end(ctx context.Context, row db.RemoteSupportSession, reason, 
 		action = "remote_support.expired"
 	}
 	s.audit(ctx, row.OrganizationID, actorPtr(byUser), action, row.Uuid, map[string]any{"reason": reason, "by": by, "status": status, "billed_minutes": ended.BilledMinutes})
+	s.timeline(ctx, ended, byUser)
 	s.publish(ctx, ended, "ended")
 	return ended, nil
+}
+
+// timeline leaves the session summary on the conversation (best effort):
+// the agent and later readers see how long it lasted and what the customer
+// allowed, without opening the audit log.
+func (s *Service) timeline(ctx context.Context, row db.RemoteSupportSession, byUser int64) {
+	tl, ok := s.Poster.(Timeline)
+	if !ok || tl == nil {
+		return
+	}
+	var seconds int64
+	if row.StartedAt.Valid && row.EndedAt.Valid {
+		seconds = int64(row.EndedAt.Time.Sub(row.StartedAt.Time) / time.Second)
+	}
+	attrs := map[string]any{
+		"event": "remote_support_ended", "session_uuid": row.Uuid.String(), "status": row.Status, "mode": row.ModeRequested,
+		"reason": row.EndedReason, "by": row.EndedBy, "duration_seconds": seconds, "billed_minutes": row.BilledMinutes,
+		"view_consent": row.ViewConsentAt.Valid, "control_consent": row.ControlConsentAt.Valid,
+		"recording": row.RecordingConsent.Valid && row.RecordingConsent.Bool,
+	}
+	if err := tl.SystemEvent(ctx, row.OrganizationID, row.ConversationID, convusecase.Actor{ID: byUser}, attrs); err != nil {
+		s.log().Warn("remote_support_timeline_failed", "session", row.Uuid, "error", err)
+	}
 }
 
 // meter charges the shared-screen time (whole minutes, rounded up) against

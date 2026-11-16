@@ -452,6 +452,34 @@ function TimelineEvent({ message: m }: { message: OptimisticMessage }) {
       text = a.reason ? `${base}: ${a.reason}` : base;
       break;
     }
+    case "remote_support_ended": {
+      // Session summary (CF-237); numbers and flags arrive as JSON values.
+      const raw = (m.attributes ?? {}) as Record<string, unknown>;
+      const seconds = Number(raw.duration_seconds) || 0;
+      const minutes = Math.floor(seconds / 60);
+      const parts = [
+        t(
+          `inbox.events.remote_support_mode_${a.mode === "control" ? "control" : "view"}`,
+        ),
+      ];
+      if (seconds > 0)
+        parts.push(
+          t("inbox.events.remote_support_duration", {
+            minutes,
+            seconds: String(seconds % 60).padStart(2, "0"),
+          }),
+        );
+      if (raw.control_consent === true)
+        parts.push(t("inbox.events.remote_support_control_given"));
+      if (raw.recording === true)
+        parts.push(t("inbox.events.remote_support_recorded"));
+      text = `${t(
+        raw.view_consent === true
+          ? "inbox.events.remote_support_ended"
+          : "inbox.events.remote_support_not_started",
+      )} (${parts.join(", ")})`;
+      break;
+    }
     case "merged_from":
     case "merged_into":
     case "split_to":
