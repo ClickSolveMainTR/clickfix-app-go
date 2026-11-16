@@ -630,7 +630,12 @@ jobs:
       # The docs copy of the public API spec must match backend/docs (CF-208).
       - name: Docs spec copy is current
         run: pnpm docs:check
+      # One frontend build per run (CF-241): a PR whose Dockerfiles, compose or
+      # deploy/ changed builds the frontend inside image-build instead, and a
+      # main push builds it once, in publish-images (the PR already proved the
+      # build). Weekly/full runs build it in image-build.
       - uses: actions/cache@v6
+        if: github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true'
         with:
           path: frontend/.next/cache
           # The Turbopack cache stores absolute paths, so it is only valid for
@@ -640,6 +645,7 @@ jobs:
           restore-keys: |
             next-${{ runner.os }}-${{ runner.environment == 'github-hosted' && 'hosted' || runner.name }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}-
       - name: Build
+        if: github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true'
         run: pnpm build
 
   # Expo app: lint, typecheck, tests and the committed API types. No native
@@ -760,7 +766,8 @@ jobs:
 
   # Builds the production images as Dokploy does (compose.prod.yml contexts),
   # without pushing. Only when Dockerfiles, compose or deploy/ change, on a
-  # full run and weekly.
+  # full run and weekly. On a main push only the compose check runs: the
+  # images are built once there, by publish-images (CF-241).
   image-build:
     needs: [changes]
     if: needs.changes.outputs.infra == 'true'
@@ -773,6 +780,7 @@ jobs:
         run: ./scripts/check-compose-env.sh
       - uses: crazy-max/ghaction-github-runtime@v4
       - name: Build backend and frontend images
+        if: github.event_name != 'push'
         run: |
           for svc in backend frontend; do
             docker buildx build "./$svc" \
@@ -911,9 +919,11 @@ jobs:
 
   # Green main runs push the backend and frontend images to GHCR as :main and
   # :sha-<short>. Dokploy only pulls them (compose.prod.yml has no build:), so
-  # the server no longer compiles anything.
+  # the server no longer compiles anything. Only the images whose inputs
+  # changed since the last v0.N tag are rebuilt (CF-241); an unchanged
+  # service keeps its current :main image.
   publish-images:
-    needs: [ci]
+    needs: [changes, ci]
     if: ${{ !failure() && needs.ci.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     permissions:
@@ -948,6 +958,8 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          BUILD_BACKEND: ${{ needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true' }}
+          BUILD_FRONTEND: ${{ needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           short="${GITHUB_SHA::7}"
@@ -958,7 +970,11 @@ jobs:
           else
             echo "Sentry source maps not uploaded: SENTRY_AUTH_TOKEN secret or SENTRY_ORG / SENTRY_PROJECT variables missing" >> "$GITHUB_STEP_SUMMARY"
           fi
-          for svc in backend frontend; do
+          services=()
+          [ "$BUILD_BACKEND" = true ] && services+=(backend)
+          [ "$BUILD_FRONTEND" = true ] && services+=(frontend)
+          [ ${#services[@]} -eq 0 ] && echo "no image input changed: :main images kept" >> "$GITHUB_STEP_SUMMARY"
+          for svc in "${services[@]}"; do
             image="ghcr.io/$owner/clickfix-$svc"
             extra=()
             [ "$svc" = frontend ] && extra=("${sentry_args[@]}")
@@ -1177,18 +1193,36 @@ jobs:
             if git -C "$dir" ls-remote --tags origin "refs/tags/$2" | grep -q .; then echo "$1 $2 exists"; return; fi
             git -C "$dir" tag "$2" HEAD && git -C "$dir" push --quiet origin "refs/tags/$2" && echo "tagged $1 $2" >> "$GITHUB_STEP_SUMMARY"
           }
-          # sdks/examples holds the guide's snippets (embedded in the docs, run in CI) and stays
-          # private; runnable example apps live in ClickSolveMainTR/clickfix-examples.
-          mirror sdks clickfix-sdks examples
+          # A mirror is updated only when it gets a new version (CF-241): a change under
+          # sdks/ without a version bump stays here until the next release, so the
+          # mirrors (and Packagist dev-main) move one commit per released version.
+          has_tag() { git ls-remote --tags "https://github.com/ClickSolveMainTR/$1.git" "refs/tags/$2" | grep -q .; }
+          sdk_tags=()
           for p in node react-widget visitor-core react-native expo; do
-            [ -f "sdks/$p/package.json" ] && tag clickfix-sdks "$p/v$(jq -r .version "sdks/$p/package.json")"
+            [ -f "sdks/$p/package.json" ] && sdk_tags+=("$p/v$(jq -r .version "sdks/$p/package.json")")
           done
-          [ -f sdks/go/VERSION ] && tag clickfix-sdks "go/v$(tr -d '[:space:]' < sdks/go/VERSION)"
-          [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && tag clickfix-sdks "flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)"
+          [ -f sdks/go/VERSION ] && sdk_tags+=("go/v$(tr -d '[:space:]' < sdks/go/VERSION)")
+          [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && sdk_tags+=("flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)")
+          new_sdk_tags=()
+          for t in "${sdk_tags[@]}"; do has_tag clickfix-sdks "$t" || new_sdk_tags+=("$t"); done
+          if [ ${#new_sdk_tags[@]} -eq 0 ]; then
+            echo "clickfix-sdks: no new package version, mirror not updated" >> "$GITHUB_STEP_SUMMARY"
+          else
+            # sdks/examples holds the guide's snippets (embedded in the docs, run in CI) and stays
+            # private; runnable example apps live in ClickSolveMainTR/clickfix-examples.
+            mirror sdks clickfix-sdks examples
+            for t in "${new_sdk_tags[@]}"; do tag clickfix-sdks "$t"; done
+          fi
           # php before laravel: clickfix/laravel requires the clickfix/sdk release next to it, so
           # its tag waits (up to 10 minutes) until Packagist lists that clickfix/sdk version.
           for p in php laravel; do
             if [ -f "sdks/$p/composer.json" ]; then
+              v=$(changelog_version "sdks/$p")
+              if [ -z "$v" ] || has_tag "clickfix-$p" "v$v"; then
+                echo "clickfix-$p: v${v:-?} already released, mirror not updated" >> "$GITHUB_STEP_SUMMARY"
+                [ "$p" = php ] && php_version=""
+                continue
+              fi
               if [ "$p" = laravel ] && [ -n "${php_version:-}" ]; then
                 for _ in $(seq 1 40); do
                   curl -fsS https://repo.packagist.org/p2/clickfix/sdk.json 2>/dev/null \
@@ -1199,7 +1233,7 @@ jobs:
                   || echo "::warning::clickfix/sdk $php_version is not on Packagist yet; clickfix/laravel is tagged anyway" | tee -a "$GITHUB_STEP_SUMMARY"
               fi
               mirror "sdks/$p" "clickfix-$p"
-              v=$(changelog_version "sdks/$p"); [ -n "$v" ] && tag "clickfix-$p" "v$v"
+              tag "clickfix-$p" "v$v"
               [ "$p" = php ] && php_version=$v
             fi
           done
