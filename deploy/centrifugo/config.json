@@ -46,6 +46,13 @@
       "allow_presence_for_client": false
     },
     {
+      "name": "remote_support",
+      "allow_subscribe_for_client": false,
+      "allow_publish_for_client": false,
+      "allow_history_for_client": false,
+      "allow_presence_for_client": false
+    },
+    {
       "name": "widget",
       "allow_subscribe_for_client": false,
       "allow_publish_for_client": false,

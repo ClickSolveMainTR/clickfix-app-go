@@ -199,6 +199,25 @@ Ek kurallar:
   - Bildirilen oturum işaretlenir.
   - Kısa sürede çok sayıda bildirim alan organizasyonda özellik kendiliğinden askıya alınır.
 
+#### Uygulama notları (CF-233)
+
+Backend `backend/internal/modules/remotesupport` altındadır. Yukarıdaki taslaktan farkları ve netleşen kararlar:
+
+- **Kod ve deneme sayımı.** Kod 9 hanedir (`crypto/rand`). Saklanan iki özet vardır, ikisi de sunucu anahtarıyla HMAC'tir: tüm kodun özeti (`code_hash`) ve ilk 5 hanenin özeti (`code_lookup`). `code_lookup` bekleyen oturumlar arasında tekildir. Yanlış bir kod, aynı 5 haneyle başlayan bekleyen oturuma yazılır; 5. yanlış denemede o oturum `expired` (`attempts`) olur. Böylece "5 yanlış denemede kod geçersiz" kuralı, kod oturumu doğrudan göstermediği halde uygulanabilir.
+- **Müşteri kimliği.** Çözme (`resolve`) bir kez `client_secret` döner (256 bit, yalnız özeti saklanır). Sonraki public çağrılar (`consent`, `token`, `end`, `report`) oturum uuid'si ve bu sırla çalışır; başka hiçbir şey açmaz.
+- **Hız sınırı.** `resolve`: IP başına dakikada 10, saatte 30; kod öneki ve bağlantı başına 15 dakikada 10. Diğer public uçlar: IP başına dakikada 60, oturum başına 10 dakikada 120. Hepsi `ratelimit.AllowStrict` ile kapalı başarısızdır (Redis yoksa istek reddedilir).
+- **Durumlar.** `pending` (kod geçerli) → `joined` (çözüldü) → `active` (müşteri ekran izi ile LiveKit'e katıldı, webhook). Başlamadan biten oturum `cancelled`, süresi dolan `expired`, başlamış oturum `ended` olur. Bitiş nedenleri: `agent`, `customer`, `declined`, `code_expired`, `timeout` (çözüldükten sonra 15 dakika içinde izleme onayı yok), `attempts`, `max_duration`, `conversation_closed`, `platform`, `reported`.
+- **Kontrol kapısı (sunucu tarafı).** Temsilci token'ı hiçbir zaman medya yayınlamaz. `canPublishData` yalnız müşteri kontrol onayı vermiş ve geri almamışsa, organizasyon kontrole izin veriyorsa ve temsilcinin `tenant.remote_support.control` izni varsa açıktır. Onay verildiğinde veya geri alındığında bağlı temsilcinin izni LiveKit `UpdateParticipant` ile hemen değiştirilir; yeni token da aynı kurala göre üretilir.
+- **Ayarlar** `remote_support_settings` tablosundadır. Organizasyon için varsayılan **kapalıdır** (dolandırıcılık riski nedeniyle yönetici açar); kontrole izin varsayılan açık, kayıt `off`, en uzun süre 60 dakika (5–240), kayıt saklama 30 gün (1–365). Platform durumu (`active | disabled | suspended`) aynı satırdadır.
+- **Entitlement.** Özellikler `remote_support.enabled` (boolean, katalog varsayılanı açık) ve `remote_support.minutes` (aylık toplam, katalog varsayılanı sınırsız). Dakika, ekran paylaşımının başladığı andan bitişe kadar yukarı yuvarlanarak oturum başına bir kez ölçülür.
+- **Kayıt.** Kayıt onayı ve organizasyonda `optional` kayıt varsa, müşteri katılınca oda için egress başlar ve dosya platform deposuna (`remote-support-recordings/<org>/<oturum>.mp4`) gider. Kayıt bilgileri `video_recordings`'e değil oturum satırına yazılır (o tablo video odasına bağlıdır); silme, video kayıtlarının saklama işiyle aynı zamanlanmış işte (`app:video:recording-purge`) yapılır. Kayıt indirme ucu bu işte yoktur.
+- **Konuşma mesajı.** Müşteriye görünen mesaj (indirme bağlantısı `{FRONTEND_URL}/download/support` + kod) konuşmanın kanalından otomatik mesaj olarak gider. Kanal penceresi kapalıysa mesaj düşmez (`message_posted: false`) ve temsilci kodu kendisi iletir. Katılma bağlantısı mesaja konmaz, yalnız temsilciye bir kez döner.
+- **Doğrulanmış ad.** Ayrı bir doğrulama kaydı olmadığından `verified`, organizasyonun durumunun `active` olmasıdır. Temsilci fotoğrafı henüz yoktur (`avatar_url: null`).
+- **Ek rotalar.** `GET /v1/tenant/conversations/{uuid}/remote-support` (konuşmanın oturumları), `GET|PUT /v1/tenant/remote-support/settings`, `GET /v1/platform/remote-support/organizations`, `PUT /v1/platform/remote-support/organizations/{uuid}/state` (kill switch; kapatma bütün açık oturumları hemen bitirir), `GET /v1/platform/remote-support/reports`.
+- **Otomatik askıya alma.** 24 saatte 3 bildirim organizasyonu `suspended` yapar ve açık oturumları bitirir; platform yöneticisi `active` ile geri açar.
+- **Gerçek zamanlı.** Kanal `remote_support:{uuid}` (Centrifugo namespace `remote_support`); oturumun temsilcisi ve `tenant.remote_support.settings` sahibi abone olabilir.
+- **Zamanlanmış iş.** `app:remote-support:sweep` dakikada bir çalışır: kodu dolanları, onay bekleyip zaman aşımına uğrayanları, süre sınırını aşanları, konuşması kapananları ve organizasyonu kapatılanları bitirir.
+
 ## 6. Masaüstü giriş akışı
 
 Kalıp, `qrlogin`'deki tek kullanımlık takastır.

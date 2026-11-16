@@ -160,6 +160,14 @@ const (
 	PermPlatformVideoManage = "platform.video.manage"
 )
 
+// Remote support sessions (CF-233).
+const (
+	PermTenantRemoteSupportUse      = "tenant.remote_support.use"
+	PermTenantRemoteSupportControl  = "tenant.remote_support.control"
+	PermTenantRemoteSupportSettings = "tenant.remote_support.settings"
+	PermPlatformRemoteSupportManage = "platform.remote_support.manage"
+)
+
 // Module guides and the ClickFix assistant (CF-141).
 const (
 	PermTenantAssistantUse          = "tenant.assistant.use"
