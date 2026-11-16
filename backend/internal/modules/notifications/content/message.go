@@ -11,6 +11,7 @@ package content
 
 import (
 	"html"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -38,7 +39,15 @@ const (
 	ActionJoin = "join"
 	// ActionSecondary is any further link (calendar, settings).
 	ActionSecondary = "link"
+	// ActionDesktop opens the primary action in ClickFix Masaüstü (CF-236).
+	// E-mail only, and only for users with an active desktop session.
+	ActionDesktop = "desktop"
 )
+
+// DesktopOpenPath is the web page behind "Masaüstünde aç": it hands the
+// path to the desktop app (clickfix://) and falls back to the browser. An
+// https link, because many mail clients drop custom-scheme links.
+const DesktopOpenPath = "/desktop/open"
 
 // Detail is one "Label: value" row.
 type Detail struct {
@@ -91,6 +100,23 @@ func (m Message) Primary() (Action, bool) {
 		}
 	}
 	return Action{}, false
+}
+
+// WithDesktopAction adds "Masaüstünde aç" after the actions when the
+// primary action is an app path; otherwise m is returned unchanged.
+func (m Message) WithDesktopAction() Message {
+	primary, ok := m.Primary()
+	if !ok || !strings.HasPrefix(primary.URL, "/") || strings.HasPrefix(primary.URL, "//") {
+		return m
+	}
+	actions := make([]Action, 0, len(m.Actions)+1)
+	actions = append(actions, m.Actions...)
+	m.Actions = append(actions, Action{
+		ID:    ActionDesktop,
+		Label: t(m.Lang, "Masaüstünde aç", "Open in ClickFix Desktop"),
+		URL:   DesktopOpenPath + "?path=" + url.QueryEscape(primary.URL),
+	})
+	return m
 }
 
 // Summary is the in-app body: the lead, the quote and up to three details

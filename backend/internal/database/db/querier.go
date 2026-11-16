@@ -2528,6 +2528,9 @@ type Querier interface {
 	UpsertWidgetDraft(ctx context.Context, arg UpsertWidgetDraftParams) (WidgetDraft, error)
 	// Marking the code used is the claim; an expired or used code returns no row.
 	UseMCPOAuthCode(ctx context.Context, arg UseMCPOAuthCodeParams) (McpOauthCode, error)
+	// True while the user has an active ClickFix Masaüstü session (CF-236);
+	// notification e-mails then carry a "Masaüstünde aç" link.
+	UserHasDesktopSession(ctx context.Context, userID int64) (bool, error)
 	UserHasPlatformPermission(ctx context.Context, arg UserHasPlatformPermissionParams) (bool, error)
 	UserHasRoleSlug(ctx context.Context, arg UserHasRoleSlugParams) (bool, error)
 	VideoActiveRecording(ctx context.Context, arg VideoActiveRecordingParams) (VideoRecording, error)

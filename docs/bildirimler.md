@@ -79,6 +79,13 @@ diliminde, saat dilimi adıyla), **ne yapılmalı** (birincil CTA).
   atılır.
 - Mobil: push `data.url` panel yolunu taşır, `mobile/src/features/push/links.ts` uygulama
   rotasına çevirir; push'un organizasyonu önce seçilir. Şema `clickfix://`.
+- **ClickFix Masaüstü (CF-236):** etkin bir masaüstü oturumu olan kullanıcının
+  (`refresh_tokens.client = 'desktop'`) bildirim e-postalarına, birincil eylem uygulama içi
+  bir yolsa "Masaüstünde aç" bağlantısı eklenir:
+  `https://<kök>/desktop/open?path=<yol>`. Sayfa uygulamayı `clickfix://` ile açar ve
+  tarayıcıda devam etme bağlantısı bırakır (e-posta istemcileri özel şemalı bağlantıları
+  siler). In-app satırı ve push değişmez. Masaüstü uygulamasında web push aboneliği açılmaz;
+  canlı in-app bildirimi uygulamanın yerel bildirimine dönüşür (pencere öndeyse gösterilmez).
 - **Açık iş:** e-postadaki `https://getclickfix.com/...` linklerinin uygulamada açılması
   (universal link / App Links) yapılandırılmadı: iOS `associatedDomains`, Android
   `intentFilters` (autoVerify), web'de `/.well-known/apple-app-site-association` ve

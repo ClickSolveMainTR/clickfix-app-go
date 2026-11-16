@@ -1,11 +1,17 @@
 /**
  * Register Web Push via BFF → backend VAPID endpoints.
  * Public key only comes from GET /api/v1/notifications/vapid-public-key (proxied).
+ *
+ * Inside ClickFix Masaüstü no browser subscription is made: the app shows
+ * native notifications itself (CF-236), so the same notification never
+ * arrives twice.
  */
+
+import { isDesktop } from "@/lib/desktop/bridge";
 
 export type WebPushSupport = {
   supported: boolean;
-  reason?: "browser" | "vapid";
+  reason?: "browser" | "vapid" | "desktop";
 };
 
 const DEFAULT_SW_URL = "/app-push-sw.js";
@@ -22,6 +28,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 function hasBrowserPushSupport(): boolean {
   return (
     typeof window !== "undefined" &&
+    !isDesktop() &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
     "Notification" in window
@@ -48,6 +55,9 @@ async function getPushRegistration(serviceWorkerUrl = DEFAULT_SW_URL) {
 
 /** Whether this browser can use Web Push and the server has VAPID configured. */
 export async function getWebPushSupport(): Promise<WebPushSupport> {
+  if (isDesktop()) {
+    return { supported: false, reason: "desktop" };
+  }
   if (!hasBrowserPushSupport()) {
     return { supported: false, reason: "browser" };
   }
