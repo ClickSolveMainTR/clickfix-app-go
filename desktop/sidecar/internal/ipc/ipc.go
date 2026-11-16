@@ -46,6 +46,8 @@ type Request struct {
 type Error struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	// Data, isteğe bağlı makine okunur ayrıntıdır (ör. {"kind": "NETWORK"}).
+	Data any `json:"data,omitempty"`
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("ipc: %d %s", e.Code, e.Message) }
