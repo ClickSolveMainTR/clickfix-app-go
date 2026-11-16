@@ -433,7 +433,7 @@ func TestResolveValidationAndErrors(t *testing.T) {
 		t.Fatal(st.Phase)
 	}
 	last := h.api.resolved[len(h.api.resolved)-1]
-	if last.Token != "AbC-123_x" || last.ClientOS != "macos" {
+	if last.Token != "AbC-123_x" || last.ClientOS != sysinfo.ShortOS() {
 		t.Errorf("bağlantı girdisi: %+v", last)
 	}
 	if _, e := h.call("session.resolve", map[string]any{"code": "123456789"}); e == nil || e.Code != CodeInvalidState {
