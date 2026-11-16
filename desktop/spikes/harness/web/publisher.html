@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>CF-235 yayıncı (aday A)</title>
+<style>body{font-family:system-ui;padding:16px} pre{font:12px ui-monospace,monospace;background:#f4f4f4;padding:8px;height:260px;overflow:auto}</style></head><body>
+<h3>Aday A: getDisplayMedia + livekit-client</h3>
+<p>Çözünürlük: <select id="res"><option value="1080">1080p</option><option value="2160">4K</option><option value="native">yerel</option></select>
+ <button id="go">Ekranı paylaş</button> <button id="stop">Durdur</button></p>
+<p>UA: <code id="ua"></code><br>getDisplayMedia: <b id="gdm"></b></p>
+<pre id="log"></pre>
+<script type="module">
+import {Room, RoomEvent, Track, LocalVideoTrack} from '/lk/livekit-client.esm.mjs';
+const $=id=>document.getElementById(id);
+const log=m=>{$('log').textContent=new Date().toISOString().slice(11,23)+' '+m+'\n'+$('log').textContent;window.__log?.(m)};
+$('ua').textContent=navigator.userAgent;
+$('gdm').textContent='isSecureContext='+window.isSecureContext+' mediaDevices='+!!navigator.mediaDevices+' getDisplayMedia='+!!navigator.mediaDevices?.getDisplayMedia+' getUserMedia='+!!navigator.mediaDevices?.getUserMedia;
+const id='customer-'+(new URLSearchParams(location.search).get('id')||'webview');
+let room,pub;
+$('go').onclick=async()=>{try{
+ const r=$('res').value;const c=r==='native'?{frameRate:30}:{width:{ideal:r==='1080'?1920:3840},height:{ideal:r==='1080'?1080:2160},frameRate:{ideal:30}};
+ const t0=performance.now();
+ const ms=await navigator.mediaDevices.getDisplayMedia({video:c,audio:false});
+ const mt=ms.getVideoTracks()[0];log('yakalama izni '+(performance.now()-t0).toFixed(0)+' ms, ayar '+JSON.stringify(mt.getSettings()));
+ if(!room){const {url,token}=await (await fetch('/token?publish=1&identity='+id)).json();room=new Room();
+  room.on(RoomEvent.DataReceived,(b,p)=>{const s=new TextDecoder().decode(b);log('kontrol '+p?.identity+': '+s);window.__control?.(s)});
+  await room.connect(url,token);log('odaya bağlandı: '+id)}
+ const lt=new LocalVideoTrack(mt);
+ pub=await room.localParticipant.publishTrack(lt,{source:Track.Source.ScreenShare,simulcast:false,videoCodec:'vp8',videoEncoding:{maxBitrate:r==='2160'?8_000_000:3_000_000,maxFramerate:30},degradationPreference:'maintain-resolution'});
+ log('yayında');
+}catch(e){log('HATA '+e.name+': '+e.message)}};
+$('stop').onclick=async()=>{if(pub){await room.localParticipant.unpublishTrack(pub.track);pub.track.stop();pub=null;log('durdu')}};
+</script></body></html>
