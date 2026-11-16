@@ -15,10 +15,24 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build.workspace = true
 
 [dependencies]
+base64.workspace = true
 clickfix-shell.workspace = true
+getrandom.workspace = true
+keyring.workspace = true
 log.workspace = true
+reqwest.workspace = true
+serde.workspace = true
 serde_json.workspace = true
-tauri.workspace = true
+sha2.workspace = true
+tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart.workspace = true
+tauri-plugin-deep-link.workspace = true
+tauri-plugin-global-shortcut.workspace = true
+tauri-plugin-notification.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-window-state.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
 url.workspace = true
 
 [lints]

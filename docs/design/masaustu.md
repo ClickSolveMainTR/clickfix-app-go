@@ -128,6 +128,22 @@ desktop/
 | Güncelleme | Tauri updater, imzalı bildirim dosyası (bkz. 8) |
 | Çevrimdışı | Bağlantı koptuğunda yerel hata sayfası ve yeniden deneme. Taslak saklama v2 |
 
+Uygulama notları (CF-236; ayrıntı `desktop/README.md`):
+
+- **Komutlar ve izinler:** tek liste `desktop/apps/agent/src-tauri/src/commands.rs`. Uzak kök (`remote-app`, yalnız `<kök>/*`, yalnız ana pencere) yalnız köprü komutlarını alır: `notify`, `set_badge`, `set_presence`, `open_external`, `version`, `sign_out`. Yerel sayfa yalnız `connect`, `start_login`, `cancel_login`. Hiçbir pencereye çekirdek ya da eklenti izni verilmez; eklentileri yalnız Rust kullanır. Komutlar ayrıca çağıranın kökünü denetler. Testler (`capability.rs`) listeyi ve `capabilities/` dizinini sabitler.
+- **Köprü:** `frontend/src/lib/desktop/bridge.ts`. Uygulama, yalnız uygulama kökündeki sayfalarda, sayfa betiklerinden önce `window.__CLICKFIX_DESKTOP__ = { bridge: 1, version, os }` kurar; köprü bu nesne ve `bridge: 1` yoksa hiçbir şey çağırmaz ve dinlemez (tarayıcıda etkisiz). Uygulamadan web'e istekler `clickfix:desktop` DOM olayıyla gelir: `command-palette`, `presence`, `sign-out`. Sözleşme yalnız geriye uyumlu genişler.
+- **Giriş:** yerel sayfa "Tarayıcıda giriş yap" ile `start_login`'i çağırır (32 bayt verifier, S256, 24 bayt state; bekleyen giriş 15 dk geçerli). Dönüşte takas `/api/mobile/v1/auth/desktop/exchange` ile yapılır. Refresh token anahtar zincirinde (`keyring`: Keychain, Credential Manager, Secret Service) uygulama köküne göre ayrı kayıtta durur; erişim token'ı yalnız bellektedir ve yenileme bir kilit altında sıralıdır. Webview oturumu: pencere `/desktop/session`'a GET ile gider, sayfa yüklenince betik erişim token'ını aynı kökenden bir form ile POST eder. Web uygulaması `/login`'e düşerse uygulama oturumu varsa yeniden devredilir (30 sn'de en fazla bir kez), yoksa yerel giriş ekranı açılır. Web'den çıkış `sign_out` ile uygulama oturumunu da kapatır; tepsideki "Oturumu kapat" önce uygulamayı, sonra `sign-out` olayıyla web'i kapatır.
+- **Bildirim:** canlı in-app bildirimi (`notification.created`) köprüye de gider; uygulama penceresi öndeyse yerel bildirim gösterilmez (web'in kendi bildirimi yeter). Masaüstünde web push aboneliği açılmaz (`register.ts`); bildirim tercihleri formu hesap genelindeki push anahtarını değiştirmez.
+- **Rozet:** `assignee=me&status=open,pending&unread=1` listesinin toplamı (tek satır istenir, 60 sn'de bir ve gelen kutusu güncellemelerinde yenilenir). macOS dock ve Linux başlatıcı sayısı, Windows görev çubuğunda kırmızı nokta, her platformda tepsi ipucu.
+- **Tepsi ve menü:** tepsi menüsünde göster/gizle, Durum (çevrimiçi, uzakta, meşgul, çevrimdışı), "Kapatınca tepside kalsın" (varsayılan açık), "Oturum açılışında başlat" (varsayılan kapalı), oturumu kapat, çık. Uygulama menüsünde Hakkında, "Güncellemeleri denetle…" (CF-240'a kadar yer tutucu bildirim), "Günlükleri aç", Düzen ve Pencere menüleri. Ayarlar uygulama yapılandırma dizininde `settings.json`'dadır; genel kısayol şimdilik yalnız bu dosyadan değişir.
+- **Derin bağlantı:** `clickfix://auth/callback`, `clickfix://conversation/<uuid>`, `clickfix://open?path=/...`. Yollar yalnız köke göre göreli olabilir (`//` ile başlayamaz; ters eğik çizgi ve denetim karakteri içeremez). Web uygulaması yüklüyse pencere oraya gider, değilse yol oturum kurulunca açılır.
+
+Sapmalar (CF-236):
+
+- **E-postadaki bağlantı `https`:** "Masaüstünde aç" doğrudan `clickfix://` değil `https://<kök>/desktop/open?path=...` adresine gider; birçok e-posta istemcisi (Gmail dahil) özel şemalı bağlantıları siler. Sayfa uygulamayı `clickfix://` ile açar ve "Tarayıcıda devam et" bağlantısı bırakır. Bağlantı yalnız etkin bir masaüstü oturumu olan kullanıcının (`refresh_tokens.client = 'desktop'`) e-postalarına ve yalnız birincil eylemi uygulama içi yol olan bildirimlere eklenir.
+- **Bildirim tıklaması:** Tauri'nin masaüstü bildirim eklentisi tıklamayı uygulamaya iletmez. Bildirimden sonraki 20 sn içinde pencere öne gelirse (tıklama macOS ve Windows'ta uygulamayı öne getirir) bildirimin sayfası açılır.
+- **Dış bağlantılar:** macOS ve Linux'ta gezinme işleyicisi iframe'leri de gördüğü için engellenen gezinmeler tarayıcıda açılmaz; dış bağlantılar `target=_blank` / `window.open` ya da köprünün `openExternal` komutuyla sistem tarayıcısında açılır.
+
 ## 5. ClickFix Destek (müşteri) ve uzaktan destek oturumu
 
 ### Akış

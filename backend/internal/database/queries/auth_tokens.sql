@@ -51,3 +51,15 @@ WHERE uuid = $1
   AND user_id = $2
   AND revoked_at IS NULL
   AND expires_at > NOW();
+
+-- name: UserHasDesktopSession :one
+-- True while the user has an active ClickFix Masaüstü session (CF-236);
+-- notification e-mails then carry a "Masaüstünde aç" link.
+SELECT EXISTS (
+  SELECT 1
+  FROM refresh_tokens
+  WHERE user_id = $1
+    AND client = 'desktop'
+    AND revoked_at IS NULL
+    AND expires_at > NOW()
+)::boolean AS has_session;

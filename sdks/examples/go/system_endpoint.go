@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -31,6 +32,11 @@ func systemEndpoint(ctx context.Context) error {
 	if port == "" {
 		port = "3000"
 	}
+	// Bağlantıyı önce açın, sonra hazır olduğunuzu yazın.
+	ln, err := net.Listen("tcp", "127.0.0.1:"+port)
+	if err != nil {
+		return err
+	}
 	fmt.Println("listening")
-	return http.ListenAndServe("127.0.0.1:"+port, nil)
+	return http.Serve(ln, nil)
 }
