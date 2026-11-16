@@ -186,6 +186,8 @@
   "resources.appointment_type": "Randevu türü",
   "resources.appointment_settings": "Randevu ayarları",
   "actions.video.room_created": "Görüntülü görüşme odası oluşturuldu",
+  "actions.desktop_release.published": "Masaüstü sürümü yayınlandı",
+  "actions.desktop_release.withdrawn": "Masaüstü sürümü geri çekildi",
   "actions.remote_support.created": "Uzaktan destek oturumu başlatıldı",
   "actions.remote_support.resolved": "Uzaktan destek kodu müşteri tarafından girildi",
   "actions.remote_support.code_invalidated": "Uzaktan destek kodu yanlış denemeler nedeniyle geçersiz kılındı",

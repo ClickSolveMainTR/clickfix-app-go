@@ -345,7 +345,7 @@
   "download.agent_title": "ClickFix Masaüstü",
   "download.agent_body": "Temsilci uygulaması: gelen kutusu, bildirimler ve uzaktan destek tek pencerede.",
   "download.os_mac_arm": "macOS (Apple silicon, M1 ve sonrası)",
-  "download.os_mac_intel": "macOS (Intel)",
+  "download.os_mac_intel": "macOS (Intel işlemcili)",
   "download.os_windows": "Windows 10 / 11 (64 bit)",
   "download.os_linux": "Linux",
   "download.version": "Sürüm {{version}}",
