@@ -230,6 +230,28 @@ func (c *Client) RemoveParticipant(ctx context.Context, room, identity string) e
 	return err
 }
 
+// Permission is a participant's live permission set (RoomService
+// UpdateParticipant replaces all of it, so every field is sent).
+type Permission struct {
+	CanSubscribe   bool `json:"canSubscribe"`
+	CanPublish     bool `json:"canPublish"`
+	CanPublishData bool `json:"canPublishData"`
+	Hidden         bool `json:"hidden"`
+}
+
+// UpdatePermission changes a connected participant's permissions without a
+// reconnect (e.g. withdrawing data publishing when control is revoked). A
+// participant that is not connected is not an error: its next token carries
+// the new grant.
+func (c *Client) UpdatePermission(ctx context.Context, room, identity string, p Permission) error {
+	err := c.call(ctx, twirpRoomService, "UpdateParticipant", VideoGrant{RoomAdmin: true, Room: room},
+		map[string]any{"room": room, "identity": identity, "permission": p}, nil)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
 // S3Output is where egress uploads the recording (per request, so an
 // organization's own bucket never touches the egress config).
 type S3Output struct {

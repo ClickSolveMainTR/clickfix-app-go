@@ -41,7 +41,7 @@ func TestPeriodicTaskRouting(t *testing.T) {
 		queue.TaskUptimeSweep: queue.QueueSync, queue.TaskOncallSweep: queue.QueueEvents, queue.TaskReportsSweep: queue.QueueExports, queue.TaskIntegrationTriggerPurge: queue.QueueMaintenance,
 		queue.TaskAppointmentReminders: queue.QueueEvents,
 		queue.TaskChannelHealth:        queue.QueueSync, queue.TaskChannelReconcile: queue.QueueSync, queue.TaskIMAPTick: queue.QueueSync, queue.TaskNetgsmTick: queue.QueueSync,
-		queue.TaskVideoSweep: queue.QueueEvents, queue.TaskVideoRecordingPurge: queue.QueueMaintenance,
+		queue.TaskVideoSweep: queue.QueueEvents, queue.TaskVideoRecordingPurge: queue.QueueMaintenance, queue.TaskRemoteSupportSweep: queue.QueueEvents,
 		queue.TaskBillingReconciliation: queue.QueueSync, queue.TaskBillingProviderSync: queue.QueueSync,
 		queue.TaskRecordingTranscriptSweep: queue.QueueMaintenance,
 		queue.TaskHistorySweep:             queue.QueueSync, queue.TaskHistoryNightly: queue.QueueMaintenance,

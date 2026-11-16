@@ -454,6 +454,8 @@
   "portal.features.module.appointments": "Appointments and calendar",
   "portal.features.replay.bytes": "Session replay storage",
   "portal.features.replay.enabled": "Session replay",
+  "portal.features.remote_support.enabled": "Remote support",
+  "portal.features.remote_support.minutes": "Remote support minutes",
   "portal.features.replay.retention_days": "Replay retention (days)",
   "portal.features.security.sso": "Enterprise SSO and SCIM",
   "portal.features.video.enabled": "Video calls",

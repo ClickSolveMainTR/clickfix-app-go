@@ -337,3 +337,7 @@ history_imports
 history_clusters
 history_cases
 history_decisions
+
+# CF-233 remote support
+remote_support_settings
+remote_support_sessions

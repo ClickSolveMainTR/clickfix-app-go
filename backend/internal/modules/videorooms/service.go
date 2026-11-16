@@ -41,8 +41,14 @@ type Notifier interface {
 	Enqueue(context.Context, notif.EnqueueInput) ([]notif.Notification, error)
 }
 
+// RemoteSupportRoomPrefix names the LiveKit rooms of remote support
+// sessions (remotesupport.RoomPrefix); their webhook events are handed to
+// Service.RemoteSupportEvent.
+const RemoteSupportRoomPrefix = "rs_"
+
 type Service struct {
 	RecordingCompleted    func(context.Context) error
+	RemoteSupportEvent    func(context.Context, livekit.Event) error
 	AppointmentOpenBefore time.Duration
 	AppointmentGrace      time.Duration
 	Q                     *db.Queries

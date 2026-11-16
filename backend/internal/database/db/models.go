@@ -3829,6 +3829,63 @@ type RefreshToken struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
+type RemoteSupportSession struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	ConversationID     int64              `json:"conversation_id"`
+	AgentUserID        pgtype.Int8        `json:"agent_user_id"`
+	ContactID          pgtype.Int8        `json:"contact_id"`
+	CodeLookup         string             `json:"code_lookup"`
+	CodeHash           string             `json:"code_hash"`
+	CodeAttempts       int32              `json:"code_attempts"`
+	CodeExpiresAt      pgtype.Timestamptz `json:"code_expires_at"`
+	JoinTokenHash      string             `json:"join_token_hash"`
+	ClientSecretHash   string             `json:"client_secret_hash"`
+	Status             string             `json:"status"`
+	ModeRequested      string             `json:"mode_requested"`
+	ResolvedAt         pgtype.Timestamptz `json:"resolved_at"`
+	ViewConsentAt      pgtype.Timestamptz `json:"view_consent_at"`
+	ControlConsentAt   pgtype.Timestamptz `json:"control_consent_at"`
+	ControlRevokedAt   pgtype.Timestamptz `json:"control_revoked_at"`
+	RecordingConsent   pgtype.Bool        `json:"recording_consent"`
+	RecordingConsentAt pgtype.Timestamptz `json:"recording_consent_at"`
+	RoomName           string             `json:"room_name"`
+	EgressID           string             `json:"egress_id"`
+	RecordingStatus    string             `json:"recording_status"`
+	RecordingKey       string             `json:"recording_key"`
+	RecordingSizeBytes int64              `json:"recording_size_bytes"`
+	RecordingExpiresAt pgtype.Timestamptz `json:"recording_expires_at"`
+	ClientOs           string             `json:"client_os"`
+	ClientVersion      string             `json:"client_version"`
+	MaxDurationMinutes int32              `json:"max_duration_minutes"`
+	StartedAt          pgtype.Timestamptz `json:"started_at"`
+	EndedAt            pgtype.Timestamptz `json:"ended_at"`
+	EndedReason        string             `json:"ended_reason"`
+	EndedBy            string             `json:"ended_by"`
+	EndedByUserID      pgtype.Int8        `json:"ended_by_user_id"`
+	ReportedAt         pgtype.Timestamptz `json:"reported_at"`
+	ReportReason       string             `json:"report_reason"`
+	BilledMinutes      int64              `json:"billed_minutes"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RemoteSupportSetting struct {
+	OrganizationID         int64              `json:"organization_id"`
+	Enabled                bool               `json:"enabled"`
+	AllowControl           bool               `json:"allow_control"`
+	Recording              string             `json:"recording"`
+	MaxDurationMinutes     int32              `json:"max_duration_minutes"`
+	RecordingRetentionDays int32              `json:"recording_retention_days"`
+	PlatformState          string             `json:"platform_state"`
+	PlatformReason         string             `json:"platform_reason"`
+	PlatformChangedAt      pgtype.Timestamptz `json:"platform_changed_at"`
+	PlatformChangedBy      pgtype.Int8        `json:"platform_changed_by"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ReportDelivery struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`

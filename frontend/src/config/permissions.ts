@@ -19,6 +19,10 @@ export const Permission = {
   TenantVideoUse: "tenant.video.use",
   TenantVideoManage: "tenant.video.manage",
   PlatformVideoManage: "platform.video.manage",
+  TenantRemoteSupportUse: "tenant.remote_support.use",
+  TenantRemoteSupportControl: "tenant.remote_support.control",
+  TenantRemoteSupportSettings: "tenant.remote_support.settings",
+  PlatformRemoteSupportManage: "platform.remote_support.manage",
   TenantAssistantUse: "tenant.assistant.use",
   PlatformAssistantManage: "platform.assistant.manage",
   PlatformGuidesManage: "platform.guides.manage",
@@ -176,6 +180,10 @@ export function isKnownPermission(slug: string): slug is PermissionSlug {
 export const permissions = {
   video: {
     platformManage: Permission.PlatformVideoManage,
+  },
+  /** Remote support sessions (CF-233). */
+  remoteSupport: {
+    platformManage: Permission.PlatformRemoteSupportManage,
   },
   /** Module guides, ClickFix Asistan and product feedback (CF-141). */
   assistant: {
@@ -398,6 +406,11 @@ export const permissions = {
     video: {
       use: Permission.TenantVideoUse,
       manage: Permission.TenantVideoManage,
+    },
+    remoteSupport: {
+      use: Permission.TenantRemoteSupportUse,
+      control: Permission.TenantRemoteSupportControl,
+      settings: Permission.TenantRemoteSupportSettings,
     },
     teamChat: {
       use: Permission.TenantTeamChatUse,
