@@ -23,6 +23,7 @@ export const Permission = {
   TenantRemoteSupportControl: "tenant.remote_support.control",
   TenantRemoteSupportSettings: "tenant.remote_support.settings",
   PlatformRemoteSupportManage: "platform.remote_support.manage",
+  PlatformDesktopReleasesManage: "platform.desktop_releases.manage",
   TenantAssistantUse: "tenant.assistant.use",
   PlatformAssistantManage: "platform.assistant.manage",
   PlatformGuidesManage: "platform.guides.manage",
@@ -184,6 +185,10 @@ export const permissions = {
   /** Remote support sessions (CF-233). */
   remoteSupport: {
     platformManage: Permission.PlatformRemoteSupportManage,
+  },
+  /** Desktop app releases: publish and withdraw (CF-240). */
+  desktopReleases: {
+    platformManage: Permission.PlatformDesktopReleasesManage,
   },
   /** Module guides, ClickFix Asistan and product feedback (CF-141). */
   assistant: {

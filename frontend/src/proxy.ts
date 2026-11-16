@@ -19,7 +19,7 @@ const protectedProxy = auth as unknown as (
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname, searchParams } = request.nextUrl;
   const publicPage =
-    /^\/(?:docs(?:\/.*)?|features(?:\/[^/]+)?|compare|security|contact|account-deletion|legal\/[^/]+)?$/.test(
+    /^\/(?:docs(?:\/.*)?|features(?:\/[^/]+)?|compare|security|contact|account-deletion|indir|legal\/[^/]+)?$/.test(
       pathname,
     );
   if (publicPage) {
@@ -56,6 +56,7 @@ export const config = {
     "/security",
     "/contact",
     "/account-deletion",
+    "/indir",
     "/legal/:path*",
     "/dashboard/:path*",
     "/profile/:path*",

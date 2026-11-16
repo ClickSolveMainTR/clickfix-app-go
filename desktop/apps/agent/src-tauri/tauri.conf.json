@@ -28,9 +28,22 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "hardenedRuntime": true
+    }
   },
   "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://getclickfix.com/api/v1/public/desktop/releases/agent/{{target}}-{{arch}}/{{current_version}}?channel=stable"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "deep-link": {
       "desktop": {
         "schemes": ["clickfix"]

@@ -18,6 +18,8 @@ export const SECURITY_PATH = "/security";
 export const CONTACT_PATH = "/contact";
 export const FEATURES_PATH = "/features";
 export const DOCS_PATH = "/docs";
+/** Desktop apps download page (CF-240). */
+export const DOWNLOAD_PATH = "/indir";
 
 /** Home FAQ entries (`landing.faq.<key>_q` / `_a`), also the FAQPage JSON-LD. */
 export const FAQ_KEYS = [

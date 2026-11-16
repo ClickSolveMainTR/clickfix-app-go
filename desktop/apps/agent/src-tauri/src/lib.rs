@@ -674,6 +674,7 @@ pub fn run() {
         .plugin(plugins::single_instance())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(plugins::logging())
+        .plugin(clickfix_shell::updates::plugin())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(

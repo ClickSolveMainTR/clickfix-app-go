@@ -76,6 +76,7 @@ function wantsBinaryStream(path: string) {
     path.includes("platform/storage/objects/download") ||
     path.includes("platform/storage/objects/preview") ||
     path.startsWith("public/storage/") ||
+    path.startsWith("public/desktop/files/") ||
     /^public\/help\/[^/]+\/logo$/.test(path)
   );
 }

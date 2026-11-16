@@ -139,3 +139,11 @@ macOS ve Windows derlemeleri, imzalama ve dağıtım CF-240 ile `desktop-release
 ## Sürüm
 
 `VERSION` tek kaynaktır. Değiştirince `Cargo.toml` (`workspace.package.version`), iki `tauri.conf.json` ve iki `package.json` de güncellenir; `scripts/check.sh` uyuşmazlığı yakalar.
+
+## Release ve güncelleme (CF-240)
+
+- İmzalı paketler yalnız elle tetiklenen `desktop-release` iş akışında derlenir (macOS arm64 + x64, Windows x64). Sürüm `VERSION`'dan okunur, git etiketi basılmaz.
+- Paketler Actions artefaktı olarak çıkar; API'ye `node scripts/publish-release.mjs <dizin>...` ile yayınlanır, `/indir` sayfası ve güncelleyici oradan okur.
+- Uygulamalar açılışta `GET /api/v1/public/desktop/releases/{app}/{target}/{current_version}` ucunu sorar, yeni paketi indirip imzasını doğrular ve kapanışta kurar (`crates/shell/src/updates.rs`). Geliştirme derlemesinde ve `plugins.updater.pubkey` boşken denetim yapılmaz.
+- `bundle.createUpdaterArtifacts` açık olduğundan yerelde paketli derleme (`tauri build`, `--no-bundle` olmadan) updater anahtarı ister. Anahtarsız yerel deneme: `pnpm --filter @clickfix-desktop/support tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'`.
+- Anahtarlar, gizli değerler, döndürme ve iptal: [docs/security/masaustu-imzalama.md](../docs/security/masaustu-imzalama.md).

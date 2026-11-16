@@ -10,6 +10,7 @@ import {
   FEATURES_PATH,
   LEGAL_DOCS,
   SECURITY_PATH,
+  DOWNLOAD_PATH,
 } from "@/features/landing/constants";
 import {
   FEATURE_PAGE_AREAS,
@@ -55,6 +56,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       page(base, featurePath(area), "monthly", 0.8),
     ),
     page(base, SECURITY_PATH, "monthly", 0.8),
+    page(base, DOWNLOAD_PATH, "weekly", 0.6),
     page(base, COMPARE_PATH, "monthly", 0.7),
     page(base, CONTACT_PATH, "yearly", 0.6),
     page(base, DOCS_PATH, "weekly", 0.8),

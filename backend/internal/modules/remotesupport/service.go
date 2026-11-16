@@ -385,7 +385,7 @@ func (s *Service) Create(ctx context.Context, org int64, agent Agent, conv db.Co
 	if err != nil {
 		return Created{}, err
 	}
-	out := Created{Code: code, JoinURL: "clickfix-support://join?t=" + token, DownloadURL: s.downloadURL()}
+	out := Created{Code: code, JoinURL: "clickfix-support://join?t=" + token, DownloadURL: s.downloadURL(s.orgLocale(ctx, org))}
 	if out.Session, err = s.view(ctx, row); err != nil {
 		return Created{}, err
 	}
@@ -394,8 +394,22 @@ func (s *Service) Create(ctx context.Context, org int64, agent Agent, conv db.Co
 	return out, nil
 }
 
-func (s *Service) downloadURL() string {
-	return strings.TrimRight(s.FrontendURL, "/") + "/download/support"
+// downloadURL is the download page (CF-240) with ClickFix Destek selected;
+// English organizations get the English page.
+func (s *Service) downloadURL(locale string) string {
+	u := strings.TrimRight(s.FrontendURL, "/") + "/indir?app=support"
+	if locale == "en" {
+		u += "&lang=en"
+	}
+	return u
+}
+
+// orgLocale is "en" for organizations with an English locale, else "tr".
+func (s *Service) orgLocale(ctx context.Context, org int64) string {
+	if o, err := s.Q.GetOrganizationByID(ctx, org); err == nil && strings.HasPrefix(o.Locale, "en") {
+		return "en"
+	}
+	return "tr"
 }
 
 // postInvite drops the customer-visible message. A channel whose reply
@@ -404,15 +418,12 @@ func (s *Service) postInvite(ctx context.Context, org, conversation int64, code 
 	if s.Poster == nil {
 		return false
 	}
-	locale := "tr"
-	if o, err := s.Q.GetOrganizationByID(ctx, org); err == nil && strings.HasPrefix(o.Locale, "en") {
-		locale = "en"
-	}
+	locale := s.orgLocale(ctx, org)
 	text := fmt.Sprintf("Uzaktan destek için ClickFix Destek uygulamasını indirin: %s\nUygulamayı açıp şu kodu girin: %s\nKod 15 dakika geçerlidir ve yalnız bir kez kullanılabilir. Ekranınızı paylaşmadan önce onayınız istenir.\nClickFix ve işletmeler sizden asla para transferi, banka girişi veya kart bilgisi istemez.",
-		s.downloadURL(), FormatCode(code))
+		s.downloadURL(locale), FormatCode(code))
 	if locale == "en" {
 		text = fmt.Sprintf("For remote support, download the ClickFix Support app: %s\nOpen it and enter this code: %s\nThe code is valid for 15 minutes and can be used once. You will be asked to approve before your screen is shared.\nClickFix and businesses will never ask you for a money transfer, bank login or card details.",
-			s.downloadURL(), FormatCode(code))
+			s.downloadURL(locale), FormatCode(code))
 	}
 	if _, err := s.Poster.PostAuto(ctx, org, conversation, "remote_support", text); err != nil {
 		s.log().Warn("remote_support_invite_not_posted", "organization_id", org, "error", err)
