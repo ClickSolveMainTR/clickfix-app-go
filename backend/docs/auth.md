@@ -110,6 +110,23 @@ Centrifugo: namespace `qrlogin` (all client permissions off) in `deploy/centrifu
 
 Phishing note: QR sign-in can be abused by showing a victim an attacker's QR. The approval screen shows browser, IP and location and the app warns to approve only codes on a screen in front of you.
 
+## Desktop app sign-in (system browser + PKCE, CF-234)
+
+Module: `internal/modules/desktoplogin`. Design: `docs/design/masaustu.md` §6. Google and Apple refuse OAuth in an embedded web view, so the ClickFix desktop app (Tauri) signs in through the system browser and comes back with a one-time code. Codes live in Redis only (`app:<env>:desktoplogin:<sha256(code)>`, TTL 60 s). Migration `000239` adds `client` / `client_os` / `device_name` to `refresh_tokens`.
+
+1. App → system browser: `{PUBLIC_FRONTEND_URL}/desktop/login?state=<16–128 unreserved chars>&challenge=<BASE64URL(SHA256(code_verifier))>`.
+2. Page `/desktop/login`: signed out → `/login?next=/desktop/login?...` (any method: password, Google, Apple, passkey, SSO, with its second factor), then back. Signed in → confirmation screen ("ClickFix Masaüstü'ne giriş yapılıyor", account e-mail, switch account / cancel / continue).
+3. Continue → `POST /v1/auth/desktop/codes {state, code_challenge, code_challenge_method:"S256"}` (Bearer through the panel BFF; 20 / 15 min per user; refused while impersonating or for deactivated accounts). Returns `code` (43-char base64url) and `redirect_url` = `clickfix://auth/callback?code=...&state=...`. The page follows it only when it is exactly that callback for its own state, then shows the "app did not open?" fallback (open again within 60 s, or create a new link).
+4. App → `POST /v1/auth/desktop/exchange {code, code_verifier, state, client_os, device_name?}` through `/api/mobile/v1` (native client, Bearer passthrough; the panel BFF refuses this path). One Lua script checks `S256(code_verifier)` and `state` and marks the code used. Returns the normal token pair + `user`. The refresh row gets `client=desktop`, `client_os` (`macos|windows|linux`), optional `device_name` (≤ 64, no control characters). No second factor: the browser that created the code was already signed in.
+   - Reuse within the window → `400 DESKTOP_LOGIN_INVALID`, audited `desktop_login.code_reused`.
+   - Wrong verifier or state → `400 DESKTOP_LOGIN_INVALID`, audited `desktop_login.verifier_mismatch`; the third miss deletes the code.
+   - Expired / unknown → `400 DESKTOP_LOGIN_INVALID`. 30 / 15 min per IP.
+5. Web view session: the app keeps its refresh token in the OS keychain. It must not share it with the web view (rotation is single use; each side would revoke the other). The web view posts the app's **access token** to the Next route `POST /desktop/session` (form or JSON `access_token`, or `Authorization: Bearer`; optional `next` path). The route accepts same-origin posts only (login CSRF), calls `POST /v1/auth/desktop/web-session` with that Bearer (caller's `sid` must be an active, non-impersonated desktop session; 30 / 15 min per user), stores the new pair in the Auth.js session cookie and answers `303` to `next` or `/dashboard`. Both proxies refuse `/auth/desktop/web-session`. The token is never put in a URL or a log line.
+
+Audit (`activity_events`, resource `auth.desktop_login`): `desktop_login.code_created`, `desktop_login.exchanged`, `desktop_login.code_reused`, `desktop_login.verifier_mismatch`, `desktop_login.web_session`. Payloads carry `client_os` only, never codes, verifiers or tokens.
+
+Refresh keeps the `client` label on the rotated row, so the device list shows "ClickFix Masaüstü (macOS)" for the session's whole life. `/desktop/*` responses use the consent screen headers (`no-store`, `no-referrer`, never framed).
+
 ## Linked identities
 
 | Method | Path | Auth |
@@ -134,6 +151,8 @@ HS256 claims: `sub`, `roles`, `is_super_admin`, `exp`, optional `imp` (impersona
 
 Refresh tokens are listed as devices. `sid` on the access token marks the current row.
 
+Each item may carry `client: "desktop"`, `client_os` and `device_name` (desktop app sessions, CF-234); the web shows them as "ClickFix Masaüstü (<OS>) · <computer>" with a "Masaüstü uygulaması" badge. Revoking works the same for every client.
+
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/v1/auth/sessions` | Bearer |
@@ -157,6 +176,9 @@ Redis INCR, 15-minute window, fail-open if Redis is down. `429 RATE_LIMITED` + `
 | Native OAuth | IP | 30 |
 | OAuth link create | IP (register bucket) | 5 |
 | Account deletion code request / deactivate | user | 5 / 10 |
+| Desktop code create (`/auth/desktop/codes`) | user | 20 |
+| Desktop code exchange (`/auth/desktop/exchange`) | IP | 30 |
+| Desktop web view session (`/auth/desktop/web-session`) | user | 30 |
 
 The BFF forwards the browser IP as `X-Forwarded-For`; the Go API must not be reachable directly from clients or the header could be spoofed.
 

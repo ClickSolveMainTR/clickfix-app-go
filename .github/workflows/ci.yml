@@ -50,6 +50,7 @@ jobs:
   #   mobile/**                   -> mobile
   #   sdks/php/**, sdks/examples/** -> backend, contracts, php (sdks/php/** also laravel)
   #   sdks/laravel/**             -> backend, contracts, laravel
+  #   desktop/**                  -> desktop (desktop/*.md dahil değil)
   #   backend/docs/openapi.yaml   -> backend, frontend, contracts, mobile, php
   #   Dockerfiles, compose.prod.yml, deploy/** -> image-build
   #   docs/**, *.md, .github/**   -> nothing (ci.yml itself -> everything)
@@ -65,6 +66,7 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
       laravel: ${{ steps.filter.outputs.laravel }}
       flutter: ${{ steps.filter.outputs.flutter }}
+      desktop: ${{ steps.filter.outputs.desktop }}
       full: ${{ steps.filter.outputs.full }}
     steps:
       # Self-hosted only: a container job that ran as root (php) can leave
@@ -89,7 +91,7 @@ jobs:
           CI_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci-full') }}
         run: |
           backend=false; frontend=false; contracts=false
-          mobile=false; php=false; infra=false; laravel=false; flutter=false; full=false
+          mobile=false; php=false; infra=false; laravel=false; flutter=false; desktop=false; full=false
           files=""
           case "$EVENT" in
             pull_request)
@@ -112,6 +114,7 @@ jobs:
               backend/docs/openapi.yaml)
                 backend=true; frontend=true; contracts=true; mobile=true; php=true ;;
               *.md|docs/*) ;;
+              desktop/*) desktop=true ;;
               backend/Dockerfile|frontend/Dockerfile|compose.prod.yml|deploy/*|.dockerignore|*/.dockerignore)
                 infra=true ;;
               backend/migrations/*) backend=true; contracts=true; infra=true ;;
@@ -126,12 +129,13 @@ jobs:
             esac
           done <<< "$files"
           if [ "$full" = "true" ]; then
-            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; laravel=true; flutter=true
+            backend=true; frontend=true; contracts=true; mobile=true; php=true; infra=true; laravel=true; flutter=true; desktop=true
           fi
           {
             echo "backend=$backend"; echo "frontend=$frontend"
             echo "contracts=$contracts"; echo "mobile=$mobile"
-            echo "php=$php"; echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"; echo "full=$full"
+            echo "php=$php"; echo "infra=$infra"; echo "laravel=$laravel"; echo "flutter=$flutter"
+            echo "desktop=$desktop"; echo "full=$full"
           } | tee -a "$GITHUB_OUTPUT"
 
   backend:
@@ -715,6 +719,45 @@ jobs:
       - name: i18n
         run: node scripts/check-i18n.mjs
 
+  # Masaüstü uygulamaları (desktop/, CF-232): Rust fmt/clippy/test, Go
+  # sidecar vet/test/golangci-lint, destek arayüzü typecheck/lint/build ve
+  # Linux `tauri build --no-bundle`. Hepsi desktop/ci/Dockerfile derleme
+  # konteynerinde çalışır; runner'a webkit2gtk paketi kurulmaz. İmaj
+  # Dockerfile özetiyle etiketlenir ve yeniden kullanılır. Konteynerin adı ve
+  # portu yoktur, runner kullanıcısıyla çalışır (kök sahipli dosya kalmaz).
+  # Cargo, Go ve pnpm önbellekleri runner başına bir dizinde kalıcıdır.
+  desktop:
+    needs: [changes]
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build container image
+        id: image
+        run: |
+          tag="clickfix-desktop-ci:$(sha256sum desktop/ci/Dockerfile | cut -c1-16)"
+          docker image inspect "$tag" >/dev/null 2>&1 || docker build --pull -t "$tag" desktop/ci
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Desktop checks
+        env:
+          IMAGE: ${{ steps.image.outputs.tag }}
+          CACHE: ${{ format('{0}/../desktop-cache-{1}', runner.temp, runner.name) }}
+        run: |
+          mkdir -p "$CACHE"
+          # Konteyner runner'ın systemd bellek sınırının dışında çalışır;
+          # aynı makinedeki öbür runner'ları OOM'a sokmaması için kendi
+          # sınırı var (makine 15 GB + 8 GB swap, 8 çekirdek, 3 runner).
+          docker run --rm \
+            --memory 6g --memory-swap 8g --cpus 4 \
+            -e CARGO_BUILD_JOBS=4 \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -v "$CACHE:/cache" \
+            -w /src/desktop \
+            -e DESKTOP_TAURI_BUILD=1 \
+            "$IMAGE" ./scripts/check.sh
+
   # Builds the production images as Dokploy does (compose.prod.yml contexts),
   # without pushing. Only when Dockerfiles, compose or deploy/ change, on a
   # full run and weekly.
@@ -743,7 +786,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, laravel, flutter]
+    needs: [changes, backend, frontend, mobile, contracts, image-build, security, sdks, php, laravel, flutter, desktop]
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
     steps:
       - name: All jobs green

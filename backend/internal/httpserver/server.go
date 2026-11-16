@@ -103,6 +103,7 @@ import (
 	departmentsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments"
 	departmentshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/handler"
 	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/desktoplogin"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/enterprise"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports"
@@ -868,6 +869,9 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	}
 	qrSvc := qrlogin.NewService(qrlogin.NewStore(deps.Redis, cfg.App.Env), uc, qrIssuer, deps.Realtime, cfg.Auth.FrontendURL, log)
 	qrlogin.RegisterRoutes(mux, qrlogin.NewHandler(qrSvc, qrGeo, ratelimit.New(deps.Redis, cfg.App.Env)), tokens, loader)
+	// Desktop app sign-in through the system browser (CF-234).
+	desktopSvc := desktoplogin.NewService(desktoplogin.NewStore(deps.Redis, cfg.App.Env), uc)
+	desktoplogin.RegisterRoutes(mux, desktoplogin.NewHandler(desktopSvc, ratelimit.New(deps.Redis, cfg.App.Env), activityRec), tokens, loader)
 
 	nh := notifhandler.New(notifSvc)
 	nh.SetRateLimiter(ratelimit.New(deps.Redis, cfg.App.Env))

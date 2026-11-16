@@ -2885,6 +2885,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/desktop/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-time code for the desktop app (signed-in browser)
+         * @description CF-234. Called by the `/desktop/login` page in the system browser
+         *     after the user signed in there (any method). Binds a one-time code to
+         *     the desktop app's `state` and PKCE S256 `code_challenge`. The code is
+         *     valid for 60 s, held in Redis (hashed key) and redeemable once. The
+         *     page sends the user to `redirect_url` (`clickfix://auth/callback`).
+         *     Not available while impersonating.
+         *
+         *     Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN` (impersonating or
+         *     disabled), `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED`
+         *     (20 / 15 min per user).
+         */
+        post: operations["postAuthDesktopCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a desktop code (desktop app)
+         * @description CF-234. Called by the desktop app (native client, through
+         *     `/api/mobile/v1`), never by browser JS (the panel BFF blocks it).
+         *     Trades the code from the callback plus the PKCE `code_verifier` and
+         *     `state` for the app's own session: the same token pair as
+         *     `/v1/auth/login` plus the user. The refresh session is labelled
+         *     `client=desktop` (and `client_os`, `device_name`) in
+         *     `GET /v1/auth/sessions`; the label survives refresh rotation.
+         *
+         *     Single use: a second exchange is refused and audited
+         *     (`desktop_login.code_reused`). A wrong verifier or state is audited
+         *     (`desktop_login.verifier_mismatch`); after 3 the code is deleted.
+         *     Expired, unknown, reused and mismatched codes all answer
+         *     `400 DESKTOP_LOGIN_INVALID`.
+         *
+         *     Errors: `400 DESKTOP_LOGIN_INVALID`, `400 VALIDATION_ERROR`,
+         *     `403 ACCOUNT_DEACTIVATED`, `403 FORBIDDEN`, `429 RATE_LIMITED`
+         *     (30 / 15 min per IP).
+         */
+        post: operations["postAuthDesktopExchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/web-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Separate session for the desktop app's web view (web server)
+         * @description CF-234. Called only by the web server's `POST /desktop/session` route
+         *     with the desktop app's access token; both proxies block it. Issues a
+         *     second session (also `client=desktop`) for the embedded web view, so
+         *     the app's keychain refresh token and the web view cookie rotate
+         *     independently. The caller's session must be an active desktop
+         *     session; impersonation sessions are refused.
+         *
+         *     Errors: `401`, `403 FORBIDDEN` (not a desktop session),
+         *     `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED` (30 / 15 min per user).
+         */
+        post: operations["postAuthDesktopWebSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications": {
         parameters: {
             query?: never;
@@ -23728,6 +23821,20 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             impersonated?: boolean;
+            /**
+             * @description Native client behind the session (CF-234). `desktop` = ClickFix
+             *     desktop app (its own session or its web view's). Absent for web /
+             *     mobile sessions.
+             * @enum {string}
+             */
+            client?: "desktop";
+            /**
+             * @description Desktop platform; set with `client`.
+             * @enum {string|null}
+             */
+            client_os?: "macos" | "windows" | "linux" | null;
+            /** @description Optional computer name the desktop app sent (max 64). */
+            device_name?: string | null;
         };
         SessionList: {
             items: components["schemas"]["AuthSession"][];
@@ -23853,6 +23960,53 @@ export interface components {
             };
         };
         EnvelopeQRLoginExchanged: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["QRLoginExchanged"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginCodeRequest: {
+            /** @description Opaque value from the desktop app, echoed in the callback. */
+            state: string;
+            /** @description PKCE S256 challenge, BASE64URL(SHA256(code_verifier)). */
+            code_challenge: string;
+            /** @enum {string} */
+            code_challenge_method: "S256";
+        };
+        DesktopLoginCode: {
+            /** @description 43-char base64url one-time code */
+            code: string;
+            /**
+             * @description `clickfix://auth/callback?code=...&state=...`
+             * @example clickfix://auth/callback?code=Zm9v...&state=abc...
+             */
+            redirect_url: string;
+            /** Format: date-time */
+            expires_at: string;
+            /**
+             * Format: int64
+             * @example 60
+             */
+            expires_in: number;
+        };
+        EnvelopeDesktopLoginCode: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DesktopLoginCode"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginExchangeRequest: {
+            code: string;
+            /** @description PKCE verifier (RFC 7636 §4.1). */
+            code_verifier: string;
+            /** @description Same value sent to `/codes`. */
+            state: string;
+            /** @enum {string} */
+            client_os: "macos" | "windows" | "linux";
+            /** @description Optional computer name shown in the device list. */
+            device_name?: string;
+        };
+        EnvelopeDesktopLoginExchanged: {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["QRLoginExchanged"];
@@ -37255,6 +37409,87 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginCode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopExchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopWebSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Web view session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };

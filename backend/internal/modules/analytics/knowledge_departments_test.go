@@ -55,6 +55,9 @@ func TestKnowledgePanelDepartmentSources(t *testing.T) {
 	($4,$5,$6,'triage','completed','{"category":"secret","confidence":0.99}'),($4,$5,$6,'reply','handoff','{}')`, f.org, deptConv, deptMsg, f.other, otherConv, otherMsg)
 	// The department suggestion inherits its conversation's department.
 	exec("INSERT INTO knowledge_suggestions(organization_id,topic,conversation_id,title,body,status) VALUES($1,'refund',$2,'t','b','pending'),($1,'general',$3,'t','b','approved'),($4,'secret',$5,'t','b','pending')", f.org, deptConv, f.conv, f.other, otherConv)
+	// The fixture session runs in America/Los_Angeles while the panel window
+	// below is in UTC: use the UTC day, not current_date (which is the LA day
+	// and lags the window between 00:00 and 08:00 UTC).
 	exec(`INSERT INTO ai_answer_cache_stats(organization_id,day,audience,department_id,exact_hits,semantic_hits,misses) VALUES
 	($1,(now() AT TIME ZONE 'UTC')::date,'customer',NULL,2,3,5),($1,(now() AT TIME ZONE 'UTC')::date,'customer',$2,1,2,1),($3,(now() AT TIME ZONE 'UTC')::date,'customer',$4,50,50,0)`, f.org, dept, f.other, foreignDept)
 	exec(`INSERT INTO category_assignments(organization_id,subject_type,subject_id,subject_uuid,category_id,confidence,source) VALUES

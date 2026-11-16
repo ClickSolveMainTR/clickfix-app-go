@@ -109,6 +109,9 @@ desktop/
 - Rust ve sidecar arasında IPC: sidecar yalnız kendi ebeveyninden stdin üzerinden komut alır, ağ portu açmaz.
   - Her komutun bir `id`'si olur, yanıt `id` ile eşlenir.
   - Uzun ömürlü olaylar `event` satırlarıyla gelir.
+- Sidecar'ı Rust tarafı (`crates/shell`) doğrudan başlatır; `tauri-plugin-shell` kullanılmaz ve webview'e shell izni verilmez (CF-232).
+- Temsilci uygulamasının `remote.urls` capability'si sabit JSON yerine çalışma anında `CLICKFIX_APP_URL`'den üretilir; böylece hazırlık ortamı ve yerel backend de yalnız kendi köküne IPC açar (CF-232).
+- Ayrıntılar ve yerel geliştirme: `desktop/README.md`.
 
 ## 4. ClickFix Masaüstü (temsilci)
 
@@ -293,6 +296,13 @@ Kalıp, `qrlogin`'deki tek kullanımlık takastır.
    - Refresh token işletim sisteminin anahtar zincirinde (Keychain / Credential Manager) saklanır.
 5. Webview'e oturum çerezi bir takas sayfası üzerinden kurulur: `POST /desktop/session` ve ardından yönlendirme. Token URL'e yazılmaz.
 
+Uygulama notları (CF-234, backend + web; ayrıntı `backend/docs/auth.md`):
+
+- Kod `POST /v1/auth/desktop/codes` ile alınır (oturum açmış tarayıcı, `state` + S256 `code_challenge`), Redis'te özetlenmiş anahtarla 60 saniye tutulur ve bir kez kullanılır. Takas `POST /v1/auth/desktop/exchange` (kod + `code_verifier` + `state` + `client_os` + isteğe bağlı `device_name`); uygulama bunu `/api/mobile/v1` üzerinden çağırır, panel BFF'i bu yolu reddeder. Yanlış verifier üçüncü denemede kodu siler; yeniden kullanım ve yanlış verifier denetim kaydına yazılır.
+- Giriş sayfası `callbackUrl` yerine mevcut giriş sayfasının `?next=` parametresini kullanır (aynı işlev, repodaki kalıp).
+- Webview ayrı bir oturum alır: uygulama refresh token'ını anahtar zincirinde tutar; aynı token'ı webview ile paylaşmak rotasyonu bozar (her taraf diğerinin token'ını iptal eder). Webview, uygulamanın **erişim token'ını** `POST /desktop/session`'a gönderir (form, JSON veya `Authorization: Bearer`); Next rotası `POST /v1/auth/desktop/web-session` ile yeni bir masaüstü oturumu alır, Auth.js çerezini kurar ve 303 ile yönlendirir. Sadece aynı kökenden gelen POST kabul edilir.
+- Oturumlar `refresh_tokens.client = 'desktop'`, `client_os`, `device_name` ile işaretlenir (migration 000239); yenilemede etiket korunur. Cihaz listesi "ClickFix Masaüstü (macOS) · <bilgisayar adı>" gösterir.
+
 ## 7. Güvenlik ve uyum
 
 - **Tehdit 1, dolandırıcılık:** "telefonla arayıp uygulamayı kurdurmak".
@@ -321,7 +331,8 @@ Kalıp, `qrlogin`'deki tek kullanımlık takastır.
 ## 8. Derleme, imzalama ve dağıtım
 
 - **CI:**
-  - `desktop/**` değişince self-hosted Linux runner'da şunlar çalışır: `cargo check`, `cargo clippy`, `cargo test`, sidecar `go vet`, `go test`, `golangci-lint`, destek arayüzünün `pnpm typecheck` / `lint` / `build`, Linux `tauri build --no-bundle` denemesi.
+  - `desktop/**` değişince self-hosted Linux runner'da şunlar çalışır: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, sidecar `go vet`, `go test`, `golangci-lint`, destek arayüzünün `pnpm typecheck` / `lint` / `build`, Linux `tauri build --no-bundle` denemesi.
+  - Bunlar `desktop/ci/Dockerfile` derleme konteynerinde, `desktop/scripts/check.sh` ile çalışır; runner'a webkit2gtk kurulmaz. Yerelde aynı betik `make desktop-check` ile çalışır.
   - macOS ve Windows derlemeleri repo private olduğu için ücretli dakika harcar. Bu yüzden yalnız `desktop-release` iş akışında çalışır (`workflow_dispatch` ile).
 - **Sürüm:** `desktop/` kendi sürümünü taşır (`desktop/VERSION`, semver). Elle git etiketi basılmaz; release iş akışı sürümü dosyadan okur.
 - **İmzalama:**

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local-shell",
+  "description": "Paketlenmiş yerel yükleme/hata sayfası: yalnız connect komutu.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": ["allow-connect"]
+}
