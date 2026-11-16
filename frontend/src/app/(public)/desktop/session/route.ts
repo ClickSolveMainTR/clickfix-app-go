@@ -117,8 +117,11 @@ export async function POST(request: Request) {
     expiresIn: data.expires_in,
   });
 
+  // Relative Location: behind the proxy `request.url` may carry the
+  // internal host, never the public one.
   const target = safeNextPath(input.next, routes.cms.home);
-  const response = NextResponse.redirect(new URL(target, request.url), 303);
-  response.headers.set("Cache-Control", "no-store");
-  return response;
+  return new NextResponse(null, {
+    status: 303,
+    headers: { Location: target, "Cache-Control": "no-store" },
+  });
 }
