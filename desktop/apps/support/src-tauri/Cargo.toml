@@ -17,8 +17,19 @@ tauri-build.workspace = true
 [dependencies]
 clickfix-shell.workspace = true
 log.workspace = true
+serde.workspace = true
 serde_json.workspace = true
-tauri.workspace = true
+# Şeffaf çerçeve/çubuk pencereleri macOS'ta özel API ister.
+tauri = { workspace = true, features = ["macos-private-api"] }
+tauri-plugin-deep-link.workspace = true
+tauri-plugin-global-shortcut.workspace = true
+tauri-plugin-opener.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+# WebView2 yoksa pencere açılamaz; açıklama yerel iletişim kutusuyla yapılır.
+[target.'cfg(windows)'.dependencies]
+rfd = { version = "0.15", default-features = false }
 
 [lints]
 workspace = true

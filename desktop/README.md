@@ -5,7 +5,7 @@ Bu dizinde iki Tauri v2 uygulaması ve onların ortak Go sidecar'ı durur. Tasar
 | Uygulama | Dizin | Ne yapar |
 |---|---|---|
 | ClickFix Masaüstü (temsilci) | `apps/agent` | Barındırılan web uygulamasını (`CLICKFIX_APP_URL`, varsayılan `https://getclickfix.com`) bir pencerede açar. Bağlantı yoksa yerel hata sayfası ve "Yeniden dene" gösterir |
-| ClickFix Destek (müşteri) | `apps/support` | Pakete gömülü küçük Vite + React + TypeScript arayüzü. Şimdilik "Kodunuzu girin" yer tutucu ekranı |
+| ClickFix Destek (müşteri) | `apps/support` | Pakete gömülü Vite + React + TypeScript arayüzü (CF-239): kod, kimlik, onaylar, macOS izin rehberi, paylaşım çerçevesi ve çubuğu, bitiş özeti. IPC sözleşmesi `sidecar/IPC.md`; geliştirmede sahte IPC (`src/ipc/mock.ts`) kullanılır, gerçek sidecar için `VITE_SUPPORT_IPC=sidecar` |
 
 ## Yapı
 
