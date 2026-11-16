@@ -17,7 +17,9 @@ import { clientIpFromHeaders, fetchUpstream } from "@/lib/server/upstream";
  * Native's fetch sends whatever the phone's cookie store holds for the host,
  * e.g. a cookie an edge proxy or CDN set on the domain, so a phone that once
  * received one failed every call from then on: CF-79.) The same paths as the
- * panel BFF are off limits (`internal/*`, the QR token exchange).
+ * panel BFF are off limits (`internal/*`, the QR token exchange, the desktop
+ * web view session), except the desktop code exchange: the desktop app is a
+ * native client like the phone (CF-234).
  */
 
 /** Request headers the app may send upstream. */
@@ -72,7 +74,10 @@ export async function proxyMobileToUpstream(
   pathSegments: string[],
   request: Request,
 ): Promise<Response> {
-  if (pathSegments.length === 0 || isForbiddenProxyPath(pathSegments)) {
+  if (
+    pathSegments.length === 0 ||
+    isForbiddenProxyPath(pathSegments, { nativeClient: true })
+  ) {
     return jsonError(404, "NOT_FOUND", "Not found");
   }
   const url = new URL(request.url);

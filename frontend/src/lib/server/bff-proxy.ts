@@ -406,15 +406,25 @@ function jsonError(status: number, code: string, message: string): Response {
  * normalised (`..`, encoded slashes) and server-to-server adapter routes that
  * must never be reachable from the browser.
  */
-export function isForbiddenProxyPath(segments: string[]): boolean {
+export function isForbiddenProxyPath(
+  segments: string[],
+  opts: { nativeClient?: boolean } = {},
+): boolean {
   for (const seg of segments) {
     if (seg === "" || seg === "." || seg === "..") return true;
     if (/[/\\%?#]/.test(seg)) return true;
   }
   if (segments[0] === "internal") return true;
+  const path = segments.join("/");
   // QR sign-in exchange returns raw API tokens: only the NextAuth server
   // (qr-login credentials provider) may call it, never browser JS.
-  return segments.join("/") === "auth/qr/exchange";
+  if (path === "auth/qr/exchange") return true;
+  // Desktop web view session (CF-234): only the /desktop/session route
+  // handler calls it, server side.
+  if (path === "auth/desktop/web-session") return true;
+  // Desktop code exchange returns raw tokens to the desktop app (native
+  // client, /api/mobile); browser JS on the panel never redeems a code.
+  return !opts.nativeClient && path === "auth/desktop/exchange";
 }
 
 /** Edge geo headers forwarded for the QR sign-in approval screen. */

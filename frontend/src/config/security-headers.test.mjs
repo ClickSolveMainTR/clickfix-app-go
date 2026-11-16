@@ -13,7 +13,7 @@ async function load(name) {
   );
 }
 
-const { CONSENT_PATH, consentHeaders, headerRules } = await load(
+const { CONSENT_PATH, DESKTOP_PATHS, consentHeaders, headerRules } = await load(
   "./security-headers.ts",
 );
 const value = (headers, key) =>
@@ -46,4 +46,12 @@ test("the consent rule comes after the baseline so it wins", () => {
       production,
     );
   }
+});
+
+test("desktop sign-in pages get the consent rules", () => {
+  const rules = headerRules(true);
+  const desktop = rules.find((r) => r.source === DESKTOP_PATHS);
+  assert.equal(DESKTOP_PATHS, "/desktop/:path*");
+  assert.deepEqual(desktop.headers, consentHeaders);
+  assert.ok(rules.indexOf(desktop) > 0);
 });

@@ -65,6 +65,7 @@ type Repository interface {
 	ResolveRoleIDsByUUIDs(ctx context.Context, roleUUIDs []uuid.UUID) ([]int64, error)
 	SaveRefresh(ctx context.Context, userID int64, hash string, expiresAt time.Time, meta model.SessionMeta) (uuid.UUID, error)
 	GetRefreshSession(ctx context.Context, hash string) (model.RefreshSession, error)
+	GetActiveSession(ctx context.Context, userID int64, sessionUUID uuid.UUID) (model.RefreshSession, error)
 	RevokeRefresh(ctx context.Context, hash string) error
 	RevokeAllRefresh(ctx context.Context, userID int64) error
 	ListActiveSessions(ctx context.Context, userID int64) ([]model.DeviceSession, error)
@@ -421,6 +422,8 @@ func (u *AuthUseCase) Refresh(ctx context.Context, rawToken string, meta model.S
 		return model.Tokens{}, userStatusError(user)
 	}
 	meta.ImpersonatorUserID = session.ImpersonatorUserID
+	// A desktop app session stays labelled across rotations (CF-234).
+	meta.Client = session.Client
 	tokens, err := u.issueTokensForUser(ctx, user, meta)
 	if err != nil {
 		return tokens, err

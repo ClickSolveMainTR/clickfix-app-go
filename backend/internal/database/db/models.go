@@ -3827,6 +3827,9 @@ type RefreshToken struct {
 	IpAddress          *netip.Addr        `json:"ip_address"`
 	ImpersonatorUserID pgtype.Int8        `json:"impersonator_user_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	Client             pgtype.Text        `json:"client"`
+	ClientOs           pgtype.Text        `json:"client_os"`
+	DeviceName         pgtype.Text        `json:"device_name"`
 }
 
 type ReportDelivery struct {
