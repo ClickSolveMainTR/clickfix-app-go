@@ -103,7 +103,7 @@ Konuşmanın içinden açmanın ürün avantajı:
    - 4K ekran ve macOS'un ekran kaydı iznini aylık yeniden sorması denenmedi.
    - İzin sahibi: izinler sidecar'ı başlatan uygulamaya bağlanır. İmzalı uygulamada izin, imza değişmedikçe korunur; imzasız denemelerde her derlemede yeniden istenir.
 
-   Hangi yol seçilirse seçilsin, **girdi enjeksiyonu Go sidecar'dadır**: robotgo; macOS'ta Accessibility, Windows'ta kullanıcı oturumu düzeyinde.
+   Hangi yol seçilirse seçilsin, **girdi enjeksiyonu Go sidecar'dadır**: macOS'ta Accessibility, Windows'ta kullanıcı oturumu düzeyinde. Ölçümde robotgo kullanıldı; üretimde macOS'ta doğrudan Quartz CGEvent kullanılır (CF-238 notları, 5. bölüm).
 6. **RustDesk kodu kullanılmaz.** AGPL-3.0 lisanslıdır; ürüne gömmek kaynak açmayı gerektirir. Yalnız mimari fikir olarak okunabilir; kod kopyalanmaz. `docs/REFERANSLAR.md` "Sadece fikir" satırına eklenir.
 7. **Gözetimsiz erişim (unattended) v1'de yoktur.** Her oturum müşterinin o anki onayıyla başlar ve uygulama kapanınca biter. Arka planda çalışan servis, otomatik başlatma ve yükseltilmiş yetki (UAC, güvenli masaüstü) kapsam dışıdır.
 8. **Linux:**
@@ -327,6 +327,17 @@ Bilinmeyen ek alanlar hata değildir, yok sayılır. Böylece sürüm içinde al
 - **Platform:** `/platform/remote-support` (`platform.remote_support.manage`): organizasyon listesi ve kill switch, bildirilen oturumlar.
 - **Geliştirme müşterisi:** `/dev/remote-support`, yalnız `NODE_ENV=development` iken açılır (üretimde 404). Kodu girer, onayları verir, `getDisplayMedia` ile ekran paylaşır ve gelen kontrol olaylarını listeler (uygulamaz). İki sekmeyle uçtan uca deneme için LiveKit yerelde çalışmalı ve LiveKit webhook'u backend'e ulaşmalıdır (oturumun `active` olması webhook'la olur).
 - **KVKK metinleri:** taslak `docs/design/uzaktan-destek-metinleri.md`; hukuki onaydan geçmeden ürüne konmaz.
+
+#### Uygulama notları (CF-238)
+
+- **IPC sözleşmesi:** `desktop/sidecar/IPC.md`. Yöntemler `session.resolve`, `session.consent`, `session.start`, `session.stop`, `control.revoke`, `permissions.status`; tasarımın istediği ek yöntemler `permissions.request`, `session.report`, `sysinfo.get`. Olaylar `state` (her değişiklikte tam anlık görüntü), `control`, `error`. Arayüz hata **koduna** göre dallanır; kabuk API çağıran yöntemler için en az 20 sn beklemelidir.
+- **Paketler (`desktop/sidecar/internal`):** `api` (CF-233 public uçları; kullanıcı ajanı `ClickFixSupport/<sürüm> (<os>)`; deneme başına 6 sn, toplam 15 sn; tek kullanımlık kodu yakmamak için `resolve` yalnız istek sunucuya hiç gitmediyse ya da 502/503/504'te yeniden denenir), `remote` (LiveKit katılımı, H.264 SCREEN_SHARE izi, oda koparsa yeni token'la 60 sn boyunca yeniden bağlanma, oda kapanınca biter), `capture` (ScreenCaptureKit + VideoToolbox, CF-235 B), `control` (sürüm 1 olay çözücü ve kapı), `input` (CGEvent), `sysinfo`, `logging`, `support` (durum makinesi).
+- **Girdi, robotgo yerine CGEvent:** tuşlar DOM `KeyboardEvent.code`'dan macOS sanal tuş koduna fiziksel konuma göre eşlenir (müşterinin klavye düzeni karakteri belirler); değiştirici tuşlar `flagsChanged` olayıyla, sürükleme `*MouseDragged` ile, çift tıklama `kCGMouseEventClickState` ile kurulur; olaylar özel bir olay kaynağıyla gönderilir, fiziksel klavyenin değiştirici durumu karışmaz. robotgo karakterden ve etkin düzenden eşler ve ekran görüntüsü/görüntü işleme bağımlılıklarını pakete taşırdı.
+- **Kapı:** engelli kısayol, ayrı olaylarla basılı tutulan değiştiricilerle kurulsa da (önce `MetaLeft`, sonra `KeyL`) atılır. Erişilebilirlik izni oturum sürerken 2 sn'de bir denetlenir: izin gelince `pending_permission` → `active`, kalkınca kapı kapanır. Geri alma önce yerelde geçer, API hatası kapıyı açmaz.
+- **Günlük:** dosyaya (`--log-dir`, varsayılan önbellek dizini altında `ClickFix/sidecar-logs`, 5 MB × 3) ve stderr'e. Token, sır, JWT, `Bearer`, bağlantıdaki `t=` ve 9 haneli kodlar maskelenir; LiveKit SDK ve standart `log` paketi de aynı maskeleyen işleyiciye yönlendirilir.
+- **Derleme:** macOS ikilisi cgo ile yalnız macOS'ta derlenir (`scripts/build-sidecar.mjs`, `MACOSX_DEPLOYMENT_TARGET` varsayılanı 12.3; ScreenCaptureKit bunu ister). Diğer hedefler `CGO_ENABLED=0`'dır. arm64 ikilisi 21 MB (`-s -w`); LiveKit/Pion yığını boyutun çoğunu oluşturur, 15 MB hedefi için sıkıştırılmış paket boyutu CF-240'ta ölçülecek.
+- **Windows:** ölçüm makinesi olmadığı için yakalama ve girdi uygulanmadı. `capture_windows.go` açıkça `desteklenmiyor` döner, `permissions.status` `unsupported` gösterir ve `session.start` `-32007` döner. Windows Graphics Capture + Media Foundation H.264 ayrı iştir.
+- **Sınanmayan:** yerel LiveKit ile uçtan uca deneme (Ekran Kaydı izni ve kullanıcı onayı gerekir) bu işte yapılmadı; birim testleri sahte API, platform ve LiveKit oturumuyla durum makinesini, kapıyı, yeniden bağlanmayı ve maskelemeyi kapsar.
 
 ## 6. Masaüstü giriş akışı
 
