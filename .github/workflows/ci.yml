@@ -745,7 +745,12 @@ jobs:
           CACHE: ${{ format('{0}/../desktop-cache-{1}', runner.temp, runner.name) }}
         run: |
           mkdir -p "$CACHE"
+          # Konteyner runner'ın systemd bellek sınırının dışında çalışır;
+          # aynı makinedeki öbür runner'ları OOM'a sokmaması için kendi
+          # sınırı var (makine 15 GB + 8 GB swap, 8 çekirdek, 3 runner).
           docker run --rm \
+            --memory 6g --memory-swap 8g --cpus 4 \
+            -e CARGO_BUILD_JOBS=4 \
             --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/src" \
             -v "$CACHE:/cache" \
