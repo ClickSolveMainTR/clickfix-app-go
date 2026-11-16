@@ -60,6 +60,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(plugins::single_instance())
         .plugin(plugins::logging())
+        .plugin(clickfix_shell::updates::plugin())
         .manage(config.clone())
         .invoke_handler(tauri::generate_handler![connect])
         .setup(move |app| {

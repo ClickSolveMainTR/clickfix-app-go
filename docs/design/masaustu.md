@@ -214,7 +214,7 @@ Backend `backend/internal/modules/remotesupport` altındadır. Yukarıdaki tasla
 - **Ayarlar** `remote_support_settings` tablosundadır. Organizasyon için varsayılan **kapalıdır** (dolandırıcılık riski nedeniyle yönetici açar); kontrole izin varsayılan açık, kayıt `off`, en uzun süre 60 dakika (5–240), kayıt saklama 30 gün (1–365). Platform durumu (`active | disabled | suspended`) aynı satırdadır.
 - **Entitlement.** Özellikler `remote_support.enabled` (boolean, katalog varsayılanı açık) ve `remote_support.minutes` (aylık toplam, katalog varsayılanı sınırsız). Dakika, ekran paylaşımının başladığı andan bitişe kadar yukarı yuvarlanarak oturum başına bir kez ölçülür.
 - **Kayıt.** Kayıt onayı ve organizasyonda `optional` kayıt varsa, müşteri katılınca oda için egress başlar ve dosya platform deposuna (`remote-support-recordings/<org>/<oturum>.mp4`) gider. Kayıt bilgileri `video_recordings`'e değil oturum satırına yazılır (o tablo video odasına bağlıdır); silme, video kayıtlarının saklama işiyle aynı zamanlanmış işte (`app:video:recording-purge`) yapılır. Kayıt indirme ucu bu işte yoktur.
-- **Konuşma mesajı.** Müşteriye görünen mesaj (indirme bağlantısı `{FRONTEND_URL}/download/support` + kod) konuşmanın kanalından otomatik mesaj olarak gider. Kanal penceresi kapalıysa mesaj düşmez (`message_posted: false`) ve temsilci kodu kendisi iletir. Katılma bağlantısı mesaja konmaz, yalnız temsilciye bir kez döner.
+- **Konuşma mesajı.** Müşteriye görünen mesaj (indirme bağlantısı `{FRONTEND_URL}/indir?app=support`, İngilizce organizasyonlarda `&lang=en` + kod; CF-240) konuşmanın kanalından otomatik mesaj olarak gider. Kanal penceresi kapalıysa mesaj düşmez (`message_posted: false`) ve temsilci kodu kendisi iletir. Katılma bağlantısı mesaja konmaz, yalnız temsilciye bir kez döner.
 - **Doğrulanmış ad.** Ayrı bir doğrulama kaydı olmadığından `verified`, organizasyonun durumunun `active` olmasıdır. Temsilci fotoğrafı henüz yoktur (`avatar_url: null`).
 - **Ek rotalar.** `GET /v1/tenant/conversations/{uuid}/remote-support` (konuşmanın oturumları), `GET|PUT /v1/tenant/remote-support/settings`, `GET /v1/platform/remote-support/organizations`, `PUT /v1/platform/remote-support/organizations/{uuid}/state` (kill switch; kapatma bütün açık oturumları hemen bitirir), `GET /v1/platform/remote-support/reports`.
 - **Otomatik askıya alma.** 24 saatte 3 bildirim organizasyonu `suspended` yapar ve açık oturumları bitirir; platform yöneticisi `active` ile geri açar.
@@ -275,12 +275,19 @@ Uygulama notları (CF-234, backend + web; ayrıntı `backend/docs/auth.md`):
 - **İmzalama:**
   - macOS: Developer ID Application sertifikası, hardened runtime, `notarytool`. Mobil için kullanılan Apple ekibi kullanılır, sertifika ayrıdır.
   - Windows: Azure Artifact Signing Türkiye'deki şirketlere açık değil. Seçenekler: bulut HSM'li OV sertifika (SSL.com eSigner, DigiCert KeyLocker) ya da AB'deki bir şirket. Bu bir kullanıcı kararıdır. İmzasız derleme yalnız iç test içindir.
+- **Release iş akışı (CF-240):** `.github/workflows/desktop-release.yml`, yalnız `workflow_dispatch` (girdiler: `app` = `support`/`agent`/`both`, `channel` = `beta`/`stable`). Hedefler: `darwin-aarch64` ve `darwin-x86_64` (ikisi de `macos-15` runner'ında; universal paket yerine iki paket, Tauri updater platform anahtarlarıyla birebir), `windows-x86_64` (NSIS). Beta kanalı ön sürüm ister (`0.2.0-beta.1`), stable istemez. Çıktı Actions artefaktıdır; API'ye yayınlama `desktop/scripts/publish-release.mjs` ile elle yapılır. Gizli değerlerin eksiği:
+  - Updater anahtarı yoksa iş akışı durur.
+  - Apple veya Windows imza değerleri yoksa paket **imzasız iç test** olarak etiketlenir (artefakt adı, `manifest.json` `os_signed: false`, indirme sayfasında uyarı) ve yayınlama betiği `--allow-unsigned` olmadan reddeder.
 - **Güncelleyici:**
-  - Tauri updater imzası zorunludur (`TAURI_SIGNING_PRIVATE_KEY`).
-  - Bildirim dosyası `GET /v1/public/desktop/releases/{app}/{target}/{current_version}` üzerinden API'den gelir.
-  - Paketler nesne depolamada durur; URL'leri API üretir.
+  - Tauri updater imzası zorunludur (`TAURI_SIGNING_PRIVATE_KEY`, `bundle.createUpdaterArtifacts`). Açık anahtar `TAURI_UPDATER_PUBKEY` değişkeninden derleme sırasında yazılır; repodaki `tauri.conf.json`'da boştur ve boşken uygulama güncelleme denetimi yapmaz.
+  - Bildirim dosyası `GET /v1/public/desktop/releases/{app}/{target}/{current_version}?channel=` üzerinden API'den gelir (Tauri biçimi, güncelleme yoksa 204). `target`, Tauri'nin `{{target}}-{{arch}}` değeridir. Uç `getclickfix.com/api/v1/...` (BFF) üzerindendir.
+  - Sürümler semver önceliğiyle karşılaştırılır. Beta istemci stable sürümleri de alır; stable istemci beta görmez. Geri çekilen sürüm sunulmaz, ama sürüm düşürülmez: düzeltme daha yüksek sürümle gelir.
+  - Uygulama açılışta denetler, paketi indirip imzasını doğrular ve **kapanışta kurar** (`clickfix_shell::updates`). Süren bir uzaktan destek oturumu yeniden başlatmayla kesilmez; yeni sürüm sonraki açılışta çalışır.
+  - Paketler nesne depolamada durur (`desktop/releases/{app}/{channel}/{version}/{target}/{uuid}/{dosya}`); API `GET /v1/public/desktop/files/{uuid}/{kind}/{name}` ile akıtır. Kayıtlar `desktop_releases` tablosundadır (000240, platform kapsamlı).
+  - Yayınlama ve geri çekme: `POST /v1/platform/desktop/releases` (multipart), `POST /v1/platform/desktop/releases/{uuid}/withdraw`; yetki `platform.desktop_releases.manage`.
   - Kanallar: `stable`, `beta`.
-- **İndirme sayfası:** `getclickfix.com/indir`. İşletim sistemini algılar, iki uygulamayı ayrı gösterir, SHA-256 değerlerini yazar. Konuşmadaki uzaktan destek mesajı da buraya bağlanır.
+- **Anahtarlar:** üretim, saklama, döndürme ve iptal prosedürü [docs/security/masaustu-imzalama.md](../security/masaustu-imzalama.md).
+- **İndirme sayfası:** `getclickfix.com/indir` (İngilizce `?lang=en`). İşletim sistemini algılar, iki uygulamayı ayrı gösterir, SHA-256 değerlerini yazar (`GET /v1/public/desktop/downloads`). `?app=support` ClickFix Destek'i öne alır. Konuşmadaki uzaktan destek mesajı da buraya bağlanır. Landing alt bilgisinde "İndir" bağlantısı vardır.
 
 ## 9. İş yolları
 

@@ -181,6 +181,7 @@
   "labels.tenant.remote_support.control": "Uzaktan destekte kontrol iste",
   "labels.tenant.remote_support.settings": "Uzaktan destek ayarlarını yönet",
   "labels.platform.remote_support.manage": "Organizasyonların uzaktan desteğini yönet",
+  "labels.platform.desktop_releases.manage": "Masaüstü uygulama sürümlerini yayınla ve geri çek",
   "groups.tenant_remote_support": "Uzaktan destek",
   "labels.tenant.replays.read": "Oturum kayıtlarını izle",
   "labels.tenant.cobrowse.use": "Ortak tarama iste",

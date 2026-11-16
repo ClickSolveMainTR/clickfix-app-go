@@ -2180,6 +2180,34 @@ type DepartmentKnowledgeShare struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type DesktopRelease struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	App               string             `json:"app"`
+	Channel           string             `json:"channel"`
+	Version           string             `json:"version"`
+	Target            string             `json:"target"`
+	Status            string             `json:"status"`
+	Notes             string             `json:"notes"`
+	Signature         string             `json:"signature"`
+	OsSigned          bool               `json:"os_signed"`
+	UpdaterKey        string             `json:"updater_key"`
+	UpdaterName       string             `json:"updater_name"`
+	UpdaterSize       int64              `json:"updater_size"`
+	UpdaterSha256     string             `json:"updater_sha256"`
+	InstallerKey      pgtype.Text        `json:"installer_key"`
+	InstallerName     pgtype.Text        `json:"installer_name"`
+	InstallerSize     pgtype.Int8        `json:"installer_size"`
+	InstallerSha256   pgtype.Text        `json:"installer_sha256"`
+	PublishedByUserID pgtype.Int8        `json:"published_by_user_id"`
+	PublishedAt       pgtype.Timestamptz `json:"published_at"`
+	WithdrawnByUserID pgtype.Int8        `json:"withdrawn_by_user_id"`
+	WithdrawnAt       pgtype.Timestamptz `json:"withdrawn_at"`
+	WithdrawnReason   string             `json:"withdrawn_reason"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
 type DomainEventLog struct {
 	ID             int64              `json:"id"`
 	EventID        uuid.UUID          `json:"event_id"`

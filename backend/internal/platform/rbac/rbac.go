@@ -168,6 +168,9 @@ const (
 	PermPlatformRemoteSupportManage = "platform.remote_support.manage"
 )
 
+// Desktop app releases: publish and withdraw (CF-240).
+const PermPlatformDesktopReleasesManage = "platform.desktop_releases.manage"
+
 // Module guides and the ClickFix assistant (CF-141).
 const (
 	PermTenantAssistantUse          = "tenant.assistant.use"
