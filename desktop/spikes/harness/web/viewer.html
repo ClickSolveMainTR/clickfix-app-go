@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>CF-235 izleyici (temsilci)</title>
+<style>
+ body{margin:0;font-family:system-ui;background:#111;color:#eee}
+ header{display:flex;gap:24px;align-items:center;padding:8px 16px;background:#000}
+ #clock{font:700 56px/1 ui-monospace,Menlo,monospace;color:#7CFC00;letter-spacing:1px}
+ #stats{font:13px ui-monospace,Menlo,monospace;white-space:pre}
+ #wrap{padding:8px 16px} video{width:100%;max-height:78vh;background:#222;cursor:crosshair}
+ #log{font:12px ui-monospace,monospace;color:#aaa;height:60px;overflow:auto}
+</style></head><body>
+<header><div id="clock">--</div><div id="stats">bağlanıyor…</div></header>
+<div id="wrap"><video id="v" autoplay playsinline muted></video><div id="log"></div></div>
+<script type="module">
+import {Room, RoomEvent, Track} from '/lk/livekit-client.esm.mjs';
+const $=id=>document.getElementById(id);
+const log=m=>{$('log').textContent=new Date().toISOString().slice(11,23)+' '+m+'\n'+$('log').textContent};
+(function tick(){const d=new Date();$('clock').textContent=d.toTimeString().slice(0,8)+'.'+String(d.getMilliseconds()).padStart(3,'0');requestAnimationFrame(tick)})();
+const {url,token}=await (await fetch('/token?identity=agent')).json();
+const room=new Room({adaptiveStream:false});
+let track=null;
+room.on(RoomEvent.TrackSubscribed,(t,pub,p)=>{if(t.kind==='video'){track=t;t.attach($('v'));log('video: '+p.identity+' '+pub.source)}});
+room.on(RoomEvent.TrackUnsubscribed,t=>{t.detach();track=null;log('video gitti')});
+room.on(RoomEvent.ParticipantConnected,p=>log('katıldı: '+p.identity));
+room.on(RoomEvent.DataReceived,(b,p)=>log('veri '+(p?.identity)+': '+new TextDecoder().decode(b)));
+await room.connect(url,token);log('odaya bağlandı');
+const send=(o,reliable)=>room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(o)),{reliable,topic:'control'});
+const norm=e=>{const r=$('v').getBoundingClientRect(),v=$('v');const vw=v.videoWidth||1,vh=v.videoHeight||1;const s=Math.min(r.width/vw,r.height/vh);const ox=(r.width-vw*s)/2,oy=(r.height-vh*s)/2;return{x:+(((e.clientX-r.left-ox)/(vw*s)).toFixed(4)),y:+(((e.clientY-r.top-oy)/(vh*s)).toFixed(4))}};
+let lastMove=0;
+$('v').addEventListener('mousemove',e=>{const n=performance.now();if(n-lastMove<33)return;lastMove=n;send({t:'move',...norm(e)},false)});
+$('v').addEventListener('mousedown',e=>{send({t:'down',b:e.button,...norm(e),ts:Date.now()},true);log('tık '+JSON.stringify(norm(e)))});
+$('v').addEventListener('mouseup',e=>send({t:'up',b:e.button,...norm(e)},true));
+window.addEventListener('keydown',e=>{if(!track)return;send({t:'key',key:e.key,code:e.code,ts:Date.now()},true)});
+let prev=null;
+setInterval(async()=>{if(!track)return;const st=await track.getRTCStatsReport?.();if(!st)return;st.forEach(s=>{if(s.type==='inbound-rtp'&&s.kind==='video'){const kbps=prev?((s.bytesReceived-prev.b)*8/((s.timestamp-prev.t))).toFixed(0):'-';const jb=s.jitterBufferEmittedCount?(1000*s.jitterBufferDelay/s.jitterBufferEmittedCount).toFixed(0):'-';$('stats').textContent=`${s.frameWidth}x${s.frameHeight} ${s.framesPerSecond??'-'} fps  ${kbps} kbps\ncodec ${st.get(s.codecId)?.mimeType??'-'} jitterbuf ${jb} ms\nkayıp ${s.packetsLost} donma ${s.freezeCount??0}`;prev={b:s.bytesReceived,t:s.timestamp}}})},1000);
+</script></body></html>
