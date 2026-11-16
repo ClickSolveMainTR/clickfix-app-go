@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ClickFix Masaüstü",
+  "mainBinaryName": "clickfix-agent",
+  "version": "0.1.0",
+  "identifier": "com.getclickfix.desktop",
+  "build": {
+    "frontendDist": "../ui",
+    "beforeDevCommand": "node ../../scripts/build-sidecar.mjs",
+    "beforeBuildCommand": "node ../../scripts/build-sidecar.mjs"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost",
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Business",
+    "shortDescription": "ClickFix temsilci uygulaması",
+    "externalBin": ["binaries/clickfix-sidecar"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

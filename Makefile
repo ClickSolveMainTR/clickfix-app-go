@@ -164,3 +164,15 @@ guide-examples:
 
 guide-examples-check:
 	cd sdks && pnpm install --frozen-lockfile && pnpm build && node examples/run.mjs --check && node examples/sync-docs.mjs --check
+
+# Masaüstü uygulamaları (desktop/, CF-232). Ön koşullar: desktop/README.md.
+.PHONY: desktop-dev-agent desktop-dev-support desktop-check
+desktop-dev-agent:
+	cd desktop && pnpm install && pnpm dev:agent
+
+desktop-dev-support:
+	cd desktop && pnpm install && pnpm dev:support
+
+# CI'daki desktop işiyle aynı betik. DESKTOP_TAURI_BUILD=1 ile tauri build --no-bundle da çalışır.
+desktop-check:
+	desktop/scripts/check.sh

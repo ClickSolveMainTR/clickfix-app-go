@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/shell", "apps/agent/src-tauri", "apps/support/src-tauri"]
+
+[workspace.package]
+# desktop/VERSION ile aynı tutulur; scripts/check.sh denetler.
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+clickfix-shell = { path = "crates/shell" }
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = "2.12"
+tauri-build = "2.7"
+tauri-plugin-log = "2"
+tauri-plugin-single-instance = "2.5"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "sync", "time"] }
+url = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+unwrap_used = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClickFix Masaüstü</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="card" aria-live="polite">
+      <div class="logo" aria-hidden="true">C</div>
+      <h1>ClickFix Masaüstü</h1>
+
+      <section id="connecting">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>ClickFix'e bağlanılıyor…</p>
+      </section>
+
+      <section id="offline" hidden>
+        <h2>Bağlantı kurulamadı</h2>
+        <p>
+          ClickFix sunucusuna ulaşılamıyor. İnternet bağlantınızı denetleyin ve
+          yeniden deneyin.
+        </p>
+        <p class="detail" id="detail"></p>
+        <button id="retry" type="button">Yeniden dene</button>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
