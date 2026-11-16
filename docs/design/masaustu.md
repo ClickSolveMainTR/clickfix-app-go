@@ -109,6 +109,9 @@ desktop/
 - Rust ve sidecar arasında IPC: sidecar yalnız kendi ebeveyninden stdin üzerinden komut alır, ağ portu açmaz.
   - Her komutun bir `id`'si olur, yanıt `id` ile eşlenir.
   - Uzun ömürlü olaylar `event` satırlarıyla gelir.
+- Sidecar'ı Rust tarafı (`crates/shell`) doğrudan başlatır; `tauri-plugin-shell` kullanılmaz ve webview'e shell izni verilmez (CF-232).
+- Temsilci uygulamasının `remote.urls` capability'si sabit JSON yerine çalışma anında `CLICKFIX_APP_URL`'den üretilir; böylece hazırlık ortamı ve yerel backend de yalnız kendi köküne IPC açar (CF-232).
+- Ayrıntılar ve yerel geliştirme: `desktop/README.md`.
 
 ## 4. ClickFix Masaüstü (temsilci)
 
@@ -265,7 +268,8 @@ Uygulama notları (CF-234, backend + web; ayrıntı `backend/docs/auth.md`):
 ## 8. Derleme, imzalama ve dağıtım
 
 - **CI:**
-  - `desktop/**` değişince self-hosted Linux runner'da şunlar çalışır: `cargo check`, `cargo clippy`, `cargo test`, sidecar `go vet`, `go test`, `golangci-lint`, destek arayüzünün `pnpm typecheck` / `lint` / `build`, Linux `tauri build --no-bundle` denemesi.
+  - `desktop/**` değişince self-hosted Linux runner'da şunlar çalışır: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, sidecar `go vet`, `go test`, `golangci-lint`, destek arayüzünün `pnpm typecheck` / `lint` / `build`, Linux `tauri build --no-bundle` denemesi.
+  - Bunlar `desktop/ci/Dockerfile` derleme konteynerinde, `desktop/scripts/check.sh` ile çalışır; runner'a webkit2gtk kurulmaz. Yerelde aynı betik `make desktop-check` ile çalışır.
   - macOS ve Windows derlemeleri repo private olduğu için ücretli dakika harcar. Bu yüzden yalnız `desktop-release` iş akışında çalışır (`workflow_dispatch` ile).
 - **Sürüm:** `desktop/` kendi sürümünü taşır (`desktop/VERSION`, semver). Elle git etiketi basılmaz; release iş akışı sürümü dosyadan okur.
 - **İmzalama:**
