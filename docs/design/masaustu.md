@@ -218,6 +218,69 @@ Backend `backend/internal/modules/remotesupport` altındadır. Yukarıdaki tasla
 - **Gerçek zamanlı.** Kanal `remote_support:{uuid}` (Centrifugo namespace `remote_support`); oturumun temsilcisi ve `tenant.remote_support.settings` sahibi abone olabilir.
 - **Zamanlanmış iş.** `app:remote-support:sweep` dakikada bir çalışır: kodu dolanları, onay bekleyip zaman aşımına uğrayanları, süre sınırını aşanları, konuşması kapananları ve organizasyonu kapatılanları bitirir.
 
+#### Kontrol olayı biçimi (sürüm 1, CF-237)
+
+Temsilci konsolu olayları üretir, ClickFix Destek sidecar'ı (CF-238) çözer ve kontrol kapısından geçirerek uygular. Başvuru kodu `frontend/src/features/remote-support/lib/control.ts` dosyasındadır (`decodeEvent` alıcının yapması gereken doğrulamanın aynısıdır; testleri `control.test.mjs`). Bu bölüm ile o dosya birlikte değişir.
+
+**Taşıma**
+
+- LiveKit veri kanalı, güvenilir (`reliable: true`), konu (topic) `clickfix.rs.control.v1`.
+- Alıcı yalnız müşteridir: `destinationIdentities` müşterinin kimliğidir (`rs:customer:<oturum>`).
+- Gönderen kimliği `rs:agent:<oturum>` olmayan olay yok sayılır. LiveKit `canPublishData` iznini yalnız kontrol onayı yürürlükteyken verdiği için başka bir katılımcı zaten yayın yapamaz; sidecar yine de kimliğe bakar.
+- Her mesaj tek bir JSON nesnesidir, UTF-8. En çok 1024 bayt; büyüğü atılır.
+
+**Ortak alanlar**
+
+| Alan | Tür | Anlam |
+|---|---|---|
+| `v` | tamsayı | Ana sürüm. Şu an `1`. Bilinmeyen sürüm atılır |
+| `seq` | tamsayı ≥ 1 | Temsilci bağlantısı başına artan sıra. Alıcı sırayı yalnız tanı için kullanır; güvenilir kanal sırayı korur |
+| `t` | tamsayı | Temsilcinin saati, Unix ms. Yalnız tanı içindir, olay zamanlaması için kullanılmaz |
+| `type` | metin | Aşağıdaki türlerden biri. Bilinmeyen tür atılır |
+
+Bilinmeyen ek alanlar hata değildir, yok sayılır. Böylece sürüm içinde alan eklemek geriye uyumludur; anlamı değişen bir değişiklik `v`'yi artırır ve konu adı `...v2` olur.
+
+**Koordinatlar:** `x` ve `y`, paylaşılan ekranın (video izinin) sol üst köşesine göre 0 ile 1 arasında normalize değerlerdir, 4 ondalık. Konsol, `object-fit: contain` ile çizilen görüntünün siyah bantlarında olay üretmez. Sidecar ekran pikseline şöyle çevirir: `px = round(x × (genişlik − 1))`, `py = round(y × (yükseklik − 1))`; genişlik ve yükseklik yakalanan birincil ekranın gerçek piksel boyutudur (HiDPI ölçeği sidecar'ın işidir). 0–1 dışı değer atılır.
+
+**Türler**
+
+| `type` | Ek alanlar | Not |
+|---|---|---|
+| `pointer.move` | `x`, `y` | Konsol en çok saniyede 60 gönderir, son konum her zaman gider |
+| `pointer.down`, `pointer.up` | `x`, `y`, `button` (`0` sol, `1` orta, `2` sağ) | DOM `button` değerleri |
+| `wheel` | `x`, `y`, `dx`, `dy` | Piksel, tamsayı, mutlak değeri en çok 1200. Satır kipi 16, sayfa kipi 800 piksel sayılır |
+| `key.down`, `key.up` | `code`, `key`, `mods` {`alt`,`ctrl`,`meta`,`shift`}, `repeat` | `code` fiziksel tuştur (DOM `KeyboardEvent.code`, ör. `KeyA`, `Enter`); düzenden bağımsız eşleme bununla yapılır. `key` bilgi amaçlıdır (en çok 32 karakter) |
+| `release` | - | Basılı bütün tuşları ve fare düğmelerini bırak. Konsol odağı kaybedince, klavyeyi geri alınca ve kontrol bitince gönderir |
+
+**Örnek**
+
+```json
+{"v":1,"seq":42,"t":1795339200000,"type":"pointer.down","x":0.5123,"y":0.2871,"button":0}
+{"v":1,"seq":43,"t":1795339200016,"type":"key.down","code":"KeyC","key":"c","mods":{"alt":false,"ctrl":true,"meta":false,"shift":false},"repeat":false}
+```
+
+**Alıcı kuralları (sidecar)**
+
+- Yukarıdaki "Kontrol kapısı" koşullarının hepsi sağlanmadan hiçbir olay uygulanmaz. Kapı kapanınca (onay geri alındı, oturum bitti, bağlantı koptu) sidecar `release` uygular gibi basılı her şeyi bırakır.
+- Engelli kısayollar hem konsolda hem sidecar'da atılır: `Ctrl+Alt+Delete`, `Ctrl+Alt+Backspace`, `Ctrl+Shift+Escape`, `Meta+L`, `Meta+Ctrl+Q`, `Meta+Alt+Escape`, `Meta+Shift+Q`. Liste `isBlockedCombo` ile aynıdır.
+- Hız sınırı: saniyede 200 olay. Aşan olaylar atılır ve oturum günlüğüne bir kez yazılır.
+- `key.up` gelmeden bağlantı koparsa sidecar basılı tuşları kendisi bırakır.
+
+**Konsol tarafı**
+
+- "Kontrolü kullan" basılınca fare ve klavye yakalanır, ekranın çevresi yeşil olur ve "Kontrol sizde" görünür.
+- Klavyeyi geri almak için `Esc` iki kez hızlıca (600 ms içinde) basılır; ilk `Esc` müşteriye gider.
+- Kontrol izni, onay ya da LiveKit veri izni gidince giriş hemen kilitlenir ve bir uyarı çıkar. Onay yeniden verilse de giriş kendiliğinden açılmaz; temsilci yeniden basar.
+
+#### Uygulama notları (CF-237)
+
+- **Konsol:** konuşma başlığındaki uzaktan destek düğmesi (`tenant.remote_support.use` yoksa görünmez). Pencere mod seçimini, müşteriye gidecek mesajın önizlemesini, kodu (bir kez) ve kopyalama düğmelerini, adım adım durumu (Centrifugo `remote_support:{uuid}`, bağlantı yoksa 4 saniyede bir sorgu), izleyiciyi ve bitince özeti gösterir. Pencereyi kapatmak oturumu bitirmez; düğmedeki yeşil nokta süren oturumu gösterir ve tıklayınca geri açar.
+- **Zaman çizelgesi:** oturum bitince konuşmaya `remote_support_ended` sistem olayı düşer (mod, süre, kontrol ve kayıt onayı). Backend'e bu işte eklendi.
+- **Ayarlar:** `/settings/remote-support` (`tenant.remote_support.settings`). Paket yoksa yükseltme bilgisi, platform kapattıysa neden gösterilir.
+- **Platform:** `/platform/remote-support` (`platform.remote_support.manage`): organizasyon listesi ve kill switch, bildirilen oturumlar.
+- **Geliştirme müşterisi:** `/dev/remote-support`, yalnız `NODE_ENV=development` iken açılır (üretimde 404). Kodu girer, onayları verir, `getDisplayMedia` ile ekran paylaşır ve gelen kontrol olaylarını listeler (uygulamaz). İki sekmeyle uçtan uca deneme için LiveKit yerelde çalışmalı ve LiveKit webhook'u backend'e ulaşmalıdır (oturumun `active` olması webhook'la olur).
+- **KVKK metinleri:** taslak `docs/design/uzaktan-destek-metinleri.md`; hukuki onaydan geçmeden ürüne konmaz.
+
 ## 6. Masaüstü giriş akışı
 
 Kalıp, `qrlogin`'deki tek kullanımlık takastır.

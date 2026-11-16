@@ -39,6 +39,7 @@ import {
 import { useApplyMacro, useMacros } from "@/features/macros/hooks/use-macros";
 import { BrandBadge } from "@/features/brands/components/brand-badge";
 import { useTeamsList } from "@/features/teams/hooks/use-teams";
+import { RemoteSupportButton } from "@/features/remote-support/components/remote-support-button";
 import { StartVideoButton } from "@/features/video/components/start-video-button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
@@ -365,6 +366,7 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
             conversation={c.uuid}
             name={c.subject || contactLabel(c)}
           />
+          <RemoteSupportButton conversation={c.uuid} />
 
           {/* Snooze */}
           <Popover {...pickerProps("snooze")}>

@@ -57,6 +57,7 @@ import {
   MessageSquareHeart,
   Video,
   Zap,
+  MonitorUp,
 } from "lucide-react";
 
 import { permissions } from "@/config/permissions";
@@ -300,6 +301,13 @@ export const platformNav = defineNav({
           href: routes.platform.video,
           icon: Video,
           permission: permissions.video.platformManage,
+        },
+        {
+          id: "platform-remote-support",
+          titleKey: "layout.nav_platform_remote_support",
+          href: routes.platform.remoteSupport,
+          icon: MonitorUp,
+          permission: permissions.remoteSupport.platformManage,
         },
         {
           id: "platform-assistant",
@@ -756,6 +764,13 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.video,
           icon: Video,
           permission: permissions.tenant.video.manage,
+        },
+        {
+          id: "settings-remote-support",
+          titleKey: "layout.nav_tenant_settings_remote_support",
+          href: routes.cms.settings.remoteSupport,
+          icon: MonitorUp,
+          permission: permissions.tenant.remoteSupport.settings,
         },
         {
           id: "settings-customer-health",

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
+	convusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/remotesupport"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/entitlement"
@@ -88,8 +89,16 @@ func (f *fakeEnt) Consume(_ context.Context, _ int64, _ string, n int64, key str
 }
 
 type fakePoster struct {
-	mu    sync.Mutex
-	texts []string
+	mu     sync.Mutex
+	texts  []string
+	events []map[string]any
+}
+
+func (f *fakePoster) SystemEvent(_ context.Context, _, _ int64, _ convusecase.Actor, attrs map[string]any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, attrs)
+	return nil
 }
 
 func (f *fakePoster) PostAuto(_ context.Context, _, _ int64, kind, content string) (uuid.UUID, error) {
@@ -359,6 +368,12 @@ func TestFlowCreateResolveConsentTokenEnd(t *testing.T) {
 	}
 	if f.ent.consumed["remote_support:"+row.Uuid.String()] != v.BilledMinutes {
 		t.Fatalf("metering %v", f.ent.consumed)
+	}
+	// The summary lands on the conversation timeline (CF-237).
+	if n := len(f.post.events); n == 0 || f.post.events[n-1]["event"] != "remote_support_ended" ||
+		f.post.events[n-1]["session_uuid"] != row.Uuid.String() || f.post.events[n-1]["control_consent"] != true ||
+		f.post.events[n-1]["duration_seconds"].(int64) < 180 {
+		t.Fatalf("timeline %+v", f.post.events)
 	}
 	if _, err = f.svc.CustomerToken(f.ctx, row.Uuid, remotesupport.ClientInput{ClientSecret: res.ClientSecret}); !errors.Is(err, remotesupport.ErrEnded) {
 		t.Fatalf("token after end: %v", err)
