@@ -1059,6 +1059,7 @@ type Querier interface {
 	// current state (user status, the identity's current phone).
 	GetActiveMCPOAuthToken(ctx context.Context, arg GetActiveMCPOAuthTokenParams) (GetActiveMCPOAuthTokenRow, error)
 	GetActiveOTPByEmailType(ctx context.Context, arg GetActiveOTPByEmailTypeParams) (OtpCode, error)
+	GetActiveRefreshTokenByUUIDForUser(ctx context.Context, arg GetActiveRefreshTokenByUUIDForUserParams) (RefreshToken, error)
 	GetActiveSupportGrant(ctx context.Context, organizationID int64) (SupportAccessGrant, error)
 	GetAgentPresence(ctx context.Context, arg GetAgentPresenceParams) (AgentPresence, error)
 	GetAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (AppLog, error)

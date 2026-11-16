@@ -27,9 +27,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { isApiError } from "@/lib/api";
 import { datetime } from "@/lib/utils/format";
 import { useLocale } from "@/providers/locale-provider";
+import { desktopOSLabel } from "@/features/desktop/lib/desktop-login";
 import { authService, type DeviceSession } from "@/services/auth.service";
 
-function sessionLabel(item: DeviceSession, fallback: string) {
+function sessionLabel(
+  item: DeviceSession,
+  fallback: string,
+  desktopLabel: (os: string) => string,
+) {
+  // Desktop app sessions (CF-234): "ClickFix Masaüstü (macOS) · <computer>".
+  if (item.client === "desktop") {
+    const label = desktopLabel(desktopOSLabel(item.client_os) ?? "");
+    const name = item.device_name?.trim();
+    return name ? `${label} · ${name}` : label;
+  }
   const ua = item.user_agent?.trim();
   return ua && ua.length > 0 ? ua : fallback;
 }
@@ -166,12 +177,24 @@ export function SessionManager() {
               <div className="min-w-0 flex-1 space-y-3">
                 <div className="space-y-1">
                   <p className="text-sm font-medium break-all">
-                    {sessionLabel(item, t("auth.sessions.unknown_device"))}
+                    {sessionLabel(
+                      item,
+                      t("auth.sessions.unknown_device"),
+                      (os) =>
+                        os
+                          ? t("auth.sessions.desktop_label", { os })
+                          : t("auth.sessions.desktop_label_plain"),
+                    )}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     {item.current ? (
                       <Badge variant="success">
                         {t("auth.sessions.current")}
+                      </Badge>
+                    ) : null}
+                    {item.client === "desktop" ? (
+                      <Badge variant="outline">
+                        {t("auth.sessions.desktop_badge")}
                       </Badge>
                     ) : null}
                     {item.impersonated ? (

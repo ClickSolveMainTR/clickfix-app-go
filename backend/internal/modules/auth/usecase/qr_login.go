@@ -9,8 +9,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// QRLoginUser is the account that approves / receives a QR sign-in.
+// QRLoginUser is the account that approves / receives a QR or desktop
+// sign-in. ID is the internal id (audit rows); it never leaves the API.
 type QRLoginUser struct {
+	ID    int64
 	UUID  uuid.UUID
 	Email string
 	Name  string
@@ -37,6 +39,16 @@ func (u *AuthUseCase) IssueQRLoginSession(
 	userUUID uuid.UUID,
 	meta model.SessionMeta,
 ) (model.Tokens, QRLoginUser, error) {
+	return u.issueSessionForUUID(ctx, userUUID, meta)
+}
+
+// issueSessionForUUID signs in an account proven by another, already
+// signed-in device or browser (QR approval, desktop code exchange).
+func (u *AuthUseCase) issueSessionForUUID(
+	ctx context.Context,
+	userUUID uuid.UUID,
+	meta model.SessionMeta,
+) (model.Tokens, QRLoginUser, error) {
 	user, err := u.repo.FindUserByUUID(ctx, userUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -54,5 +66,5 @@ func (u *AuthUseCase) IssueQRLoginSession(
 	if err != nil {
 		return model.Tokens{}, QRLoginUser{}, err
 	}
-	return tokens, QRLoginUser{UUID: user.UUID, Email: user.Email, Name: user.Name}, nil
+	return tokens, QRLoginUser{ID: user.ID, UUID: user.UUID, Email: user.Email, Name: user.Name}, nil
 }
