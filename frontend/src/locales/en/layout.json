@@ -108,5 +108,7 @@
   "nav_tenant_settings_mcp": "Connect with MCP",
   "nav_tenant_settings_connect": "Connect your system",
   "nav_categories": "Categories",
-  "nav_departments": "Departments"
+  "nav_departments": "Departments",
+  "nav_tenant_settings_remote_support": "Remote support",
+  "nav_platform_remote_support": "Remote support"
 }
