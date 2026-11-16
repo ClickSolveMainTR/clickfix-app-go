@@ -109,7 +109,7 @@ func (q *Queries) AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) 
 
 const answerCacheStat = `-- name: AnswerCacheStat :exec
 INSERT INTO ai_answer_cache_stats(organization_id,day,audience,department_id,exact_hits,semantic_hits,misses)
-VALUES($1,current_date,$2,$3::bigint,$4::bigint,$5::bigint,$6::bigint)
+VALUES($1,(now() AT TIME ZONE 'UTC')::date,$2,$3::bigint,$4::bigint,$5::bigint,$6::bigint)
 ON CONFLICT ON CONSTRAINT uq_ai_answer_cache_stats_day DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
  semantic_hits=ai_answer_cache_stats.semantic_hits+excluded.semantic_hits,misses=ai_answer_cache_stats.misses+excluded.misses
 `
@@ -123,7 +123,7 @@ type AnswerCacheStatParams struct {
 	Miss           int64       `json:"miss"`
 }
 
-// One row per day, audience and department (NULL = organization wide, CF-225).
+// One row per UTC day (readers filter on UTC dates), audience and department (NULL = organization wide, CF-225).
 func (q *Queries) AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error {
 	_, err := q.db.Exec(ctx, answerCacheStat,
 		arg.OrganizationID,

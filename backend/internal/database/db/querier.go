@@ -155,7 +155,7 @@ type Querier interface {
 	// (CF-223) a unit still on the old model is not served.
 	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
 	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
-	// One row per day, audience and department (NULL = organization wide, CF-225).
+	// One row per UTC day (readers filter on UTC dates), audience and department (NULL = organization wide, CF-225).
 	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error
 	AnswerCacheStats(ctx context.Context, arg AnswerCacheStatsParams) ([]AnswerCacheStatsRow, error)
 	AnswerCacheTouch(ctx context.Context, arg AnswerCacheTouchParams) error
