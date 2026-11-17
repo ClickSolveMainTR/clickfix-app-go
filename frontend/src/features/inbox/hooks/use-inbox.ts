@@ -45,6 +45,9 @@ export const inboxKeys = {
     [...inboxKeys.all(org), "detail", uuid] as const,
   messages: (org: string, uuid: string) =>
     [...inboxKeys.all(org), "messages", uuid] as const,
+  /** Autonomous agent jobs of a conversation (composer draft band). */
+  aiJobs: (org: string, uuid: string) =>
+    [...inboxKeys.all(org), "ai-jobs", uuid] as const,
   history: (org: string, contact: string) =>
     [...inboxKeys.all(org), "history", contact] as const,
 };
@@ -400,6 +403,14 @@ export function useInboxLive(
       // The channel manager splits the payload into { type, data }.
       const ev = { ...raw.data, type: raw.type } as unknown as InboxLiveEvent;
       if (!ev?.type || !ev.conversation_uuid) return;
+      // An AI agent job finished (CF-246): the composer shows its draft
+      // without waiting for a reload. Lists and badges are unchanged.
+      if (ev.type === "ai.job_finished") {
+        void qc.invalidateQueries({
+          queryKey: inboxKeys.aiJobs(org, ev.conversation_uuid),
+        });
+        return;
+      }
       if (ev.type === "conversation.viewers") {
         qc.setQueryData(
           [...inboxKeys.all(org), "viewers", ev.conversation_uuid],

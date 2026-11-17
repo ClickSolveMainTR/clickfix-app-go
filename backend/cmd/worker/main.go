@@ -298,6 +298,8 @@ func main() {
 
 	supportoperations.RegisterEvents(eventBus, aiBilling, aiCore.AI, inboxCore.Conversations, notifSvc, publisher)
 	agentSvc.Sender = inboxCore.Conversations
+	// AI job outcomes reach open composers live (CF-246).
+	agentSvc.Live = inboxCore.Conversations
 	// Departments (CF-215): AI routing of first messages and transfers.
 	departmentsSvc := departmentsusecase.New(pool, queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log

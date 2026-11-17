@@ -17,6 +17,7 @@ import {
   Paperclip,
   SendHorizontal,
   Sparkles,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,7 +38,14 @@ import {
   type CopilotEntry,
   type CopilotRequest,
 } from "../hooks/use-copilot";
-import { useInboxAgents, useSendMessage } from "../hooks/use-inbox";
+import {
+  inboxKeys,
+  useInboxAgents,
+  useInboxScope,
+  useMessages,
+  useSendMessage,
+} from "../hooks/use-inbox";
+import { pickAgentDraft } from "../lib/agent-draft";
 import { aiCodeKey } from "../lib/copilot";
 import { useDrafts } from "../lib/drafts";
 import { initials } from "../lib/format";
@@ -449,17 +457,32 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         <button
           type="button"
           onClick={() =>
-            copilot.showAgentDraft(agentDraft.uuid, agentDraft.text)
+            copilot.showAgentDraft(
+              agentDraft.uuid,
+              agentDraft.text,
+              agentDraft.unsourced,
+            )
           }
-          className="bg-signal-soft/60 hover:bg-signal-soft text-foreground mb-2 flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-1.5 text-left text-xs transition-colors"
+          className={cn(
+            "text-foreground mb-2 flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-1.5 text-left text-xs transition-colors",
+            agentDraft.unsourced
+              ? "border-amber-300 bg-amber-50/70 hover:bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
+              : "bg-signal-soft/60 hover:bg-signal-soft",
+          )}
         >
-          <Sparkles className="text-signal-text size-3.5 shrink-0" />
+          {agentDraft.unsourced ? (
+            <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <Sparkles className="text-signal-text size-3.5 shrink-0" />
+          )}
           <span className="min-w-0 flex-1 truncate">
-            {agentDraft.confidence != null
-              ? t("inbox.copilot.agent_draft_ready_confidence", {
-                  n: Math.round(agentDraft.confidence * 100),
-                })
-              : t("inbox.copilot.agent_draft_ready")}
+            {agentDraft.unsourced
+              ? t("inbox.copilot.agent_draft_unsourced")
+              : agentDraft.confidence != null
+                ? t("inbox.copilot.agent_draft_ready_confidence", {
+                    n: Math.round(agentDraft.confidence * 100),
+                  })
+                : t("inbox.copilot.agent_draft_ready")}
           </span>
           <span className="text-signal-text font-medium">
             {t("inbox.copilot.agent_draft_show")}
@@ -761,34 +784,26 @@ function ModeTab({
 
 /**
  * Pending reply the autonomous agent drafted for review (CF-64 "draft"
- * mode). Hidden once a teammate has answered after it was written.
+ * mode), or the model's unsourced text of a handoff (CF-246). Refetched when
+ * a message arrives and live on the inbox "ai.job_finished" event; hidden
+ * once a teammate has answered after it was written. Shown only with the
+ * copilot permission and the right to reply (the caller's `enabled`).
  */
 function useAgentDraft(conversation: ConversationDetail, enabled: boolean) {
+  const { org } = useInboxScope();
   const jobs = useQuery({
     queryKey: [
-      "inbox",
-      "ai-jobs",
-      conversation.uuid,
+      ...inboxKeys.aiJobs(org, conversation.uuid),
       conversation.last_message_at,
     ],
     queryFn: () => copilotService.jobs(conversation.uuid),
-    enabled,
+    enabled: enabled && Boolean(org),
     staleTime: 30_000,
     retry: false,
   });
-  const job = jobs.data?.find((j) => j.task === "reply");
-  if (!job || job.status !== "draft") return null;
-  const reply = job.result.reply;
-  if (typeof reply !== "string" || !reply.trim()) return null;
-  if (
-    conversation.last_message_direction === "out" &&
-    Date.parse(conversation.last_message_at) > Date.parse(job.created_at)
-  )
-    return null;
-  const confidence = job.result.confidence;
-  return {
-    uuid: job.uuid,
-    text: reply.trim(),
-    confidence: typeof confidence === "number" ? confidence : null,
-  };
+  // Same query as the thread: no extra request.
+  const messages = useMessages(enabled ? conversation.uuid : null);
+  return enabled
+    ? pickAgentDraft(jobs.data, conversation, messages.items)
+    : null;
 }

@@ -132,6 +132,10 @@ const (
 	EventMessageUpdated      = "message.updated"
 	// EventConversationViewers: who views / types in a conversation (CF-49).
 	EventConversationViewers = "conversation.viewers"
+	// EventAIJobFinished: an AI agent job of the conversation finished
+	// (draft, handoff or automatic reply); the composer refetches the job
+	// list to show a draft (CF-246).
+	EventAIJobFinished = "ai.job_finished"
 )
 
 // LiveEvent is one realtime inbox event. Message is set for message events

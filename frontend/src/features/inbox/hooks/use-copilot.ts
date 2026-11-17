@@ -23,6 +23,11 @@ export type CopilotEntry = {
   option?: string;
   /** `agent` = draft produced by the autonomous agent (CF-64), not a call. */
   origin: "copilot" | "agent";
+  /**
+   * Agent draft of a handoff (CF-246): the model's text without a checked
+   * source; the panel asks the agent to verify it before sending.
+   */
+  unsourced?: boolean;
   status: "pending" | "done" | "error";
   text?: string;
   sources?: AICitation[];
@@ -132,12 +137,13 @@ export function useCopilot(conversationUuid: string) {
   );
 
   const showAgentDraft = useCallback(
-    (jobUuid: string, text: string) => {
+    (jobUuid: string, text: string, unsourced = false) => {
       push({
         id: jobUuid,
         op: "suggest_reply",
         input: "",
         origin: "agent",
+        unsourced,
         status: "done",
         text,
         sources: [],
