@@ -630,6 +630,8 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: deps.Storage}
 	agentSvc.Fields = customFieldsSvc
 	agentSvc.Hours = slaSvc
+	// CF-243: a newly connected channel joins an active agent's scope.
+	inboxCore.Channels.WithConnectHook(agentSvc)
 	agentSvc.Memory = aiCore.Memory
 	agentSvc.Departments, departmentsSvc.Classifier = departmentsSvc, agentSvc
 	agentusecase.WireMeasurement(agentSvc, departmentDirectory, aiCore.Memory)

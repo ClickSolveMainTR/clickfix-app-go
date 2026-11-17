@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   Gauge,
   History,
+  LayoutDashboard,
   ListOrdered,
   ShieldCheck,
   Wrench,
@@ -15,6 +16,7 @@ import { permissions } from "@/config/permissions";
 import { AgentTab } from "./agent-tab";
 import { EvaluationTab } from "./evaluation-tab";
 import { InsightsTab } from "./insights-tab";
+import { OverviewTab } from "./overview-tab";
 import { ProceduresTab } from "./procedures-tab";
 import { RunsTab } from "./runs-tab";
 import { SecurityTab } from "./security-tab";
@@ -47,6 +49,13 @@ export type AISettingsTab = {
  * plus its `ai_settings.tabs.<id>` label; the page handles routing.
  */
 export const AI_SETTINGS_TABS: AISettingsTab[] = [
+  {
+    // Default tab (CF-243): channels, warnings and automatic replies.
+    id: "overview",
+    labelKey: "ai_settings.tabs.overview",
+    icon: LayoutDashboard,
+    component: OverviewTab,
+  },
   {
     id: "agent",
     labelKey: "ai_settings.tabs.agent",

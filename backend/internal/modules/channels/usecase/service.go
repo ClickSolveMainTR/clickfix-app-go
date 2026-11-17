@@ -107,6 +107,7 @@ type Service struct {
 	vault        *channels.Vault
 	entitlements entitlement.Engine
 	guard        CredentialGuard
+	onConnect    ConnectHook
 	log          *slog.Logger
 	now          func() time.Time
 	publicAPIURL string
@@ -116,6 +117,16 @@ type Service struct {
 func New(q *db.Queries, registry *channels.Registry, vault *channels.Vault) *Service {
 	return &Service{q: q, registry: registry, vault: vault, log: slog.Default(), now: time.Now}
 }
+
+// ConnectHook hears about every newly connected instance (CF-243: the AI
+// agent adds the channel type to its scope). It must not fail the
+// connection; implementations log their own errors.
+type ConnectHook interface {
+	ChannelConnected(ctx context.Context, orgID int64, channelType string)
+}
+
+// WithConnectHook sets the hook Create calls after storing an instance.
+func (s *Service) WithConnectHook(h ConnectHook) *Service { s.onConnect = h; return s }
 
 // Registry returns the adapter registry.
 func (s *Service) Registry() *channels.Registry { return s.registry }
@@ -209,6 +220,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (InstanceView, err
 	})
 	if err != nil {
 		return InstanceView{}, uniqueErr(err)
+	}
+	if s.onConnect != nil {
+		s.onConnect.ChannelConnected(ctx, in.OrganizationID, in.Type)
 	}
 	return s.view(row, nil)
 }

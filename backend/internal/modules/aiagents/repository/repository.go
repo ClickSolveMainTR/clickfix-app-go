@@ -29,6 +29,20 @@ func (s *Store) Config(ctx context.Context, org int64) (model.Config, int32, err
 	}
 	return out, row.Revision, nil
 }
+
+// EnableChannel adds channelType to the organization's agent channels when
+// a config exists and its mode is not off (CF-243). It reports whether the
+// config changed; a missing/off config or an already listed type is a no-op.
+func (s *Store) EnableChannel(ctx context.Context, org int64, channelType string) (bool, error) {
+	if channelType == "" || len(channelType) > 100 {
+		return false, model.ErrInvalid
+	}
+	_, err := s.Q.AIAgentEnableChannel(ctx, db.AIAgentEnableChannelParams{OrganizationID: org, ChannelType: channelType})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
 func (s *Store) SaveConfig(ctx context.Context, org, actor int64, in model.Config) (int32, error) {
 	if err := in.Validate(); err != nil {
 		return 0, err

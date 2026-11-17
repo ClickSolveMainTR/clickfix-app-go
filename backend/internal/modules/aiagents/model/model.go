@@ -49,14 +49,31 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Handoff reasons of an inactive agent (CF-243): the run log and the
+// conversation's AI jobs tell a channel left out of the agent's scope apart
+// from a message outside working hours.
+const (
+	ReasonChannelNotEnabled    = "Channel not enabled for AI agent"
+	ReasonOutsideBusinessHours = "Outside business hours"
+)
+
 // Active reports whether the agent handles channel now. open is the
 // organization's working-hours state (businesshours.Source); it only
 // matters with BusinessHoursOnly.
 func (c Config) Active(channel string, open bool) bool {
+	return c.InactiveReason(channel, open) == ""
+}
+
+// InactiveReason is why the agent does not handle channel now, or "" when
+// it does (see Active).
+func (c Config) InactiveReason(channel string, open bool) string {
 	if !slices.Contains(c.Channels, channel) {
-		return false
+		return ReasonChannelNotEnabled
 	}
-	return open || !c.BusinessHoursOnly
+	if !open && c.BusinessHoursOnly {
+		return ReasonOutsideBusinessHours
+	}
+	return ""
 }
 
 type Triage struct {

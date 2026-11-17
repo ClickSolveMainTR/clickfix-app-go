@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 import { appToast } from "@/providers/toast-provider";
 
+import { agentKey } from "../hooks/use-agent-channels";
 import { aiErrorMessage, isConflict } from "../lib/errors";
 import {
   aiSettingsService,
@@ -53,8 +54,7 @@ const MODES: { value: AIAgentMode; icon: typeof Bot }[] = [
   { value: "autonomous", icon: Bot },
 ];
 
-export const agentKey = (slug: string) =>
-  ["tenant", slug, "ai", "agent"] as const;
+export { agentKey };
 
 /**
  * "Ajan" tab (CF-64): mode, triage, persona, channel/category scope,

@@ -44,6 +44,8 @@ export type PaletteItem = {
   /** Serializable icon id for localStorage restore (see resolveSearchIcon). */
   iconKey?: string;
   group: string;
+  /** Extra words the page filter matches (nav `keywordsKey`). */
+  keywords?: string;
 };
 
 export type SearchCatalog = {

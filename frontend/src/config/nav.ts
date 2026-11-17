@@ -607,6 +607,15 @@ export const cmsNav = defineNav({
           icon: SlidersHorizontal,
           permission: permissions.tenant.settings.read,
         },
+        // CF-243: the AI hub right after General.
+        {
+          id: "settings-ai",
+          titleKey: "layout.nav_ai_settings",
+          href: routes.cms.settings.ai,
+          icon: Bot,
+          permission: permissions.tenant.settings.read,
+          keywordsKey: "layout.nav_ai_settings_keywords",
+        },
         {
           id: "settings-members",
           titleKey: "layout.nav_tenant_settings_members",
@@ -662,13 +671,6 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.apps,
           icon: Puzzle,
           permission: permissions.tenant.settings.write,
-        },
-        {
-          id: "settings-ai",
-          titleKey: "layout.nav_ai_settings",
-          href: routes.cms.settings.ai,
-          icon: Bot,
-          permission: permissions.tenant.settings.read,
         },
         {
           id: "settings-knowledge",

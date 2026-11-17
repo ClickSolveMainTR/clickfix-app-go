@@ -29,9 +29,10 @@ export type OAuthChannelType = "instagram" | "messenger" | "slack";
 
 /**
  * Operational settings of an inbox (CF-61), kept in the instance's
- * `settings` next to channel specific keys (e.g. `inbound_alias`).
+ * `settings` next to channel specific keys (e.g. `inbound_alias`). The old
+ * `ai_enabled` flag is no longer written: the AI agent's channel-type scope
+ * decides (CF-243).
  */
 export type ChannelOperationalSettings = {
-  ai_enabled?: boolean;
   default_team_uuid?: string;
 };

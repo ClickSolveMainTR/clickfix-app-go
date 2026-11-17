@@ -118,6 +118,7 @@ export function useCommandPaletteData(variant: AppLayoutVariant) {
       (item) =>
         item.label.toLowerCase().includes(q) ||
         item.description?.toLowerCase().includes(q) ||
+        item.keywords?.toLowerCase().includes(q) ||
         item.href.toLowerCase().includes(q),
     );
   }, [effectiveSpec, pageItems, searchText]);

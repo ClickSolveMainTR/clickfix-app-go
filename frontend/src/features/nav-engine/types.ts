@@ -65,6 +65,8 @@ export type NavItemDef = {
   soon?: boolean;
   /** Command palette icon key (see resolveSearchIcon). */
   searchIcon?: string;
+  /** i18n key of extra search words (space separated) for the palette. */
+  keywordsKey?: string;
   /** Static badges merged after the live adornment. */
   badges?: NavBadge[];
   info?: NavInfo;
