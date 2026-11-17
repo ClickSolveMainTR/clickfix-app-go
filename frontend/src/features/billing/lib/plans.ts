@@ -127,3 +127,9 @@ export function versionBody(
 export function featureLabel(feature: BillingFeature, locale: string) {
   return (locale === "tr" ? feature.label_tr : feature.label_en) || feature.key;
 }
+
+/** Daily AI limits (CF-229): their usage resets at midnight Istanbul time. */
+export const DAILY_FEATURES: ReadonlySet<string> = new Set([
+  "ai.daily_calls",
+  "ai.daily_budget_micros",
+]);

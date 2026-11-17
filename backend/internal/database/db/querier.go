@@ -386,7 +386,8 @@ type Querier interface {
 	BillingListTrials(ctx context.Context, atTime pgtype.Timestamptz) ([]BillingSubscription, error)
 	BillingListVersions(ctx context.Context, planID int64) ([]BillingPlanVersion, error)
 	// Current counts of the gauge features nothing meters by event: the usage
-	// view reads them live so seats and channels never show 0 while they exist.
+	// view reads them live so seats, channels and the daily AI limits never show
+	// 0 while they are in use.
 	BillingLiveGauges(ctx context.Context, organizationID int64) ([]BillingLiveGaugesRow, error)
 	BillingLockCoupon(ctx context.Context, code string) (BillingCoupon, error)
 	BillingLockOrganization(ctx context.Context, argUuid uuid.UUID) (int64, error)
