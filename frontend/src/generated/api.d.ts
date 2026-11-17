@@ -5904,6 +5904,10 @@ export interface paths {
          *     webhook_url with the same signature headers and Idempotency-Key=message UUID.
          *     Return 2xx only after durable acceptance; 4xx other than 408/429 is permanent.
          *     No attachment URLs or provider credentials are included.
+         *     The answer carries `conversation_uuid` and `message_uuid` (CF-245; a
+         *     redelivered id answers with the same conversation). Status changes made
+         *     in ClickFix POST APIChannelStatusChanged to webhook_url (header
+         *     `X-ClickFix-Event: status_changed`, Idempotency-Key = event id).
          *
          *     Slack uses X-Slack-Signature and X-Slack-Request-Timestamp; POST URL verification
          *     echoes text/plain. Teams uses Bot Framework RS256 JWT (issuer, app audience,
@@ -18076,6 +18080,26 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
+    apiChannelStatusChanged: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell an organization's custom channel that a conversation's status changed
+         * @description CF-245. Sent when an agent, a rule or a merge changes the status of an API channel conversation (resolved, closed, reopened, pending, snoozed). Same signature headers as the reply, plus X-ClickFix-Event: status_changed. Idempotency-Key is the event id and stays the same on retries; process each only once. Temporary failures are retried with backoff; 4xx except 408/429 is permanent.
+         */
+        post: operations["deliverAPIChannelStatusChanged"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/history/imports": {
         parameters: {
             query?: never;
@@ -18573,6 +18597,11 @@ export interface components {
             event: "conversation.created" | "conversation.resolved" | "contact.created" | "csat.submitted" | "conversation.tag_added";
             /** Format: uuid */
             entity_uuid: string | null;
+            /**
+             * Format: uuid
+             * @description CF-245: conversation events only; equals entity_uuid.
+             */
+            conversation_uuid?: string;
             /** Format: date-time */
             occurred_at: string;
         };
@@ -24483,6 +24512,31 @@ export interface components {
             /** Format: date-time */
             at?: string;
         };
+        /** @description CF-245: a conversation status change posted to the organization's webhook URL. */
+        APIChannelStatusChanged: {
+            /**
+             * Format: uuid
+             * @description Event id; equals Idempotency-Key
+             */
+            id: string;
+            /** @enum {string} */
+            type: "status_changed";
+            /** Format: uuid */
+            conversation_id: string;
+            /** @description The thread_id of the customer's messages; empty when none was sent */
+            thread_id: string;
+            /** @description Previous status */
+            from: string;
+            /** @enum {string} */
+            to: "open" | "pending" | "snoozed" | "resolved" | "closed";
+            /**
+             * Format: date-time
+             * @description Only when to is snoozed
+             */
+            snoozed_until?: string;
+            /** Format: date-time */
+            changed_at: string;
+        };
         /** @description JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key. */
         APIChannelReply: {
             /** Format: uuid */
@@ -25106,6 +25160,16 @@ export interface components {
             data: {
                 /** @enum {boolean} */
                 received: true;
+                /**
+                 * Format: uuid
+                 * @description API channel only (CF-245): the conversation the message joined. Absent when the instance is paused.
+                 */
+                conversation_uuid?: string;
+                /**
+                 * Format: uuid
+                 * @description API channel only (CF-245): the stored message.
+                 */
+                message_uuid?: string;
             };
             meta: components["schemas"]["ResponseMeta"];
         };
@@ -25185,6 +25249,8 @@ export interface components {
             snoozed_until: string | null;
             /** Format: date-time */
             resolved_at: string | null;
+            /** @description CF-245: the channel's thread id (the REST API channel's thread_id); null when the channel has none. */
+            external_thread_id?: string | null;
             /** @description A free-form reply is allowed now (channel reply window) */
             window_open: boolean;
             /** Format: date-time */
@@ -45024,6 +45090,8 @@ export interface operations {
                 company?: string;
                 /** @description CF-195: the contact's identity state. */
                 identity?: components["schemas"]["ContactIdentityState"];
+                /** @description CF-245: exact channel thread id (the REST API channel's thread_id). */
+                external_thread_id?: string;
                 mentioned?: "1" | "true";
                 unread?: "1" | "true";
                 sla_breached?: "1" | "true" | "0" | "false";
@@ -64880,6 +64948,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description CF-245: exact channel thread id (the REST API channel's thread_id). */
+                external_thread_id?: string;
             };
             header?: never;
             path?: never;
@@ -73638,6 +73708,68 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["APIChannelReply"];
+            };
+        };
+        responses: {
+            /** @description Durably accepted, including duplicate id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Durably accepted, including duplicate id */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent content rejection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent authentication rejection */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit, retried with backoff */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporary receiver failure, retried with backoff */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverAPIChannelStatusChanged: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-ClickFix-Event": "status_changed";
+                "X-ClickFix-Timestamp": string;
+                "X-ClickFix-Signature": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["APIChannelStatusChanged"];
             };
         };
         responses: {

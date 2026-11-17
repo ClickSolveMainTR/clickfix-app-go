@@ -69,7 +69,7 @@ Gövde:
 }
 ```
 
-`data` içeriği olaya göre değişir. Ayrıntılı bilgi için ilgili kaynağı API ile okuyun.
+`data` içeriği olaya göre değişir. Konuşma ve mesaj olaylarında (`conversation.*`, `message.*`) `data.conversation_uuid` her zaman konuşmanın kimliğidir; `GET /v1/public-api/conversations/{uuid}` ile okuyabilirsiniz. Durum olaylarında (`conversation.resolved`, `conversation.reopened`, `conversation.status_changed`) `data.from` ve `data.to` önceki ve yeni durumu verir. Ayrıntılı bilgi için ilgili kaynağı API ile okuyun.
 
 ## İmza doğrulama [#verifying-the-signature]
 

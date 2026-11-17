@@ -514,18 +514,20 @@ WHERE c.organization_id = $2
        OR ($20::text = 'verified' AND ct.verified_at IS NOT NULL)
        OR ($20::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
        OR ($20::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
-  AND ($21::timestamptz IS NULL OR (
+  -- CF-245: the REST API channel's own thread id.
+  AND ($21::text IS NULL OR c.external_thread_id = $21::text)
+  AND ($22::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
-        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $21::timestamptz))
-  AND ($22::text IS NULL
-       OR c.subject ILIKE '%' || $22 || '%'
-       OR c.last_message_preview ILIKE '%' || $22 || '%'
-       OR ct.name ILIKE '%' || $22 || '%'
-       OR ct.email ILIKE '%' || $22 || '%'
-       OR ct.phone ILIKE '%' || $22 || '%'
-       OR ct.external_id = $22
-       OR c.number::text = $22
-       OR c.uuid = ANY($23::uuid[]))
+        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $22::timestamptz))
+  AND ($23::text IS NULL
+       OR c.subject ILIKE '%' || $23 || '%'
+       OR c.last_message_preview ILIKE '%' || $23 || '%'
+       OR ct.name ILIKE '%' || $23 || '%'
+       OR ct.email ILIKE '%' || $23 || '%'
+       OR ct.phone ILIKE '%' || $23 || '%'
+       OR ct.external_id = $23
+       OR c.number::text = $23
+       OR c.uuid = ANY($24::uuid[]))
 `
 
 type CountConversationsParams struct {
@@ -549,6 +551,7 @@ type CountConversationsParams struct {
 	UnreadOnly         bool               `json:"unread_only"`
 	SlaBreached        pgtype.Bool        `json:"sla_breached"`
 	IdentityState      pgtype.Text        `json:"identity_state"`
+	ExternalThreadID   pgtype.Text        `json:"external_thread_id"`
 	SlaDueBefore       pgtype.Timestamptz `json:"sla_due_before"`
 	Q                  pgtype.Text        `json:"q"`
 	MatchUuids         []uuid.UUID        `json:"match_uuids"`
@@ -576,6 +579,7 @@ func (q *Queries) CountConversations(ctx context.Context, arg CountConversations
 		arg.UnreadOnly,
 		arg.SlaBreached,
 		arg.IdentityState,
+		arg.ExternalThreadID,
 		arg.SlaDueBefore,
 		arg.Q,
 		arg.MatchUuids,
@@ -2262,32 +2266,34 @@ WHERE c.organization_id = $2
        OR ($20::text = 'verified' AND ct.verified_at IS NOT NULL)
        OR ($20::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
        OR ($20::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
-  AND ($21::timestamptz IS NULL OR (
+  -- CF-245: the REST API channel's own thread id.
+  AND ($21::text IS NULL OR c.external_thread_id = $21::text)
+  AND ($22::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
-        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $21::timestamptz))
-  AND ($22::text IS NULL
-       OR c.subject ILIKE '%' || $22 || '%'
-       OR c.last_message_preview ILIKE '%' || $22 || '%'
-       OR ct.name ILIKE '%' || $22 || '%'
-       OR ct.email ILIKE '%' || $22 || '%'
-       OR ct.phone ILIKE '%' || $22 || '%'
-       OR ct.external_id = $22
-       OR c.number::text = $22
-       OR c.uuid = ANY($23::uuid[]))
+        AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= $22::timestamptz))
+  AND ($23::text IS NULL
+       OR c.subject ILIKE '%' || $23 || '%'
+       OR c.last_message_preview ILIKE '%' || $23 || '%'
+       OR ct.name ILIKE '%' || $23 || '%'
+       OR ct.email ILIKE '%' || $23 || '%'
+       OR ct.phone ILIKE '%' || $23 || '%'
+       OR ct.external_id = $23
+       OR c.number::text = $23
+       OR c.uuid = ANY($24::uuid[]))
 ORDER BY
-  CASE WHEN $24::text = 'last_message_at' AND $25::boolean THEN c.last_message_at END DESC,
-  CASE WHEN $24::text = 'last_message_at' AND NOT $25::boolean THEN c.last_message_at END ASC,
-  CASE WHEN $24::text = 'created_at' AND $25::boolean THEN c.created_at END DESC,
-  CASE WHEN $24::text = 'created_at' AND NOT $25::boolean THEN c.created_at END ASC,
-  CASE WHEN $24::text = 'waiting_since' AND $25::boolean THEN c.waiting_since END DESC NULLS LAST,
-  CASE WHEN $24::text = 'waiting_since' AND NOT $25::boolean THEN c.waiting_since END ASC NULLS LAST,
-  CASE WHEN $24::text = 'priority' AND $25::boolean
+  CASE WHEN $25::text = 'last_message_at' AND $26::boolean THEN c.last_message_at END DESC,
+  CASE WHEN $25::text = 'last_message_at' AND NOT $26::boolean THEN c.last_message_at END ASC,
+  CASE WHEN $25::text = 'created_at' AND $26::boolean THEN c.created_at END DESC,
+  CASE WHEN $25::text = 'created_at' AND NOT $26::boolean THEN c.created_at END ASC,
+  CASE WHEN $25::text = 'waiting_since' AND $26::boolean THEN c.waiting_since END DESC NULLS LAST,
+  CASE WHEN $25::text = 'waiting_since' AND NOT $26::boolean THEN c.waiting_since END ASC NULLS LAST,
+  CASE WHEN $25::text = 'priority' AND $26::boolean
        THEN CASE c.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END END DESC,
-  CASE WHEN $24::text = 'priority' AND NOT $25::boolean
+  CASE WHEN $25::text = 'priority' AND NOT $26::boolean
        THEN CASE c.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END END ASC,
   c.last_message_at DESC,
   c.id DESC
-LIMIT $27 OFFSET $26
+LIMIT $28 OFFSET $27
 `
 
 type ListConversationsParams struct {
@@ -2311,6 +2317,7 @@ type ListConversationsParams struct {
 	UnreadOnly         bool               `json:"unread_only"`
 	SlaBreached        pgtype.Bool        `json:"sla_breached"`
 	IdentityState      pgtype.Text        `json:"identity_state"`
+	ExternalThreadID   pgtype.Text        `json:"external_thread_id"`
 	SlaDueBefore       pgtype.Timestamptz `json:"sla_due_before"`
 	Q                  pgtype.Text        `json:"q"`
 	MatchUuids         []uuid.UUID        `json:"match_uuids"`
@@ -2368,6 +2375,7 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		arg.UnreadOnly,
 		arg.SlaBreached,
 		arg.IdentityState,
+		arg.ExternalThreadID,
 		arg.SlaDueBefore,
 		arg.Q,
 		arg.MatchUuids,

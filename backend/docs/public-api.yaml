@@ -224,6 +224,7 @@ paths:
                       assignee:
                         uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                         name: Mehmet Kaya
+                      external_thread_id: null
                       created_at: 2026-11-11T09:15:00Z
                       updated_at: 2026-11-11T09:15:00Z
                   total: 134
@@ -240,7 +241,7 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Scope: `conversations:read`. Paged list (`limit`, `offset`), limited to the conversations the member who created the key can see."
+      description: "Scope: `conversations:read`. Paged list (`limit`, `offset`), limited to the conversations the member who created the key can see. `external_thread_id` returns the API channel conversations of one of your threads (the `thread_id` you sent); every conversation carries `external_thread_id`."
       parameters:
         - name: limit
           in: query
@@ -255,10 +256,19 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - name: external_thread_id
+          in: query
+          description: Exact channel thread id (the REST API channel's thread_id).
+          schema:
+            type: string
+            maxLength: 255
+          x-i18n:
+            tr:
+              description: Kanalın konu kimliği, tam eşleşme (REST API kanalının thread_id değeri).
       x-i18n:
         tr:
           summary: Konuşmaları listele
-          description: "Kapsam: `conversations:read`. Sayfalı liste (`limit`, `offset`); anahtarı oluşturan üyenin görebildiği konuşmalarla sınırlıdır."
+          description: "Kapsam: `conversations:read`. Sayfalı liste (`limit`, `offset`); anahtarı oluşturan üyenin görebildiği konuşmalarla sınırlıdır. `external_thread_id`, API kanalında kendi konu kimliğinize (gönderdiğiniz `thread_id`) ait konuşmaları döner; her konuşma `external_thread_id` alanını taşır."
       x-codeSamples:
         - lang: bash
           label: curl
@@ -492,6 +502,7 @@ paths:
                   assignee:
                     uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                     name: Mehmet Kaya
+                  external_thread_id: null
                   created_at: 2026-11-11T09:15:00Z
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
@@ -596,6 +607,7 @@ paths:
                   assignee:
                     uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                     name: Mehmet Kaya
+                  external_thread_id: null
                   created_at: 2026-11-11T09:15:00Z
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
@@ -2607,6 +2619,7 @@ paths:
                     - id: 2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f
                       event: conversation.created
                       entity_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                      conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
                       occurred_at: 2026-11-11T09:15:00Z
                   next_cursor: 1762852500000:2c3d4e5f
                   has_more: false
@@ -3146,6 +3159,8 @@ paths:
         Sends a customer message to the API channel. The channel is set up under **Channels → Add channel → API**; the setup gives you the inbound URL (`{instance}`), the signing secret and a field for the URL agent replies are sent to.
 
         The request is verified with the channel's signing secret, not an API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + raw_body)). Requests whose timestamp is older than 5 minutes are rejected. A message with the same `id` is stored once. Retry on `5xx`.
+
+        The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies and status changes (`status_changed`) refer to it as `conversation_id`.
       security:
         - apiChannelSignature: []
       parameters:
@@ -3191,6 +3206,7 @@ paths:
                 data:
                   received: true
                   conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  message_uuid: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
           x-i18n:
@@ -3211,6 +3227,8 @@ paths:
             API kanalına bir müşteri mesajı gönderir. Kanal **Kanallar → Kanal ekle → API** ile kurulur; kurulumda gelen adresi (`{instance}`), imza anahtarını ve temsilci yanıtlarının gönderileceği adresi alırsınız.
 
             İstek API anahtarıyla değil kanalın imza anahtarıyla doğrulanır: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(imza_anahtarı, timestamp + "." + ham_gövde)). Zaman damgası 5 dakikadan eskiyse istek reddedilir. Aynı `id` ile gelen mesaj bir kez kaydedilir. `5xx` yanıtında tekrar deneyin.
+
+            Yanıt, mesajın girdiği konuşmayı (`conversation_uuid`) ve `message_uuid` değerini taşır; tekrarlanan `id` aynı konuşmayla yanıtlanır. `conversation_uuid` değerini kendi `thread_id` değerinizle saklayın: temsilci yanıtları ve durum değişiklikleri (`status_changed`) ona `conversation_id` olarak başvurur.
       x-codeSamples:
         - lang: bash
           label: curl
@@ -3384,6 +3402,97 @@ webhooks:
           summary: Temsilci yanıtı (API kanalı)
           description: |
             Bir temsilci API kanalındaki konuşmayı yanıtladığında ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (mesaj UUID'si) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. Mesajı kalıcı olarak kaydettikten sonra `2xx` dönün. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
+  apiChannelStatusChanged:
+    post:
+      tags:
+        - API channel
+      operationId: deliverAPIChannelStatusChanged
+      summary: Conversation status changed (API channel)
+      description: |
+        When an agent, a rule or a merge changes the status of a conversation on the API channel (resolved, closed, reopened, pending, snoozed), ClickFix sends a `POST` with this body to the URL configured on the channel. The request carries `X-ClickFix-Event: status_changed`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (the signing method above) and `Idempotency-Key` (the event `id`, the same on every retry); process every key only once. `conversation_id` is the `conversation_uuid` from the message answer and `thread_id` is the thread you sent. Agent replies carry no `X-ClickFix-Event` header, so one endpoint can tell the two apart. Temporary failures are retried with increasing delays; `4xx` responses other than `408` and `429` count as permanent failures.
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - status_changed
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            description: Unix seconds
+            x-i18n:
+              tr:
+                description: Unix saniye
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            description: sha256= followed by hex HMAC-SHA256
+            x-i18n:
+              tr:
+                description: "`sha256=` ve onaltılık HMAC-SHA256"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/APIChannelStatusChanged"
+            example:
+              id: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a
+              type: status_changed
+              conversation_id: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+              thread_id: order-991
+              from: open
+              to: resolved
+              changed_at: 2026-11-11T10:02:00Z
+      responses:
+        "200":
+          description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
+        "204":
+          description: Durably accepted, including duplicate id
+          x-i18n:
+            tr:
+              description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
+        "400":
+          description: Permanent content rejection
+          x-i18n:
+            tr:
+              description: Kalıcı içerik reddi
+        "401":
+          description: Permanent authentication rejection
+          x-i18n:
+            tr:
+              description: Kalıcı kimlik doğrulama reddi
+        "429":
+          description: Rate limit, retried with backoff
+          x-i18n:
+            tr:
+              description: Hız sınırı; artan aralıklarla tekrar denenir
+        "500":
+          description: Temporary receiver failure, retried with backoff
+          x-i18n:
+            tr:
+              description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
+      x-i18n:
+        tr:
+          summary: Konuşma durumu değişti (API kanalı)
+          description: |
+            Bir temsilci, kural ya da birleştirme API kanalındaki bir konuşmanın durumunu değiştirdiğinde (çözüldü, kapandı, yeniden açıldı, beklemede, ertelendi) ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Event: status_changed`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (olay `id` değeri; her tekrarda aynıdır) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. `conversation_id`, mesaj yanıtındaki `conversation_uuid`; `thread_id` sizin gönderdiğiniz konudur. Temsilci yanıtlarında `X-ClickFix-Event` başlığı yoktur; tek uç nokta ikisini ayırabilir. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
 components:
   schemas:
     APIChannelMessage:
@@ -3447,6 +3556,65 @@ components:
       x-i18n:
         tr:
           description: Organizasyonun herkese açık webhook adresine zaman damgalı HMAC ve Idempotency-Key ile gönderilen JSON.
+    APIChannelStatusChanged:
+      type: object
+      description: A conversation status change posted to the organization's webhook URL.
+      required:
+        - id
+        - type
+        - conversation_id
+        - thread_id
+        - from
+        - to
+        - changed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Event id; equals Idempotency-Key
+          x-i18n:
+            tr:
+              description: Olay kimliği; Idempotency-Key ile aynıdır
+        type:
+          type: string
+          enum:
+            - status_changed
+        conversation_id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+          description: The thread_id of the customer's messages; empty when none was sent
+          x-i18n:
+            tr:
+              description: Müşteri mesajlarının thread_id değeri; gönderilmediyse boş
+        from:
+          type: string
+          description: Previous status
+          x-i18n:
+            tr:
+              description: Önceki durum
+        to:
+          type: string
+          enum:
+            - open
+            - pending
+            - snoozed
+            - resolved
+            - closed
+        snoozed_until:
+          type: string
+          format: date-time
+          description: Only when to is snoozed
+          x-i18n:
+            tr:
+              description: Yalnızca to snoozed olduğunda
+        changed_at:
+          type: string
+          format: date-time
+      x-i18n:
+        tr:
+          description: Organizasyonun webhook adresine gönderilen konuşma durum değişikliği.
     CompanyEvent:
       type: object
       required:
@@ -3956,6 +4124,20 @@ components:
               type: boolean
               enum:
                 - true
+            conversation_uuid:
+              type: string
+              format: uuid
+              description: "API channel only: the conversation the message joined. Absent when the instance is paused."
+              x-i18n:
+                tr:
+                  description: "Yalnızca API kanalı: mesajın girdiği konuşma. Kanal duraklatılmışsa yer almaz."
+            message_uuid:
+              type: string
+              format: uuid
+              description: "API channel only: the stored message."
+              x-i18n:
+                tr:
+                  description: "Yalnızca API kanalı: kaydedilen mesaj."
         meta:
           $ref: "#/components/schemas/ResponseMeta"
     Error:
@@ -4135,6 +4317,13 @@ components:
             - string
             - "null"
           format: uuid
+        conversation_uuid:
+          type: string
+          format: uuid
+          description: Conversation events only; equals entity_uuid.
+          x-i18n:
+            tr:
+              description: Yalnızca konuşma olaylarında; entity_uuid ile aynıdır.
         occurred_at:
           type: string
           format: date-time

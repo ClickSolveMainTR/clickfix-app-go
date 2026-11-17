@@ -72,6 +72,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.IdentityState = strings.TrimSpace(v.Get("identity"))
+	f.ExternalThreadID = strings.TrimSpace(v.Get("external_thread_id"))
 	if raw := v.Get("sla_breached"); raw != "" {
 		b := raw == "1" || raw == "true"
 		f.SLABreached = &b

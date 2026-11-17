@@ -65,6 +65,9 @@ type Conversation struct {
 	SLABreachedAt        *time.Time  `json:"sla_breached_at"`
 	SnoozedUntil         *time.Time  `json:"snoozed_until"`
 	ResolvedAt           *time.Time  `json:"resolved_at"`
+	// ExternalThreadID is the channel's thread id (the REST API channel's
+	// thread_id, CF-245); null when the channel has none.
+	ExternalThreadID *string `json:"external_thread_id"`
 	// WindowOpen: a free-form reply is allowed now (channels with a reply
 	// window, e.g. 24 hours on WhatsApp); WindowEndsAt when it closes.
 	WindowOpen   bool       `json:"window_open"`
