@@ -68,8 +68,8 @@ func Defaults() Settings {
 			"en": "We are currently outside our working hours. We have your message and will reply when we are back.",
 		}},
 		Handoff: Reply{Enabled: true, Text: Localized{
-			"tr": "Sizi bir destek temsilcisine aktarıyoruz. Bir ekip arkadaşımız en kısa sürede sizinle ilgilenecek.",
-			"en": "We are handing you over to a support agent. A member of our team will be with you shortly.",
+			"tr": "Sorunuzu ekibimize ilettim; bir temsilci en kısa sürede size dönecek. Bu sırada sipariş ya da talep numarası ve tarih gibi ayrıntıları paylaşırsanız daha hızlı yardımcı olabiliriz.",
+			"en": "I have passed your question to our team; a representative will get back to you shortly. Meanwhile, sharing details such as your order or request number and the date will help us assist you faster.",
 		}},
 	}
 }
