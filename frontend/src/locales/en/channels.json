@@ -125,7 +125,7 @@
   "oauth.pick_page": "Pick the page to connect:",
   "settings.title": "Channel settings",
   "settings.ai": "AI agent",
-  "settings.ai_hint": "Let the AI agent answer this channel's conversations first.",
+  "settings.ai_hint": "The AI agent answers conversations of this channel type first. This edits the agent's channel list and affects every {{channel}} channel.",
   "settings.greeting": "Automatic greeting",
   "settings.greeting_placeholder": "Hi! We got your message and will get back to you shortly.",
   "settings.hours": "Business hours",
@@ -299,5 +299,8 @@
   "health.identity_code.WIDGET_IDENTITY_DISABLED": "the widget has no identity secret.",
   "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash does not match (wrong secret or signature).",
   "settings.hours_source": "Working hours and automatic replies are organization-wide.",
-  "settings.hours_source_link": "Open working hours"
+  "settings.hours_source_link": "Open working hours",
+  "settings.ai_inactive": "The AI agent is off right now (no saved settings or mode off); it will not answer even with this channel in its list.",
+  "settings.ai_settings_link": "Open AI settings",
+  "settings.ai_read_only": "Changing this requires permission to edit organization settings."
 }

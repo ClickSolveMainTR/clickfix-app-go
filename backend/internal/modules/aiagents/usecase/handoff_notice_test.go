@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/repository"
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 )
 
 type fakeNotices struct{ conversations []int64 }
@@ -73,5 +75,76 @@ func TestHandoffNotifiesTheCustomer(t *testing.T) {
 	}
 	if got := run("draft", "temsilci lütfen", true); len(got) != 0 {
 		t.Fatalf("draft mode never talks to the customer: got %v", got)
+	}
+}
+
+// closedHours: the organization is outside its working hours.
+type closedHours struct{}
+
+func (closedHours) HoursState(context.Context, int64, time.Time) (businesshours.State, error) {
+	return businesshours.State{Open: false}, nil
+}
+
+// CF-243: a channel outside the agent's scope and a message outside working
+// hours hand off with different reasons.
+func TestInactiveHandoffReasons(t *testing.T) {
+	ctx := context.Background()
+	run := func(channels []string, hoursOnly bool) string {
+		engine, _, org, actor := agentCoreFixture(t)
+		c, msg := conversationFixture(t, engine, org)
+		svc := New(&repository.Store{Repository: engine.Repo.Billing}, engine, &fakeBot{})
+		svc.Hours = closedHours{}
+		cfg := model.DefaultConfig()
+		cfg.Mode = "autonomous"
+		cfg.Channels = channels
+		cfg.BusinessHoursOnly = hoursOnly
+		if _, err := svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Inbound(ctx, org, msg.Uuid); err != nil {
+			t.Fatal(err)
+		}
+		rows, err := svc.Repo.Q.AIAgentJobs(ctx, db.AIAgentJobsParams{OrganizationID: org, Uuid: c.Uuid, Limit: 5})
+		if err != nil || len(rows) != 1 || rows[0].Status != "handoff" {
+			t.Fatalf("jobs=%+v err=%v", rows, err)
+		}
+		return rows[0].Reason
+	}
+	if got := run([]string{"email"}, false); got != model.ReasonChannelNotEnabled {
+		t.Fatalf("channel not in scope: reason %q", got)
+	}
+	if got := run([]string{"whatsapp"}, true); got != model.ReasonOutsideBusinessHours {
+		t.Fatalf("outside hours: reason %q", got)
+	}
+}
+
+// CF-243: connecting a channel adds its type to an active agent's scope
+// once; a missing or off config stays untouched.
+func TestChannelConnectedEnablesType(t *testing.T) {
+	ctx := context.Background()
+	engine, _, org, actor := agentCoreFixture(t)
+	svc := New(&repository.Store{Repository: engine.Repo.Billing}, engine, &fakeBot{})
+	svc.ChannelConnected(ctx, org, "email")
+	if _, revision, err := svc.Repo.Config(ctx, org); err != nil || revision != 0 {
+		t.Fatalf("missing config must stay missing: revision=%d err=%v", revision, err)
+	}
+	cfg := model.DefaultConfig()
+	if _, err := svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
+		t.Fatal(err)
+	}
+	svc.ChannelConnected(ctx, org, "email")
+	if got, _, _ := svc.Repo.Config(ctx, org); len(got.Channels) != 0 {
+		t.Fatalf("off config must stay untouched: %v", got.Channels)
+	}
+	cfg.Mode = "draft"
+	cfg.Channels = []string{"whatsapp"}
+	if _, err := svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
+		t.Fatal(err)
+	}
+	svc.ChannelConnected(ctx, org, "email")
+	svc.ChannelConnected(ctx, org, "email")
+	got, _, err := svc.Repo.Config(ctx, org)
+	if err != nil || len(got.Channels) != 2 || got.Channels[0] != "whatsapp" || got.Channels[1] != "email" {
+		t.Fatalf("channels=%v err=%v", got.Channels, err)
 	}
 }

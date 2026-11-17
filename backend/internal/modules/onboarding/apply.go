@@ -643,11 +643,53 @@ func (a *Applier) applyPersona(ctx context.Context, st *applyState) (result, err
 	if len(ag.HandoffKeywords) > 0 {
 		cfg["handoff_keywords"] = ag.HandoffKeywords
 	}
+	// CF-243: the agent covers the organization's connected channel types
+	// (kept with any type already listed), so turning it on later needs no
+	// extra channel step.
+	channels, err := a.agentChannels(ctx, st.org, cfg["channels"])
+	if err != nil {
+		return result{}, err
+	}
+	cfg["channels"] = channels
 	saved, err := a.Q.AIAgentSaveConfig(ctx, db.AIAgentSaveConfigParams{OrganizationID: st.org, Config: mustJSON(cfg), UpdatedBy: i8(st.actor)})
 	if err != nil {
 		return result{}, err
 	}
 	return result{status: ItemUpdated, id: saved.ID, previous: prev}, nil
+}
+
+// agentChannels merges the stored agent channel list with the types of the
+// organization's connected channel instances (at most 20, the config limit).
+func (a *Applier) agentChannels(ctx context.Context, org int64, stored any) ([]string, error) {
+	out := []string{}
+	seen := map[string]bool{}
+	add := func(v string) {
+		if v != "" && !seen[v] && len(out) < 20 {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	if list, ok := stored.([]any); ok {
+		for _, v := range list {
+			if s, ok := v.(string); ok {
+				add(s)
+			}
+		}
+	} else if list, ok := stored.([]string); ok {
+		for _, v := range list {
+			add(v)
+		}
+	}
+	rows, err := a.Q.ListChannelInstances(ctx, db.ListChannelInstancesParams{OrganizationID: org})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if r.Status != "disconnected" {
+			add(r.ChannelType)
+		}
+	}
+	return out, nil
 }
 
 // applyGuardrails writes the tone and the "never do" rules as business

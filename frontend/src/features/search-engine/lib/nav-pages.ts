@@ -36,6 +36,7 @@ export function buildNavPageItems(
             className: "size-4 shrink-0 opacity-80",
           }),
           group: t("search.group_pages"),
+          ...(item.keywordsKey ? { keywords: t(item.keywordsKey) } : {}),
         });
       }
     }

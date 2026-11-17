@@ -26,6 +26,8 @@ export function visibleSettingsGroups(
           if (!q) return true;
           return (
             t(item.titleKey).toLocaleLowerCase().includes(q) ||
+            (item.keywordsKey !== undefined &&
+              t(item.keywordsKey).toLocaleLowerCase().includes(q)) ||
             groupLabel.includes(q)
           );
         }),
