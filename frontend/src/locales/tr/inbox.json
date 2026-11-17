@@ -178,6 +178,8 @@
   "copilot.agent_draft": "AI ajanının taslağı",
   "copilot.agent_draft_ready": "AI ajanı bu konuşma için bir yanıt taslağı hazırladı",
   "copilot.agent_draft_ready_confidence": "AI ajanı bir yanıt taslağı hazırladı · güven %{{n}}",
+  "copilot.agent_draft_unsourced": "Kaynaksız öneri, kontrol edin: AI ajanı emin olamadı ve konuşmayı size devretti",
+  "copilot.agent_draft_unsourced_hint": "Kaynaksız öneri, kontrol edin. Bu metin doğrulanmış bir kaynağa dayanmıyor; siz düzenleyip göndermeden müşteriye gitmez.",
   "copilot.agent_draft_show": "İncele",
   "copilot.ask_label": "Copilot'a sorunuz",
   "copilot.ask_placeholder": "Örn. Bu müşteri geçen ay ne yaşadı?",

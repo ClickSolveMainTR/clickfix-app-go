@@ -13857,7 +13857,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inspect triage, drafts and human handoff history */
+        /**
+         * Inspect triage, drafts and human handoff history
+         * @description Requires `tenant.conversations.read`. When a job finishes (draft, handoff or automatic reply) the conversation's inbox channel receives `ai.job_finished` with the conversation uuid; refetch this list then.
+         */
         get: operations["listConversationAIJobs"];
         put?: never;
         post?: never;

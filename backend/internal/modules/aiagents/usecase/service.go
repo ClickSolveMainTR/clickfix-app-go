@@ -40,6 +40,13 @@ type BotSender interface {
 	PostAI(context.Context, int64, uuid.UUID, string, int32) (uuid.UUID, error)
 }
 
+// JobNotifier tells the agents watching a conversation that an AI job
+// finished (CF-246); the realtime inbox event refreshes the composer's
+// draft band. Best effort.
+type JobNotifier interface {
+	AIJobFinished(ctx context.Context, org, conversationID int64)
+}
+
 // SystemProvider is the organization's connected system (CF-197): its
 // playbook intents go to triage, the matched playbook's concept data and
 // instructions go to the reply, and its AI-allowed actions are tools.
@@ -81,6 +88,10 @@ type Service struct {
 	// Cache is the answer cache (CF-216); nil leaves cache hit rate
 	// unmeasured in evaluations.
 	Cache AnswerCache
+	// Live publishes the realtime "AI job finished" inbox event after a
+	// job's outcome is committed (CF-246); nil publishes nothing. New sets
+	// it from a sender that implements JobNotifier.
+	Live JobNotifier
 }
 
 // Memory answers from knowledge units before any generation and offers
@@ -215,7 +226,11 @@ func (s *Service) open(ctx context.Context, org int64) bool {
 }
 
 func New(repo *repository.Store, engine Engine, sender BotSender) *Service {
-	return &Service{Repo: repo, Engine: engine, Sender: sender, Now: time.Now}
+	s := &Service{Repo: repo, Engine: engine, Sender: sender, Now: time.Now}
+	if live, ok := sender.(JobNotifier); ok {
+		s.Live = live
+	}
+	return s
 }
 
 func (s *Service) Consumer() eventdispatch.Consumer {
@@ -409,7 +424,7 @@ func (s *Service) finish(ctx context.Context, job db.AiAgentJob, run uuid.UUID, 
 	// Survive a cancelled provider request to persist the human-handoff outcome.
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	return s.Repo.Within(finishCtx, func(r *billingrepo.Repository) error {
+	err = s.Repo.Within(finishCtx, func(r *billingrepo.Repository) error {
 		if err := r.Q.AIAgentFinish(finishCtx, db.AIAgentFinishParams{OrganizationID: job.OrganizationID, ID: job.ID, Status: status, RunUuid: pgtype.UUID{Bytes: run, Valid: run != uuid.Nil}, Result: raw, Reason: reason}); err != nil {
 			return err
 		}
@@ -418,6 +433,11 @@ func (s *Service) finish(ctx context.Context, job db.AiAgentJob, run uuid.UUID, 
 		ev.EventID = uuid.NewSHA1(job.Uuid, []byte(status))
 		return r.Emit(finishCtx, ev)
 	})
+	// Only after the commit: the composer refetches the jobs on this event.
+	if err == nil && s.Live != nil {
+		s.Live.AIJobFinished(finishCtx, job.OrganizationID, job.ConversationID)
+	}
+	return err
 }
 
 // reply answers the customer. memory is the knowledge-layer lookup Inbound

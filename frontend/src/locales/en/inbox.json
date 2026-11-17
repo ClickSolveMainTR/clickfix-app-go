@@ -178,6 +178,8 @@
   "copilot.agent_draft": "AI agent draft",
   "copilot.agent_draft_ready": "The AI agent drafted a reply for this conversation",
   "copilot.agent_draft_ready_confidence": "The AI agent drafted a reply · {{n}}% confidence",
+  "copilot.agent_draft_unsourced": "Unsourced suggestion, please check: the AI agent was unsure and handed the conversation to you",
+  "copilot.agent_draft_unsourced_hint": "Unsourced suggestion, please check. This text is not based on a verified source; nothing reaches the customer until you edit and send it.",
   "copilot.agent_draft_show": "Review",
   "copilot.ask_label": "Your question for Copilot",
   "copilot.ask_placeholder": "e.g. What did this customer go through last month?",
