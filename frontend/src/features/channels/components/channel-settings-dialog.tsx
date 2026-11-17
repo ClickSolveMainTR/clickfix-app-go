@@ -18,6 +18,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BrandSelect } from "@/features/brands/components/brand-select";
+import {
+  useAgentChannelToggle,
+  useAgentConfig,
+} from "@/features/ai-settings/hooks/use-agent-channels";
+import { aiErrorMessage } from "@/features/ai-settings/lib/errors";
 import { EmailChannelFields } from "@/features/channels/components/email-channel-fields";
 import {
   GoogleChatSpacePicker,
@@ -48,14 +53,20 @@ import type {
   ChannelInstance,
   ChannelOperationalSettings,
 } from "@/features/channels/types";
+import { useTenant } from "@/features/tenant/components/tenant-provider";
+import { permissions } from "@/config/permissions";
 import { routes } from "@/config/routes";
 import { useLocale } from "@/providers/locale-provider";
+import { usePermission } from "@/providers/permission-provider";
+import { appToast } from "@/providers/toast-provider";
 
 /**
- * Per-inbox settings (CF-61): name, brand and AI agent. They live in the
- * instance settings next to the channel's own keys, which are kept
- * untouched. Working hours and automatic replies are organization-wide
- * (SLA schedule and auto replies, CF-198). The webhook URL is shown
+ * Per-inbox settings (CF-61): name and brand live in the instance settings
+ * next to the channel's own keys, which are kept untouched. The AI agent
+ * switch edits the agent's channel-type scope (CF-243, needs
+ * `tenant.settings.write`), so it applies to every instance of this type.
+ * Working hours and automatic replies are organization-wide (SLA schedule
+ * and auto replies, CF-198). The webhook URL is shown
  * for channels configured on the provider side. SMS, voice, Teams, Google
  * Chat and API channels can change credentials (secrets are write-only:
  * empty keeps the stored value); Slack and Google Chat edit their routed
@@ -81,9 +92,20 @@ export function ChannelSettingsDialog({
   // Sent only when changed: an omitted brand_id keeps the current brand.
   const brandPatch =
     brandId !== (channel.brand_id ?? null) ? { brand_id: brandId } : {};
-  const [s, setS] = useState<ChannelOperationalSettings>({
-    ai_enabled: initial.ai_enabled ?? false,
-  });
+  const { slug } = useTenant();
+  const { can } = usePermission();
+  const canReadAI = can(permissions.tenant.settings.read);
+  const canWriteAI = can(permissions.tenant.settings.write);
+  const agent = useAgentConfig(slug, canReadAI);
+  const toggleAgent = useAgentChannelToggle(slug);
+  const agentOn = agent.data?.config.channels.includes(channel.type) ?? false;
+  const [aiOn, setAiOn] = useState<boolean | null>(null);
+  const aiChecked = aiOn ?? agentOn;
+  // No saved config or mode off: the agent is silent on every channel.
+  const agentInactive =
+    agent.data !== undefined &&
+    (agent.data.revision === 0 || agent.data.config.mode === "off");
+  const [saving, setSaving] = useState(false);
 
   const setup = SETUP_TYPES.has(channel.type);
   const provider = channel.credential_hints.provider;
@@ -105,8 +127,21 @@ export function ChannelSettingsDialog({
     mode === "token" ? creds.webhook_token : undefined,
   );
 
-  const save = () => {
-    const settings: Record<string, unknown> = { ...initial, ...s };
+  const save = async () => {
+    if (aiOn !== null && aiOn !== agentOn) {
+      setSaving(true);
+      try {
+        await toggleAgent.mutateAsync({ type: channel.type, enabled: aiOn });
+      } catch (error) {
+        appToast.error(aiErrorMessage(error, t));
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    const settings: Record<string, unknown> = { ...initial };
+    // Legacy per-instance flag the backend never read (CF-243).
+    delete settings.ai_enabled;
     if (channel.type === "voice" && provider === "netgsm") {
       try {
         const servers: unknown = JSON.parse(ice);
@@ -227,19 +262,44 @@ export function ChannelSettingsDialog({
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label htmlFor="ai-enabled">{t("channels.settings.ai")}</Label>
-              <p className="text-muted-foreground text-xs">
-                {t("channels.settings.ai_hint")}
-              </p>
+          {canReadAI ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="ai-enabled">
+                    {t("channels.settings.ai")}
+                  </Label>
+                  <p className="text-muted-foreground text-xs">
+                    {t("channels.settings.ai_hint", {
+                      channel: t(`channels.types.${channel.type}`),
+                    })}
+                  </p>
+                </div>
+                <Switch
+                  id="ai-enabled"
+                  checked={aiChecked}
+                  disabled={!canWriteAI || !agent.data}
+                  onCheckedChange={setAiOn}
+                />
+              </div>
+              {agentInactive ? (
+                <p className="text-muted-foreground text-xs">
+                  {t("channels.settings.ai_inactive")}{" "}
+                  <Link
+                    href={`${routes.cms.settings.ai}?tab=agent`}
+                    className="text-foreground underline underline-offset-4"
+                  >
+                    {t("channels.settings.ai_settings_link")}
+                  </Link>
+                </p>
+              ) : null}
+              {!canWriteAI ? (
+                <p className="text-muted-foreground text-xs">
+                  {t("channels.settings.ai_read_only")}
+                </p>
+              ) : null}
             </div>
-            <Switch
-              id="ai-enabled"
-              checked={s.ai_enabled}
-              onCheckedChange={(v) => setS({ ...s, ai_enabled: v })}
-            />
-          </div>
+          ) : null}
 
           <p className="text-muted-foreground text-xs">
             {t("channels.settings.hours_source")}{" "}
@@ -304,10 +364,11 @@ export function ChannelSettingsDialog({
           <Button
             disabled={
               update.isPending ||
+              saving ||
               name.trim() === "" ||
               (isEmail && !emailComplete(email, channel.credential_hints))
             }
-            onClick={save}
+            onClick={() => void save()}
           >
             {t("channels.save")}
           </Button>

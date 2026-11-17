@@ -44,7 +44,10 @@ func (s *Service) PostAI(ctx context.Context, org int64, trigger uuid.UUID, cont
 		if err != nil {
 			return err
 		}
-		if policy.Revision != revision || cfg.Mode != "autonomous" || !cfg.Active(conv.ChannelType, s.open(ctx, org)) {
+		if reason := cfg.InactiveReason(conv.ChannelType, s.open(ctx, org)); reason != "" {
+			return fmt.Errorf("%w: %s", ErrInvalid, reason)
+		}
+		if policy.Revision != revision || cfg.Mode != "autonomous" {
 			return ErrInvalid
 		}
 		if conv.AssigneeUserID.Valid || conv.Status == model.StatusClosed || conv.Status == model.StatusResolved || !conv.ChannelInstanceID.Valid {

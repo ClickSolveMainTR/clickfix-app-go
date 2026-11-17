@@ -402,8 +402,8 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	if human {
 		return handoff("Human public reply exists in this conversation")
 	}
-	if !cfg.Active(conv.ChannelType, s.open(ctx, org)) {
-		return handoff("Outside configured channels or business hours")
+	if reason := cfg.InactiveReason(conv.ChannelType, s.open(ctx, org)); reason != "" {
+		return handoff(reason)
 	}
 	// The web widget can turn the AI agent off or let the visitor ask for a
 	// person (CF-150); it marks the message instead of the organization config.
@@ -567,7 +567,10 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		if err != nil {
 			return err
 		}
-		if currentRevision != revision || current.Mode != "autonomous" || !current.Active(conv.ChannelType, s.open(ctx, org)) {
+		if inactive := current.InactiveReason(conv.ChannelType, s.open(ctx, org)); inactive != "" {
+			// The channel was dropped or working hours ended mid-generation.
+			status, reason = "handoff", inactive
+		} else if currentRevision != revision || current.Mode != "autonomous" {
 			status, reason = "handoff", "Policy changed during generation"
 		} else if s.Sender == nil {
 			status, reason = "handoff", "Delivery unavailable"

@@ -128,6 +128,13 @@ func TestSetupApplyAndUndoAgainstPostgres(t *testing.T) {
 				t.Fatalf("widget color %q, want %q", color, run.Plan.Widget.Color)
 			}
 
+			// CF-243: the agent written by the setup covers the connected
+			// widget channel (no row when the persona item was not applied).
+			var widgetInScope bool
+			if err := pool.QueryRow(ctx, "SELECT COALESCE(config->'channels' ? 'widget', false) FROM ai_agent_configs WHERE organization_id = $1", org.ID).Scan(&widgetInScope); err == nil && !widgetInScope {
+				t.Fatal("agent config channels miss the connected widget type")
+			}
+
 			// A second run of the same template finds everything in place.
 			again, err := svc.FromTemplate(ctx, org.ID, userID, tpl.Key, "Acme")
 			if err != nil {

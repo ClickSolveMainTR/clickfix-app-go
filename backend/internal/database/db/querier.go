@@ -17,6 +17,10 @@ type Querier interface {
 	AIAgentClaim(ctx context.Context, arg AIAgentClaimParams) (AiAgentJob, error)
 	AIAgentConfig(ctx context.Context, organizationID int64) (AiAgentConfig, error)
 	AIAgentContactHistory(ctx context.Context, arg AIAgentContactHistoryParams) ([]AIAgentContactHistoryRow, error)
+	// A newly connected channel type joins an existing, active agent config
+	// (CF-243). Idempotent: no row when the config is missing, off, already
+	// lists the type or is at the 20-channel limit.
+	AIAgentEnableChannel(ctx context.Context, arg AIAgentEnableChannelParams) (int32, error)
 	AIAgentFinish(ctx context.Context, arg AIAgentFinishParams) error
 	AIAgentHumanSince(ctx context.Context, arg AIAgentHumanSinceParams) (bool, error)
 	AIAgentJobCount(ctx context.Context, arg AIAgentJobCountParams) (int64, error)
