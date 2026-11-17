@@ -57,6 +57,11 @@ const (
 	ReasonOutsideBusinessHours = "Outside business hours"
 )
 
+// HandoffNoticeSent ends the reason of a handoff after which the customer
+// got the handoff notice (CF-244), so the run log tells a silent handoff
+// apart from one the customer heard about.
+const HandoffNoticeSent = "; handoff notice sent"
+
 // Active reports whether the agent handles channel now. open is the
 // organization's working-hours state (businesshours.Source); it only
 // matters with BusinessHoursOnly.

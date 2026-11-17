@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
@@ -87,7 +88,7 @@ func (s *Service) Performance(ctx context.Context, org int64, from, to time.Time
 	for _, r := range latest {
 		if r.Status == "handoff" || r.Status == "unknown" {
 			out.Handoffs++
-			out.HandoffReasons[r.Reason]++
+			out.HandoffReasons[strings.TrimSuffix(r.Reason, model.HandoffNoticeSent)]++
 		}
 	}
 	for _, id := range resolved {
