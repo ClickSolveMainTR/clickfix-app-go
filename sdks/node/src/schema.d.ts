@@ -616,6 +616,11 @@ export interface components {
             event: "conversation.created" | "conversation.resolved" | "contact.created" | "csat.submitted" | "conversation.tag_added";
             /** Format: uuid */
             entity_uuid: string | null;
+            /**
+             * Format: uuid
+             * @description Conversation events only; equals entity_uuid.
+             */
+            conversation_uuid?: string;
             /** Format: date-time */
             occurred_at: string;
         };
@@ -701,6 +706,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Exact channel thread id (the REST API channel's thread_id). */
+                external_thread_id?: string;
             };
             header?: never;
             path?: never;

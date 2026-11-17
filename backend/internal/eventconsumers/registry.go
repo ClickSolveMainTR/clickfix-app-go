@@ -8,6 +8,7 @@ import (
 	analyticsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics"
 	analyticsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/analytics/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
+	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
 	kbusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/usecase"
 	mobileextusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/mobileext/usecase"
 	notifmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/notifications"
@@ -50,6 +51,9 @@ type Deps struct {
 	// LiveActivities sends iOS Live Activity pushes (CF-152); registered
 	// only when APNs is configured.
 	LiveActivities *mobileextusecase.Service
+	// ChannelStatus tells REST API channel endpoints about conversation
+	// status changes (CF-245).
+	ChannelStatus *channelsmodule.StatusNotifier
 }
 
 // New builds the consumer registry.
@@ -90,6 +94,9 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 	}
 	if deps.LiveActivities.PushConfigured() {
 		consumers = append(consumers, deps.LiveActivities.Consumer())
+	}
+	if deps.ChannelStatus != nil {
+		consumers = append(consumers, deps.ChannelStatus.Consumer())
 	}
 	if deps.Webhooks != nil {
 		consumers = append(consumers, eventdispatch.WebhookConsumer(deps.Webhooks))

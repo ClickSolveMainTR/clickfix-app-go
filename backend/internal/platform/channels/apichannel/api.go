@@ -109,19 +109,59 @@ func (a *Adapter) Send(ctx context.Context,
 	if err != nil {
 		return channels.SendResult{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.Credentials["webhook_url"], bytes.NewReader(body))
-	if err != nil {
-		return channels.SendResult{}, errors.New("invalid webhook URL")
-	}
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ClickFix-Timestamp", ts)
-	req.Header.Set("X-ClickFix-Signature", channelhttp.Sign(inst.Credentials["signing_secret"], ts, body))
-	req.Header.Set("Idempotency-Key", msg.MessageUUID.String())
-	if err := channelhttp.Do(a.client, req, nil); err != nil {
+	if err := a.post(ctx, inst, "", msg.MessageUUID.String(), body); err != nil {
 		return channels.SendResult{}, err
 	}
 	return channels.SendResult{ExternalID: msg.MessageUUID.String()}, nil
+}
+
+// NotifyStatus posts a signed status_changed event (CF-245) when an agent
+// or a rule changes the conversation's status. The event id is stable
+// across retries and is sent as Idempotency-Key; receivers drop repeats.
+// A snoozed conversation has to=snoozed and snoozed_until.
+func (a *Adapter) NotifyStatus(ctx context.Context, inst channels.Instance, ch channels.StatusChange) error {
+	if _, err := a.Connect(ctx, inst); err != nil {
+		return channels.Permanent("configuration", err)
+	}
+	if ch.EventID == uuid.Nil || ch.ConversationUUID == uuid.Nil || ch.To == "" {
+		return channels.Permanent("status_event", errors.New("event id, conversation and target status required"))
+	}
+	at := ch.At
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	payload := map[string]any{
+		"id": ch.EventID, "type": "status_changed",
+		"conversation_id": ch.ConversationUUID, "thread_id": ch.ThreadID,
+		"from": ch.From, "to": ch.To, "changed_at": at.UTC(),
+	}
+	if ch.SnoozedUntil != nil {
+		payload["snoozed_until"] = ch.SnoozedUntil.UTC()
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return a.post(ctx, inst, "status_changed", ch.EventID.String(), body)
+}
+
+// post sends one signed body to the organization's webhook URL. event sets
+// X-ClickFix-Event when not empty (message deliveries carry none, as
+// before CF-245).
+func (a *Adapter) post(ctx context.Context, inst channels.Instance, event, key string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.Credentials["webhook_url"], bytes.NewReader(body))
+	if err != nil {
+		return errors.New("invalid webhook URL")
+	}
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	req.Header.Set("Content-Type", "application/json")
+	if event != "" {
+		req.Header.Set("X-ClickFix-Event", event)
+	}
+	req.Header.Set("X-ClickFix-Timestamp", ts)
+	req.Header.Set("X-ClickFix-Signature", channelhttp.Sign(inst.Credentials["signing_secret"], ts, body))
+	req.Header.Set("Idempotency-Key", key)
+	return channelhttp.Do(a.client, req, nil)
 }
 
 // TestDelivery posts a signed test event to the organization's webhook
@@ -168,4 +208,5 @@ func (a *Adapter) TestDelivery(ctx context.Context, inst channels.Instance, _ st
 var (
 	_ channels.Adapter        = (*Adapter)(nil)
 	_ channels.DeliveryTester = (*Adapter)(nil)
+	_ channels.StatusNotifier = (*Adapter)(nil)
 )

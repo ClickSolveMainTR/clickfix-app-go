@@ -96,11 +96,14 @@ type ListFilter struct {
 	// IdentityState keeps conversations whose contact is verified,
 	// anonymous or self_named (CF-195); "" for any.
 	IdentityState string
-	Q             string
-	Sort          string
-	Desc          bool
-	Limit         int32
-	Offset        int32
+	// ExternalThreadID keeps the conversations of one channel thread (the
+	// REST API channel's thread_id, CF-245); "" for any.
+	ExternalThreadID string
+	Q                string
+	Sort             string
+	Desc             bool
+	Limit            int32
+	Offset           int32
 }
 
 // List returns one page of the inbox for viewer.
@@ -117,6 +120,12 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 			return nil, 0, fmt.Errorf("%w: unknown identity state %q", ErrInvalid, f.IdentityState)
 		}
 		p.IdentityState = pgText(f.IdentityState)
+	}
+	if t := strings.TrimSpace(f.ExternalThreadID); t != "" {
+		if len(t) > 255 {
+			return nil, 0, fmt.Errorf("%w: external_thread_id is too long", ErrInvalid)
+		}
+		p.ExternalThreadID = pgText(t)
 	}
 	for _, st := range p.Statuses {
 		if !model.Valid(st, model.Statuses) {
@@ -225,7 +234,7 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 		ChannelTypes: p.ChannelTypes, ChannelInstanceIds: p.ChannelInstanceIds, Assignee: p.Assignee,
 		AssigneeUserID: p.AssigneeUserID, TeamID: p.TeamID, ContactID: p.ContactID, CompanyID: p.CompanyID,
 		TagIds: p.TagIds, Mentioned: p.Mentioned, MyTeams: p.MyTeams, UnreadOnly: p.UnreadOnly, SlaBreached: p.SlaBreached, SlaDueBefore: p.SlaDueBefore, Q: p.Q,
-		MatchUuids: p.MatchUuids, IdentityState: p.IdentityState,
+		MatchUuids: p.MatchUuids, IdentityState: p.IdentityState, ExternalThreadID: p.ExternalThreadID,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -909,6 +918,7 @@ func (s *Service) toConversation(c db.Conversation, unread int, tags []uuid.UUID
 		NextResponseDueAt: timePtr(c.NextResponseDueAt), ResolutionDueAt: timePtr(c.ResolutionDueAt),
 		SLABreachedAt: timePtr(c.SlaBreachedAt), SnoozedUntil: timePtr(c.SnoozedUntil), ResolvedAt: timePtr(c.ResolvedAt),
 		WindowOpen: true, CreatedAt: c.CreatedAt.Time.UTC(), UpdatedAt: c.UpdatedAt.Time.UTC(),
+		ExternalThreadID: textPtr(c.ExternalThreadID),
 	}
 	for _, t := range tags {
 		out.TagUUIDs = append(out.TagUUIDs, t.String())

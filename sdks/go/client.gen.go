@@ -699,10 +699,12 @@ type IntegrationSubscriptionEvents string
 
 // IntegrationTrigger defines model for IntegrationTrigger.
 type IntegrationTrigger struct {
-	EntityUuid *openapi_types.UUID     `json:"entity_uuid"`
-	Event      IntegrationTriggerEvent `json:"event"`
-	Id         openapi_types.UUID      `json:"id"`
-	OccurredAt time.Time               `json:"occurred_at"`
+	// ConversationUuid Conversation events only; equals entity_uuid.
+	ConversationUuid *openapi_types.UUID     `json:"conversation_uuid,omitempty"`
+	EntityUuid       *openapi_types.UUID     `json:"entity_uuid"`
+	Event            IntegrationTriggerEvent `json:"event"`
+	Id               openapi_types.UUID      `json:"id"`
+	OccurredAt       time.Time               `json:"occurred_at"`
 }
 
 // IntegrationTriggerEvent defines model for IntegrationTrigger.Event.
@@ -822,6 +824,9 @@ type UpdateIntegrationContact200JSONResponseBodySuccess bool
 type GetV1PublicApiConversationsParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// ExternalThreadId Exact channel thread id (the REST API channel's thread_id).
+	ExternalThreadId *string `form:"external_thread_id,omitempty" json:"external_thread_id,omitempty"`
 }
 
 // CreateIntegrationConversationParams defines parameters for CreateIntegrationConversation.
@@ -2433,6 +2438,18 @@ func NewGetV1PublicApiConversationsRequest(server string, params *GetV1PublicApi
 		if params.Offset != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ExternalThreadId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "external_thread_id", *params.ExternalThreadId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

@@ -346,6 +346,26 @@ type DeliveryTest struct {
 	Recipient string `json:"recipient,omitempty"`
 }
 
+// StatusChange is a conversation status transition told to the channel's
+// own endpoint (CF-245). EventID is stable across retries and is the
+// receiver's idempotency key.
+type StatusChange struct {
+	EventID          uuid.UUID
+	ConversationUUID uuid.UUID
+	ThreadID         string
+	From             string
+	To               string
+	SnoozedUntil     *time.Time
+	At               time.Time
+}
+
+// StatusNotifier is implemented by channels that tell the connected
+// application about conversation status changes (REST API channel).
+// Errors follow Send: Permanent ones are not retried.
+type StatusNotifier interface {
+	NotifyStatus(ctx context.Context, inst Instance, change StatusChange) error
+}
+
 // Errors.
 var (
 	// ErrUnknownType: no adapter registered for the type.

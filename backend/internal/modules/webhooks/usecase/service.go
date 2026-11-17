@@ -100,13 +100,18 @@ func (s *Service) Consume(ctx context.Context, ev events.Event) error {
 	if ev.TenantID == nil {
 		return nil
 	}
-	raw, err := json.Marshal(map[string]any{"id": ev.EventID, "event": ev.Name, "version": ev.Version, "occurred_at": ev.OccurredAt, "data": ev.Payload})
+	conv := ConversationUUID(ev)
+	raw, err := json.Marshal(map[string]any{"id": ev.EventID, "event": ev.Name, "version": ev.Version, "occurred_at": ev.OccurredAt, "data": WebhookData(ev)})
 	if err != nil {
 		return err
 	}
 	if slices.Contains([]string{"conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"}, ev.Name) {
 		// Polling gets public references only; the resource API rechecks visibility for details.
-		b, err := json.Marshal(map[string]any{"id": ev.EventID, "event": ev.Name, "entity_uuid": ev.EntityUUID, "occurred_at": ev.OccurredAt})
+		ref := map[string]any{"id": ev.EventID, "event": ev.Name, "entity_uuid": ev.EntityUUID, "occurred_at": ev.OccurredAt}
+		if conv != "" {
+			ref["conversation_uuid"] = conv
+		}
+		b, err := json.Marshal(ref)
 		if err != nil {
 			return err
 		}
@@ -115,6 +120,36 @@ func (s *Service) Consume(ctx context.Context, ev events.Event) error {
 		}
 	}
 	return s.Store.EnqueueOutboundWebhooks(ctx, db.EnqueueOutboundWebhooksParams{OrganizationID: *ev.TenantID, EventID: ev.EventID, EventName: ev.Name, Payload: raw})
+}
+
+// ConversationUUID is the public id of the conversation an event is about
+// (CF-245): the payload's conversation_uuid when the producer set one,
+// otherwise the envelope entity of conversation and message events. Empty
+// for other events.
+func ConversationUUID(ev events.Event) string {
+	if v, ok := ev.Payload["conversation_uuid"].(string); ok && v != "" {
+		return v
+	}
+	if ev.EntityType == "conversation" && ev.EntityUUID != nil && *ev.EntityUUID != uuid.Nil {
+		return ev.EntityUUID.String()
+	}
+	return ""
+}
+
+// WebhookData is the delivered data object: the event payload plus
+// conversation_uuid on conversation and message events (CF-245). Existing
+// keys are kept; the shared payload map is not modified.
+func WebhookData(ev events.Event) map[string]any {
+	conv := ConversationUUID(ev)
+	if conv == "" {
+		return ev.Payload
+	}
+	out := make(map[string]any, len(ev.Payload)+1)
+	for k, v := range ev.Payload {
+		out[k] = v
+	}
+	out["conversation_uuid"] = conv
+	return out
 }
 
 func (s *Service) Enqueue(ctx context.Context, org int64, webhook, eventID uuid.UUID, event string, payload any) error {
