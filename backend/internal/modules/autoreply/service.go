@@ -221,31 +221,33 @@ func (s *Service) OnMessage(ctx context.Context, org int64, message uuid.UUID) e
 }
 
 // NotifyHandoff tells the customer that a person takes over (the AI agent
-// calls it when it hands off a conversation it was answering, or when the
-// customer asked for a person). At most once per conversation.
-func (s *Service) NotifyHandoff(ctx context.Context, org, conversationID int64) error {
+// calls it when it hands off a conversation it was answering, could not
+// answer safely, or the customer asked for a person). At most once per
+// conversation; sent reports whether this call posted the notice.
+func (s *Service) NotifyHandoff(ctx context.Context, org, conversationID int64) (bool, error) {
 	if s.poster == nil {
-		return nil
+		return false, nil
 	}
 	last, err := s.q.LastAutoReplyAt(ctx, db.LastAutoReplyAtParams{OrganizationID: org, ConversationID: conversationID, Kind: KindHandoff})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if last.Valid {
-		return nil
+		return false, nil
 	}
 	settings, err := s.Get(ctx, org)
 	if err != nil {
-		return err
+		return false, err
 	}
 	text := settings.Render(KindHandoff, s.locale(ctx, org), nil)
 	if text == "" {
-		return nil
+		return false, nil
 	}
 	if _, err := s.poster.PostAuto(ctx, org, conversationID, KindHandoff, text); err != nil {
 		s.log.Warn("auto_reply_post_failed", "organization_id", org, "conversation_id", conversationID, "kind", KindHandoff, "error", err)
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
 // locale is the organization's locale ("tr" when unknown).

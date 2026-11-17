@@ -129,28 +129,76 @@ func (s *Service) recordGap(ctx context.Context, q memmodel.Query, conversation 
 	}
 }
 
-// HandoffNotifier posts the handoff notice to the customer.
+// HandoffNotifier posts the handoff notice to the customer, at most once per
+// conversation; sent reports whether this call posted it.
 type HandoffNotifier interface {
-	NotifyHandoff(ctx context.Context, org, conversationID int64) error
+	NotifyHandoff(ctx context.Context, org, conversationID int64) (sent bool, err error)
 }
 
-// notifyHandoff tells the customer a person takes over when the agent was
-// the one talking to them: the customer asked for a person, or the agent
-// had answered in this conversation before. A draft-mode agent never spoke
-// to the customer, so a draft handoff stays silent.
-func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversation, cfg model.Config, requested bool) {
+// handoffKind is why the agent hands a conversation to a person, which
+// decides whether the customer hears about it.
+type handoffKind int
+
+const (
+	// handoffQuiet: the agent steps aside (a person owns the conversation,
+	// policy, scope); the customer hears it only when the agent had
+	// answered in this conversation before.
+	handoffQuiet handoffKind = iota
+	// handoffRequested: the customer asked for a person.
+	handoffRequested
+	// handoffUnanswered: the agent was meant to answer but could not do so
+	// safely (no sources, low confidence, AI unavailable); without the
+	// notice the customer would hear nothing after the acknowledgement
+	// (CF-244).
+	handoffUnanswered
+)
+
+// notifyHandoff tells an autonomous agent's customer that a person takes
+// over and reports whether the notice was posted. A draft-mode agent never
+// spoke to the customer, so a draft handoff stays silent. The notifier sends
+// the notice at most once per conversation.
+func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversation, cfg model.Config, kind handoffKind) bool {
 	if s.Notices == nil || cfg.Mode != "autonomous" {
-		return
+		return false
 	}
-	if !requested {
+	switch kind {
+	case handoffQuiet:
 		spoke, err := s.Repo.Q.ConversationHasAIReply(ctx, db.ConversationHasAIReplyParams{OrganizationID: org, ConversationID: conv.ID})
 		if err != nil || !spoke {
-			return
+			return false
+		}
+	case handoffUnanswered:
+		// Generation takes a while: stay quiet when a person replied,
+		// took the conversation or closed it in the meantime.
+		if !s.unattended(ctx, org, conv.ID) {
+			return false
 		}
 	}
-	if err := s.Notices.NotifyHandoff(ctx, org, conv.ID); err != nil {
+	sent, err := s.Notices.NotifyHandoff(ctx, org, conv.ID)
+	if err != nil {
 		slog.WarnContext(ctx, "ai_handoff_notice_failed", "organization_id", org, "conversation_id", conv.ID, "error", err)
+		return false
 	}
+	return sent
+}
+
+// unattended reports whether no person owns, answered or closed the
+// conversation now.
+func (s *Service) unattended(ctx context.Context, org, conversationID int64) bool {
+	conv, err := s.Repo.Q.GetConversationByID(ctx, db.GetConversationByIDParams{OrganizationID: org, ID: conversationID})
+	if err != nil || conv.AssigneeUserID.Valid || conv.Status == "closed" || conv.Status == "resolved" {
+		return false
+	}
+	human, err := s.Repo.Q.AIAgentHumanSince(ctx, db.AIAgentHumanSinceParams{OrganizationID: org, ConversationID: conversationID, TriggerID: 0})
+	return err == nil && !human
+}
+
+// noticeReason marks a handoff reason whose notice reached the customer.
+func noticeReason(reason string, sent bool) string {
+	if sent {
+		return reason + model.HandoffNoticeSent
+	}
+	return reason
 }
 
 // open reports whether the organization is inside its working hours now.
@@ -383,14 +431,14 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		return err
 	}
 	handoff := func(reason string) error {
-		s.notifyHandoff(ctx, org, conv, cfg, false)
-		return s.finish(ctx, job, uuid.Nil, "handoff", reason, model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
+		sent := s.notifyHandoff(ctx, org, conv, cfg, handoffQuiet)
+		return s.finish(ctx, job, uuid.Nil, "handoff", noticeReason(reason, sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 	}
 	// The customer asked for a person: say so even when the agent never
 	// spoke in this conversation.
 	requestedHuman := func(reason string) error {
-		s.notifyHandoff(ctx, org, conv, cfg, true)
-		return s.finish(ctx, job, uuid.Nil, "handoff", reason, model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
+		sent := s.notifyHandoff(ctx, org, conv, cfg, handoffRequested)
+		return s.finish(ctx, job, uuid.Nil, "handoff", noticeReason(reason, sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 	}
 	if conv.AssigneeUserID.Valid || conv.Status == "closed" || conv.Status == "resolved" {
 		return handoff("Human owns the conversation or conversation is closed")
@@ -528,13 +576,15 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 		var runErr error
 		run, runErr = s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: 2048}, options)
+		// The customer hears a safe handoff notice, never an unchecked
+		// answer.
 		if runErr != nil {
-			s.notifyHandoff(ctx, org, conv, cfg, false)
-			return s.finish(ctx, job, run.UUID, "handoff", "AI unavailable, guard rejected, or credits exhausted", model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
+			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered)
+			return s.finish(ctx, job, run.UUID, "handoff", noticeReason("AI unavailable, guard rejected, or credits exhausted", sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 		}
 		if err = json.Unmarshal([]byte(run.Text), &answer); err != nil {
-			s.notifyHandoff(ctx, org, conv, cfg, false)
-			return s.finish(ctx, job, run.UUID, "handoff", "Invalid answer", model.Reply{}, "ai.handoff")
+			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered)
+			return s.finish(ctx, job, run.UUID, "handoff", noticeReason("Invalid answer", sent), model.Reply{}, "ai.handoff")
 		}
 		// Only the knowledge layer sets these, never model output.
 		answer.UnitUUID, answer.Memory = nil, ""
@@ -559,8 +609,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 	}
 	status, reason := "draft", "Agent review required"
+	// unanswered: the agent could not answer safely; the customer gets the
+	// handoff notice and the model's text stays a draft for the agent.
+	unanswered := false
 	if answer.Handoff || answer.Confidence < cfg.Confidence || !grounded || strings.TrimSpace(answer.Text) == "" {
-		status, reason = "handoff", "Low confidence or insufficient public sources"
+		status, reason, unanswered = "handoff", "Low confidence or insufficient public sources", true
 	}
 	if status == "draft" && cfg.Mode == "autonomous" {
 		current, currentRevision, err := s.Repo.Config(ctx, org)
@@ -584,7 +637,11 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	event := "ai.reply_suggested"
 	if status == "handoff" {
 		event = "ai.handoff"
-		s.notifyHandoff(ctx, org, conv, cfg, false)
+		kind := handoffQuiet
+		if unanswered {
+			kind = handoffUnanswered
+		}
+		reason = noticeReason(reason, s.notifyHandoff(ctx, org, conv, cfg, kind))
 	}
 	return s.finish(ctx, job, run.UUID, status, reason, answer, event)
 }

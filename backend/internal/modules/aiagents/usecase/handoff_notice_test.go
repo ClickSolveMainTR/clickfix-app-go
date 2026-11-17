@@ -3,78 +3,163 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aiagents/repository"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/autoreply"
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/businesshours"
 )
 
-type fakeNotices struct{ conversations []int64 }
-
-func (f *fakeNotices) NotifyHandoff(_ context.Context, _ int64, conv int64) error {
-	f.conversations = append(f.conversations, conv)
-	return nil
+// autoPoster stores automatic replies as the inbox core does (a bot message
+// with its auto_reply kind), so the real auto-reply rules run on top.
+type autoPoster struct {
+	t     *testing.T
+	pool  *pgxpool.Pool
+	posts []int64
 }
 
-// CF-198: when an autonomous agent hands a conversation to a person the
-// customer hears about it: always when they asked for a person, otherwise
-// only when the agent had answered them before. A draft-mode agent never
-// spoke to the customer, so it stays silent.
-func TestHandoffNotifiesTheCustomer(t *testing.T) {
+func (p *autoPoster) PostAuto(ctx context.Context, org, conv int64, kind, content string) (uuid.UUID, error) {
+	attrs, _ := json.Marshal(map[string]string{"auto_reply": kind})
+	var id uuid.UUID
+	if err := p.pool.QueryRow(ctx, `INSERT INTO messages(organization_id,conversation_id,direction,sender_type,kind,status,content,content_attributes)
+		VALUES($1,$2,'out','bot','text','queued',$3,$4) RETURNING uuid`, org, conv, content, attrs).Scan(&id); err != nil {
+		p.t.Fatal(err)
+	}
+	p.posts = append(p.posts, conv)
+	return id, nil
+}
+
+type handoffCase struct {
+	mode        string
+	text        string
+	spoke       bool   // the agent answered earlier in the conversation
+	human       bool   // a person replied before the message
+	humanMidway bool   // a person replies while the agent generates
+	disabled    bool   // the organization turned the handoff notice off
+	aiErr       error  // the AI call fails
+	followUps   int    // further customer messages after the first
+	wantNotices int    // handoff notices posted
+	wantReason  string // reason of the first job ("" skips)
+}
+
+func runHandoffCase(t *testing.T, tc handoffCase) ([]int64, []db.AiAgentJob) {
+	t.Helper()
 	ctx := context.Background()
-	raw, _ := json.Marshal(model.Reply{Text: "Supported answer", Summary: "s", Confidence: 0.2, Citations: []uuid.UUID{}})
-	run := func(mode, text string, spoke bool) []int64 {
-		// Each case gets its own organization (the fixture numbers
-		// conversations from 1).
-		engine, fake, org, actor := agentCoreFixture(t)
-		fake.response = string(raw)
-		engine.RAG = fakeSources{citation: kbmodel.Citation{ChunkUUID: uuid.New(), ArticleUUID: uuid.New(), Version: 1, Content: "Supported answer", Locale: "tr"}}
-		c, msg := conversationFixture(t, engine, org)
-		if _, err := engine.Repo.Billing.Pool.Exec(ctx, "UPDATE messages SET content = $3 WHERE organization_id = $1 AND id = $2", org, msg.ID, text); err != nil {
+	raw, _ := json.Marshal(model.Reply{Text: "Unsupported draft answer", Summary: "s", Confidence: 0.3, Citations: []uuid.UUID{}})
+	// Each case gets its own organization (the fixture numbers
+	// conversations from 1).
+	engine, fake, org, actor := agentCoreFixture(t)
+	fake.response = string(raw)
+	fake.err = tc.aiErr
+	engine.RAG = fakeSources{citation: kbmodel.Citation{ChunkUUID: uuid.New(), ArticleUUID: uuid.New(), Version: 1, Content: "Other topic", Locale: "tr"}}
+	pool := engine.Repo.Billing.Pool
+	c, msg := conversationFixture(t, engine, org)
+	if _, err := pool.Exec(ctx, "UPDATE messages SET content = $3 WHERE organization_id = $1 AND id = $2", org, msg.ID, tc.text); err != nil {
+		t.Fatal(err)
+	}
+	insert := func(sender, content, attrs string) {
+		if _, err := pool.Exec(ctx, `INSERT INTO messages(organization_id,conversation_id,direction,sender_type,kind,status,content,content_attributes)
+			VALUES($1,$2,'out',$3,'text','sent',$4,$5)`, org, c.ID, sender, content, attrs); err != nil {
 			t.Fatal(err)
 		}
-		if spoke {
-			if _, err := engine.Repo.Billing.Pool.Exec(ctx, `INSERT INTO messages(organization_id,conversation_id,direction,sender_type,kind,status,content,content_attributes)
-				VALUES($1,$2,'out','bot','text','sent','Earlier AI answer','{"ai_trigger_message_uuid":"x"}')`, org, c.ID); err != nil {
-				t.Fatal(err)
+	}
+	if tc.spoke {
+		insert("bot", "Earlier AI answer", `{"ai_trigger_message_uuid":"x"}`)
+	}
+	if tc.human {
+		insert("agent", "Merhaba, ben bakıyorum", `{}`)
+	}
+	if tc.humanMidway {
+		fake.hook = func() { insert("agent", "Ben ilgileniyorum", `{}`) }
+	}
+	poster := &autoPoster{t: t, pool: pool}
+	notices := autoreply.New(engine.Repo.Billing.Q, poster, nil, nil, nil)
+	if tc.disabled {
+		settings := autoreply.Defaults()
+		settings.Handoff.Enabled = false
+		if _, err := notices.Put(ctx, org, settings); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := New(&repository.Store{Repository: engine.Repo.Billing}, engine, &fakeBot{})
+	svc.Notices = notices
+	cfg := model.DefaultConfig()
+	cfg.Mode = tc.mode
+	cfg.Channels = []string{"whatsapp"}
+	if _, err := svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Inbound(ctx, org, msg.Uuid); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < tc.followUps; i++ {
+		var next uuid.UUID
+		if err := pool.QueryRow(ctx, `INSERT INTO messages(organization_id,conversation_id,direction,sender_type,sender_contact_id,kind,status,content)
+			VALUES($1,$2,'in','contact',$3,'text','received','Hâlâ bekliyorum') RETURNING uuid`, org, c.ID, c.ContactID).Scan(&next); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Inbound(ctx, org, next); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := svc.Repo.Q.AIAgentJobs(ctx, db.AIAgentJobsParams{OrganizationID: org, Uuid: c.Uuid, Limit: 10})
+	if err != nil || len(rows) != 1+tc.followUps {
+		t.Fatalf("jobs=%+v err=%v", rows, err)
+	}
+	for _, r := range rows {
+		if r.Status != "handoff" {
+			t.Fatalf("every job hands off: %+v", r)
+		}
+	}
+	return poster.posts, rows
+}
+
+// CF-198, CF-244: when an autonomous agent hands a conversation to a person
+// the customer hears about it once: when they asked for a person, when the
+// agent had answered them before, and when the agent could not answer
+// safely (no sources, low confidence, AI failure), which used to leave the
+// customer in silence after the acknowledgement. The model's unchecked text
+// is never sent. A draft-mode agent never speaks to the customer; a person
+// who already replied, or the organization's own setting, keeps it quiet.
+func TestHandoffNotifiesTheCustomer(t *testing.T) {
+	lowConfidence := "Low confidence or insufficient public sources"
+	for name, tc := range map[string]handoffCase{
+		"customer asked for a person":    {mode: "autonomous", text: "Bir temsilci ile görüşmek istiyorum", wantNotices: 1, wantReason: "Customer requested a human" + model.HandoffNoticeSent},
+		"answered before, unsure now":    {mode: "autonomous", text: "Kargom nerede?", spoke: true, wantNotices: 1, wantReason: lowConfidence + model.HandoffNoticeSent},
+		"never answered, no sources":     {mode: "autonomous", text: "Kargom nerede?", wantNotices: 1, wantReason: lowConfidence + model.HandoffNoticeSent},
+		"notice once per conversation":   {mode: "autonomous", text: "Kargom nerede?", followUps: 2, wantNotices: 1},
+		"AI unavailable":                 {mode: "autonomous", text: "Kargom nerede?", aiErr: errors.New("provider down"), wantNotices: 1, wantReason: "AI unavailable, guard rejected, or credits exhausted" + model.HandoffNoticeSent},
+		"draft mode stays quiet":         {mode: "draft", text: "Kargom nerede?", wantNotices: 0, wantReason: lowConfidence},
+		"draft mode, asked for person":   {mode: "draft", text: "temsilci lütfen", spoke: true, wantNotices: 0},
+		"a person already replied":       {mode: "autonomous", text: "Kargom nerede?", human: true, wantNotices: 0, wantReason: "Human public reply exists in this conversation"},
+		"a person replies meanwhile":     {mode: "autonomous", text: "Kargom nerede?", humanMidway: true, wantNotices: 0, wantReason: lowConfidence},
+		"organization turned notice off": {mode: "autonomous", text: "Kargom nerede?", disabled: true, wantNotices: 0, wantReason: lowConfidence},
+	} {
+		t.Run(name, func(t *testing.T) {
+			posts, rows := runHandoffCase(t, tc)
+			if len(posts) != tc.wantNotices {
+				t.Fatalf("notices=%v want %d", posts, tc.wantNotices)
 			}
-		}
-		notices := &fakeNotices{}
-		svc := New(&repository.Store{Repository: engine.Repo.Billing}, engine, &fakeBot{})
-		svc.Notices = notices
-		cfg := model.DefaultConfig()
-		cfg.Mode = mode
-		cfg.Channels = []string{"whatsapp"}
-		if _, err := svc.Repo.SaveConfig(ctx, org, actor, cfg); err != nil {
-			t.Fatal(err)
-		}
-		if err := svc.Inbound(ctx, org, msg.Uuid); err != nil {
-			t.Fatal(err)
-		}
-		rows, err := svc.Repo.Q.AIAgentJobs(ctx, db.AIAgentJobsParams{OrganizationID: org, Uuid: c.Uuid, Limit: 5})
-		if err != nil || len(rows) != 1 || rows[0].Status != "handoff" {
-			t.Fatalf("jobs=%+v err=%v", rows, err)
-		}
-		t.Logf("%s/%q spoke=%v: reason=%s notices=%v", mode, text, spoke, rows[0].Reason, notices.conversations)
-		return notices.conversations
-	}
-	if got := run("autonomous", "Bir temsilci ile görüşmek istiyorum", false); len(got) != 1 {
-		t.Fatalf("customer asked for a person: notices=%v", got)
-	}
-	if got := run("autonomous", "Kargom nerede?", true); len(got) != 1 {
-		t.Fatalf("agent had answered before, low confidence now: notices=%v", got)
-	}
-	if got := run("autonomous", "Kargom nerede?", false); len(got) != 0 {
-		t.Fatalf("agent never spoke: no notice, got %v", got)
-	}
-	if got := run("draft", "temsilci lütfen", true); len(got) != 0 {
-		t.Fatalf("draft mode never talks to the customer: got %v", got)
+			// Jobs come newest first; the first message's job is last.
+			first := rows[len(rows)-1]
+			if tc.wantReason != "" && first.Reason != tc.wantReason {
+				t.Fatalf("reason %q want %q", first.Reason, tc.wantReason)
+			}
+			for _, r := range rows[:len(rows)-1] {
+				if strings.HasSuffix(r.Reason, model.HandoffNoticeSent) {
+					t.Fatalf("a follow-up must not send a second notice: %q", r.Reason)
+				}
+			}
+		})
 	}
 }
 
