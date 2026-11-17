@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- ClickFix marka karosu (docs/brand.md): yeşil kare, siyah imleç. -->
+  <g transform="translate(64 64) scale(0.437073)">
+    <rect width="2050" height="2050" rx="450" fill="#03ff13"/>
+    <polygon fill="#000000" points="482.33 1391 418.33 647 1698.33 815 706.33 823 482.33 1391"/>
+  </g>
+</svg>

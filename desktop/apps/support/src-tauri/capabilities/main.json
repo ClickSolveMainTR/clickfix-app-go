@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "support-main",
+  "description": "Destek arayüzü: izin listeli sidecar çağrıları, derin bağlantı, izin rehberi ve sabit bağlantılar.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-sidecar-version",
+    "allow-sidecar-call",
+    "allow-take-join-token",
+    "allow-open-permission-settings",
+    "allow-open-link",
+    "allow-relaunch",
+    "allow-quit",
+    "allow-bar-action",
+    "allow-mock-overlay"
+  ]
+}

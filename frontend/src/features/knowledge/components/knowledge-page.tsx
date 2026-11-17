@@ -14,13 +14,15 @@ import { useLocale } from "@/providers/locale-provider";
 
 import { ArticlesTab } from "./articles-tab";
 import { CollectionsTab } from "./collections-tab";
+import { HistoryTab } from "./history-tab";
 
-const TABS = ["articles", "collections"] as const;
+const TABS = ["articles", "collections", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
- * Knowledge base admin (CF-73): articles (drafts, publication, versions) and
- * the collection / category tree that structures the public help center.
+ * Knowledge base admin (CF-73): articles (drafts, publication, versions),
+ * the collection / category tree that structures the public help center and
+ * the history pipeline that turns past records into suggestions (CF-217).
  */
 export function KnowledgePage() {
   const { t } = useLocale();
@@ -30,8 +32,12 @@ export function KnowledgePage() {
   const perms = org?.permissions ?? [];
   const canRead = perms.includes(Permission.TenantSettingsRead);
   const canWrite = perms.includes(Permission.TenantSettingsWrite);
+  const canHistory = perms.includes(Permission.TenantHistoryRead);
   const raw = params.get("tab");
-  const tab: Tab = TABS.includes(raw as Tab) ? (raw as Tab) : "articles";
+  const tab: Tab =
+    TABS.includes(raw as Tab) && (raw !== "history" || canHistory)
+      ? (raw as Tab)
+      : "articles";
 
   return (
     <div className="space-y-6">
@@ -84,6 +90,11 @@ export function KnowledgePage() {
             <TabsTrigger value="collections">
               {t("knowledge.tabs.collections")}
             </TabsTrigger>
+            {canHistory && (
+              <TabsTrigger value="history">
+                {t("knowledge.tabs.history")}
+              </TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="articles" className="mt-4">
             {org && <ArticlesTab />}
@@ -91,6 +102,14 @@ export function KnowledgePage() {
           <TabsContent value="collections" className="mt-4">
             {org && <CollectionsTab canWrite={canWrite} />}
           </TabsContent>
+          {canHistory && (
+            <TabsContent value="history" className="mt-4">
+              <HistoryTab
+                canManage={perms.includes(Permission.TenantHistoryManage)}
+                canReview={perms.includes(Permission.TenantHistoryReview)}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </div>

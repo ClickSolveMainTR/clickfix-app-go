@@ -81,7 +81,7 @@ UPDATE conversations SET
     snoozed_until = CASE WHEN status IN ('snoozed', 'resolved') THEN NULL ELSE snoozed_until END,
     resolved_at = CASE WHEN status IN ('snoozed', 'resolved') THEN NULL ELSE resolved_at END
 WHERE organization_id = $3 AND id = $4
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type ApplyInboundToConversationParams struct {
@@ -143,6 +143,10 @@ func (q *Queries) ApplyInboundToConversation(ctx context.Context, arg ApplyInbou
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -173,7 +177,7 @@ UPDATE conversations SET
                              ELSE first_response_at END,
     message_count = message_count + 1
 WHERE organization_id = $4 AND id = $5
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type ApplyOutboundToConversationParams struct {
@@ -237,6 +241,10 @@ func (q *Queries) ApplyOutboundToConversation(ctx context.Context, arg ApplyOutb
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -665,7 +673,7 @@ func (q *Queries) FilterVisibleConversationUUIDs(ctx context.Context, arg Filter
 }
 
 const findConversationByThread = `-- name: FindConversationByThread :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations
 WHERE organization_id = $1 AND channel_instance_id = $2 AND external_thread_id = $3 AND deleted_at IS NULL
 ORDER BY id DESC
 LIMIT 1
@@ -722,12 +730,16 @@ func (q *Queries) FindConversationByThread(ctx context.Context, arg FindConversa
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
 
 const findLatestConversationForContact = `-- name: FindLatestConversationForContact :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations
 WHERE organization_id = $1
   AND contact_id = $2
   AND COALESCE(channel_instance_id, 0) = COALESCE($3::bigint, 0)
@@ -789,6 +801,10 @@ func (q *Queries) FindLatestConversationForContact(ctx context.Context, arg Find
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -828,7 +844,7 @@ func (q *Queries) GetChannelInstancesByUUIDs(ctx context.Context, arg GetChannel
 }
 
 const getConversationByID = `-- name: GetConversationByID :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 type GetConversationByIDParams struct {
@@ -881,12 +897,16 @@ func (q *Queries) GetConversationByID(ctx context.Context, arg GetConversationBy
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
 
 const getConversationByUUID = `-- name: GetConversationByUUID :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations WHERE organization_id = $1 AND uuid = $2 AND deleted_at IS NULL
 `
 
 type GetConversationByUUIDParams struct {
@@ -939,6 +959,10 @@ func (q *Queries) GetConversationByUUID(ctx context.Context, arg GetConversation
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -1009,7 +1033,7 @@ func (q *Queries) GetConversationStatusByUUID(ctx context.Context, arg GetConver
 }
 
 const getConversationView = `-- name: GetConversationView :one
-SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id,
+SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id, c.department_id, c.department_source, c.department_confidence, c.department_routed_at,
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
        ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
        co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
@@ -1112,6 +1136,10 @@ func (q *Queries) GetConversationView(ctx context.Context, arg GetConversationVi
 		&i.Conversation.MergedAt,
 		&i.Conversation.AnonymizedAt,
 		&i.Conversation.BrandID,
+		&i.Conversation.DepartmentID,
+		&i.Conversation.DepartmentSource,
+		&i.Conversation.DepartmentConfidence,
+		&i.Conversation.DepartmentRoutedAt,
 		&i.ContactUuid,
 		&i.ContactName,
 		&i.ContactEmail,
@@ -1481,7 +1509,7 @@ INSERT INTO conversations (
     $10, $11, $12, $13,
     $14, $15
 )
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type InsertConversationParams struct {
@@ -1563,6 +1591,10 @@ func (q *Queries) InsertConversation(ctx context.Context, arg InsertConversation
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -2169,7 +2201,7 @@ func (q *Queries) ListConversationViews(ctx context.Context, arg ListConversatio
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id,
+SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_instance_id, c.contact_id, c.company_id, c.subject, c.status, c.status_id, c.priority, c.source, c.assignee_user_id, c.assignee_team_id, c.custom_fields, c.external_thread_id, c.sla_policy_id, c.first_response_due_at, c.next_response_due_at, c.resolution_due_at, c.sla_breached_at, c.first_response_at, c.waiting_since, c.snoozed_until, c.resolved_at, c.closed_at, c.last_message_at, c.last_inbound_at, c.last_outbound_at, c.last_message_preview, c.last_message_direction, c.message_count, c.meta, c.created_at, c.updated_at, c.deleted_at, c.merged_into_id, c.merged_at, c.anonymized_at, c.brand_id, c.department_id, c.department_source, c.department_confidence, c.department_routed_at,
        ct.uuid AS contact_uuid, ct.name AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone,
        ct.external_id AS contact_external_id, ct.verified_at AS contact_verified_at,
        co.uuid AS company_uuid, co.name AS company_name, co.external_id AS company_external_id,
@@ -2401,6 +2433,10 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Conversation.MergedAt,
 			&i.Conversation.AnonymizedAt,
 			&i.Conversation.BrandID,
+			&i.Conversation.DepartmentID,
+			&i.Conversation.DepartmentSource,
+			&i.Conversation.DepartmentConfidence,
+			&i.Conversation.DepartmentRoutedAt,
 			&i.ContactUuid,
 			&i.ContactName,
 			&i.ContactEmail,
@@ -2611,7 +2647,7 @@ func (q *Queries) ListTags(ctx context.Context, organizationID int64) ([]ListTag
 }
 
 const lockConversation = `-- name: LockConversation :one
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE
 `
 
 type LockConversationParams struct {
@@ -2664,6 +2700,10 @@ func (q *Queries) LockConversation(ctx context.Context, arg LockConversationPara
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -2934,7 +2974,7 @@ func (q *Queries) SetConversationSLA(ctx context.Context, arg SetConversationSLA
 const softDeleteConversation = `-- name: SoftDeleteConversation :one
 UPDATE conversations SET deleted_at = NOW()
 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type SoftDeleteConversationParams struct {
@@ -2987,6 +3027,10 @@ func (q *Queries) SoftDeleteConversation(ctx context.Context, arg SoftDeleteConv
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -3051,7 +3095,7 @@ UPDATE conversations SET
     -- message reopens it and starts the wait again.
     waiting_since = CASE WHEN $2::text IN ('resolved', 'closed') THEN NULL ELSE waiting_since END
 WHERE organization_id = $12 AND id = $13 AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 type UpdateConversationStateParams struct {
@@ -3131,6 +3175,10 @@ func (q *Queries) UpdateConversationState(ctx context.Context, arg UpdateConvers
 		&i.MergedAt,
 		&i.AnonymizedAt,
 		&i.BrandID,
+		&i.DepartmentID,
+		&i.DepartmentSource,
+		&i.DepartmentConfidence,
+		&i.DepartmentRoutedAt,
 	)
 	return i, err
 }
@@ -3309,7 +3357,7 @@ func (q *Queries) UpsertTag(ctx context.Context, arg UpsertTagParams) (Tag, erro
 const wakeSnoozedConversations = `-- name: WakeSnoozedConversations :many
 UPDATE conversations SET status = 'open', status_id = NULL, snoozed_until = NULL
 WHERE status = 'snoozed' AND snoozed_until <= $1::timestamptz AND deleted_at IS NULL
-RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id
+RETURNING id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at
 `
 
 // Snoozes that ran out go back to open (the worker publishes the events).
@@ -3364,6 +3412,10 @@ func (q *Queries) WakeSnoozedConversations(ctx context.Context, now pgtype.Times
 			&i.MergedAt,
 			&i.AnonymizedAt,
 			&i.BrandID,
+			&i.DepartmentID,
+			&i.DepartmentSource,
+			&i.DepartmentConfidence,
+			&i.DepartmentRoutedAt,
 		); err != nil {
 			return nil, err
 		}

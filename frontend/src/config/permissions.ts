@@ -19,6 +19,11 @@ export const Permission = {
   TenantVideoUse: "tenant.video.use",
   TenantVideoManage: "tenant.video.manage",
   PlatformVideoManage: "platform.video.manage",
+  TenantRemoteSupportUse: "tenant.remote_support.use",
+  TenantRemoteSupportControl: "tenant.remote_support.control",
+  TenantRemoteSupportSettings: "tenant.remote_support.settings",
+  PlatformRemoteSupportManage: "platform.remote_support.manage",
+  PlatformDesktopReleasesManage: "platform.desktop_releases.manage",
   TenantAssistantUse: "tenant.assistant.use",
   PlatformAssistantManage: "platform.assistant.manage",
   PlatformGuidesManage: "platform.guides.manage",
@@ -121,6 +126,9 @@ export const Permission = {
   TenantChannelsRead: "tenant.channels.read",
   TenantTeamsRead: "tenant.teams.read",
   TenantTeamsWrite: "tenant.teams.write",
+  TenantDepartmentsRead: "tenant.departments.read",
+  TenantDepartmentsWrite: "tenant.departments.write",
+  TenantDepartmentsReadAll: "tenant.departments.read_all",
   TenantReportsRead: "tenant.reports.read",
   TenantReportsExport: "tenant.reports.export",
   TenantAiUse: "tenant.ai.use",
@@ -144,6 +152,18 @@ export const Permission = {
   TenantIntegrationsRead: "tenant.integrations.read",
   TenantIntegrationsManage: "tenant.integrations.manage",
   TenantIntegrationsUse: "tenant.integrations.use",
+  /** AI knowledge layer measurement: panel and evaluation sets (CF-220). */
+  TenantAIInsightsRead: "tenant.ai_insights.read",
+  TenantAIInsightsManage: "tenant.ai_insights.manage",
+  /** History pipeline (CF-217): archive, uploads and suggestion reviews. */
+  TenantHistoryRead: "tenant.history.read",
+  TenantHistoryManage: "tenant.history.manage",
+  TenantHistoryReview: "tenant.history.review",
+  /** Category taxonomy and the label store (CF-218). */
+  TenantCategoriesRead: "tenant.categories.read",
+  TenantCategoriesManage: "tenant.categories.manage",
+  TenantCategoriesLabel: "tenant.categories.label",
+  TenantCategoriesExport: "tenant.categories.export",
 } as const;
 
 export type PermissionSlug = (typeof Permission)[keyof typeof Permission];
@@ -161,6 +181,14 @@ export function isKnownPermission(slug: string): slug is PermissionSlug {
 export const permissions = {
   video: {
     platformManage: Permission.PlatformVideoManage,
+  },
+  /** Remote support sessions (CF-233). */
+  remoteSupport: {
+    platformManage: Permission.PlatformRemoteSupportManage,
+  },
+  /** Desktop app releases: publish and withdraw (CF-240). */
+  desktopReleases: {
+    platformManage: Permission.PlatformDesktopReleasesManage,
   },
   /** Module guides, ClickFix Asistan and product feedback (CF-141). */
   assistant: {
@@ -326,6 +354,11 @@ export const permissions = {
       read: Permission.TenantTeamsRead,
       write: Permission.TenantTeamsWrite,
     },
+    departments: {
+      read: Permission.TenantDepartmentsRead,
+      write: Permission.TenantDepartmentsWrite,
+      readAll: Permission.TenantDepartmentsReadAll,
+    },
     appointments: {
       read: Permission.TenantAppointmentsRead,
       write: Permission.TenantAppointmentsWrite,
@@ -354,6 +387,10 @@ export const permissions = {
       read: Permission.TenantAiRead,
       write: Permission.TenantAiWrite,
     },
+    aiInsights: {
+      read: Permission.TenantAIInsightsRead,
+      manage: Permission.TenantAIInsightsManage,
+    },
     automations: {
       read: Permission.TenantAutomationsRead,
       write: Permission.TenantAutomationsWrite,
@@ -375,6 +412,11 @@ export const permissions = {
       use: Permission.TenantVideoUse,
       manage: Permission.TenantVideoManage,
     },
+    remoteSupport: {
+      use: Permission.TenantRemoteSupportUse,
+      control: Permission.TenantRemoteSupportControl,
+      settings: Permission.TenantRemoteSupportSettings,
+    },
     teamChat: {
       use: Permission.TenantTeamChatUse,
     },
@@ -393,6 +435,12 @@ export const permissions = {
       read: Permission.TenantIntegrationsRead,
       manage: Permission.TenantIntegrationsManage,
       use: Permission.TenantIntegrationsUse,
+    },
+    categories: {
+      read: Permission.TenantCategoriesRead,
+      manage: Permission.TenantCategoriesManage,
+      label: Permission.TenantCategoriesLabel,
+      export: Permission.TenantCategoriesExport,
     },
   },
 } as const;

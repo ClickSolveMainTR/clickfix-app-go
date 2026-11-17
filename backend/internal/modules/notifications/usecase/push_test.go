@@ -69,6 +69,9 @@ func (m *pushTestQuerier) ResumeNotificationProcessing(context.Context, int64) (
 func (m *pushTestQuerier) MarkNotificationDead(context.Context, db.MarkNotificationDeadParams) (db.Notification, error) {
 	return db.Notification{}, nil
 }
+func (m *pushTestQuerier) MarkNotificationSkipped(context.Context, db.MarkNotificationSkippedParams) (db.Notification, error) {
+	return db.Notification{}, nil
+}
 func (m *pushTestQuerier) ListStuckProcessingNotificationIDs(context.Context, int32) ([]int64, error) {
 	return nil, nil
 }

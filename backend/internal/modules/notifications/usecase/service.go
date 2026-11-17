@@ -46,6 +46,7 @@ type Querier interface {
 	MarkNotificationProcessing(ctx context.Context, id int64) (db.Notification, error)
 	ResumeNotificationProcessing(ctx context.Context, id int64) (db.Notification, error)
 	MarkNotificationDead(ctx context.Context, arg db.MarkNotificationDeadParams) (db.Notification, error)
+	MarkNotificationSkipped(ctx context.Context, arg db.MarkNotificationSkippedParams) (db.Notification, error)
 	ListStuckProcessingNotificationIDs(ctx context.Context, staleMinutes int32) ([]int64, error)
 	MarkNotificationSent(ctx context.Context, arg db.MarkNotificationSentParams) (db.Notification, error)
 	MarkNotificationFailed(ctx context.Context, arg db.MarkNotificationFailedParams) (db.Notification, error)
@@ -181,10 +182,14 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 		if rich {
 			title, body = msg.Title, msg.Summary()
 			if ch == model.ChannelEmail {
-				body = msg.EmailText(s.appURL)
+				email := msg
+				if in.UserID != nil && s.hasDesktopSession(ctx, *in.UserID) {
+					email = msg.WithDesktopAction()
+				}
+				body = email.EmailText(s.appURL)
 				// The layout shows the primary action as its button.
 				if a, ok := msg.Primary(); ok && actionURL != nil && *actionURL == a.URL {
-					body = msg.EmailBody(s.appURL)
+					body = email.EmailBody(s.appURL)
 				}
 			}
 		} else if in.TemplateCode != "" {
@@ -283,6 +288,28 @@ func (s *Service) Enqueue(ctx context.Context, in model.EnqueueInput) ([]model.N
 	return out, nil
 }
 
+// desktopSessions is implemented by db.Queries (CF-236); test fakes may
+// leave it out, then no desktop link is added.
+type desktopSessions interface {
+	UserHasDesktopSession(ctx context.Context, userID int64) (bool, error)
+}
+
+// hasDesktopSession reports whether the user is signed in to ClickFix
+// Masaüstü, so the e-mail can offer "Masaüstünde aç". Lookup errors only
+// drop the link.
+func (s *Service) hasDesktopSession(ctx context.Context, userID int64) bool {
+	q, ok := s.q.(desktopSessions)
+	if !ok {
+		return false
+	}
+	has, err := q.UserHasDesktopSession(ctx, userID)
+	if err != nil {
+		s.log.Debug("desktop_session_lookup_failed", "error", err)
+		return false
+	}
+	return has
+}
+
 // scheduleDeliverAt delivers now or, for e-mail held by quiet hours, at a
 // later time (inline mode has no scheduler and delivers immediately).
 func (s *Service) scheduleDeliverAt(ctx context.Context, id int64, at *time.Time) error {
@@ -360,6 +387,11 @@ func (s *Service) Deliver(ctx context.Context, id int64) error {
 	}
 	res, err := p.Deliver(ctx, row, userUUID)
 	if err != nil {
+		var skip *providers.SkipError
+		if errors.As(err, &skip) {
+			s.skipped(ctx, row, skip.Reason)
+			return nil
+		}
 		return s.deliveryFailed(ctx, row, err)
 	}
 	// Status writes must land even when the task context was cancelled
@@ -455,14 +487,58 @@ func (s *Service) deadLetter(ctx context.Context, row db.Notification, err error
 	})
 	s.log.WarnContext(ctx, "notification_dead_lettered",
 		"id", row.ID, "channel", row.Channel, "cause", cause, "attempts", row.AttemptCount, "error", msg)
-	if observability.Enabled() && observability.Allow("notification-dead:"+row.Channel+":"+cause, deadLetterReportWindow) {
-		observability.CaptureError(ctx, err, observability.Options{
-			Level:       sentry.LevelError,
-			Transaction: "notification delivery " + row.Channel,
-			Fingerprint: []string{"notification-dead-letter", row.Channel, cause},
-			Tags:        map[string]string{"channel": row.Channel, "cause": cause},
-		})
+	if !observability.Enabled() || !observability.Allow("notification-dead:"+row.Channel+":"+cause, deadLetterReportWindow) {
+		return
 	}
+	opts := observability.Options{
+		Level:       sentry.LevelError,
+		Transaction: "notification delivery " + row.Channel,
+		Fingerprint: []string{"notification-dead-letter", row.Channel, cause},
+		Tags:        map[string]string{"channel": row.Channel, "cause": cause, "source": sourceOf(row)},
+	}
+	if recipientRejected(cause) {
+		// The provider refused this recipient for good (bad or unknown
+		// address). Nothing is broken on our side: a warning, not an error.
+		opts.Level = sentry.LevelWarning
+		opts.Fingerprint = []string{"notification-recipient-rejected", row.Channel, cause}
+		observability.CaptureMessage(ctx, "notification recipient rejected ("+row.Channel+", "+cause+")", opts)
+		return
+	}
+	observability.CaptureError(ctx, err, opts)
+}
+
+// recipientRejected reports causes where the provider permanently refused
+// the recipient or message (SMTP 5xx): retrying cannot help and the
+// platform is healthy. Configuration, TLS and auth failures stay errors.
+func recipientRejected(cause string) bool {
+	return cause == mail.CauseRejected
+}
+
+// sourceOf is the low-cardinality origin of a row (event or template code),
+// so a report shows which job sent it without any personal data.
+func sourceOf(row db.Notification) string {
+	if row.SourceEvent.Valid && row.SourceEvent.String != "" {
+		return row.SourceEvent.String
+	}
+	if row.TemplateCode.Valid && row.TemplateCode.String != "" {
+		return row.TemplateCode.String
+	}
+	return "unknown"
+}
+
+// skipped records an intentionally unsent row (status cancelled, history
+// event "skipped"). It is not a failure: no retry, no error report.
+func (s *Service) skipped(ctx context.Context, row db.Notification, reason string) {
+	writeCtx := context.WithoutCancel(ctx)
+	_, _ = s.q.MarkNotificationSkipped(writeCtx, db.MarkNotificationSkippedParams{
+		ID: row.ID, LastError: pgtype.Text{String: "skipped: " + reason, Valid: true},
+	})
+	_, _ = s.q.InsertNotificationHistory(writeCtx, db.InsertNotificationHistoryParams{
+		NotificationID: row.ID, Event: "skipped",
+		Metadata: mustJSON(map[string]any{"reason": reason, "attempt": row.AttemptCount}),
+	})
+	s.log.InfoContext(ctx, "notification_skipped",
+		"id", row.ID, "channel", row.Channel, "reason", reason, "source", sourceOf(row))
 }
 
 // deadLetterReportWindow: at most one tracker event per channel and cause.

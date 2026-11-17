@@ -160,6 +160,17 @@ const (
 	PermPlatformVideoManage = "platform.video.manage"
 )
 
+// Remote support sessions (CF-233).
+const (
+	PermTenantRemoteSupportUse      = "tenant.remote_support.use"
+	PermTenantRemoteSupportControl  = "tenant.remote_support.control"
+	PermTenantRemoteSupportSettings = "tenant.remote_support.settings"
+	PermPlatformRemoteSupportManage = "platform.remote_support.manage"
+)
+
+// Desktop app releases: publish and withdraw (CF-240).
+const PermPlatformDesktopReleasesManage = "platform.desktop_releases.manage"
+
 // Module guides and the ClickFix assistant (CF-141).
 const (
 	PermTenantAssistantUse          = "tenant.assistant.use"
@@ -173,4 +184,31 @@ const (
 	PermTenantIntegrationsRead   = "tenant.integrations.read"
 	PermTenantIntegrationsManage = "tenant.integrations.manage"
 	PermTenantIntegrationsUse    = "tenant.integrations.use"
+	// History pipeline (CF-217): archive and runs, uploads/settings, reviews.
+	PermTenantHistoryRead   = "tenant.history.read"
+	PermTenantHistoryManage = "tenant.history.manage"
+	PermTenantHistoryReview = "tenant.history.review"
+)
+
+// Category taxonomy and the label store (CF-218).
+const (
+	PermTenantCategoriesRead   = "tenant.categories.read"
+	PermTenantCategoriesManage = "tenant.categories.manage"
+	PermTenantCategoriesLabel  = "tenant.categories.label"
+	PermTenantCategoriesExport = "tenant.categories.export"
+)
+
+// Departments (CF-215): business units with their own knowledge, SLA,
+// working hours and AI settings. read_all sees every department's knowledge.
+const (
+	PermTenantDepartmentsRead    = "tenant.departments.read"
+	PermTenantDepartmentsWrite   = "tenant.departments.write"
+	PermTenantDepartmentsReadAll = "tenant.departments.read_all"
+)
+
+// AI knowledge layer measurement (CF-220): the insight panel and the
+// evaluation sets with their run history.
+const (
+	PermTenantAIInsightsRead   = "tenant.ai_insights.read"
+	PermTenantAIInsightsManage = "tenant.ai_insights.manage"
 )

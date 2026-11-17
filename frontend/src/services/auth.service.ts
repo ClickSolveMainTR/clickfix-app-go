@@ -42,6 +42,10 @@ export type DeviceSession = {
   created_at: string;
   expires_at: string;
   impersonated: boolean;
+  /** `desktop` for a ClickFix desktop app session (CF-234). */
+  client?: "desktop";
+  client_os?: "macos" | "windows" | "linux" | null;
+  device_name?: string | null;
 };
 
 type SessionListResult = {
@@ -51,6 +55,7 @@ type SessionListResult = {
 type StatusPayload = components["schemas"]["StatusPayload"];
 export type QRLoginCreated = components["schemas"]["QRLoginCreated"];
 export type QRLoginState = components["schemas"]["QRLoginState"];
+export type DesktopLoginCode = components["schemas"]["DesktopLoginCode"];
 type PatchProfileRequest = components["schemas"]["PatchProfileRequest"];
 type ForgotPasswordRequest = components["schemas"]["ForgotPasswordRequest"];
 type ResetPasswordRequest = components["schemas"]["ResetPasswordRequest"];
@@ -118,6 +123,23 @@ export const authService = {
       await apiClient.POST("/v1/auth/qr/sessions/{id}/state", {
         params: { path: { id: sessionId } },
         body: { browser_secret: browserSecret },
+      }),
+      { silent: true },
+    );
+  },
+
+  /**
+   * One-time code for the desktop app (CF-234; `/desktop/login`). Bound to
+   * the app's state and PKCE S256 challenge; 60 s, single use.
+   */
+  async createDesktopLoginCode(state: string, codeChallenge: string) {
+    return unwrap<DesktopLoginCode>(
+      await apiClient.POST("/v1/auth/desktop/codes", {
+        body: {
+          state,
+          code_challenge: codeChallenge,
+          code_challenge_method: "S256",
+        },
       }),
       { silent: true },
     );

@@ -79,6 +79,13 @@ diliminde, saat dilimi adıyla), **ne yapılmalı** (birincil CTA).
   atılır.
 - Mobil: push `data.url` panel yolunu taşır, `mobile/src/features/push/links.ts` uygulama
   rotasına çevirir; push'un organizasyonu önce seçilir. Şema `clickfix://`.
+- **ClickFix Masaüstü (CF-236):** etkin bir masaüstü oturumu olan kullanıcının
+  (`refresh_tokens.client = 'desktop'`) bildirim e-postalarına, birincil eylem uygulama içi
+  bir yolsa "Masaüstünde aç" bağlantısı eklenir:
+  `https://<kök>/desktop/open?path=<yol>`. Sayfa uygulamayı `clickfix://` ile açar ve
+  tarayıcıda devam etme bağlantısı bırakır (e-posta istemcileri özel şemalı bağlantıları
+  siler). In-app satırı ve push değişmez. Masaüstü uygulamasında web push aboneliği açılmaz;
+  canlı in-app bildirimi uygulamanın yerel bildirimine dönüşür (pencere öndeyse gösterilmez).
 - **Açık iş:** e-postadaki `https://getclickfix.com/...` linklerinin uygulamada açılması
   (universal link / App Links) yapılandırılmadı: iOS `associatedDomains`, Android
   `intentFilters` (autoVerify), web'de `/.well-known/apple-app-site-association` ve
@@ -103,6 +110,23 @@ diliminde, saat dilimi adıyla), **ne yapılmalı** (birincil CTA).
 - **Yeniden deneme:** Asynq teslim görevi; geri çekilmeli yeniden deneme ve kalıcı hatada
   kayıt (dead-letter, `notification_history`) #172 (CF-153) ile geliyor. Expo push ayrı
   kuyrukta yeniden denenir; `DeviceNotRegistered` cihazı devre dışı bırakır.
+- **Ayrılmış alan adları (CF-226):** RFC 2606 alan adlarındaki alıcılara (`example.com`,
+  `example.net`, `example.org` ve alt alan adları; `*.test`, `*.invalid`, `*.localhost`,
+  `*.example`) e-posta denenmez. Satır `cancelled` durumuna alınır, `last_error`
+  `skipped: reserved_domain` olur ve geçmişe `skipped` olayı yazılır. Bu bir hata değildir:
+  yeniden denenmez, Sentry'ye gitmez, yalnız `notification_skipped` log satırı düşer.
+  Sadece `APP_ENV=development` iken (MailHog her adresi kabul eder) bu adreslere de gönderilir.
+- **Kalıcı sağlayıcı reddi:** SMTP 5xx (ör. Resend `550 Invalid to`) yeniden denenmez, satır
+  hemen dead-letter olur. Sentry'ye hata değil **uyarı** olarak, kanal ve neden başına saatte
+  en fazla bir kez düşer (`notification-recipient-rejected` parmak izi, `source` etiketi satırın
+  olay/şablon kodu). Yapılandırma, TLS ve kimlik doğrulama hataları hata olarak kalır; ağ,
+  zaman aşımı ve 4xx gibi geçici hatalar eskisi gibi geri çekilmeli yeniden denenir.
+- **Demo ve seed verisi (karar, CF-226):** demo/seed kullanıcılarının bildirim e-postaları
+  ayrıca kapatılmaz. Bu kullanıcılar ayrılmış alan adlarını kullandığı sürece gönderim
+  zaten atlanır ve in-app/push bildirimleri çalışmaya devam eder (demo akışı bozulmaz).
+  Yeni seed ve örnek verisi yalnız ayrılmış alan adlarını (`example.com`, `*.test`) kullanır.
+  `seed-demo`'daki `example.com.tr` adresleri ayrılmış değildir, gerçek bir alana gidebilir;
+  bunların `example.com`'a çekilmesi ayrı bir iş olarak izlenir.
 - **Takılan satırlar:** `ReclaimStuck` işlemde kalan satırları yeniden teslime verir.
 - **Özet:** `ProcessDigests` saatlik/günlük özet e-postası gönderir (kritik olmayan katalog
   e-postaları). Düşük öncelikli olaylar (CSAT, iş tamamlandı) varsayılan olarak e-posta

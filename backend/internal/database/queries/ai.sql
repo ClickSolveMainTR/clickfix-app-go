@@ -1,11 +1,15 @@
 -- name: AIPolicy :one
 SELECT * FROM ai_policies WHERE organization_id=$1;
 -- name: AISavePolicy :one
-INSERT INTO ai_policies(organization_id,enabled,mask_pii,allow_unmask,daily_calls,concurrency,daily_budget_micros)
- VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id) DO UPDATE SET enabled=excluded.enabled,mask_pii=excluded.mask_pii,
- allow_unmask=excluded.allow_unmask,daily_calls=excluded.daily_calls,concurrency=excluded.concurrency,daily_budget_micros=excluded.daily_budget_micros RETURNING *;
+-- batch_share_percent NULL keeps the stored share (50 on a new row).
+INSERT INTO ai_policies(organization_id,enabled,mask_pii,allow_unmask,daily_calls,concurrency,daily_budget_micros,batch_share_percent)
+ VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE(sqlc.narg(batch_share_percent)::smallint,50)) ON CONFLICT(organization_id) DO UPDATE SET enabled=excluded.enabled,mask_pii=excluded.mask_pii,
+ allow_unmask=excluded.allow_unmask,daily_calls=excluded.daily_calls,concurrency=excluded.concurrency,daily_budget_micros=excluded.daily_budget_micros,
+ batch_share_percent=COALESCE(sqlc.narg(batch_share_percent)::smallint,ai_policies.batch_share_percent) RETURNING *;
 -- name: AIUsageToday :one
-SELECT count(*)::bigint AS calls,COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0)::bigint AS cost
+SELECT count(*)::bigint AS calls,COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0)::bigint AS cost,
+ count(*) FILTER (WHERE lane='batch')::bigint AS batch_calls,
+ COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)) FILTER (WHERE lane='batch'),0)::bigint AS batch_cost
  FROM ai_runs WHERE organization_id=$1 AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul';
 -- name: AIActive :one
@@ -14,8 +18,8 @@ SELECT count(*) FROM ai_runs WHERE organization_id=$1 AND status='running';
 WITH recording AS (
  SELECT id FROM recording_transcripts WHERE organization_id=$1 AND uuid=sqlc.narg(recording_uuid)::uuid AND status='processing' FOR KEY SHARE
 )
-INSERT INTO ai_runs(organization_id,uuid,actor_id,task,provider,model,status,input,retrieved_chunks,reserved_cost_micros,reserved_credits,reserved_tokens,conversation_id)
- SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+INSERT INTO ai_runs(organization_id,uuid,actor_id,task,provider,model,status,input,retrieved_chunks,reserved_cost_micros,reserved_credits,reserved_tokens,conversation_id,lane)
+ SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,COALESCE(sqlc.narg(lane)::text,'live')
  WHERE sqlc.narg(recording_uuid)::uuid IS NULL OR EXISTS(SELECT 1 FROM recording) RETURNING *;
 -- name: AIFinishRun :execrows
 UPDATE ai_runs SET status=sqlc.arg(status),output=CASE WHEN pii_erased_at IS NULL THEN sqlc.arg(output)::text ELSE '' END,

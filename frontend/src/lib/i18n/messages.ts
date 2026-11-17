@@ -43,6 +43,8 @@ import enSecurity from "@/locales/en/security.json";
 import enPlatformHealth from "@/locales/en/platform_health.json";
 import enEngineering from "@/locales/en/engineering.json";
 import enTeams from "@/locales/en/teams.json";
+import enCategories from "@/locales/en/categories.json";
+import enDepartments from "@/locales/en/departments.json";
 import enChannels from "@/locales/en/channels.json";
 import enInbox from "@/locales/en/inbox.json";
 import enContacts from "@/locales/en/contacts.json";
@@ -63,6 +65,7 @@ import enCoaching from "@/locales/en/coaching.json";
 import enAutomationIntegrations from "@/locales/en/automation_integrations.json";
 import enIntegrationsConnect from "@/locales/en/integrations_connect.json";
 import enVideo from "@/locales/en/video.json";
+import enRemoteSupport from "@/locales/en/remote_support.json";
 import enGuides from "@/locales/en/guides.json";
 import enAssistant from "@/locales/en/assistant.json";
 import enRouting from "@/locales/en/routing.json";
@@ -128,6 +131,8 @@ import trSecurity from "@/locales/tr/security.json";
 import trPlatformHealth from "@/locales/tr/platform_health.json";
 import trEngineering from "@/locales/tr/engineering.json";
 import trTeams from "@/locales/tr/teams.json";
+import trCategories from "@/locales/tr/categories.json";
+import trDepartments from "@/locales/tr/departments.json";
 import trChannels from "@/locales/tr/channels.json";
 import trInbox from "@/locales/tr/inbox.json";
 import trContacts from "@/locales/tr/contacts.json";
@@ -148,6 +153,7 @@ import trCoaching from "@/locales/tr/coaching.json";
 import trAutomationIntegrations from "@/locales/tr/automation_integrations.json";
 import trIntegrationsConnect from "@/locales/tr/integrations_connect.json";
 import trVideo from "@/locales/tr/video.json";
+import trRemoteSupport from "@/locales/tr/remote_support.json";
 import trGuides from "@/locales/tr/guides.json";
 import trAssistant from "@/locales/tr/assistant.json";
 import trRouting from "@/locales/tr/routing.json";
@@ -186,6 +192,8 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     security: trSecurity,
     platform_health: trPlatformHealth,
     teams: trTeams,
+    categories: trCategories,
+    departments: trDepartments,
     engineering: trEngineering,
     channels: trChannels,
     inbox: trInbox,
@@ -207,6 +215,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     automation_integrations: trAutomationIntegrations,
     integrations_connect: trIntegrationsConnect,
     video: trVideo,
+    remote_support: trRemoteSupport,
     guides: trGuides,
     assistant: trAssistant,
     routing: trRouting,
@@ -267,6 +276,8 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     security: enSecurity,
     platform_health: enPlatformHealth,
     teams: enTeams,
+    categories: enCategories,
+    departments: enDepartments,
     engineering: enEngineering,
     channels: enChannels,
     inbox: enInbox,
@@ -288,6 +299,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     automation_integrations: enAutomationIntegrations,
     integrations_connect: enIntegrationsConnect,
     video: enVideo,
+    remote_support: enRemoteSupport,
     guides: enGuides,
     assistant: enAssistant,
     routing: enRouting,

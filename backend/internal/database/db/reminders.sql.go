@@ -104,7 +104,7 @@ func (q *Queries) GetConversationBulkOp(ctx context.Context, arg GetConversation
 }
 
 const getConversationsByUUIDs = `-- name: GetConversationsByUUIDs :many
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations
 WHERE organization_id = $1 AND uuid = ANY($2::uuid[]) AND deleted_at IS NULL
 `
 
@@ -164,6 +164,10 @@ func (q *Queries) GetConversationsByUUIDs(ctx context.Context, arg GetConversati
 			&i.MergedAt,
 			&i.AnonymizedAt,
 			&i.BrandID,
+			&i.DepartmentID,
+			&i.DepartmentSource,
+			&i.DepartmentConfidence,
+			&i.DepartmentRoutedAt,
 		); err != nil {
 			return nil, err
 		}

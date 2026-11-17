@@ -64,6 +64,13 @@ SELECT g.key::text AS key, g.quantity::bigint AS quantity FROM (
  UNION ALL SELECT 'channels.whatsapp', count(*) FROM channel_instances WHERE organization_id=$1::bigint AND deleted_at IS NULL AND channel_type='whatsapp'
  UNION ALL SELECT 'contacts', count(*) FROM contacts WHERE organization_id=$1::bigint AND deleted_at IS NULL
  UNION ALL SELECT 'storage.bytes', COALESCE(sum(size_bytes),0) FROM attachments WHERE organization_id=$1::bigint AND deleted_at IS NULL
+ -- Daily AI limits (CF-229, CF-242): the same counts AIUsageToday and
+ -- AIActive enforce, reset at midnight in Istanbul.
+ UNION ALL SELECT 'ai.daily_calls', count(*) FROM ai_runs WHERE organization_id=$1::bigint AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
+  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul'
+ UNION ALL SELECT 'ai.daily_budget_micros', COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0) FROM ai_runs WHERE organization_id=$1::bigint AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
+  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul'
+ UNION ALL SELECT 'ai.concurrency', count(*) FROM ai_runs WHERE organization_id=$1::bigint AND status='running'
 ) g
 `
 
@@ -73,7 +80,8 @@ type BillingLiveGaugesRow struct {
 }
 
 // Current counts of the gauge features nothing meters by event: the usage
-// view reads them live so seats and channels never show 0 while they exist.
+// view reads them live so seats, channels and the daily AI limits never show
+// 0 while they are in use.
 func (q *Queries) BillingLiveGauges(ctx context.Context, organizationID int64) ([]BillingLiveGaugesRow, error) {
 	rows, err := q.db.Query(ctx, billingLiveGauges, organizationID)
 	if err != nil {

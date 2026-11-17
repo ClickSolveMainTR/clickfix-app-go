@@ -13,10 +13,10 @@ import (
 )
 
 const complianceAIRuns = `-- name: ComplianceAIRuns :many
-SELECT DISTINCT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at FROM ai_runs a JOIN ai_agent_jobs j ON j.organization_id=a.organization_id AND j.run_uuid=a.uuid
+SELECT DISTINCT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at, a.lane FROM ai_runs a JOIN ai_agent_jobs j ON j.organization_id=a.organization_id AND j.run_uuid=a.uuid
 JOIN conversations c ON c.organization_id=j.organization_id AND c.id=j.conversation_id
 WHERE a.organization_id=$1 AND c.contact_id=$2
-UNION SELECT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at FROM ai_runs a JOIN conversations c ON c.organization_id=a.organization_id AND c.id=a.conversation_id WHERE a.organization_id=$1 AND c.contact_id=$2 ORDER BY id
+UNION SELECT a.id, a.uuid, a.organization_id, a.actor_id, a.task, a.provider, a.model, a.status, a.input, a.output, a.retrieved_chunks, a.tool_calls, a.input_tokens, a.output_tokens, a.cost_micros, a.reserved_cost_micros, a.reserved_tokens, a.reserved_credits, a.charged_credits, a.latency_ms, a.error_code, a.created_at, a.finished_at, a.conversation_id, a.pii_erased_at, a.lane FROM ai_runs a JOIN conversations c ON c.organization_id=a.organization_id AND c.id=a.conversation_id WHERE a.organization_id=$1 AND c.contact_id=$2 ORDER BY id
 `
 
 type ComplianceAIRunsParams struct {
@@ -59,6 +59,7 @@ func (q *Queries) ComplianceAIRuns(ctx context.Context, arg ComplianceAIRunsPara
 			&i.FinishedAt,
 			&i.ConversationID,
 			&i.PiiErasedAt,
+			&i.Lane,
 		); err != nil {
 			return nil, err
 		}
@@ -454,7 +455,7 @@ func (q *Queries) ComplianceConversationPublicID(ctx context.Context, arg Compli
 }
 
 const complianceConversations = `-- name: ComplianceConversations :many
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations WHERE organization_id=$1 AND contact_id=$2 ORDER BY id FOR UPDATE
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations WHERE organization_id=$1 AND contact_id=$2 ORDER BY id FOR UPDATE
 `
 
 type ComplianceConversationsParams struct {
@@ -513,6 +514,10 @@ func (q *Queries) ComplianceConversations(ctx context.Context, arg ComplianceCon
 			&i.MergedAt,
 			&i.AnonymizedAt,
 			&i.BrandID,
+			&i.DepartmentID,
+			&i.DepartmentSource,
+			&i.DepartmentConfidence,
+			&i.DepartmentRoutedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1006,7 +1011,7 @@ func (q *Queries) ComplianceRetentionAttachments(ctx context.Context, arg Compli
 }
 
 const complianceRetentionConversations = `-- name: ComplianceRetentionConversations :many
-SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id FROM conversations WHERE organization_id=$1 AND status='closed' AND closed_at < now()-make_interval(days=>$2::int)
+SELECT id, uuid, organization_id, number, channel_type, channel_instance_id, contact_id, company_id, subject, status, status_id, priority, source, assignee_user_id, assignee_team_id, custom_fields, external_thread_id, sla_policy_id, first_response_due_at, next_response_due_at, resolution_due_at, sla_breached_at, first_response_at, waiting_since, snoozed_until, resolved_at, closed_at, last_message_at, last_inbound_at, last_outbound_at, last_message_preview, last_message_direction, message_count, meta, created_at, updated_at, deleted_at, merged_into_id, merged_at, anonymized_at, brand_id, department_id, department_source, department_confidence, department_routed_at FROM conversations WHERE organization_id=$1 AND status='closed' AND closed_at < now()-make_interval(days=>$2::int)
 AND anonymized_at IS NULL ORDER BY id LIMIT 200 FOR UPDATE
 `
 
@@ -1066,6 +1071,10 @@ func (q *Queries) ComplianceRetentionConversations(ctx context.Context, arg Comp
 			&i.MergedAt,
 			&i.AnonymizedAt,
 			&i.BrandID,
+			&i.DepartmentID,
+			&i.DepartmentSource,
+			&i.DepartmentConfidence,
+			&i.DepartmentRoutedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -400,5 +400,17 @@
   "screen.title": "Ekran bağlamı",
   "screen.page": "Sayfa",
   "screen.events": "Olaylar",
-  "filters.identity": "Kimlik"
+  "filters.identity": "Kimlik",
+  "events.department_transferred": "{{actor}} konuşmayı {{department}} departmanına devretti",
+  "events.department_picked": "Müşteri {{department}} departmanını seçti",
+  "events.department_predicted": "AI konuşmayı {{department}} departmanına yönlendirdi",
+  "events.department_organization_wide": "organizasyon geneli",
+  "events.department_ai": "AI",
+  "events.remote_support_ended": "Uzaktan destek oturumu bitti",
+  "events.remote_support_not_started": "Uzaktan destek oturumu ekran paylaşılmadan kapandı",
+  "events.remote_support_mode_view": "izleme",
+  "events.remote_support_mode_control": "kontrol isteği",
+  "events.remote_support_duration": "süre {{minutes}}:{{seconds}}",
+  "events.remote_support_control_given": "kontrol onayı verildi",
+  "events.remote_support_recorded": "kaydedildi"
 }

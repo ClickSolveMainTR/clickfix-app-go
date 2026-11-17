@@ -205,3 +205,34 @@ func TestEmailBodyLeavesPrimaryToTheLayout(t *testing.T) {
 		t.Fatalf("body:\n%s", body)
 	}
 }
+
+func TestWithDesktopAction(t *testing.T) {
+	m := Message{Lang: "tr", Actions: []Action{{ID: ActionOpen, Label: "Konuşmayı aç", URL: "/inbox?c=abc"}}}
+	got := m.WithDesktopAction()
+	if len(m.Actions) != 1 {
+		t.Fatal("original message changed")
+	}
+	if len(got.Actions) != 2 || got.Actions[1] != (Action{ID: ActionDesktop, Label: "Masaüstünde aç", URL: "/desktop/open?path=%2Finbox%3Fc%3Dabc"}) {
+		t.Fatalf("actions %+v", got.Actions)
+	}
+	if p, _ := got.Primary(); p.ID != ActionOpen {
+		t.Fatalf("primary changed: %+v", p)
+	}
+	body := got.EmailBody("https://getclickfix.com")
+	if !strings.Contains(body, "Masaüstünde aç: https://getclickfix.com/desktop/open?path=%2Finbox%3Fc%3Dabc") {
+		t.Fatalf("e-mail body:\n%s", body)
+	}
+	if strings.Contains(body, "Konuşmayı aç:") {
+		t.Fatal("primary action repeated in the body")
+	}
+	en := Message{Lang: "en", Actions: m.Actions}.WithDesktopAction()
+	if en.Actions[1].Label != "Open in ClickFix Desktop" {
+		t.Fatalf("label %q", en.Actions[1].Label)
+	}
+	// Absolute or missing primary links get no desktop link.
+	for _, a := range [][]Action{nil, {{ID: ActionOpen, URL: "https://example.com/x"}}, {{ID: ActionOpen, URL: "//evil.test"}}} {
+		if out := (Message{Actions: a}).WithDesktopAction(); len(out.Actions) != len(a) {
+			t.Fatalf("desktop link added for %+v", a)
+		}
+	}
+}

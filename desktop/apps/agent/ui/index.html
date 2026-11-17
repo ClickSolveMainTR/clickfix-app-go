@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClickFix Masaüstü</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="card" aria-live="polite">
+      <div class="logo" aria-hidden="true">C</div>
+      <h1>ClickFix Masaüstü</h1>
+
+      <section id="connecting">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>ClickFix'e bağlanılıyor…</p>
+      </section>
+
+      <section id="offline" hidden>
+        <h2>Bağlantı kurulamadı</h2>
+        <p>
+          ClickFix sunucusuna ulaşılamıyor. İnternet bağlantınızı denetleyin ve
+          yeniden deneyin.
+        </p>
+        <p class="detail" id="offline-detail"></p>
+        <button id="retry" type="button">Yeniden dene</button>
+      </section>
+
+      <section id="signed-out" hidden>
+        <h2>Giriş yapın</h2>
+        <p>
+          Giriş, varsayılan tarayıcınızda açılır. Şifre, Google, Apple, passkey
+          ya da SSO ile her zamanki gibi giriş yapın; ardından uygulamaya
+          dönersiniz.
+        </p>
+        <button id="sign-in" type="button">Tarayıcıda giriş yap</button>
+      </section>
+
+      <section id="waiting" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <h2>Tarayıcıda girişi tamamlayın</h2>
+        <p>
+          Tarayıcıda "ClickFix Masaüstü'ne giriş yapılıyor" ekranında devam
+          edin. Tarayıcı uygulamayı açmak için izin isteyebilir.
+        </p>
+        <div class="actions">
+          <button id="reopen" type="button">Tarayıcıyı yeniden aç</button>
+          <button id="cancel" type="button" class="secondary">Vazgeç</button>
+        </div>
+      </section>
+
+      <section id="error" hidden>
+        <h2>Giriş tamamlanamadı</h2>
+        <p class="detail" id="error-detail"></p>
+        <div class="actions">
+          <button id="error-retry" type="button">Yeniden dene</button>
+          <button id="error-sign-in" type="button" class="secondary">
+            Yeniden giriş yap
+          </button>
+        </div>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

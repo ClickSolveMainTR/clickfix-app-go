@@ -400,5 +400,17 @@
   "screen.title": "Screen context",
   "screen.page": "Page",
   "screen.events": "Events",
-  "filters.identity": "Identity"
+  "filters.identity": "Identity",
+  "events.department_transferred": "{{actor}} transferred the conversation to {{department}}",
+  "events.department_picked": "The customer picked {{department}}",
+  "events.department_predicted": "The AI routed the conversation to {{department}}",
+  "events.department_organization_wide": "organization-wide",
+  "events.department_ai": "The AI",
+  "events.remote_support_ended": "Remote support session ended",
+  "events.remote_support_not_started": "Remote support session closed before the screen was shared",
+  "events.remote_support_mode_view": "view only",
+  "events.remote_support_mode_control": "control requested",
+  "events.remote_support_duration": "duration {{minutes}}:{{seconds}}",
+  "events.remote_support_control_given": "control approved",
+  "events.remote_support_recorded": "recorded"
 }

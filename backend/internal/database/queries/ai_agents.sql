@@ -43,3 +43,18 @@ ON CONFLICT DO NOTHING RETURNING *;
 SELECT uuid,subject,status,created_at,last_message_preview FROM conversations
 WHERE organization_id=$1 AND contact_id=$2 AND deleted_at IS NULL AND id<>sqlc.arg(current_conversation_id)
 ORDER BY created_at DESC LIMIT 10;
+
+-- name: AIAgentEnableChannel :one
+-- A newly connected channel type joins an existing, active agent config
+-- (CF-243). Idempotent: no row when the config is missing, off, already
+-- lists the type or is at the 20-channel limit.
+UPDATE ai_agent_configs SET
+  config = jsonb_set(config, '{channels}',
+    (CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END)
+    || to_jsonb(sqlc.arg(channel_type)::text)),
+  revision = revision + 1
+WHERE organization_id = sqlc.arg(organization_id)
+  AND COALESCE(config->>'mode', 'off') <> 'off'
+  AND NOT (CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END) ? sqlc.arg(channel_type)::text
+  AND jsonb_array_length(CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END) < 20
+RETURNING revision;

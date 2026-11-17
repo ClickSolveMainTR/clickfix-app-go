@@ -106,6 +106,10 @@ func TestEnrichedContentPerChannel(t *testing.T) {
 	if strings.Contains(email[1], "Open conversation:") {
 		t.Fatal("primary action repeated in the body")
 	}
+	// No desktop session: no "open in the desktop app" link (CF-236).
+	if strings.Contains(email[1], "/desktop/open") {
+		t.Fatalf("desktop link without a desktop session:\n%s", email[1])
+	}
 	inapp := payloads[model.ChannelInapp]
 	push, _ := inapp["push"].(map[string]any)
 	if push["title"] != "Conversation assigned" || push["body"] != "WhatsApp · #42" {
@@ -135,4 +139,77 @@ func mustUUID(t *testing.T, pool *pgxpool.Pool, userID int64) uuid.UUID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// TestEmailDesktopLink checks, against Postgres, that a user with an active
+// ClickFix Masaüstü session gets "Open in ClickFix Desktop" in the e-mail and
+// that the in-app row stays as it was (CF-236).
+func TestEmailDesktopLink(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	q := db.New(pool)
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, password_hash, name, surname, status, locale) VALUES ($1, 'x', 'Jane', 'Agent', 'active', 'en') RETURNING id`,
+		"nd-"+uuid.NewString()[:8]+"@example.test").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, userID) })
+	if has, err := q.UserHasDesktopSession(ctx, userID); err != nil || has {
+		t.Fatalf("fresh user has desktop session = %v, %v", has, err)
+	}
+	// A revoked desktop session and an active web session do not count.
+	if _, err := pool.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, revoked_at, client) VALUES
+		($1, $2, NOW() + interval '1 day', NOW(), 'desktop'),
+		($1, $3, NOW() + interval '1 day', NULL, NULL)`,
+		userID, "h-"+uuid.NewString(), "h-"+uuid.NewString()); err != nil {
+		t.Fatal(err)
+	}
+	if has, _ := q.UserHasDesktopSession(ctx, userID); has {
+		t.Fatal("revoked desktop / web session counted as desktop session")
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, client, client_os) VALUES ($1, $2, NOW() + interval '1 day', 'desktop', 'macos')`,
+		userID, "h-"+uuid.NewString()); err != nil {
+		t.Fatal(err)
+	}
+	if has, err := q.UserHasDesktopSession(ctx, userID); err != nil || !has {
+		t.Fatalf("desktop session = %v, %v", has, err)
+	}
+
+	svc := New(q, nil, []providers.Provider{providers.InappProvider{}, providers.NoopProvider{Name: "email", Log: slog.Default()}}, slog.Default()).
+		WithAppURL("https://app.example.test/")
+	conv := uuid.NewString()
+	if err := svc.NotifyEvent(ctx, NotifyInput{
+		Event: events.ConversationAssigned, UserIDs: []int64{userID}, ActionURL: "/inbox?c=" + conv, DedupeKey: "ev-" + conv,
+		Vars: map[string]string{"number": "7", "customer": "Deniz Kaya", "channel": "whatsapp", "actor": "Ali Veli", "url": "/inbox?c=" + conv},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bodies := map[string]string{}
+	rows, err := pool.Query(ctx, `SELECT channel, body FROM notifications WHERE user_id = $1`, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var ch, body string
+		if err := rows.Scan(&ch, &body); err != nil {
+			t.Fatal(err)
+		}
+		bodies[ch] = body
+	}
+	want := "Open in ClickFix Desktop: https://app.example.test/desktop/open?path=%2Finbox%3Fc%3D" + conv
+	if !strings.Contains(bodies[model.ChannelEmail], want) {
+		t.Fatalf("e-mail misses %q:\n%s", want, bodies[model.ChannelEmail])
+	}
+	if strings.Contains(bodies[model.ChannelInapp], "/desktop/open") {
+		t.Fatalf("desktop link leaked into the in-app row: %s", bodies[model.ChannelInapp])
+	}
 }

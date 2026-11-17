@@ -5,6 +5,7 @@ import {
   Workflow,
   BarChart3,
   BookOpen,
+  FolderTree,
   CalendarCog,
   CalendarDays,
   BookUser,
@@ -56,6 +57,7 @@ import {
   MessageSquareHeart,
   Video,
   Zap,
+  MonitorUp,
 } from "lucide-react";
 
 import { permissions } from "@/config/permissions";
@@ -301,6 +303,13 @@ export const platformNav = defineNav({
           permission: permissions.video.platformManage,
         },
         {
+          id: "platform-remote-support",
+          titleKey: "layout.nav_platform_remote_support",
+          href: routes.platform.remoteSupport,
+          icon: MonitorUp,
+          permission: permissions.remoteSupport.platformManage,
+        },
+        {
           id: "platform-assistant",
           titleKey: "layout.nav_platform_assistant",
           href: routes.platform.assistant,
@@ -458,6 +467,13 @@ export const cmsNav = defineNav({
       defaultOpen: true,
       items: [
         {
+          id: "departments",
+          titleKey: "layout.nav_departments",
+          href: routes.cms.departments.root,
+          icon: Building2,
+          permission: permissions.tenant.departments.read,
+        },
+        {
           id: "teams",
           titleKey: "layout.nav_teams",
           href: routes.cms.teams.root,
@@ -591,6 +607,15 @@ export const cmsNav = defineNav({
           icon: SlidersHorizontal,
           permission: permissions.tenant.settings.read,
         },
+        // CF-243: the AI hub right after General.
+        {
+          id: "settings-ai",
+          titleKey: "layout.nav_ai_settings",
+          href: routes.cms.settings.ai,
+          icon: Bot,
+          permission: permissions.tenant.settings.read,
+          keywordsKey: "layout.nav_ai_settings_keywords",
+        },
         {
           id: "settings-members",
           titleKey: "layout.nav_tenant_settings_members",
@@ -648,18 +673,18 @@ export const cmsNav = defineNav({
           permission: permissions.tenant.settings.write,
         },
         {
-          id: "settings-ai",
-          titleKey: "layout.nav_ai_settings",
-          href: routes.cms.settings.ai,
-          icon: Bot,
-          permission: permissions.tenant.settings.read,
-        },
-        {
           id: "settings-knowledge",
           titleKey: "layout.nav_knowledge",
           href: routes.cms.settings.knowledge.root,
           icon: BookOpen,
           permission: permissions.tenant.settings.read,
+        },
+        {
+          id: "settings-categories",
+          titleKey: "layout.nav_categories",
+          href: routes.cms.settings.categories,
+          icon: FolderTree,
+          permission: permissions.tenant.categories.read,
         },
         {
           id: "settings-billing",
@@ -741,6 +766,13 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.video,
           icon: Video,
           permission: permissions.tenant.video.manage,
+        },
+        {
+          id: "settings-remote-support",
+          titleKey: "layout.nav_tenant_settings_remote_support",
+          href: routes.cms.settings.remoteSupport,
+          icon: MonitorUp,
+          permission: permissions.tenant.remoteSupport.settings,
         },
         {
           id: "settings-customer-health",

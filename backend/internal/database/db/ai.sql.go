@@ -117,7 +117,7 @@ func (q *Queries) AIFinishRun(ctx context.Context, arg AIFinishRunParams) (int64
 }
 
 const aIGetRun = `-- name: AIGetRun :one
-SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at FROM ai_runs WHERE organization_id=$1 AND uuid=$2
+SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at, lane FROM ai_runs WHERE organization_id=$1 AND uuid=$2
 `
 
 type AIGetRunParams struct {
@@ -154,17 +154,18 @@ func (q *Queries) AIGetRun(ctx context.Context, arg AIGetRunParams) (AiRun, erro
 		&i.FinishedAt,
 		&i.ConversationID,
 		&i.PiiErasedAt,
+		&i.Lane,
 	)
 	return i, err
 }
 
 const aIInsertRun = `-- name: AIInsertRun :one
 WITH recording AS (
- SELECT id FROM recording_transcripts WHERE organization_id=$1 AND uuid=$14::uuid AND status='processing' FOR KEY SHARE
+ SELECT id FROM recording_transcripts WHERE organization_id=$1 AND uuid=$15::uuid AND status='processing' FOR KEY SHARE
 )
-INSERT INTO ai_runs(organization_id,uuid,actor_id,task,provider,model,status,input,retrieved_chunks,reserved_cost_micros,reserved_credits,reserved_tokens,conversation_id)
- SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
- WHERE $14::uuid IS NULL OR EXISTS(SELECT 1 FROM recording) RETURNING id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at
+INSERT INTO ai_runs(organization_id,uuid,actor_id,task,provider,model,status,input,retrieved_chunks,reserved_cost_micros,reserved_credits,reserved_tokens,conversation_id,lane)
+ SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,COALESCE($14::text,'live')
+ WHERE $15::uuid IS NULL OR EXISTS(SELECT 1 FROM recording) RETURNING id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at, lane
 `
 
 type AIInsertRunParams struct {
@@ -181,6 +182,7 @@ type AIInsertRunParams struct {
 	ReservedCredits    int64       `json:"reserved_credits"`
 	ReservedTokens     int64       `json:"reserved_tokens"`
 	ConversationID     pgtype.Int8 `json:"conversation_id"`
+	Lane               pgtype.Text `json:"lane"`
 	RecordingUuid      pgtype.UUID `json:"recording_uuid"`
 }
 
@@ -199,6 +201,7 @@ func (q *Queries) AIInsertRun(ctx context.Context, arg AIInsertRunParams) (AiRun
 		arg.ReservedCredits,
 		arg.ReservedTokens,
 		arg.ConversationID,
+		arg.Lane,
 		arg.RecordingUuid,
 	)
 	var i AiRun
@@ -228,12 +231,13 @@ func (q *Queries) AIInsertRun(ctx context.Context, arg AIInsertRunParams) (AiRun
 		&i.FinishedAt,
 		&i.ConversationID,
 		&i.PiiErasedAt,
+		&i.Lane,
 	)
 	return i, err
 }
 
 const aIListRuns = `-- name: AIListRuns :many
-SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at FROM ai_runs WHERE organization_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3
+SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at, lane FROM ai_runs WHERE organization_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3
 `
 
 type AIListRunsParams struct {
@@ -277,6 +281,7 @@ func (q *Queries) AIListRuns(ctx context.Context, arg AIListRunsParams) ([]AiRun
 			&i.FinishedAt,
 			&i.ConversationID,
 			&i.PiiErasedAt,
+			&i.Lane,
 		); err != nil {
 			return nil, err
 		}
@@ -289,7 +294,7 @@ func (q *Queries) AIListRuns(ctx context.Context, arg AIListRunsParams) ([]AiRun
 }
 
 const aIPolicy = `-- name: AIPolicy :one
-SELECT organization_id, enabled, mask_pii, allow_unmask, daily_calls, concurrency, daily_budget_micros, created_at, updated_at FROM ai_policies WHERE organization_id=$1
+SELECT organization_id, enabled, mask_pii, allow_unmask, daily_calls, concurrency, daily_budget_micros, created_at, updated_at, batch_share_percent FROM ai_policies WHERE organization_id=$1
 `
 
 func (q *Queries) AIPolicy(ctx context.Context, organizationID int64) (AiPolicy, error) {
@@ -305,6 +310,7 @@ func (q *Queries) AIPolicy(ctx context.Context, organizationID int64) (AiPolicy,
 		&i.DailyBudgetMicros,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BatchSharePercent,
 	)
 	return i, err
 }
@@ -328,21 +334,24 @@ func (q *Queries) AIQuotaMonth(ctx context.Context, organizationID int64) (AIQuo
 }
 
 const aISavePolicy = `-- name: AISavePolicy :one
-INSERT INTO ai_policies(organization_id,enabled,mask_pii,allow_unmask,daily_calls,concurrency,daily_budget_micros)
- VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id) DO UPDATE SET enabled=excluded.enabled,mask_pii=excluded.mask_pii,
- allow_unmask=excluded.allow_unmask,daily_calls=excluded.daily_calls,concurrency=excluded.concurrency,daily_budget_micros=excluded.daily_budget_micros RETURNING organization_id, enabled, mask_pii, allow_unmask, daily_calls, concurrency, daily_budget_micros, created_at, updated_at
+INSERT INTO ai_policies(organization_id,enabled,mask_pii,allow_unmask,daily_calls,concurrency,daily_budget_micros,batch_share_percent)
+ VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8::smallint,50)) ON CONFLICT(organization_id) DO UPDATE SET enabled=excluded.enabled,mask_pii=excluded.mask_pii,
+ allow_unmask=excluded.allow_unmask,daily_calls=excluded.daily_calls,concurrency=excluded.concurrency,daily_budget_micros=excluded.daily_budget_micros,
+ batch_share_percent=COALESCE($8::smallint,ai_policies.batch_share_percent) RETURNING organization_id, enabled, mask_pii, allow_unmask, daily_calls, concurrency, daily_budget_micros, created_at, updated_at, batch_share_percent
 `
 
 type AISavePolicyParams struct {
-	OrganizationID    int64 `json:"organization_id"`
-	Enabled           bool  `json:"enabled"`
-	MaskPii           bool  `json:"mask_pii"`
-	AllowUnmask       bool  `json:"allow_unmask"`
-	DailyCalls        int32 `json:"daily_calls"`
-	Concurrency       int32 `json:"concurrency"`
-	DailyBudgetMicros int64 `json:"daily_budget_micros"`
+	OrganizationID    int64       `json:"organization_id"`
+	Enabled           bool        `json:"enabled"`
+	MaskPii           bool        `json:"mask_pii"`
+	AllowUnmask       bool        `json:"allow_unmask"`
+	DailyCalls        pgtype.Int4 `json:"daily_calls"`
+	Concurrency       pgtype.Int4 `json:"concurrency"`
+	DailyBudgetMicros pgtype.Int8 `json:"daily_budget_micros"`
+	BatchSharePercent pgtype.Int2 `json:"batch_share_percent"`
 }
 
+// batch_share_percent NULL keeps the stored share (50 on a new row).
 func (q *Queries) AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiPolicy, error) {
 	row := q.db.QueryRow(ctx, aISavePolicy,
 		arg.OrganizationID,
@@ -352,6 +361,7 @@ func (q *Queries) AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiP
 		arg.DailyCalls,
 		arg.Concurrency,
 		arg.DailyBudgetMicros,
+		arg.BatchSharePercent,
 	)
 	var i AiPolicy
 	err := row.Scan(
@@ -364,12 +374,13 @@ func (q *Queries) AISavePolicy(ctx context.Context, arg AISavePolicyParams) (AiP
 		&i.DailyBudgetMicros,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.BatchSharePercent,
 	)
 	return i, err
 }
 
 const aIStaleRuns = `-- name: AIStaleRuns :many
-SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at FROM ai_runs WHERE organization_id IS NOT NULL AND status='running' AND created_at<now()-interval '10 minutes' ORDER BY created_at LIMIT 100
+SELECT id, uuid, organization_id, actor_id, task, provider, model, status, input, output, retrieved_chunks, tool_calls, input_tokens, output_tokens, cost_micros, reserved_cost_micros, reserved_tokens, reserved_credits, charged_credits, latency_ms, error_code, created_at, finished_at, conversation_id, pii_erased_at, lane FROM ai_runs WHERE organization_id IS NOT NULL AND status='running' AND created_at<now()-interval '10 minutes' ORDER BY created_at LIMIT 100
 `
 
 func (q *Queries) AIStaleRuns(ctx context.Context) ([]AiRun, error) {
@@ -407,6 +418,7 @@ func (q *Queries) AIStaleRuns(ctx context.Context) ([]AiRun, error) {
 			&i.FinishedAt,
 			&i.ConversationID,
 			&i.PiiErasedAt,
+			&i.Lane,
 		); err != nil {
 			return nil, err
 		}
@@ -419,20 +431,29 @@ func (q *Queries) AIStaleRuns(ctx context.Context) ([]AiRun, error) {
 }
 
 const aIUsageToday = `-- name: AIUsageToday :one
-SELECT count(*)::bigint AS calls,COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0)::bigint AS cost
+SELECT count(*)::bigint AS calls,COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0)::bigint AS cost,
+ count(*) FILTER (WHERE lane='batch')::bigint AS batch_calls,
+ COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)) FILTER (WHERE lane='batch'),0)::bigint AS batch_cost
  FROM ai_runs WHERE organization_id=$1 AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul'
 `
 
 type AIUsageTodayRow struct {
-	Calls int64 `json:"calls"`
-	Cost  int64 `json:"cost"`
+	Calls      int64 `json:"calls"`
+	Cost       int64 `json:"cost"`
+	BatchCalls int64 `json:"batch_calls"`
+	BatchCost  int64 `json:"batch_cost"`
 }
 
 func (q *Queries) AIUsageToday(ctx context.Context, organizationID int64) (AIUsageTodayRow, error) {
 	row := q.db.QueryRow(ctx, aIUsageToday, organizationID)
 	var i AIUsageTodayRow
-	err := row.Scan(&i.Calls, &i.Cost)
+	err := row.Scan(
+		&i.Calls,
+		&i.Cost,
+		&i.BatchCalls,
+		&i.BatchCost,
+	)
 	return i, err
 }
 

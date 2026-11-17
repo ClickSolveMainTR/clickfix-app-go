@@ -303,6 +303,10 @@ func (r *memRepo) GetRefreshSession(_ context.Context, _ string) (model.RefreshS
 	return model.RefreshSession{}, repository.ErrNotFound
 }
 
+func (r *memRepo) GetActiveSession(context.Context, int64, uuid.UUID) (model.RefreshSession, error) {
+	return model.RefreshSession{}, repository.ErrNotFound
+}
+
 func (r *memRepo) RevokeRefresh(context.Context, string) error   { return nil }
 func (r *memRepo) RevokeAllRefresh(context.Context, int64) error { return nil }
 

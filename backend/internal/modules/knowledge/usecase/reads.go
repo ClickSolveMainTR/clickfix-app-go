@@ -6,6 +6,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/repository"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/deptscope"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -24,6 +25,11 @@ type ArticleFilter struct {
 	// with a newer unpublished draft).
 	State      string
 	Collection *uuid.UUID
+	// Department (CF-215): "" any, "none" organization-wide, "id" the one in
+	// DepartmentID. Scope is the member's visibility.
+	DepartmentMode string
+	DepartmentID   pgtype.Int8
+	Scope          deptscope.Scope
 }
 
 func (f ArticleFilter) Validate() error {
@@ -31,6 +37,9 @@ func (f ArticleFilter) Validate() error {
 		return model.ErrInvalid
 	}
 	if f.Visibility != "" && f.Visibility != "public" && f.Visibility != "internal" {
+		return model.ErrInvalid
+	}
+	if f.DepartmentMode != "" && f.DepartmentMode != "none" && f.DepartmentMode != "id" {
 		return model.ErrInvalid
 	}
 	switch f.State {
@@ -49,11 +58,14 @@ func (s *Service) Articles(ctx context.Context, org int64, f ArticleFilter, limi
 	if f.Collection != nil {
 		collection = pgtype.UUID{Bytes: *f.Collection, Valid: true}
 	}
-	rows, err := s.Repo.Q.KnowledgeArticles(ctx, db.KnowledgeArticlesParams{OrganizationID: org, Q: f.Q, Locale: f.Locale, Visibility: f.Visibility, CollectionUuid: collection, State: f.State, Limit: limit, Offset: offset})
+	restrict, viewer := f.Scope.Args()
+	rows, err := s.Repo.Q.KnowledgeArticles(ctx, db.KnowledgeArticlesParams{OrganizationID: org, Q: f.Q, Locale: f.Locale, Visibility: f.Visibility, CollectionUuid: collection, State: f.State, Limit: limit, Offset: offset,
+		DeptRestrict: restrict, ViewerDepartments: viewer, DepartmentMode: f.DepartmentMode, DepartmentID: f.DepartmentID})
 	if err != nil {
 		return nil, 0, err
 	}
-	count, err := s.Repo.Q.KnowledgeArticleCount(ctx, db.KnowledgeArticleCountParams{OrganizationID: org, Q: f.Q, Locale: f.Locale, Visibility: f.Visibility, CollectionUuid: collection, State: f.State})
+	count, err := s.Repo.Q.KnowledgeArticleCount(ctx, db.KnowledgeArticleCountParams{OrganizationID: org, Q: f.Q, Locale: f.Locale, Visibility: f.Visibility, CollectionUuid: collection, State: f.State,
+		DeptRestrict: restrict, ViewerDepartments: viewer, DepartmentMode: f.DepartmentMode, DepartmentID: f.DepartmentID})
 	return rows, count, err
 }
 

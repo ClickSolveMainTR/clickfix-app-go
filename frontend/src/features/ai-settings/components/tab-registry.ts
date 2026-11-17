@@ -1,6 +1,9 @@
 import {
   Bot,
+  ClipboardCheck,
+  Gauge,
   History,
+  LayoutDashboard,
   ListOrdered,
   ShieldCheck,
   Wrench,
@@ -8,7 +11,12 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
+import { permissions } from "@/config/permissions";
+
 import { AgentTab } from "./agent-tab";
+import { EvaluationTab } from "./evaluation-tab";
+import { InsightsTab } from "./insights-tab";
+import { OverviewTab } from "./overview-tab";
 import { ProceduresTab } from "./procedures-tab";
 import { RunsTab } from "./runs-tab";
 import { SecurityTab } from "./security-tab";
@@ -21,6 +29,8 @@ export type AISettingsTabProps = {
   canWrite: boolean;
   /** `tenant.conversations.reply`: may execute AI runs (test chat). */
   canRun: boolean;
+  /** `tenant.ai_insights.manage`: may edit the evaluation set and run it. */
+  canManage: boolean;
 };
 
 export type AISettingsTab = {
@@ -29,6 +39,8 @@ export type AISettingsTab = {
   labelKey: string;
   icon: LucideIcon;
   component: ComponentType<AISettingsTabProps>;
+  /** Shown only with this permission (default: the page's own). */
+  permission?: string;
 };
 
 /**
@@ -37,6 +49,13 @@ export type AISettingsTab = {
  * plus its `ai_settings.tabs.<id>` label; the page handles routing.
  */
 export const AI_SETTINGS_TABS: AISettingsTab[] = [
+  {
+    // Default tab (CF-243): channels, warnings and automatic replies.
+    id: "overview",
+    labelKey: "ai_settings.tabs.overview",
+    icon: LayoutDashboard,
+    component: OverviewTab,
+  },
   {
     id: "agent",
     labelKey: "ai_settings.tabs.agent",
@@ -66,5 +85,19 @@ export const AI_SETTINGS_TABS: AISettingsTab[] = [
     labelKey: "ai_settings.tabs.runs",
     icon: History,
     component: RunsTab,
+  },
+  {
+    id: "insights",
+    labelKey: "ai_settings.tabs.insights",
+    icon: Gauge,
+    component: InsightsTab,
+    permission: permissions.tenant.aiInsights.read,
+  },
+  {
+    id: "evaluation",
+    labelKey: "ai_settings.tabs.evaluation",
+    icon: ClipboardCheck,
+    component: EvaluationTab,
+    permission: permissions.tenant.aiInsights.read,
   },
 ];

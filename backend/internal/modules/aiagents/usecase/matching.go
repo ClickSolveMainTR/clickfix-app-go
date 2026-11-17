@@ -31,7 +31,7 @@ func (s *Service) enrichTriage(ctx context.Context, org int64, conv db.Conversat
 	if len(query) > 1000 {
 		query = string([]rune(query)[:min(250, len([]rune(query)))])
 	}
-	rows, err := s.Repo.Q.AISimilarConversations(ctx, db.AISimilarConversationsParams{OrganizationID: org, CurrentID: conv.ID, Q: query})
+	rows, err := s.Repo.Q.AISimilarConversations(ctx, db.AISimilarConversationsParams{OrganizationID: org, CurrentID: conv.ID, Q: query, BrandID: conv.BrandID})
 	if err != nil {
 		return nil, nil, err
 	}

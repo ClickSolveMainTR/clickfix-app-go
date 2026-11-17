@@ -22,7 +22,60 @@ type MeteredEmbedder struct {
 }
 
 func (e *MeteredEmbedder) Model() string { return e.Raw.Model() }
+
+// EmbeddingCostMicros prices tokens of embedding input (CF-228 estimates).
+func (e *MeteredEmbedder) EmbeddingCostMicros(tokens int64) int64 {
+	return ai.Route{InputPrice: e.InputPrice}.Cost(tokens, 0)
+}
+
+// BatchAllowance is the batch share of the daily limits and what is left of
+// it today: the lower of the batch share and the total limit (CF-228).
+func (e *MeteredEmbedder) BatchAllowance(ctx context.Context, org int64) (ai.BatchAllowance, error) {
+	p, err := e.Repo.Policy(ctx, org)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	limits, err := e.Repo.Limits(ctx, p)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	used, err := e.Repo.Billing.Q.AIUsageToday(ctx, org)
+	if err != nil {
+		return ai.BatchAllowance{}, err
+	}
+	out := ai.BatchAllowance{Enabled: p.Enabled}
+	out.CallsPerDay, out.CallsLeft = left(limits.Batch.DailyCalls, used.BatchCalls, limits.Effective.DailyCalls, used.Calls)
+	out.BudgetMicrosPerDay, out.BudgetMicrosLeft = left(limits.Batch.DailyBudgetMicros, used.BatchCost, limits.Effective.DailyBudgetMicros, used.Cost)
+	return out, nil
+}
+
+// left is a batch cap per day and what remains today under both caps. The
+// batch share is unlimited exactly when the total is (BatchShare).
+func left(batch repository.Cap, batchUsed int64, total repository.Cap, totalUsed int64) (*int64, *int64) {
+	if batch.Unlimited || batch.Limit == nil || total.Limit == nil {
+		return nil, nil
+	}
+	perDay := *batch.Limit
+	rest := max(min(perDay-batchUsed, *total.Limit-totalUsed), 0)
+	return &perDay, &rest
+}
 func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddings, error) {
+	return e.EmbedModel(ctx, e.Raw.Model(), input)
+}
+
+// EmbedModel meters an embedding with a named model (an organization whose
+// stored vectors are still from the previous model, CF-214).
+func (e *MeteredEmbedder) EmbedModel(ctx context.Context, model string, input []string) (ai.Embeddings, error) {
+	raw := e.Raw.Embed
+	if model != e.Raw.Model() {
+		named, ok := e.Raw.(ai.ModelEmbedder)
+		if !ok || model == "" {
+			return ai.Embeddings{}, ai.ErrNotConfigured
+		}
+		raw = func(ctx context.Context, input []string) (ai.Embeddings, error) {
+			return named.EmbedModel(ctx, model, input)
+		}
+	}
 	org, ok := orgctx.OrganizationID(ctx)
 	if !ok || e.InputPrice < 1 {
 		return ai.Embeddings{}, ai.ErrNotConfigured
@@ -48,12 +101,12 @@ func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddi
 	id := uuid.New()
 	reservedCredits := (maxTokens + 999) / 1000
 	reservedCost := route.Cost(maxTokens, 0)
-	_, _, err := e.Repo.Reserve(ctx, db.AIInsertRunParams{OrganizationID: org, Uuid: id, Task: "embedding", Provider: ai.ProviderOpenAI, Model: e.Model(), Status: "running", Input: strings.Join(texts, "\n\n"), RetrievedChunks: []byte(`[]`), ReservedTokens: maxTokens, ReservedCredits: reservedCredits, ReservedCostMicros: reservedCost})
+	_, _, err := e.Repo.Reserve(ctx, db.AIInsertRunParams{OrganizationID: org, Uuid: id, Task: "embedding", Provider: ai.ProviderOpenAI, Model: model, Status: "running", Input: strings.Join(texts, "\n\n"), RetrievedChunks: []byte(`[]`), ReservedTokens: maxTokens, ReservedCredits: reservedCredits, ReservedCostMicros: reservedCost})
 	if err != nil {
 		return ai.Embeddings{}, err
 	}
 	started := time.Now()
-	out, err := e.Raw.Embed(ctx, texts)
+	out, err := raw(ctx, texts)
 	status := "completed"
 	code := ""
 	charged := (out.InputTokens + 999) / 1000
@@ -83,7 +136,7 @@ func (e *MeteredEmbedder) Embed(ctx context.Context, input []string) (ai.Embeddi
 	}
 	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	finishErr := e.Repo.Finish(finishCtx, db.AIFinishRunParams{OrganizationID: org, Uuid: id, Provider: ai.ProviderOpenAI, Model: e.Model(), Status: status, Output: fmt.Sprintf("%d embedding vectors", len(out.Vectors)), ToolCalls: []byte(`[]`), InputTokens: out.InputTokens, CostMicros: cost, ReservedCostMicros: remaining, ChargedCredits: charged, LatencyMs: time.Since(started).Milliseconds(), ErrorCode: code})
+	finishErr := e.Repo.Finish(finishCtx, db.AIFinishRunParams{OrganizationID: org, Uuid: id, Provider: ai.ProviderOpenAI, Model: model, Status: status, Output: fmt.Sprintf("%d embedding vectors", len(out.Vectors)), ToolCalls: []byte(`[]`), InputTokens: out.InputTokens, CostMicros: cost, ReservedCostMicros: remaining, ChargedCredits: charged, LatencyMs: time.Since(started).Milliseconds(), ErrorCode: code})
 	if finishErr != nil {
 		return ai.Embeddings{}, finishErr
 	}

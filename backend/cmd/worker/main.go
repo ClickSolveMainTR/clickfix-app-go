@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	appointmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/appointments/usecase"
 	authrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/repository"
 	authuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/usecase"
+	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 
 	"context"
 	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
@@ -41,8 +43,10 @@ import (
 	healthusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customerhealth/usecase"
 	customfieldsrepository "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/repository"
 	customfieldsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/customfields/usecase"
+	departmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/departments/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/entitlements"
 	exportusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/exports/usecase"
+	historyusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/history/usecase"
 	importusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/imports/usecase"
 	systemsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/integrations/systems/usecase"
 	logsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/logs/usecase"
@@ -55,6 +59,7 @@ import (
 	orgrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/repository"
 	orguc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	presenceusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/presence/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/remotesupport"
 	reportsrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/repository"
 	reportsuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/usecase"
 	routingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/routing/usecase"
@@ -70,6 +75,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/workforce"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/observability"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/activity"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine"
 	bulkadapters "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/bulkengine/adapters"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
@@ -143,7 +149,7 @@ func main() {
 	mailer := mail.NewSMTPSender(cfg.SMTP)
 	provs := []providers.Provider{
 		providers.InappProvider{},
-		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL},
+		providers.EmailProvider{Mail: mailer, AppURL: cfg.Auth.FrontendURL, DeliverReserved: cfg.App.Env == "development"},
 		providers.RealtimeProvider{Pub: publisher},
 		providers.NoopProvider{Name: "sms", Log: log},
 		providers.NoopProvider{Name: "push", Log: log},
@@ -183,6 +189,7 @@ func main() {
 	agentSvc.Sources = &agentusecase.SourceService{Agents: agentSvc, Storage: store}
 	agentSvc.Fields = customfieldsusecase.New(customfieldsrepository.New(pool, queries))
 	agentSvc.Hours = slaSvc
+	agentSvc.Memory = aiCore.Memory
 	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
 	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
@@ -198,11 +205,13 @@ func main() {
 		SLA:                 slaSvc,
 		AutoReply:           autoReplySvc,
 		Knowledge:           aiCore.RAG,
+		Memory:              aiCore.Memory,
 		Agents:              agentSvc,
 		Analytics:           analyticsSvc,
 		Surveys:             surveysSvc,
 		Status:              statusSvc,
 		LiveActivities:      mobileextmodule.NewService(cfg.APNs, pool, queries, log),
+		Categories:          categoriesusecase.New(pool, queries, categoriesusecase.Options{Departments: departmentsusecase.NewDirectory(queries), Embedder: aiCore.RAG.Embedder, AI: aiCore.AI}),
 	})
 	if err != nil {
 		log.Error("event_consumers_init_failed", "error", err)
@@ -289,6 +298,15 @@ func main() {
 
 	supportoperations.RegisterEvents(eventBus, aiBilling, aiCore.AI, inboxCore.Conversations, notifSvc, publisher)
 	agentSvc.Sender = inboxCore.Conversations
+	// Departments (CF-215): AI routing of first messages and transfers.
+	departmentsSvc := departmentsusecase.New(pool, queries)
+	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	// Remote support sweep and recording retention (CF-233).
+	remoteSupportSvc := remotesupport.New(queries, cfg, entitlements.New(billingRepository, nil, cfg.App.Env), inboxCore.Conversations, publisher, activityRec, store, log)
+	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
+	// Measurement set (CF-220) of the evaluation sweep: department sets and
+	// cache hit rate (CF-225).
+	agentusecase.WireMeasurement(agentSvc, departmentsusecase.NewDirectory(queries), aiCore.Memory)
 	agentBox, agentBoxErr := crypto.NewSecretBox(cfg.Encryption.Key)
 	if agentBoxErr != nil {
 		log.Warn("ai_tool_credentials_unavailable", "error", agentBoxErr)
@@ -303,6 +321,9 @@ func main() {
 	complianceSvc := &complianceuc.Service{Search: searchClient, Repo: compliancerepo.New(pool, queries), Store: store, Jobs: queueClient, Activity: activityRec}
 	accountRepo := authrepo.NewPostgres(pool, queries)
 	accountRepo.SetDeletionSearch(searchClient)
+	// History pipeline (CF-217): runs, raw-file retention and the nightly run.
+	historySvc := historyusecase.New(pool, queries, store, aiCore.RAG.Embedder, historyusecase.EngineDrafter{Engine: aiCore.AI})
+	historySvc.Log = log
 	worker := queue.NewWorker(cfg, log, notifSvc.Deliver).
 		WithConversationSend(inboxCore.Deliver).
 		WithNetgsm(inboxCore.EnqueueNetgsm, inboxCore.PollNetgsm, inboxCore.ArchiveNetgsm).
@@ -330,16 +351,23 @@ func main() {
 		Handle(queue.TaskUptimeSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepMonitors(ctx) }).
 		Handle(queue.TaskOncallSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepAlerts(ctx) }).
 		Handle(queue.TaskVideoSweep, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.Sweep(ctx) }).
-		Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.PurgeExpired(ctx) }).
+		Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error {
+			return errors.Join(videoSvc.PurgeExpired(ctx), remoteSupportSvc.PurgeRecordings(ctx))
+		}).
+		Handle(queue.TaskRemoteSupportSweep, func(ctx context.Context, _ *asynq.Task) error { return remoteSupportSvc.Sweep(ctx) }).
 		Handle(queue.TaskReportsSweep, func(ctx context.Context, _ *asynq.Task) error { return reportsSvc.Sweep(ctx) }).
 		Handle(retention.Task, func(ctx context.Context, _ *asynq.Task) error {
 			return (retention.Service{Q: queries, Store: store}).Purge(ctx)
 		}).
 		Handle(queue.TaskIntegrationTriggerPurge, func(ctx context.Context, _ *asynq.Task) error { return queries.IntegrationPurgeTriggers(ctx) }).
 		Handle(queue.TaskKnowledgeSync, func(ctx context.Context, _ *asynq.Task) error { return agentSvc.Sources.Sweep(ctx) }).
+		Handle(queue.TaskAIEvaluationSweep, func(ctx context.Context, _ *asynq.Task) error { return agentSvc.SweepEvaluations(ctx) }).
+		Handle(queue.TaskHistorySweep, func(ctx context.Context, _ *asynq.Task) error { return historySvc.Sweep(ctx) }).
+		Handle(queue.TaskHistoryNightly, func(ctx context.Context, _ *asynq.Task) error { return historySvc.Nightly(ctx) }).
 		Handle(queue.TaskRecordingTranscribe, transcriptSvc.Handle).
 		Handle(queue.TaskRecordingTranscriptSweep, func(ctx context.Context, _ *asynq.Task) error { return transcriptSvc.Sweep(ctx) }).
 		Handle(queue.TaskAIReconcile, func(ctx context.Context, _ *asynq.Task) error { return aiCore.AI.Reconcile(ctx) }).
+		Handle(queue.TaskVectorReembed, func(ctx context.Context, _ *asynq.Task) error { return aiCore.Reembed.Run(ai.WithBatch(ctx)) }).
 		Handle(eventdispatch.TaskConsume, eventProcessor.ProcessTask).
 		Handle(eventdispatch.TaskPurgeConsumptions, eventProcessor.PurgeConsumptions).
 		Handle(queue.TaskSLASweep, queue.SLASweepHandler(slaSvc.Sweep)).

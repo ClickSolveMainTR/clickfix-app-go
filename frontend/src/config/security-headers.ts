@@ -55,10 +55,18 @@ export const consentHeaders = [
   { key: "Referrer-Policy", value: "no-referrer" },
 ];
 
+/**
+ * Desktop app sign-in pages (CF-234): `/desktop/login` carries the app's
+ * state / PKCE challenge in its URL and hands out a one-time code, so it gets
+ * the consent screen's rules (never framed, cached or sent as a referrer).
+ */
+export const DESKTOP_PATHS = "/desktop/:path*";
+
 /** Later rules win for the same header, so the consent rule comes last. */
 export function headerRules(production: boolean): HeaderRule[] {
   return [
     { source: "/:path*", headers: baselineHeaders(production) },
+    { source: DESKTOP_PATHS, headers: consentHeaders },
     { source: CONSENT_PATH, headers: consentHeaders },
   ];
 }

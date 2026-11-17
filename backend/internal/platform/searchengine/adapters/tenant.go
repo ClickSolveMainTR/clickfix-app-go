@@ -32,8 +32,9 @@ const MaxIndexedContent = 4000
 const subtitleLength = 140
 
 // Inbox deep links (frontend /inbox reads ?c, ?contact and ?company).
+// Contacts open their detail page (CF-221).
 func conversationHref(id uuid.UUID) string { return "/inbox?status=all&c=" + id.String() }
-func contactHref(id uuid.UUID) string      { return "/inbox?status=all&contact=" + id.String() }
+func contactHref(id uuid.UUID) string      { return "/contacts/" + id.String() }
 func companyHref(id uuid.UUID) string      { return "/inbox?status=all&company=" + id.String() }
 
 // TenantQuerier is the slice of db.Queries the tenant adapters read.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"net/textproto"
 	"testing"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
@@ -23,6 +24,7 @@ type deliverTestQuerier struct {
 	sent     int
 	failed   int
 	dead     int
+	skipped  int
 	stuck    []int64
 }
 
@@ -67,6 +69,12 @@ func (d *deliverTestQuerier) MarkNotificationDead(_ context.Context, arg db.Mark
 	return d.row, nil
 }
 
+func (d *deliverTestQuerier) MarkNotificationSkipped(_ context.Context, arg db.MarkNotificationSkippedParams) (db.Notification, error) {
+	d.skipped++
+	d.row.Status, d.row.LastError = model.StatusCancelled, arg.LastError
+	return d.row, nil
+}
+
 type failingMail struct{ err error }
 
 func (f failingMail) Send(context.Context, mail.Message) error { return f.err }
@@ -81,7 +89,8 @@ func (r *recordingEnqueuer) Enqueue(task *asynq.Task, _ ...asynq.Option) (*asynq
 func emailRow(attempt, maxAttempts int32) db.Notification {
 	return db.Notification{
 		ID: 11, Channel: model.ChannelEmail, Status: model.StatusProcessing,
-		Recipient:    pgtype.Text{String: "a@example.com", Valid: true},
+		// .local is not an RFC 2606 reserved name: the row is sendable.
+		Recipient:    pgtype.Text{String: "agent@mailbox.local", Valid: true},
 		AttemptCount: attempt, MaxAttempts: maxAttempts,
 	}
 }
@@ -218,5 +227,79 @@ func TestReclaimStuckDeliversProcessingRows(t *testing.T) {
 	}
 	if q.sent != 1 {
 		t.Fatalf("MarkNotificationSent calls = %d, want 1", q.sent)
+	}
+}
+
+type countingMail struct{ calls int }
+
+func (c *countingMail) Send(context.Context, mail.Message) error { c.calls++; return nil }
+
+func TestDeliverSkipsReservedDomain(t *testing.T) {
+	t.Parallel()
+	for _, addr := range []string{"demo@example.com", "seed@acme.test", "x@foo.invalid", "y@localhost"} {
+		row := emailRow(1, 5)
+		row.Recipient = pgtype.Text{String: addr, Valid: true}
+		q := &deliverTestQuerier{row: row}
+		sender := &countingMail{}
+		svc := New(q, &recordingEnqueuer{}, []providers.Provider{providers.EmailProvider{Mail: sender}}, slog.Default())
+		if err := svc.Deliver(context.Background(), 11); err != nil {
+			t.Fatalf("%s: skip must not be retried, got %v", addr, err)
+		}
+		if sender.calls != 0 {
+			t.Fatalf("%s: mail sent %d times, want 0", addr, sender.calls)
+		}
+		if q.skipped != 1 || q.dead != 0 || q.failed != 0 || q.sent != 0 {
+			t.Fatalf("%s: skipped=%d dead=%d failed=%d sent=%d", addr, q.skipped, q.dead, q.failed, q.sent)
+		}
+		if q.row.Status != model.StatusCancelled || q.row.LastError.String != "skipped: "+providers.SkipReservedDomain {
+			t.Fatalf("%s: row %q %q", addr, q.row.Status, q.row.LastError.String)
+		}
+	}
+}
+
+func TestDeliverReservedDomainAllowedInDevelopment(t *testing.T) {
+	t.Parallel()
+	row := emailRow(1, 5)
+	row.Recipient = pgtype.Text{String: "demo@example.com", Valid: true}
+	q := &deliverTestQuerier{row: row}
+	sender := &countingMail{}
+	svc := New(q, &recordingEnqueuer{}, []providers.Provider{providers.EmailProvider{Mail: sender, DeliverReserved: true}}, slog.Default())
+	if err := svc.Deliver(context.Background(), 11); err != nil {
+		t.Fatalf("Deliver: %v", err)
+	}
+	if sender.calls != 1 || q.sent != 1 || q.skipped != 0 {
+		t.Fatalf("calls=%d sent=%d skipped=%d", sender.calls, q.sent, q.skipped)
+	}
+}
+
+// smtpReject is a permanent provider rejection (Resend answers 550 at DATA).
+var smtpReject = &mail.SendError{Stage: "data", Addr: "smtp.example.com:587", Err: &textproto.Error{Code: 550, Msg: "Invalid `to` field"}}
+
+func TestDeliverPermanentRejectionIsNotRetried(t *testing.T) {
+	t.Parallel()
+	q := &deliverTestQuerier{row: emailRow(1, 5)}
+	enq := &recordingEnqueuer{}
+	svc := New(q, enq, []providers.Provider{providers.EmailProvider{Mail: failingMail{smtpReject}}}, slog.Default())
+	if err := svc.Deliver(context.Background(), 11); err != nil {
+		t.Fatalf("5xx must not return a retry error, got %v", err)
+	}
+	if q.dead != 1 || q.failed != 0 || len(enq.tasks) != 0 {
+		t.Fatalf("dead=%d failed=%d enqueued=%d", q.dead, q.failed, len(enq.tasks))
+	}
+}
+
+func TestPermanentRejectionIsReportedAsWarning(t *testing.T) {
+	t.Parallel()
+	cause, transient := deliveryCause(smtpReject)
+	if cause != mail.CauseRejected || transient {
+		t.Fatalf("cause=%q transient=%v", cause, transient)
+	}
+	if !recipientRejected(cause) {
+		t.Fatal("smtp 5xx must be reported as a warning, not an error")
+	}
+	for _, c := range []string{mail.CauseNotConfigured, mail.CauseAuth, mail.CauseTLS, mail.CauseTimeout} {
+		if recipientRejected(c) {
+			t.Fatalf("%s must stay an error", c)
+		}
 	}
 }

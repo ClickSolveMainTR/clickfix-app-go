@@ -72,6 +72,15 @@ export const routes = {
     smartSetup: "/getting-started",
     /** Shared inbox. */
     inbox: "/inbox",
+    /** Contacts and their detail page (CF-221); companies keep their own. */
+    contacts: {
+      root: "/contacts",
+      detail: (uuid: string) => `/contacts/${encodeURIComponent(uuid)}`,
+    },
+    companies: {
+      root: "/companies",
+      detail: (uuid: string) => `/companies/${encodeURIComponent(uuid)}`,
+    },
     /** Channel management (CF-61); Meta logins return to connect/{type}. */
     channels: "/channels",
     /** ClickFix Asistan as a full page (CF-200). */
@@ -139,6 +148,11 @@ export const routes = {
       create: "/teams/create",
       detail: (uuid: string) => `/teams/${uuid}`,
     },
+    departments: {
+      root: "/departments",
+      create: "/departments/create",
+      detail: (uuid: string) => `/departments/${uuid}`,
+    },
     settings: {
       organization: "/settings/organization",
       members: "/settings/members",
@@ -163,6 +177,8 @@ export const routes = {
           `/settings/engineering/callback/${encodeURIComponent(provider)}`,
       },
       video: "/settings/video",
+      /** Remote support settings (CF-237). */
+      remoteSupport: "/settings/remote-support",
       customerHealth: "/settings/customer-health",
       roles: {
         root: "/settings/roles",
@@ -191,6 +207,8 @@ export const routes = {
         create: "/settings/knowledge/new",
         detail: (uuid: string) => `/settings/knowledge/${uuid}`,
       },
+      /** Category taxonomy, review queue and label export (CF-218). */
+      categories: "/settings/categories",
     },
     objects: {
       records: (typeUuid: string) => `/objects/${typeUuid}`,
@@ -231,6 +249,8 @@ export const routes = {
     },
     /** Platform video module (CF-139). */
     video: "/platform/video",
+    /** Remote support kill switch and reports (CF-237). */
+    remoteSupport: "/platform/remote-support",
     /** ClickFix Asistan settings, module guides, product feedback (CF-141). */
     assistant: "/platform/assistant",
     guides: "/platform/guides",

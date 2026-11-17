@@ -8,6 +8,7 @@ import (
 
 	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 )
 
 type RetrievalResult struct {
@@ -15,7 +16,8 @@ type RetrievalResult struct {
 	Err       error
 }
 
-func (s *Service) retrieve(ctx context.Context, org int64, input, locale string, publicOnly bool) ([]kbmodel.Citation, error) {
+func (s *Service) retrieve(ctx context.Context, scope vectorstore.Scope, input, locale string, publicOnly bool) ([]kbmodel.Citation, error) {
+	org := scope.OrganizationID
 	if s.RAG == nil {
 		return nil, ai.ErrNotConfigured
 	}
@@ -30,29 +32,35 @@ func (s *Service) retrieve(ctx context.Context, org int64, input, locale string,
 		}
 	}
 	started := time.Now()
-	citations, err := s.RAG.Search(ctx, org, query, locale, publicOnly)
+	citations, err := s.RAG.SearchScoped(ctx, scope, query, locale, publicOnly)
 	slog.InfoContext(ctx, "ai_stage", "stage", "retrieval", "organization_id", org, "duration_ms", time.Since(started).Milliseconds(), "failed", err != nil)
 	return citations, err
 }
 
 // PrefetchReply uses the same guarded, public-only retriever and metered embedder
-// as regular reply runs. The buffered, closed result is safe to cancel and join.
-func (s *Service) PrefetchReply(ctx context.Context, org int64, input, locale string) <-chan RetrievalResult {
+// as regular reply runs, inside the conversation's scope (CF-214). The buffered,
+// closed result is safe to cancel and join.
+func (s *Service) PrefetchReply(ctx context.Context, scope vectorstore.Scope, input, locale string) <-chan RetrievalResult {
+	org := scope.OrganizationID
 	if s.RAG == nil {
 		return nil
 	}
 	policy, err := s.Repo.Policy(ctx, org)
-	if err != nil || !policy.Enabled || policy.Concurrency < 2 {
+	if err != nil || !policy.Enabled {
+		return nil
+	}
+	limits, err := s.Repo.Limits(ctx, policy)
+	if err != nil {
 		return nil
 	}
 	active, err := s.Repo.Billing.Q.AIActive(ctx, org)
-	if err != nil || active+2 > int64(policy.Concurrency) {
+	if err != nil || !limits.Effective.Concurrency.Allows(active, 2) {
 		return nil
 	}
 	result := make(chan RetrievalResult, 1)
 	go func() {
 		defer close(result)
-		citations, err := s.retrieve(ctx, org, input, locale, true)
+		citations, err := s.retrieve(ctx, scope, input, locale, true)
 		result <- RetrievalResult{Citations: citations, Err: err}
 	}()
 	return result

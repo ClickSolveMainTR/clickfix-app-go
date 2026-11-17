@@ -189,6 +189,7 @@ type RefreshSession struct {
 	UUID               uuid.UUID
 	UserID             int64
 	ImpersonatorUserID *int64
+	Client             SessionClient
 }
 
 // DeviceSession is a user-visible refresh session (token never included).
@@ -200,6 +201,11 @@ type DeviceSession struct {
 	CreatedAt    time.Time `json:"created_at"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Impersonated bool      `json:"impersonated"`
+	// Client is "desktop" for a ClickFix desktop app session (CF-234);
+	// omitted for web / mobile sessions.
+	Client     string  `json:"client,omitempty"`
+	ClientOS   *string `json:"client_os,omitempty"`
+	DeviceName *string `json:"device_name,omitempty"`
 }
 
 // SessionMeta carries optional request metadata for refresh tokens.
@@ -207,6 +213,20 @@ type SessionMeta struct {
 	UserAgent          string
 	IP                 string
 	ImpersonatorUserID *int64
+	// Client labels a native client session (desktop app, CF-234). It is
+	// carried over on refresh rotation.
+	Client SessionClient
+}
+
+// ClientDesktop marks a ClickFix desktop app session.
+const ClientDesktop = "desktop"
+
+// SessionClient identifies a native client behind a refresh session.
+// The zero value is a web / mobile session.
+type SessionClient struct {
+	Kind       string // "" or ClientDesktop
+	OS         string // macos | windows | linux
+	DeviceName string // optional computer name, max 64 chars
 }
 
 // SessionSwitch tells clients which identity the issued tokens represent.

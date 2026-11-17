@@ -1,6 +1,7 @@
 "use client";
 
 import { formatBytes, formatCount } from "@/features/billing/lib/money";
+import { DAILY_FEATURES } from "@/features/billing/lib/plans";
 import type {
   BillingUsageSummary,
   EntitlementValue,
@@ -90,7 +91,9 @@ export function UsageMeters({
             <p className="text-muted-foreground mt-1.5 text-xs">
               {v.period === "month"
                 ? t("billing.usage.monthly")
-                : t("billing.usage.current")}
+                : DAILY_FEATURES.has(v.feature)
+                  ? t("billing.usage.daily")
+                  : t("billing.usage.current")}
               {over
                 ? ` · ${t(v.enforcement === "soft" ? "billing.usage.over_soft" : "billing.usage.over_hard")}`
                 : ""}

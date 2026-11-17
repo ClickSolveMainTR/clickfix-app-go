@@ -137,3 +137,18 @@ AssistantDocumentsPurgeExpired retention: deletes only expired rows of every org
 # the organization) before using it.
 GetWidgetAppKeyByHash      lookup by the key's sha256; OpenApp rejects rows of another widget
 TouchWidgetAppKey          last_used_at of a row GetWidgetAppKeyByHash already resolved
+
+# History pipeline (CF-217): platform-wide worker sweep over every
+# organization; it only fails runs whose raw-file retention passed.
+HistoryImportExpireStale     sweep fails runs whose raw-file retention passed, in every organization
+
+# Remote support (CF-233): the customer's desktop app has no account; it
+# names a session by its 9-digit code (HMAC lookup), the one-time join token
+# hash or the session uuid plus its client secret (verified before use).
+# LiveKit names rooms and egresses by unique names. The org comes from the row.
+RemoteSupportSessionByUUID          public consent/token/end/report: client secret HMAC verified first; org taken from the row
+RemoteSupportPendingByCode          public resolve by the HMAC of the code prefix; org taken from the row
+RemoteSupportSessionByJoinToken     public resolve by the hash of a 256-bit join token; org taken from the row
+RemoteSupportSessionByRoom          LiveKit webhook names the room by its unique rs_ name; org taken from the row
+RemoteSupportSessionByEgress        egress webhook names the recording by its unique egress id; org taken from the row
+RemoteSupportExpiredRecordings      platform retention worker over every organization; rows carry organization_id

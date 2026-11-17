@@ -7,6 +7,7 @@ package db
 import (
 	"net/netip"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -95,6 +96,51 @@ type AiAgentJob struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AiAnswerCache struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	UnitID         int64              `json:"unit_id"`
+	Audience       string             `json:"audience"`
+	Locale         string             `json:"locale"`
+	ScopeKey       string             `json:"scope_key"`
+	QuestionHash   string             `json:"question_hash"`
+	Score          float32            `json:"score"`
+	Hits           int64              `json:"hits"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	LastHitAt      pgtype.Timestamptz `json:"last_hit_at"`
+}
+
+type AiAnswerCacheStat struct {
+	OrganizationID int64       `json:"organization_id"`
+	Day            pgtype.Date `json:"day"`
+	Audience       string      `json:"audience"`
+	ExactHits      int64       `json:"exact_hits"`
+	SemanticHits   int64       `json:"semantic_hits"`
+	Misses         int64       `json:"misses"`
+	DepartmentID   pgtype.Int8 `json:"department_id"`
+}
+
+type AiCaseMemory struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ConversationID int64              `json:"conversation_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Locale         string             `json:"locale"`
+	Category       string             `json:"category"`
+	Problem        string             `json:"problem"`
+	Resolution     string             `json:"resolution"`
+	Anonymized     bool               `json:"anonymized"`
+	Status         string             `json:"status"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt     pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AiConversationLink struct {
 	ID             int64              `json:"id"`
 	OrganizationID int64              `json:"organization_id"`
@@ -116,34 +162,47 @@ type AiCreditReservationLot struct {
 }
 
 type AiEvaluation struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Config         []byte             `json:"config"`
-	ConfigRevision int32              `json:"config_revision"`
-	BaselineUuid   pgtype.UUID        `json:"baseline_uuid"`
-	Status         string             `json:"status"`
-	Report         []byte             `json:"report"`
-	AuthorID       int64              `json:"author_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	Config            []byte             `json:"config"`
+	ConfigRevision    int32              `json:"config_revision"`
+	BaselineUuid      pgtype.UUID        `json:"baseline_uuid"`
+	Status            string             `json:"status"`
+	Report            []byte             `json:"report"`
+	AuthorID          int64              `json:"author_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	TriggerKind       string             `json:"trigger_kind"`
+	DepartmentID      pgtype.Int8        `json:"department_id"`
+	Fingerprint       []byte             `json:"fingerprint"`
+	Model             string             `json:"model"`
+	AnswerAccuracy    pgtype.Float8      `json:"answer_accuracy"`
+	SourceHitRate     pgtype.Float8      `json:"source_hit_rate"`
+	CacheHitRate      pgtype.Float8      `json:"cache_hit_rate"`
+	AvgLatencyMs      pgtype.Float8      `json:"avg_latency_ms"`
+	CostPerCaseMicros pgtype.Float8      `json:"cost_per_case_micros"`
 }
 
 type AiEvaluationCase struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Name           string             `json:"name"`
-	Transcript     string             `json:"transcript"`
-	Locale         string             `json:"locale"`
-	Expected       []byte             `json:"expected"`
-	Revision       int32              `json:"revision"`
-	AuthorID       int64              `json:"author_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	Channel        string             `json:"channel"`
-	Category       string             `json:"category"`
-	ScenarioAt     pgtype.Timestamptz `json:"scenario_at"`
+	ID                   int64              `json:"id"`
+	Uuid                 uuid.UUID          `json:"uuid"`
+	OrganizationID       int64              `json:"organization_id"`
+	Name                 string             `json:"name"`
+	Transcript           string             `json:"transcript"`
+	Locale               string             `json:"locale"`
+	Expected             []byte             `json:"expected"`
+	Revision             int32              `json:"revision"`
+	AuthorID             int64              `json:"author_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Channel              string             `json:"channel"`
+	Category             string             `json:"category"`
+	ScenarioAt           pgtype.Timestamptz `json:"scenario_at"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
+	ExpectedAnswer       string             `json:"expected_answer"`
+	ExpectedArticleUuids []uuid.UUID        `json:"expected_article_uuids"`
+	Active               bool               `json:"active"`
 }
 
 type AiEvaluationResult struct {
@@ -159,6 +218,23 @@ type AiEvaluationResult struct {
 	ErrorCode      string             `json:"error_code"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	AnswerCorrect  bool               `json:"answer_correct"`
+	SourceHit      pgtype.Bool        `json:"source_hit"`
+	CacheHit       pgtype.Bool        `json:"cache_hit"`
+	LatencyMs      int64              `json:"latency_ms"`
+	CostMicros     int64              `json:"cost_micros"`
+}
+
+type AiEvaluationWatch struct {
+	OrganizationID  int64              `json:"organization_id"`
+	Enabled         bool               `json:"enabled"`
+	ActorID         int64              `json:"actor_id"`
+	LastFingerprint []byte             `json:"last_fingerprint"`
+	LastCheckedAt   pgtype.Timestamptz `json:"last_checked_at"`
+	LeaseUntil      pgtype.Timestamptz `json:"lease_until"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AiPolicy struct {
@@ -166,11 +242,12 @@ type AiPolicy struct {
 	Enabled           bool               `json:"enabled"`
 	MaskPii           bool               `json:"mask_pii"`
 	AllowUnmask       bool               `json:"allow_unmask"`
-	DailyCalls        int32              `json:"daily_calls"`
-	Concurrency       int32              `json:"concurrency"`
-	DailyBudgetMicros int64              `json:"daily_budget_micros"`
+	DailyCalls        pgtype.Int4        `json:"daily_calls"`
+	Concurrency       pgtype.Int4        `json:"concurrency"`
+	DailyBudgetMicros pgtype.Int8        `json:"daily_budget_micros"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	BatchSharePercent int16              `json:"batch_share_percent"`
 }
 
 type AiProcedure struct {
@@ -221,6 +298,7 @@ type AiRun struct {
 	FinishedAt         pgtype.Timestamptz `json:"finished_at"`
 	ConversationID     pgtype.Int8        `json:"conversation_id"`
 	PiiErasedAt        pgtype.Timestamptz `json:"pii_erased_at"`
+	Lane               string             `json:"lane"`
 }
 
 type AiTool struct {
@@ -1355,6 +1433,7 @@ type BusinessContextSection struct {
 	UpdatedBy      int64              `json:"updated_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type BusinessContextVersion struct {
@@ -1416,6 +1495,69 @@ type CannedResponse struct {
 	CreatedBy      pgtype.Int8        `json:"created_by"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Category struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	ParentID       pgtype.Int8        `json:"parent_id"`
+	Name           string             `json:"name"`
+	Slug           string             `json:"slug"`
+	Description    string             `json:"description"`
+	Examples       []string           `json:"examples"`
+	Position       int32              `json:"position"`
+	Depth          int16              `json:"depth"`
+	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CategoryAssignment struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	SubjectType    string             `json:"subject_type"`
+	SubjectID      int64              `json:"subject_id"`
+	SubjectUuid    uuid.UUID          `json:"subject_uuid"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	CategoryID     pgtype.Int8        `json:"category_id"`
+	Confidence     float32            `json:"confidence"`
+	Source         string             `json:"source"`
+	Classifier     string             `json:"classifier"`
+	NeedsReview    bool               `json:"needs_review"`
+	AssignedBy     pgtype.Int8        `json:"assigned_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CategoryExample struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	CategoryID     int64              `json:"category_id"`
+	Content        string             `json:"content"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type CategoryLabel struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	DepartmentID       pgtype.Int8        `json:"department_id"`
+	SubjectType        string             `json:"subject_type"`
+	SubjectUuid        uuid.UUID          `json:"subject_uuid"`
+	Action             string             `json:"action"`
+	Content            string             `json:"content"`
+	Embedding          vectorstore.Vector `json:"embedding"`
+	EmbeddingModel     string             `json:"embedding_model"`
+	PreviousCategoryID pgtype.Int8        `json:"previous_category_id"`
+	PreviousSource     pgtype.Text        `json:"previous_source"`
+	PreviousConfidence pgtype.Float4      `json:"previous_confidence"`
+	CategoryID         int64              `json:"category_id"`
+	LabeledBy          int64              `json:"labeled_by"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 type ChangelogEntry struct {
@@ -1657,6 +1799,22 @@ type Contact struct {
 	CompanyVerifiedAt pgtype.Timestamptz `json:"company_verified_at"`
 }
 
+type ContactAiSummary struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	Audience       string             `json:"audience"`
+	Summary        string             `json:"summary"`
+	OpenTopics     []byte             `json:"open_topics"`
+	Sentiment      string             `json:"sentiment"`
+	Locale         string             `json:"locale"`
+	RunUuid        pgtype.UUID        `json:"run_uuid"`
+	SourceAt       pgtype.Timestamptz `json:"source_at"`
+	GeneratedBy    pgtype.Int8        `json:"generated_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ContactConsent struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`
@@ -1682,6 +1840,17 @@ type ContactIdentity struct {
 	Meta              []byte             `json:"meta"`
 	LastSeenAt        pgtype.Timestamptz `json:"last_seen_at"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
+type ContactNote struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	ContactID      int64              `json:"contact_id"`
+	AuthorUserID   pgtype.Int8        `json:"author_user_id"`
+	Body           string             `json:"body"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Conversation struct {
@@ -1726,6 +1895,10 @@ type Conversation struct {
 	MergedAt             pgtype.Timestamptz `json:"merged_at"`
 	AnonymizedAt         pgtype.Timestamptz `json:"anonymized_at"`
 	BrandID              pgtype.UUID        `json:"brand_id"`
+	DepartmentID         pgtype.Int8        `json:"department_id"`
+	DepartmentSource     pgtype.Text        `json:"department_source"`
+	DepartmentConfidence pgtype.Float4      `json:"department_confidence"`
+	DepartmentRoutedAt   pgtype.Timestamptz `json:"department_routed_at"`
 }
 
 type ConversationBulkOp struct {
@@ -1745,6 +1918,21 @@ type ConversationBulkOp struct {
 type ConversationCounter struct {
 	OrganizationID int64 `json:"organization_id"`
 	LastNumber     int64 `json:"last_number"`
+}
+
+type ConversationDepartmentTransfer struct {
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	ConversationID   int64              `json:"conversation_id"`
+	FromDepartmentID pgtype.Int8        `json:"from_department_id"`
+	ToDepartmentID   pgtype.Int8        `json:"to_department_id"`
+	ActorKind        string             `json:"actor_kind"`
+	ActorUserID      pgtype.Int8        `json:"actor_user_id"`
+	Confidence       pgtype.Float4      `json:"confidence"`
+	Reason           string             `json:"reason"`
+	ContextSummary   string             `json:"context_summary"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
 type ConversationLink struct {
@@ -1959,6 +2147,65 @@ type DataSubjectRequest struct {
 	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Department struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Color          string             `json:"color"`
+	WidgetVisible  bool               `json:"widget_visible"`
+	SortOrder      int32              `json:"sort_order"`
+	SlaPolicyID    pgtype.UUID        `json:"sla_policy_id"`
+	Timezone       pgtype.Text        `json:"timezone"`
+	WorkingHours   []byte             `json:"working_hours"`
+	AiEnabled      bool               `json:"ai_enabled"`
+	AiInstructions string             `json:"ai_instructions"`
+	RoutingHint    string             `json:"routing_hint"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DepartmentKnowledgeShare struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	DepartmentID   int64              `json:"department_id"`
+	ResourceKind   string             `json:"resource_kind"`
+	ResourceID     int64              `json:"resource_id"`
+	SharedBy       pgtype.Int8        `json:"shared_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type DesktopRelease struct {
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	App               string             `json:"app"`
+	Channel           string             `json:"channel"`
+	Version           string             `json:"version"`
+	Target            string             `json:"target"`
+	Status            string             `json:"status"`
+	Notes             string             `json:"notes"`
+	Signature         string             `json:"signature"`
+	OsSigned          bool               `json:"os_signed"`
+	UpdaterKey        string             `json:"updater_key"`
+	UpdaterName       string             `json:"updater_name"`
+	UpdaterSize       int64              `json:"updater_size"`
+	UpdaterSha256     string             `json:"updater_sha256"`
+	InstallerKey      pgtype.Text        `json:"installer_key"`
+	InstallerName     pgtype.Text        `json:"installer_name"`
+	InstallerSize     pgtype.Int8        `json:"installer_size"`
+	InstallerSha256   pgtype.Text        `json:"installer_sha256"`
+	PublishedByUserID pgtype.Int8        `json:"published_by_user_id"`
+	PublishedAt       pgtype.Timestamptz `json:"published_at"`
+	WithdrawnByUserID pgtype.Int8        `json:"withdrawn_by_user_id"`
+	WithdrawnAt       pgtype.Timestamptz `json:"withdrawn_at"`
+	WithdrawnReason   string             `json:"withdrawn_reason"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type DomainEventLog struct {
@@ -2400,6 +2647,123 @@ type GuideProgress struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type HistoryCase struct {
+	ID                  int64              `json:"id"`
+	Uuid                uuid.UUID          `json:"uuid"`
+	OrganizationID      int64              `json:"organization_id"`
+	ImportID            int64              `json:"import_id"`
+	BrandID             pgtype.UUID        `json:"brand_id"`
+	DepartmentID        pgtype.Int8        `json:"department_id"`
+	Source              string             `json:"source"`
+	ExternalRef         string             `json:"external_ref"`
+	ConversationID      pgtype.Int8        `json:"conversation_id"`
+	Subject             string             `json:"subject"`
+	Problem             string             `json:"problem"`
+	Resolution          string             `json:"resolution"`
+	MessageCount        int32              `json:"message_count"`
+	Locale              string             `json:"locale"`
+	TrainingAllowed     bool               `json:"training_allowed"`
+	Category            string             `json:"category"`
+	Embedding           vectorstore.Vector `json:"embedding"`
+	ResolutionEmbedding vectorstore.Vector `json:"resolution_embedding"`
+	EmbeddingModel      string             `json:"embedding_model"`
+	ClusterID           pgtype.Int8        `json:"cluster_id"`
+	OpenedAt            pgtype.Timestamptz `json:"opened_at"`
+	ClosedAt            pgtype.Timestamptz `json:"closed_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+}
+
+type HistoryCluster struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Category       string             `json:"category"`
+	Label          string             `json:"label"`
+	Centroid       vectorstore.Vector `json:"centroid"`
+	EmbeddingModel string             `json:"embedding_model"`
+	Size           int32              `json:"size"`
+	Evidence       int32              `json:"evidence"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type HistoryDecision struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	SuggestionID   pgtype.Int8        `json:"suggestion_id"`
+	ClusterID      pgtype.Int8        `json:"cluster_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	Decision       string             `json:"decision"`
+	Reason         string             `json:"reason"`
+	Title          string             `json:"title"`
+	Body           string             `json:"body"`
+	Correction     string             `json:"correction"`
+	Embedding      vectorstore.Vector `json:"embedding"`
+	EmbeddingModel string             `json:"embedding_model"`
+	DecidedBy      pgtype.Int8        `json:"decided_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type HistoryImport struct {
+	ID                    int64              `json:"id"`
+	Uuid                  uuid.UUID          `json:"uuid"`
+	OrganizationID        int64              `json:"organization_id"`
+	BrandID               pgtype.UUID        `json:"brand_id"`
+	DepartmentID          pgtype.Int8        `json:"department_id"`
+	Source                string             `json:"source"`
+	Connector             string             `json:"connector"`
+	FileName              string             `json:"file_name"`
+	Status                string             `json:"status"`
+	Stage                 string             `json:"stage"`
+	TotalRecords          int32              `json:"total_records"`
+	ProcessedRecords      int32              `json:"processed_records"`
+	SkippedRecords        int32              `json:"skipped_records"`
+	ClustersTouched       int32              `json:"clusters_touched"`
+	SuggestionsCreated    int32              `json:"suggestions_created"`
+	SuggestionsSuppressed int32              `json:"suggestions_suppressed"`
+	ConsentAnalysis       bool               `json:"consent_analysis"`
+	ConsentTraining       bool               `json:"consent_training"`
+	ConsentBy             pgtype.Int8        `json:"consent_by"`
+	ConsentAt             pgtype.Timestamptz `json:"consent_at"`
+	ConsentVersion        string             `json:"consent_version"`
+	RawKey                string             `json:"raw_key"`
+	RawRetainUntil        pgtype.Timestamptz `json:"raw_retain_until"`
+	RawDeletedAt          pgtype.Timestamptz `json:"raw_deleted_at"`
+	WindowStart           pgtype.Timestamptz `json:"window_start"`
+	WindowEnd             pgtype.Timestamptz `json:"window_end"`
+	CancelRequested       bool               `json:"cancel_requested"`
+	LeaseUntil            pgtype.Timestamptz `json:"lease_until"`
+	Error                 string             `json:"error"`
+	CreatedBy             pgtype.Int8        `json:"created_by"`
+	StartedAt             pgtype.Timestamptz `json:"started_at"`
+	FinishedAt            pgtype.Timestamptz `json:"finished_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ErrorCode             string             `json:"error_code"`
+	ResumeAt              pgtype.Timestamptz `json:"resume_at"`
+	ResumeOffset          int32              `json:"resume_offset"`
+}
+
+type HistorySetting struct {
+	OrganizationID         int64              `json:"organization_id"`
+	EvidenceThreshold      int32              `json:"evidence_threshold"`
+	ClusterSimilarity      float32            `json:"cluster_similarity"`
+	ResolutionSimilarity   float32            `json:"resolution_similarity"`
+	RejectionSimilarity    float32            `json:"rejection_similarity"`
+	RawRetentionHours      int32              `json:"raw_retention_hours"`
+	ArchiveRetentionDays   int32              `json:"archive_retention_days"`
+	NightlyEnabled         bool               `json:"nightly_enabled"`
+	NightlyConsentAnalysis bool               `json:"nightly_consent_analysis"`
+	NightlyConsentTraining bool               `json:"nightly_consent_training"`
+	NightlyWatermark       pgtype.Timestamptz `json:"nightly_watermark"`
+	UpdatedBy              pgtype.Int8        `json:"updated_by"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ImportChange struct {
 	ID           int64              `json:"id"`
 	Uuid         uuid.UUID          `json:"uuid"`
@@ -2578,6 +2942,7 @@ type KnowledgeArticle struct {
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	BrandID             pgtype.UUID        `json:"brand_id"`
+	DepartmentID        pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeArticleAudience struct {
@@ -2611,16 +2976,20 @@ type KnowledgeArticleVersion struct {
 }
 
 type KnowledgeChunk struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	ArticleID      int64              `json:"article_id"`
-	Version        int32              `json:"version"`
-	Ordinal        int32              `json:"ordinal"`
-	Content        string             `json:"content"`
-	Embedding      []float32          `json:"embedding"`
-	EmbeddingModel string             `json:"embedding_model"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ID               int64              `json:"id"`
+	Uuid             uuid.UUID          `json:"uuid"`
+	OrganizationID   int64              `json:"organization_id"`
+	ArticleID        int64              `json:"article_id"`
+	Version          int32              `json:"version"`
+	Ordinal          int32              `json:"ordinal"`
+	Content          string             `json:"content"`
+	EmbeddingModel   string             `json:"embedding_model"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Embedding        vectorstore.Vector `json:"embedding"`
+	BrandID          pgtype.UUID        `json:"brand_id"`
+	DepartmentID     pgtype.Int8        `json:"department_id"`
+	PendingEmbedding vectorstore.Vector `json:"pending_embedding"`
+	PendingModel     pgtype.Text        `json:"pending_model"`
 }
 
 type KnowledgeCollection struct {
@@ -2633,6 +3002,23 @@ type KnowledgeCollection struct {
 	Kind           string             `json:"kind"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KnowledgeGapQuestion struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	Audience       string             `json:"audience"`
+	Locale         string             `json:"locale"`
+	ScopeKey       string             `json:"scope_key"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	QuestionHash   string             `json:"question_hash"`
+	Question       string             `json:"question"`
+	Category       string             `json:"category"`
+	ConversationID pgtype.Int8        `json:"conversation_id"`
+	Occurrences    int64              `json:"occurrences"`
+	FirstSeenAt    pgtype.Timestamptz `json:"first_seen_at"`
+	LastSeenAt     pgtype.Timestamptz `json:"last_seen_at"`
 }
 
 type KnowledgeIndexState struct {
@@ -2678,6 +3064,7 @@ type KnowledgeSource struct {
 	LastSyncedAt   pgtype.Timestamptz `json:"last_synced_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type KnowledgeSourceDocument struct {
@@ -2693,18 +3080,25 @@ type KnowledgeSourceDocument struct {
 }
 
 type KnowledgeSuggestion struct {
-	ID             int64              `json:"id"`
-	Uuid           uuid.UUID          `json:"uuid"`
-	OrganizationID int64              `json:"organization_id"`
-	Topic          string             `json:"topic"`
-	ConversationID int64              `json:"conversation_id"`
-	ArticleID      pgtype.Int8        `json:"article_id"`
-	Title          string             `json:"title"`
-	Body           string             `json:"body"`
-	Status         string             `json:"status"`
-	ReviewedBy     pgtype.Int8        `json:"reviewed_by"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID                int64              `json:"id"`
+	Uuid              uuid.UUID          `json:"uuid"`
+	OrganizationID    int64              `json:"organization_id"`
+	Topic             string             `json:"topic"`
+	ConversationID    pgtype.Int8        `json:"conversation_id"`
+	ArticleID         pgtype.Int8        `json:"article_id"`
+	Title             string             `json:"title"`
+	Body              string             `json:"body"`
+	Status            string             `json:"status"`
+	ReviewedBy        pgtype.Int8        `json:"reviewed_by"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID      pgtype.Int8        `json:"department_id"`
+	Source            string             `json:"source"`
+	ClusterID         pgtype.Int8        `json:"cluster_id"`
+	ImportID          pgtype.Int8        `json:"import_id"`
+	EvidenceCount     int32              `json:"evidence_count"`
+	ConflictArticleID pgtype.Int8        `json:"conflict_article_id"`
+	ConflictScore     float32            `json:"conflict_score"`
 }
 
 type KnowledgeTranslation struct {
@@ -2715,6 +3109,37 @@ type KnowledgeTranslation struct {
 	SourceVersion   int32              `json:"source_version"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KnowledgeUnit struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
+	ArticleID      pgtype.Int8        `json:"article_id"`
+	SuggestionID   pgtype.Int8        `json:"suggestion_id"`
+	SourceVersion  int32              `json:"source_version"`
+	SourceHash     string             `json:"source_hash"`
+	Ordinal        int32              `json:"ordinal"`
+	Locale         string             `json:"locale"`
+	Visibility     string             `json:"visibility"`
+	Category       string             `json:"category"`
+	Question       string             `json:"question"`
+	Variants       []string           `json:"variants"`
+	Answer         string             `json:"answer"`
+	EmbeddingModel string             `json:"embedding_model"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KnowledgeUnitQuestion struct {
+	ID             int64              `json:"id"`
+	OrganizationID int64              `json:"organization_id"`
+	UnitID         int64              `json:"unit_id"`
+	Ordinal        int32              `json:"ordinal"`
+	Content        string             `json:"content"`
+	Embedding      vectorstore.Vector `json:"embedding"`
 }
 
 type LiveActivityToken struct {
@@ -3430,6 +3855,66 @@ type RefreshToken struct {
 	IpAddress          *netip.Addr        `json:"ip_address"`
 	ImpersonatorUserID pgtype.Int8        `json:"impersonator_user_id"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	Client             pgtype.Text        `json:"client"`
+	ClientOs           pgtype.Text        `json:"client_os"`
+	DeviceName         pgtype.Text        `json:"device_name"`
+}
+
+type RemoteSupportSession struct {
+	ID                 int64              `json:"id"`
+	Uuid               uuid.UUID          `json:"uuid"`
+	OrganizationID     int64              `json:"organization_id"`
+	ConversationID     int64              `json:"conversation_id"`
+	AgentUserID        pgtype.Int8        `json:"agent_user_id"`
+	ContactID          pgtype.Int8        `json:"contact_id"`
+	CodeLookup         string             `json:"code_lookup"`
+	CodeHash           string             `json:"code_hash"`
+	CodeAttempts       int32              `json:"code_attempts"`
+	CodeExpiresAt      pgtype.Timestamptz `json:"code_expires_at"`
+	JoinTokenHash      string             `json:"join_token_hash"`
+	ClientSecretHash   string             `json:"client_secret_hash"`
+	Status             string             `json:"status"`
+	ModeRequested      string             `json:"mode_requested"`
+	ResolvedAt         pgtype.Timestamptz `json:"resolved_at"`
+	ViewConsentAt      pgtype.Timestamptz `json:"view_consent_at"`
+	ControlConsentAt   pgtype.Timestamptz `json:"control_consent_at"`
+	ControlRevokedAt   pgtype.Timestamptz `json:"control_revoked_at"`
+	RecordingConsent   pgtype.Bool        `json:"recording_consent"`
+	RecordingConsentAt pgtype.Timestamptz `json:"recording_consent_at"`
+	RoomName           string             `json:"room_name"`
+	EgressID           string             `json:"egress_id"`
+	RecordingStatus    string             `json:"recording_status"`
+	RecordingKey       string             `json:"recording_key"`
+	RecordingSizeBytes int64              `json:"recording_size_bytes"`
+	RecordingExpiresAt pgtype.Timestamptz `json:"recording_expires_at"`
+	ClientOs           string             `json:"client_os"`
+	ClientVersion      string             `json:"client_version"`
+	MaxDurationMinutes int32              `json:"max_duration_minutes"`
+	StartedAt          pgtype.Timestamptz `json:"started_at"`
+	EndedAt            pgtype.Timestamptz `json:"ended_at"`
+	EndedReason        string             `json:"ended_reason"`
+	EndedBy            string             `json:"ended_by"`
+	EndedByUserID      pgtype.Int8        `json:"ended_by_user_id"`
+	ReportedAt         pgtype.Timestamptz `json:"reported_at"`
+	ReportReason       string             `json:"report_reason"`
+	BilledMinutes      int64              `json:"billed_minutes"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RemoteSupportSetting struct {
+	OrganizationID         int64              `json:"organization_id"`
+	Enabled                bool               `json:"enabled"`
+	AllowControl           bool               `json:"allow_control"`
+	Recording              string             `json:"recording"`
+	MaxDurationMinutes     int32              `json:"max_duration_minutes"`
+	RecordingRetentionDays int32              `json:"recording_retention_days"`
+	PlatformState          string             `json:"platform_state"`
+	PlatformReason         string             `json:"platform_reason"`
+	PlatformChangedAt      pgtype.Timestamptz `json:"platform_changed_at"`
+	PlatformChangedBy      pgtype.Int8        `json:"platform_changed_by"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ReportDelivery struct {
@@ -3929,6 +4414,7 @@ type Team struct {
 	Skills         []string           `json:"skills"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	DepartmentID   pgtype.Int8        `json:"department_id"`
 }
 
 type TeamMember struct {

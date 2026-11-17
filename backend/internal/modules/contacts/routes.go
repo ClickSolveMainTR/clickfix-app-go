@@ -33,6 +33,13 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("PATCH /v1/tenant/contacts/{uuid}", h.UpdateContact, write)
 	route("DELETE /v1/tenant/contacts/{uuid}", h.DeleteContact, del)
 	route("POST /v1/tenant/contacts/{uuid}/merge", h.MergeContact, write)
+	// CF-221: contact page, unified timeline, notes and the AI summary.
+	route("GET /v1/tenant/contacts/{uuid}/overview", h.GetContactOverview, read)
+	route("GET /v1/tenant/contacts/{uuid}/timeline", h.GetContactTimeline, read)
+	route("POST /v1/tenant/contacts/{uuid}/notes", h.CreateContactNote, write)
+	route("DELETE /v1/tenant/contact-notes/{uuid}", h.DeleteContactNote, write)
+	mux.Handle("POST /v1/tenant/contacts/{uuid}/ai-summary",
+		middleware.Chain(http.HandlerFunc(h.GenerateContactSummary), authn, org, read, middleware.RequireTenantPermission(rbac.PermTenantAiUse)))
 
 	route("GET /v1/tenant/companies", h.ListCompanies, read)
 	route("POST /v1/tenant/companies", h.CreateCompany, write)

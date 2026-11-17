@@ -114,6 +114,34 @@ func (q *Queries) AIAgentContactHistory(ctx context.Context, arg AIAgentContactH
 	return items, nil
 }
 
+const aIAgentEnableChannel = `-- name: AIAgentEnableChannel :one
+UPDATE ai_agent_configs SET
+  config = jsonb_set(config, '{channels}',
+    (CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END)
+    || to_jsonb($1::text)),
+  revision = revision + 1
+WHERE organization_id = $2
+  AND COALESCE(config->>'mode', 'off') <> 'off'
+  AND NOT (CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END) ? $1::text
+  AND jsonb_array_length(CASE WHEN jsonb_typeof(config->'channels') = 'array' THEN config->'channels' ELSE '[]'::jsonb END) < 20
+RETURNING revision
+`
+
+type AIAgentEnableChannelParams struct {
+	ChannelType    string `json:"channel_type"`
+	OrganizationID int64  `json:"organization_id"`
+}
+
+// A newly connected channel type joins an existing, active agent config
+// (CF-243). Idempotent: no row when the config is missing, off, already
+// lists the type or is at the 20-channel limit.
+func (q *Queries) AIAgentEnableChannel(ctx context.Context, arg AIAgentEnableChannelParams) (int32, error) {
+	row := q.db.QueryRow(ctx, aIAgentEnableChannel, arg.ChannelType, arg.OrganizationID)
+	var revision int32
+	err := row.Scan(&revision)
+	return revision, err
+}
+
 const aIAgentFinish = `-- name: AIAgentFinish :exec
 UPDATE ai_agent_jobs j SET status=$1,
 run_uuid=(SELECT a.uuid FROM ai_runs a WHERE a.organization_id=j.organization_id AND a.uuid=$2::uuid),

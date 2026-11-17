@@ -49,14 +49,36 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// Handoff reasons of an inactive agent (CF-243): the run log and the
+// conversation's AI jobs tell a channel left out of the agent's scope apart
+// from a message outside working hours.
+const (
+	ReasonChannelNotEnabled    = "Channel not enabled for AI agent"
+	ReasonOutsideBusinessHours = "Outside business hours"
+)
+
+// HandoffNoticeSent ends the reason of a handoff after which the customer
+// got the handoff notice (CF-244), so the run log tells a silent handoff
+// apart from one the customer heard about.
+const HandoffNoticeSent = "; handoff notice sent"
+
 // Active reports whether the agent handles channel now. open is the
 // organization's working-hours state (businesshours.Source); it only
 // matters with BusinessHoursOnly.
 func (c Config) Active(channel string, open bool) bool {
+	return c.InactiveReason(channel, open) == ""
+}
+
+// InactiveReason is why the agent does not handle channel now, or "" when
+// it does (see Active).
+func (c Config) InactiveReason(channel string, open bool) string {
 	if !slices.Contains(c.Channels, channel) {
-		return false
+		return ReasonChannelNotEnabled
 	}
-	return open || !c.BusinessHoursOnly
+	if !open && c.BusinessHoursOnly {
+		return ReasonOutsideBusinessHours
+	}
+	return ""
 }
 
 type Triage struct {
@@ -81,6 +103,10 @@ type Reply struct {
 	Confidence float64     `json:"confidence"`
 	Handoff    bool        `json:"handoff"`
 	Citations  []uuid.UUID `json:"citation_ids"`
+	// UnitUUID is the knowledge unit that answered without a generation
+	// call, Memory the cache outcome ("exact" or "semantic"; CF-216).
+	UnitUUID *uuid.UUID `json:"unit_uuid,omitempty"`
+	Memory   string     `json:"memory,omitempty"`
 }
 
 type CopilotInput struct {

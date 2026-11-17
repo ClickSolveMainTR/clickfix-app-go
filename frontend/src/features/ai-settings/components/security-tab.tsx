@@ -43,6 +43,18 @@ const PII_KINDS = ["IBAN", "EMAIL", "CARD", "TCKN", "PHONE"] as const;
 
 const MAX_BUDGET_MICROS = 1_000_000_000_000;
 
+type Limit = AIPolicy["effective_limits"]["daily_calls"];
+
+/** "" follows the platform limit (null); anything else must be a number. */
+function parseOptional(raw: string): number | null {
+  const trimmed = raw.trim().replace(",", ".");
+  return trimmed === "" ? null : Number(trimmed);
+}
+
+function fieldText(value: number | null | undefined, scale = 1): string {
+  return value == null ? "" : String(value / scale);
+}
+
 function toInput(policy: AIPolicy): AIPolicyInput {
   return {
     enabled: policy.enabled,
@@ -51,6 +63,7 @@ function toInput(policy: AIPolicy): AIPolicyInput {
     daily_calls: policy.daily_calls,
     concurrency: policy.concurrency,
     daily_budget_micros: policy.daily_budget_micros,
+    batch_share_percent: policy.batch_share_percent,
   };
 }
 
@@ -120,11 +133,20 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
     queryFn: () => aiSettingsService.policy(slug),
   });
   const [form, setForm] = useState<AIPolicyInput | null>(null);
+  const [calls, setCalls] = useState("");
+  const [concurrency, setConcurrency] = useState("");
   const [budget, setBudget] = useState("");
+  const [share, setShare] = useState("");
   const [saving, setSaving] = useState(false);
+  const reset = (policy: AIPolicy) => {
+    setForm(toInput(policy));
+    setCalls(fieldText(policy.daily_calls));
+    setConcurrency(fieldText(policy.concurrency));
+    setBudget(fieldText(policy.daily_budget_micros, 1_000_000));
+    setShare(String(policy.batch_share_percent));
+  };
   if (query.data && form === null) {
-    setForm(toInput(query.data));
-    setBudget(String(query.data.daily_budget_micros / 1_000_000));
+    reset(query.data);
   }
   if (!form || !query.data) {
     return (
@@ -141,35 +163,78 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
     key: K,
     value: AIPolicyInput[K],
   ) => setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  const budgetValue = Number(budget.replace(",", "."));
-  const budgetMicros = Math.round(budgetValue * 1_000_000);
+  // CF-229: an empty limit follows the platform limit; a value can only
+  // lower it, so the effective limit is the lower of the two.
+  const callsValue = parseOptional(calls);
+  const concurrencyValue = parseOptional(concurrency);
+  const budgetValue = parseOptional(budget);
+  const budgetMicros =
+    budgetValue === null ? null : Math.round(budgetValue * 1_000_000);
   const errors = {
     calls:
-      !Number.isInteger(form.daily_calls) ||
-      form.daily_calls < 1 ||
-      form.daily_calls > 100_000,
+      callsValue !== null &&
+      (!Number.isInteger(callsValue) || callsValue < 1 || callsValue > 100_000),
     concurrency:
-      !Number.isInteger(form.concurrency) ||
-      form.concurrency < 1 ||
-      form.concurrency > 20,
+      concurrencyValue !== null &&
+      (!Number.isInteger(concurrencyValue) ||
+        concurrencyValue < 1 ||
+        concurrencyValue > 20),
     budget:
-      !Number.isFinite(budgetValue) ||
-      budgetMicros < 1 ||
-      budgetMicros > MAX_BUDGET_MICROS,
+      budgetMicros !== null &&
+      (!Number.isFinite(budgetMicros) ||
+        budgetMicros < 1 ||
+        budgetMicros > MAX_BUDGET_MICROS),
   };
-  const invalid = errors.calls || errors.concurrency || errors.budget;
-  const next: AIPolicyInput = { ...form, daily_budget_micros: budgetMicros };
+  // CF-228: batch jobs may use this share of the daily limits.
+  const shareValue = Number(share.trim());
+  const shareInvalid =
+    !Number.isInteger(shareValue) || shareValue < 10 || shareValue > 90;
+  const invalid =
+    errors.calls || errors.concurrency || errors.budget || shareInvalid;
+  const next: AIPolicyInput = {
+    ...form,
+    daily_calls: callsValue,
+    concurrency: concurrencyValue,
+    daily_budget_micros: budgetMicros,
+    batch_share_percent: shareValue,
+  };
   const dirty =
-    JSON.stringify(next) !== JSON.stringify(toInput(query.data)) &&
-    !errors.budget;
+    JSON.stringify(next) !== JSON.stringify(toInput(query.data)) && !invalid;
+  const platform = query.data.platform_limits;
+  const effective = query.data.effective_limits;
+  const batch = query.data.batch_limits;
+  const limitText = (limit: Limit, format?: (n: number) => string) =>
+    limit.unlimited || limit.limit == null
+      ? t("ai_settings.security.unlimited")
+      : format
+        ? format(limit.limit)
+        : limit.limit.toLocaleString(locale);
+  const limitHint = (
+    range: string,
+    key: "daily_calls" | "concurrency" | "daily_budget_micros",
+    format?: (n: number) => string,
+  ) => (
+    <>
+      <span className="block">{range}</span>
+      <span className="block">
+        {t("ai_settings.security.platform_limit", {
+          value: limitText(platform[key], format),
+        })}
+        {" · "}
+        {t("ai_settings.security.effective_limit", {
+          value: limitText(effective[key], format),
+        })}
+      </span>
+    </>
+  );
+  const money = (micros: number) => formatMicros(micros, locale);
 
   const save = async () => {
     setSaving(true);
     try {
       const saved = await aiSettingsService.savePolicy(slug, next);
       qc.setQueryData(policyKey(slug), saved);
-      setForm(toInput(saved));
-      setBudget(String(saved.daily_budget_micros / 1_000_000));
+      reset(saved);
       appToast.success(t("ai_settings.security.saved"));
     } catch (error) {
       appToast.error(aiErrorMessage(error, t));
@@ -242,7 +307,10 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
           <CardContent className="grid gap-4 sm:grid-cols-3">
             <SettingRow
               label={t("ai_settings.security.daily_calls")}
-              hint={t("ai_settings.security.daily_calls_hint")}
+              hint={limitHint(
+                t("ai_settings.security.daily_calls_hint"),
+                "daily_calls",
+              )}
               htmlFor="ai-daily-calls"
             >
               <Input
@@ -250,15 +318,19 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
                 type="number"
                 min={1}
                 max={100000}
-                value={form.daily_calls}
+                value={calls}
+                placeholder={t("ai_settings.security.follow_platform")}
                 disabled={readOnly}
                 aria-invalid={errors.calls}
-                onChange={(e) => set("daily_calls", Number(e.target.value))}
+                onChange={(e) => setCalls(e.target.value)}
               />
             </SettingRow>
             <SettingRow
               label={t("ai_settings.security.concurrency")}
-              hint={t("ai_settings.security.concurrency_hint")}
+              hint={limitHint(
+                t("ai_settings.security.concurrency_hint"),
+                "concurrency",
+              )}
               htmlFor="ai-concurrency"
             >
               <Input
@@ -266,21 +338,26 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
                 type="number"
                 min={1}
                 max={20}
-                value={form.concurrency}
+                value={concurrency}
+                placeholder={t("ai_settings.security.follow_platform")}
                 disabled={readOnly}
                 aria-invalid={errors.concurrency}
-                onChange={(e) => set("concurrency", Number(e.target.value))}
+                onChange={(e) => setConcurrency(e.target.value)}
               />
             </SettingRow>
             <SettingRow
               label={t("ai_settings.security.daily_budget")}
-              hint={
+              hint={limitHint(
                 errors.budget
                   ? t("ai_settings.security.daily_budget_invalid")
-                  : t("ai_settings.security.daily_budget_hint", {
-                      value: formatMicros(budgetMicros, locale),
-                    })
-              }
+                  : budgetMicros === null
+                    ? t("ai_settings.security.daily_budget_follow")
+                    : t("ai_settings.security.daily_budget_hint", {
+                        value: money(budgetMicros),
+                      }),
+                "daily_budget_micros",
+                money,
+              )}
               htmlFor="ai-budget"
             >
               <div className="relative">
@@ -292,10 +369,47 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
                   inputMode="decimal"
                   className="ps-7"
                   value={budget}
+                  placeholder={t("ai_settings.security.follow_platform")}
                   disabled={readOnly}
                   aria-invalid={errors.budget}
                   onChange={(e) => setBudget(e.target.value)}
                 />
+              </div>
+            </SettingRow>
+            <SettingRow
+              label={t("ai_settings.security.batch_share")}
+              hint={
+                <>
+                  <span className="block">
+                    {shareInvalid
+                      ? t("ai_settings.security.batch_share_invalid")
+                      : t("ai_settings.security.batch_share_hint")}
+                  </span>
+                  <span className="block">
+                    {t("ai_settings.security.batch_limits", {
+                      calls: limitText(batch.daily_calls),
+                      budget: limitText(batch.daily_budget_micros, money),
+                    })}
+                  </span>
+                </>
+              }
+              htmlFor="ai-batch-share"
+            >
+              <div className="relative">
+                <Input
+                  id="ai-batch-share"
+                  type="number"
+                  min={10}
+                  max={90}
+                  className="pe-7"
+                  value={share}
+                  disabled={readOnly}
+                  aria-invalid={shareInvalid}
+                  onChange={(e) => setShare(e.target.value)}
+                />
+                <span className="text-muted-foreground pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm">
+                  %
+                </span>
               </div>
             </SettingRow>
           </CardContent>
@@ -315,10 +429,7 @@ export function SecurityTab({ slug, canWrite }: AISettingsTabProps) {
             <Button
               variant="outline"
               disabled={!dirty || saving}
-              onClick={() => {
-                setForm(toInput(query.data));
-                setBudget(String(query.data.daily_budget_micros / 1_000_000));
-              }}
+              onClick={() => reset(query.data)}
             >
               {t("ai_settings.discard")}
             </Button>

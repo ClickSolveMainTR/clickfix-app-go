@@ -1,6 +1,6 @@
 -- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (user_id, token_hash, expires_at, user_agent, ip_address, impersonator_user_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO refresh_tokens (user_id, token_hash, expires_at, user_agent, ip_address, impersonator_user_id, client, client_os, device_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: GetValidRefreshTokenByHash :one
@@ -43,3 +43,23 @@ SET revoked_at = NOW()
 WHERE user_id = $1
   AND uuid <> $2
   AND revoked_at IS NULL;
+
+-- name: GetActiveRefreshTokenByUUIDForUser :one
+SELECT *
+FROM refresh_tokens
+WHERE uuid = $1
+  AND user_id = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW();
+
+-- name: UserHasDesktopSession :one
+-- True while the user has an active ClickFix Masaüstü session (CF-236);
+-- notification e-mails then carry a "Masaüstünde aç" link.
+SELECT EXISTS (
+  SELECT 1
+  FROM refresh_tokens
+  WHERE user_id = $1
+    AND client = 'desktop'
+    AND revoked_at IS NULL
+    AND expires_at > NOW()
+)::boolean AS has_session;

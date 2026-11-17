@@ -2885,6 +2885,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/desktop/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-time code for the desktop app (signed-in browser)
+         * @description CF-234. Called by the `/desktop/login` page in the system browser
+         *     after the user signed in there (any method). Binds a one-time code to
+         *     the desktop app's `state` and PKCE S256 `code_challenge`. The code is
+         *     valid for 60 s, held in Redis (hashed key) and redeemable once. The
+         *     page sends the user to `redirect_url` (`clickfix://auth/callback`).
+         *     Not available while impersonating.
+         *
+         *     Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN` (impersonating or
+         *     disabled), `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED`
+         *     (20 / 15 min per user).
+         */
+        post: operations["postAuthDesktopCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a desktop code (desktop app)
+         * @description CF-234. Called by the desktop app (native client, through
+         *     `/api/mobile/v1`), never by browser JS (the panel BFF blocks it).
+         *     Trades the code from the callback plus the PKCE `code_verifier` and
+         *     `state` for the app's own session: the same token pair as
+         *     `/v1/auth/login` plus the user. The refresh session is labelled
+         *     `client=desktop` (and `client_os`, `device_name`) in
+         *     `GET /v1/auth/sessions`; the label survives refresh rotation.
+         *
+         *     Single use: a second exchange is refused and audited
+         *     (`desktop_login.code_reused`). A wrong verifier or state is audited
+         *     (`desktop_login.verifier_mismatch`); after 3 the code is deleted.
+         *     Expired, unknown, reused and mismatched codes all answer
+         *     `400 DESKTOP_LOGIN_INVALID`.
+         *
+         *     Errors: `400 DESKTOP_LOGIN_INVALID`, `400 VALIDATION_ERROR`,
+         *     `403 ACCOUNT_DEACTIVATED`, `403 FORBIDDEN`, `429 RATE_LIMITED`
+         *     (30 / 15 min per IP).
+         */
+        post: operations["postAuthDesktopExchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/web-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Separate session for the desktop app's web view (web server)
+         * @description CF-234. Called only by the web server's `POST /desktop/session` route
+         *     with the desktop app's access token; both proxies block it. Issues a
+         *     second session (also `client=desktop`) for the embedded web view, so
+         *     the app's keychain refresh token and the web view cookie rotate
+         *     independently. The caller's session must be an active desktop
+         *     session; impersonation sessions are refused.
+         *
+         *     Errors: `401`, `403 FORBIDDEN` (not a desktop session),
+         *     `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED` (30 / 15 min per user).
+         */
+        post: operations["postAuthDesktopWebSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications": {
         parameters: {
             query?: never;
@@ -3459,6 +3552,338 @@ export interface paths {
         get: operations["getTenantContext"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Category tree metadata
+         * @description Table contract of `GET /v1/tenant/categories` (`tenant.categories.read`, CF-218).
+         */
+        get: operations["getTenantCategoriesMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the category tree
+         * @description `tenant.categories.read` (CF-218). The whole tree as a flat list, parents before children (`depth`, `position`, `name`). `department` (uuid) lists the organization-wide nodes plus that department's branches; a department of another organization answers `400 VALIDATION_ERROR` (`department_uuid`, `not_found`). Archived nodes only with `include_archived=true`.
+         */
+        get: operations["getTenantCategories"];
+        put?: never;
+        /**
+         * Create a category
+         * @description `tenant.categories.manage` (CF-218). `slug` defaults to the slugified name. A root may be organization-wide or belong to a department; a child of a department node belongs to the same department (it inherits it when `department_uuid` is omitted); a child of an organization-wide node may open a department branch. At most 5 levels. `examples` (up to 50) are sample texts the embedding classifier compares records with. Errors: `400 VALIDATION_ERROR` (`name`, `slug`, `examples`, `parent_uuid` `not_found`/`cycle`/`too_deep`/`archived`, `department_uuid` `mismatch`/`not_found`/`unavailable`), `409 CONFLICT` when the slug is taken.
+         */
+        post: operations["postTenantCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Records waiting for a category decision
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Records whose classification stayed below the confidence bar (`needs_review`), newest first. `subject_type` narrows the kind.
+         */
+        get: operations["getTenantCategoryReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/labels/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export the category labels (training set)
+         * @description `tenant.categories.read` + `tenant.categories.export` (CF-218). Every agent confirmation and correction of the organization as JSON Lines, oldest first: masked text, its vector and embedding model, the previous and the new category, the previous source and confidence, who and when. The training set of the organization's own classifier (CF-219); it never contains another organization's labels. `since` (RFC 3339) exports labels created from then on. Not wrapped in the response envelope.
+         */
+        get: operations["getTenantCategoryLabelsExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/categories/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a category
+         * @description `tenant.categories.read` (CF-218).
+         */
+        get: operations["getTenantCategory"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an unused category
+         * @description `tenant.categories.manage` (CF-218). Only a node without children, records or labels; otherwise `409 CONFLICT` (archive it instead). Answers `status: deleted`.
+         */
+        delete: operations["deleteTenantCategory"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a category
+         * @description `tenant.categories.manage` (CF-218). Omitted fields keep their value; `parent_uuid: ""` makes the node a root, `department_uuid: ""` makes it organization-wide. Moving a node moves its subtree (same rules as create). `archived: true` archives the node and its subtree: archived nodes are no classification candidates but keep their labels.
+         */
+        patch: operations["patchTenantCategory"];
+        trace?: never;
+    };
+    "/v1/tenant/category-assignments/{subjectType}/{subjectUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a record's category
+         * @description `tenant.categories.read` (CF-218). The record must be visible to the caller (conversations follow the inbox visibility; suggestions need `tenant.settings.read`), else `404`. `assignment` is `null` while the record has no category.
+         */
+        get: operations["getTenantCategoryAssignment"];
+        /**
+         * Confirm or correct a record's category
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). The record takes the category with source `human` and confidence 1. The decision is stored as a label (`confirm` when the category stays, `correct` otherwise): masked text, vector, previous and new category, who and when. Errors: `400 VALIDATION_ERROR` (`category_uuid` `not_found`/`archived`/`department`).
+         */
+        put: operations["putTenantCategoryAssignment"];
+        post?: never;
+        /**
+         * Clear a record's category
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Labels already collected stay. Answers `status: deleted`.
+         */
+        delete: operations["deleteTenantCategoryAssignment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/category-assignments/{subjectType}/{subjectUuid}/classify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Classify a record
+         * @description `tenant.categories.read` + `tenant.categories.label` (CF-218). Phase 1: embedding similarity to the category examples and labelled records; when unsure the AI (metered, `tenant.ai` policy and credits apply); when confidence stays low the record goes to the review queue (`needs_review`). An existing decision is returned unchanged; `force=true` re-runs a machine decision, never a human one. Errors: `409 CONFLICT` when the organization has no categories or the record has no text.
+         */
+        post: operations["postTenantCategoryClassify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Departments list metadata
+         * @description Table contract of `GET /v1/tenant/departments` (`tenant.departments.read`, CF-215).
+         */
+        get: operations["getTenantDepartmentsMeta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List departments
+         * @description `tenant.departments.read` (CF-215). A department is a business unit (technical support, sales ...), optionally under a brand; teams belong to it. Listed in `sort_order`. `q` searches name and description, `brand` filters by brand uuid, `mine=true` lists the caller's departments (through their teams).
+         */
+        get: operations["getTenantDepartments"];
+        put?: never;
+        /**
+         * Create a department
+         * @description `tenant.departments.write`. `name` is required and unique in the organization. `team_uuids` sets the department's teams.
+         */
+        post: operations["postTenantDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a department
+         * @description `tenant.departments.read`. Includes teams and leads (the leads of its teams).
+         */
+        get: operations["getTenantDepartment"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a department
+         * @description `tenant.departments.write`. Teams and conversations lose the department. Knowledge the department still owns blocks the delete with `409 DEPARTMENT_IN_USE` (details carry the counts) unless `move_to` is `none` (organization-wide) or another department's uuid.
+         */
+        delete: operations["deleteTenantDepartment"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a department
+         * @description `tenant.departments.write`. Any subset of the fields; `brand_uuid` / `sla_policy_uuid` take null to clear, `inherit_hours: true` drops the department's own hours, `team_uuids` replaces the team list.
+         */
+        patch: operations["patchTenantDepartment"];
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}/shares": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Knowledge shared with or by a department
+         * @description `tenant.departments.read`. Items shared with this department and this department's items shared with others.
+         */
+        get: operations["getTenantDepartmentShares"];
+        put?: never;
+        /**
+         * Share a knowledge item with a department
+         * @description `tenant.departments.read`; the caller must lead the item's department (a lead of one of its teams) or hold `tenant.departments.write`, else `403`. Knowledge is closed by default: a department sees its own items, organization-wide items and items shared with it. Organization-wide items need no share (`422 organization_wide`).
+         */
+        post: operations["postTenantDepartmentShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/departments/{uuid}/shares/{shareUuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop sharing a knowledge item
+         * @description `tenant.departments.read`; a lead of the receiving or the owning department, or `tenant.departments.write`.
+         */
+        delete: operations["deleteTenantDepartmentShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/department": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Department of a conversation
+         * @description `tenant.conversations.read` + `tenant.departments.read` (CF-215). The department, who set it (`customer` widget pick, `ai` prediction with its confidence, `agent` transfer) and the transfer history with the handed-over context.
+         */
+        get: operations["getTenantConversationDepartment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/department-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer a conversation to another department
+         * @description `tenant.conversations.assign` (CF-215). Moves the conversation with its context: `reason` and `context_summary` land in the timeline and the transfer history. A team of another department is unassigned so the receiving department's routing picks it up; `release_assignee` unassigns the agent too. `department_uuid: null` makes it organization-wide.
+         */
+        post: operations["postTenantConversationDepartmentTransfer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10998,6 +11423,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/contacts/{uuid}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contact page (CF-221)
+         * @description Everything the contact page shows above its timeline, in a fixed number of queries: the contact with identities and custom fields, its company (owner, health, revenue), health stats (open conversations, last contact, CSAT, SLA), conversations with tags, files, appointments, consents and KVKK requests, roadmap feedback, forum posts, status notices and the cached AI summary. Requires `tenant.contacts.read`; each section is filtered by the member's permissions (`sections` says which ones are visible, hidden ones are empty): conversations, tags, files and status notices need `tenant.conversations.read` and follow the inbox team visibility rule (without `tenant.conversations.read_all` only the member's teams, assignments, unrouted and joined conversations); NPS / CES need `tenant.conversations.read_all`; appointments `tenant.appointments.read`; consents and KVKK requests `tenant.settings.write`; feedback and forum `tenant.feedback.read` (pending forum posts `tenant.feedback.manage`); the AI summary `tenant.ai.use`.
+         */
+        get: operations["getTenantContactOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unified contact timeline (CF-221)
+         * @description Newest first, one stream over conversations opened and resolved, CSAT and NPS / CES answers, notes, appointments, consent changes, KVKK requests, in-product events, roadmap votes and comments, forum posts, status notices and system events (contact created, channel identity added, edited, merged). Kinds the member may not see (same rules as the overview sections) are dropped; `timeline_kinds` of the overview lists the visible ones. Page backwards with `before` = the previous page's `next_before`. Requires `tenant.contacts.read`.
+         */
+        get: operations["getTenantContactTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a note to a contact (CF-221)
+         * @description Requires `tenant.contacts.write`. Notes follow the contact on merge, are part of the KVKK export and are deleted on erase.
+         */
+        post: operations["postTenantContactNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contact-notes/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a contact note (CF-221)
+         * @description Requires `tenant.contacts.write`; only the author may delete unless the member also holds `tenant.contacts.delete`.
+         */
+        delete: operations["deleteTenantContactNote"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/contacts/{uuid}/ai-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate the AI summary of a contact (CF-221)
+         * @description Requires `tenant.contacts.read` and `tenant.ai.use`. Runs through the AI engine (policy, plan, credits, PII masking and guard apply; billed like other AI runs) over what the member may see: visible conversations (latest public messages) and notes. The result is cached and returned by the overview as `ai_summary`; members who see every conversation share one summary, a member limited by team visibility gets their own.
+         */
+        post: operations["postTenantContactAISummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/contacts/export": {
         parameters: {
             query?: never;
@@ -11675,7 +12200,7 @@ export interface paths {
         };
         /**
          * List current draft articles
-         * @description Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server.
+         * @description Requires tenant.settings.read. Organization-owned reads and writes are scoped on the server. Department visibility (CF-215): members see organization-wide articles, their departments' articles and articles shared with their departments; `tenant.departments.read_all` sees all. Other departments' articles answer 404 on the item routes.
          */
         get: operations["knowledgeArticles"];
         put?: never;
@@ -12753,11 +13278,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organization EvaluationCases */
+        /**
+         * List organization EvaluationCases
+         * @description Requires tenant.ai_insights.read.
+         */
         get: operations["listEvaluationCases"];
         put?: never;
-        /** Save a masked golden scenario or conversation transcript */
+        /**
+         * Save a masked golden scenario or conversation transcript
+         * @description Requires tenant.ai_insights.manage.
+         */
         post: operations["createEvaluationCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/evaluation-cases/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace an evaluation case (bumps its revision)
+         * @description Requires tenant.ai_insights.manage.
+         */
+        put: operations["updateEvaluationCase"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12771,11 +13322,61 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List organization Evaluations */
+        /**
+         * List organization Evaluations
+         * @description Run history, newest first. Requires tenant.ai_insights.read.
+         */
         get: operations["listEvaluations"];
         put?: never;
-        /** Replay golden set against configuration and compare baseline */
+        /**
+         * Run the evaluation set (manual) and compare with the previous run
+         * @description Requires tenant.ai_insights.manage. Spends AI credits for every active case.
+         */
         post: operations["runAIEvaluation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/evaluations/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Automatic evaluation runs
+         * @description Requires tenant.ai_insights.read.
+         */
+        get: operations["getEvaluationWatch"];
+        /**
+         * Turn automatic evaluation runs on or off
+         * @description Requires tenant.ai_insights.manage. When on, the set reruns (within ~10 minutes) after the agent config, the reply model or the published knowledge changes; runs spend AI credits and are recorded under the member who turned it on.
+         */
+        put: operations["setEvaluationWatch"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/analytics/ai-knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI knowledge panel of the organization or a department
+         * @description Requires tenant.ai_insights.read. Aggregates only, no conversation content. Default window: the last 30 days. `departments` lists the organization's departments for the filter; categories come from the category store (CF-218) and fall back to the latest triage results while nothing is classified in the window.
+         */
+        get: operations["getAIKnowledgePanel"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12936,6 +13537,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/ai/memory/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agent assistant: answer from knowledge units (answer cache) or similar resolved cases (CF-216) */
+        post: operations["searchAIMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/case-memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Anonymized case summaries of resolved conversations (CF-216) */
+        get: operations["listAICaseMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/case-memories/{uuid}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (customer AI may use it) or reject a case summary; only anonymized summaries can be approved */
+        post: operations["reviewAICaseMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/knowledge-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Question/answer units extracted from published articles and approved suggestions (CF-216) */
+        get: operations["listAIKnowledgeUnits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/answer-cache/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Answer cache hit rate per audience (CF-216) */
+        get: operations["getAIAnswerCacheStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/ai/knowledge-gaps/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Questions no knowledge unit, case or source answered (CF-216) */
+        get: operations["listAIKnowledgeGapQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/conversations/{uuid}/ai/knowledge-suggestion": {
         parameters: {
             query?: never;
@@ -13064,7 +13767,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Store and queue PDF DOCX Markdown or text import; max 8 MiB */
+        /**
+         * Store and queue PDF DOCX Markdown or text import; max 8 MiB
+         * @description Multipart `file`, `title`, `locale` and optional `department_uuid` (CF-215).
+         */
         post: operations["uploadKnowledgeSource"];
         delete?: never;
         options?: never;
@@ -16206,6 +16912,378 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/conversations/{uuid}/remote-support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support sessions of a conversation
+         * @description Organization scoped. Requires tenant.remote_support.use. The conversation must be visible to the caller (team rules). Latest 20.
+         */
+        get: operations["listConversationRemoteSupport"];
+        put?: never;
+        /**
+         * Start a remote support session
+         * @description Organization scoped. Requires tenant.remote_support.use. mode control also requires tenant.remote_support.control and the organization's allow_control. Returns the 9-digit code and the one-time join link once (only HMAC digests are stored); both expire after 15 minutes and work once. A customer-visible message with the download link and the code is posted on the conversation when its channel can carry it (message_posted).
+         */
+        post: operations["createRemoteSupportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support settings
+         * @description Organization scoped. Requires tenant.remote_support.settings. Includes the platform state and whether sessions can start (ready).
+         */
+        get: operations["getRemoteSupportSettings"];
+        /**
+         * Update remote support settings
+         * @description Organization scoped. Requires tenant.remote_support.settings. Remote support is off until enabled. Recording is off or optional (the customer is asked separately).
+         */
+        put: operations["updateRemoteSupportSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support session status
+         * @description Organization scoped. Requires tenant.remote_support.use. Visible to the session's agent, tenant.remote_support.settings holders and members who can see the conversation. Live updates: Centrifugo channel remote_support:{uuid} (session agent and settings holders).
+         */
+        get: operations["getRemoteSupportSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Agent LiveKit token
+         * @description Organization scoped. Requires tenant.remote_support.use. Session agent only, after the customer's viewing consent. The agent never publishes media (subscribe only). can_publish_data (input events) is true only while the customer's control consent is in force, the organization allows control and the agent holds tenant.remote_support.control; revoking control removes it from the connected participant at once.
+         */
+        post: operations["createRemoteSupportAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a remote support session
+         * @description Organization scoped. Requires tenant.remote_support.use. Session agent, or tenant.remote_support.settings. Deletes the LiveKit room and meters the minutes. Idempotent.
+         */
+        post: operations["endRemoteSupportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a code or join link
+         * @description Public (desktop app, no login). Exactly one of code (9 digits, spaces/dashes ignored) or token (from clickfix-support://join?t=...). Single use. Five wrong codes charged to one session invalidate it. Returns the organization, the agent, the requested mode, the scam warning and a client_secret for the next calls (returned only here).
+         */
+        post: operations["resolveRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give or withdraw consent
+         * @description Public, client_secret. view (required first, can only be given; stopping is /end), control (only when requested and allowed; false withdraws it), recording (only when the organization records; false declines or stops). Every step is audited.
+         */
+        post: operations["consentRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Customer LiveKit token
+         * @description Public, client_secret, after the viewing consent. Publishes only the screen_share source, receives data, publishes no data.
+         */
+        post: operations["createRemoteSupportCustomerToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Customer stops the session
+         * @description Public, client_secret. Ending before the viewing consent is recorded as declined.
+         */
+        post: operations["endRemoteSupportByCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a scam attempt
+         * @description Public, client_secret. Flags and ends the session. Three reports within 24 hours suspend the organization's remote support until the platform reviews it.
+         */
+        post: operations["reportRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organizations using remote support
+         * @description Requires platform.remote_support.manage. Sorted by reports of the last 30 days.
+         */
+        get: operations["listPlatformRemoteSupportOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/organizations/{uuid}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Kill switch for an organization
+         * @description Requires platform.remote_support.manage. disabled (reason required) ends every open session of the organization at once; active lifts a kill switch or an automatic suspension.
+         */
+        put: operations["setPlatformRemoteSupportState"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reported remote support sessions
+         * @description Requires platform.remote_support.manage. Newest first.
+         */
+        get: operations["listPlatformRemoteSupportReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/releases/{app}/{target}/{current_version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tauri updater check
+         * @description Public (desktop app, no login, no organization). Answers in the Tauri updater dynamic server format, not the envelope: 200 with the newest published release of the app for the target that is newer than current_version (semver precedence), or 204 when the client is up to date. A beta client also receives stable releases; a stable client never receives beta. Withdrawn releases are never offered.
+         */
+        get: operations["getDesktopUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download page entries
+         * @description Public. The newest published release of each app per target with its file name, size, SHA-256 and a same-origin download path. macOS entries offer the .dmg; Windows entries offer the NSIS installer. os_signed false marks an unsigned internal test build.
+         */
+        get: operations["listDesktopDownloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/files/{uuid}/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a desktop package
+         * @description Public. Streams a package of a published release from object storage (the bucket stays private). The name must match the stored file name. Withdrawn releases answer 404.
+         */
+        get: operations["downloadDesktopFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List desktop releases
+         * @description Requires `platform.desktop_releases.manage`. Newest first.
+         */
+        get: operations["listPlatformDesktopReleases"];
+        put?: never;
+        /**
+         * Publish a desktop release
+         * @description Requires `platform.desktop_releases.manage`. Multipart form, at most 1 GiB. The files go to object storage and the SHA-256 is computed server-side. Stable versions have no pre-release part; beta versions must have one. Version, app, channel and target are unique together (409 DESKTOP_RELEASE_EXISTS). Used by desktop/scripts/publish-release.mjs.
+         */
+        post: operations["publishPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases/{uuid}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a desktop release
+         * @description Requires `platform.desktop_releases.manage`. The release leaves the updater and the download page; its files stay in storage. Clients already on it move off when a higher version is published. 409 DESKTOP_RELEASE_WITHDRAWN when already withdrawn.
+         */
+        post: operations["withdrawPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/guides": {
         parameters: {
             query?: never;
@@ -17016,6 +18094,278 @@ export interface webhooks {
          * @description CF-245. Sent when an agent, a rule or a merge changes the status of an API channel conversation (resolved, closed, reopened, pending, snoozed). Same signature headers as the reply, plus X-ClickFix-Event: status_changed. Idempotency-Key is the event id and stays the same on retries; process each only once. Temporary failures are retried with backoff; 4xx except 408/429 is permanent.
          */
         post: operations["deliverAPIChannelStatusChanged"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List history runs
+         * @description Runs of the history pipeline (CF-217), newest first: uploads, nightly runs over closed conversations and
+         *     future connectors, with progress counters, consent and whether the raw file is gone.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryImports"];
+        put?: never;
+        /**
+         * Upload a history export
+         * @description Multipart form: `file` (.json or .zip in the documented schema, see docs/gecmis-kayitlar.md; at most 50 MB),
+         *     `consent_analysis` (must be `true`: the data owner's consent to analysis), `consent_training` (optional,
+         *     recorded separately), optional `brand_uuid` and `department_id`. The file is validated now, kept in private
+         *     storage and deleted when the run ends or its retention passes. Processing happens in the worker.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["uploadTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Estimate the AI use of a history export
+         * @description Multipart form: `file`, as for the upload. The file is parsed and dropped, never stored. Returns the
+         *     embedding calls and cost the run needs and whether today's batch share of the daily AI limits covers them
+         *     (CF-228), so the panel can warn before the upload. Requires `tenant.history.manage`.
+         */
+        post: operations["estimateTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a history run
+         * @description One run with its progress.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistoryImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a history run
+         * @description A waiting run is cancelled at once, a running one at its next batch. What was archived before the stop stays
+         *     until the run is rolled back.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["cancelTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/imports/{uuid}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a history run
+         * @description Removes the run's archived cases, the pending suggestions only its cases supported and clusters left empty.
+         *     Approved suggestions (article drafts) and the decision memory stay. Cancel a running run first.
+         *     Requires `tenant.history.manage`.
+         */
+        post: operations["rollbackTenantHistoryImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the history archive
+         * @description The read-only archive: anonymized cases, never inbox conversations. Filter by run or cluster.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List case clusters
+         * @description Groups of similar cases, strongest evidence first. Evidence is how many cases share one resolution.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryClusters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List suggestions from history
+         * @description knowledge_suggestions rows the pipeline produced once a cluster reached the evidence threshold. A suggestion
+         *     close to a published article carries it as `conflict_article_*`.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistorySuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/suggestions/{uuid}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Review a suggestion
+         * @description Approve, reject or correct a pending suggestion; a reason is required. Approve and correct create an internal
+         *     article draft (publishing stays a separate step). Every decision is kept with its reason and an embedding, so
+         *     a rejected idea is not suggested again. Department leads review their department's suggestions.
+         *     Requires `tenant.history.review`.
+         */
+        post: operations["decideTenantHistorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the decision memory
+         * @description Approvals, rejections and corrections with their reasons, newest first.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["listTenantHistoryDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get history settings
+         * @description Evidence threshold, similarity thresholds, retention and the nightly run.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistorySettings"];
+        /**
+         * Save history settings
+         * @description The nightly run needs the organization's analysis consent; training consent is recorded separately.
+         *     Requires `tenant.history.manage`.
+         */
+        put: operations["putTenantHistorySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/history/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the sample export
+         * @description The documented example file (docs/examples/gecmis-ornek.json). Every value in it is invented.
+         *     Requires `tenant.history.read`.
+         */
+        get: operations["getTenantHistorySample"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18317,6 +19667,8 @@ export interface components {
             conversations: components["schemas"]["WidgetConversation"][];
             /** @description Start form of a new conversation (CF-52); null when none is offered. */
             request_form?: components["schemas"]["PublicRequestForm"] | null;
+            /** @description Departments the visitor may pick for a new conversation (CF-215); empty hides the picker and the AI routes the first message. */
+            departments?: components["schemas"]["WidgetDepartment"][];
         };
         WidgetIdentifyInput: {
             /** @description The user's id in your system (the contact's external id); no line breaks */
@@ -18362,6 +19714,11 @@ export interface components {
              * @enum {string}
              */
             intent?: "" | "human" | "callback" | "video";
+            /**
+             * Format: uuid
+             * @description Department the visitor picked for a new conversation (CF-215); one of bootstrap `departments`
+             */
+            department_uuid?: string;
             /** @description SDK attributes set before the contact existed */
             attributes?: {
                 [key: string]: unknown;
@@ -18384,6 +19741,8 @@ export interface components {
             /** @enum {string} */
             consent?: "true" | "false";
             intent?: string;
+            /** Format: uuid */
+            department_uuid?: string;
             phone?: string;
             text?: string;
             /** Format: uuid */
@@ -18509,6 +19868,8 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         KnowledgeArticle: {
+            /** @description Department of the article (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** Format: int64 */
             id: number;
             /** Format: uuid */
@@ -18538,6 +19899,11 @@ export interface components {
             deleted_at: string | null;
         };
         KnowledgeArticleInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             slug: string;
             /** @enum {string} */
             locale: "tr" | "en";
@@ -18611,6 +19977,20 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        AILimit: {
+            /**
+             * Format: int64
+             * @description null when unlimited
+             */
+            limit: number | null;
+            unlimited: boolean;
+        };
+        AILimits: {
+            daily_calls: components["schemas"]["AILimit"];
+            concurrency: components["schemas"]["AILimit"];
+            daily_budget_micros: components["schemas"]["AILimit"];
+        };
+        /** @description Tenant AI policy (CF-229). platform_limits are the plan grant or organization override set by the platform; effective_limits are the lower of the platform and tenant limits and are what reservations enforce. */
         AIPolicy: {
             /** Format: int64 */
             organization_id: number;
@@ -18620,10 +20000,24 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
+            /**
+             * @description Share of the effective daily call and budget limits that batch jobs (history pipeline, re-embedding, evaluations) may use (CF-228). Live AI keeps the rest and may also use what batch jobs leave unused.
+             * @default 50
+             */
+            batch_share_percent: number;
+            platform_limits: components["schemas"]["AILimits"];
+            effective_limits: components["schemas"]["AILimits"];
+            /** @description batch_share_percent of effective_limits (concurrency is shared): what batch jobs may use per day. */
+            batch_limits: components["schemas"]["AILimits"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -18636,10 +20030,17 @@ export interface components {
             mask_pii: boolean;
             /** @default false */
             allow_unmask: boolean;
-            daily_calls: number;
-            concurrency: number;
-            /** Format: int64 */
-            daily_budget_micros: number;
+            /** @description Tenant limit; null follows the platform limit (ai.daily_calls). A value can only lower the platform limit. */
+            daily_calls: number | null;
+            /** @description Tenant limit; null follows the platform limit (ai.concurrency). A value can only lower the platform limit. */
+            concurrency: number | null;
+            /**
+             * Format: int64
+             * @description Tenant limit; null follows the platform limit (ai.daily_budget_micros). A value can only lower the platform limit.
+             */
+            daily_budget_micros: number | null;
+            /** @description Share of the daily limits batch jobs may use (CF-228). Omit to keep the current share. */
+            batch_share_percent?: number;
         };
         AIRun: {
             /** Format: int64 */
@@ -18736,6 +20137,11 @@ export interface components {
             published_revision: number | null;
         };
         AIBusinessContextInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             /** @enum {string} */
             kind: "company" | "products" | "pricing" | "refunds" | "tone" | "forbidden" | "other";
             title: string;
@@ -18745,6 +20151,8 @@ export interface components {
             revision: number;
         };
         AIBusinessContextSection: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** @enum {string} */
             kind: "company" | "products" | "pricing" | "refunds" | "tone" | "forbidden" | "other";
             title: string;
@@ -18785,8 +20193,10 @@ export interface components {
             handoff?: boolean | null;
             minimum_confidence?: number;
         };
+        /** @description A question of the organization's (or a department's) evaluation set. At least one of expected, expected_answer or expected_article_uuids is required. */
         AIEvaluationCaseInput: {
             name: string;
+            /** @description Conversation the agent answers; optional when question is given. */
             transcript?: string;
             /** @enum {string} */
             locale: "tr" | "en";
@@ -18798,12 +20208,27 @@ export interface components {
             category?: string;
             /** Format: date-time */
             at?: string;
+            /** @description Short form of a set question; stored as the transcript "Customer: <question>" when transcript is empty. */
+            question?: string;
+            /**
+             * Format: uuid
+             * @description Department set (CF-215); omitted = organization wide.
+             */
+            department_uuid?: string;
+            /** @description Expected answer; correct when the reply holds at least 60% of its content words. */
+            expected_answer?: string;
+            /** @description Knowledge articles a correct answer should cite (source hit). */
+            expected_article_uuids?: string[];
+            /**
+             * @description Inactive cases stay in the set but are not run.
+             * @default true
+             */
+            active: boolean;
         };
         AIEvaluationCase: {
             id: number;
             /** Format: uuid */
             uuid: string;
-            organization_id: number;
             name: string;
             transcript: string;
             /** @enum {string} */
@@ -18820,6 +20245,10 @@ export interface components {
             category?: string;
             /** Format: date-time */
             scenario_at?: string;
+            department_uuid: string | null;
+            expected_answer: string;
+            expected_article_uuids: string[];
+            active: boolean;
         };
         AISimulationInput: {
             transcript: string;
@@ -18841,6 +20270,16 @@ export interface components {
             summary: string;
             confidence: number;
             handoff: boolean;
+            /**
+             * Format: uuid
+             * @description Knowledge unit that answered without a generation call (CF-216)
+             */
+            unit_uuid?: string;
+            /**
+             * @description Answer cache outcome when a knowledge unit answered (CF-216)
+             * @enum {string}
+             */
+            memory?: "exact" | "semantic";
             citation_ids: string[];
         };
         AISimulationResult: {
@@ -18850,11 +20289,36 @@ export interface components {
             /** @enum {string} */
             outcome: "draft" | "handoff" | "disabled";
             cost_micros: number;
+            model?: string;
+            latency_ms?: number;
+            cited_article_uuids?: string[] | null;
         };
         AIEvaluationInput: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Run to compare with; default is the previous completed run of the same scope.
+             */
             baseline_uuid?: string;
             config?: components["schemas"]["AIAgentConfig"];
+            /**
+             * Format: uuid
+             * @description Run only this department's set (CF-215).
+             */
+            department_uuid?: string;
+        };
+        /** @description Before/after metrics of a run; null = not measurable (no expected sources, no answer cache connected, no completed case). */
+        AIEvaluationMetrics: {
+            cases: number;
+            completed: number;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
+        };
+        /** @description One department's share of a run; department_uuid null = organization-wide cases. */
+        AIEvaluationDepartmentMetrics: components["schemas"]["AIEvaluationMetrics"] & {
+            department_uuid: string | null;
         };
         AIEvaluationReport: {
             cases: number;
@@ -18863,12 +20327,22 @@ export interface components {
             regressions: string[];
             cost_micros: number;
             scoring: string;
+            metrics?: components["schemas"]["AIEvaluationMetrics"];
+            before?: components["schemas"]["AIEvaluationMetrics"] | null;
+            departments?: components["schemas"]["AIEvaluationDepartmentMetrics"][];
+        };
+        /** @description What a run was measured against; a watch reruns the set when it changes. */
+        AIEvaluationFingerprint: {
+            config_revision?: number;
+            /** Format: date-time */
+            knowledge_updated_at?: string;
+            knowledge_published?: number;
+            reply_model?: string;
         };
         AIEvaluation: {
             id: number;
             /** Format: uuid */
             uuid: string;
-            organization_id: number;
             config: components["schemas"]["AIAgentConfig"];
             config_revision: number;
             baseline_uuid: string | null;
@@ -18882,10 +20356,19 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /** @enum {string} */
+            trigger_kind: "manual" | "initial" | "config_change" | "model_change" | "knowledge_change";
+            department_uuid: string | null;
+            fingerprint?: components["schemas"]["AIEvaluationFingerprint"];
+            model: string;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
         };
         AIEvaluationResult: {
             id: number;
-            organization_id: number;
             /** Format: uuid */
             evaluation_uuid: string;
             /** Format: uuid */
@@ -18900,25 +20383,296 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            department_uuid: string | null;
+            answer_correct: boolean;
+            source_hit: boolean | null;
+            cache_hit: boolean | null;
+            latency_ms: number;
+            cost_micros: number;
+        };
+        AIEvaluationWatch: {
+            enabled: boolean;
+            last_checked_at: string | null;
+            last_fingerprint: components["schemas"]["AIEvaluationFingerprint"] | null;
+        };
+        AIKnowledgeEvaluationPoint: {
+            /** Format: uuid */
+            uuid: string;
+            trigger: string;
+            model: string;
+            /** Format: date-time */
+            created_at: string;
+            answer_accuracy: number | null;
+            source_hit_rate: number | null;
+            cache_hit_rate: number | null;
+            avg_latency_ms: number | null;
+            cost_per_case_micros: number | null;
+        };
+        /** @description AI knowledge panel (CF-220). Every section carries available/reason; a missing source is shown as no data, never as zero. */
+        AIKnowledgePanel: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            until: string;
+            department: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            } | null;
+            departments: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+            }[];
+            cache: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                lookups: number;
+                hits: number;
+                hit_rate: number | null;
+            };
+            ai_usage: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                calls: number;
+                failed: number;
+                cost_micros: number;
+                by_task: {
+                    task: string;
+                    calls: number;
+                    failed: number;
+                    cost_micros: number;
+                    avg_latency_ms: number;
+                }[];
+            };
+            knowledge_gaps: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                topics: {
+                    topic: string;
+                    conversations: number;
+                }[];
+            };
+            suggestions: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                pending: number;
+                approved: number;
+                rejected: number;
+            };
+            categories: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                classified: number;
+                avg_confidence: number | null;
+                /** @description Classifications under 0.6 confidence. */
+                low_confidence: number;
+                categories: {
+                    category: string;
+                    conversations: number;
+                    avg_confidence: number | null;
+                }[];
+                confidence_buckets: {
+                    from: number;
+                    to: number;
+                    count: number;
+                }[];
+            };
+            handoff: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                conversations: number;
+                handoffs: number;
+                rate: number | null;
+            };
+            evaluation: {
+                available: boolean;
+                /**
+                 * @description Why the section has no data: the producing layer has not landed (source_not_connected) or the source has no department scope yet (department_scope_unavailable).
+                 * @enum {string}
+                 */
+                reason?: "source_not_connected" | "department_scope_unavailable";
+                latest: components["schemas"]["AIKnowledgeEvaluationPoint"] | null;
+                previous: components["schemas"]["AIKnowledgeEvaluationPoint"] | null;
+            };
         };
         AIKnowledgeGap: {
             topic: string;
             conversations: number;
             conversation_ids: number[];
         };
+        AIMemoryUnitHit: {
+            /** Format: uuid */
+            uuid: string;
+            question: string;
+            answer: string;
+            category: string;
+            /** @enum {string} */
+            visibility: "public" | "internal";
+            /** Format: uuid */
+            article_uuid?: string;
+            score: number;
+        };
+        AIMemoryCase: {
+            /** Format: uuid */
+            uuid: string;
+            problem: string;
+            resolution: string;
+            category: string;
+            /** @enum {string} */
+            status: "pending" | "approved";
+            score: number;
+            /**
+             * Format: uuid
+             * @description Present only when the caller may open the source conversation.
+             */
+            conversation_uuid?: string;
+        };
+        AIMemoryResult: {
+            /**
+             * @description exact: cached repeat, no AI call; semantic: one embedding call; miss: no unit matched.
+             * @enum {string}
+             */
+            outcome: "exact" | "semantic" | "miss";
+            unit?: components["schemas"]["AIMemoryUnitHit"];
+            cases: components["schemas"]["AIMemoryCase"][];
+            embedding_calls: number;
+        };
+        AICaseMemory: {
+            /** Format: uuid */
+            uuid: string;
+            locale: string;
+            category: string;
+            problem: string;
+            resolution: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            anonymized: boolean;
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            reviewed_at: string | null;
+            /** Format: uuid */
+            conversation_uuid: string;
+        };
+        AICaseMemoryReview: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            status: "approved" | "rejected";
+            anonymized: boolean;
+            problem: string;
+            resolution: string;
+            category: string;
+        };
+        AIKnowledgeUnit: {
+            /** Format: uuid */
+            uuid: string;
+            question: string;
+            variants: string[];
+            answer: string;
+            category: string;
+            locale: string;
+            /** @enum {string} */
+            visibility: "public" | "internal";
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            source_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            article_uuid: string | null;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+        };
+        AIAnswerCacheAudienceStats: {
+            /** @enum {string} */
+            audience: "customer" | "agent";
+            exact_hits: number;
+            semantic_hits: number;
+            misses: number;
+            lookups: number;
+            hit_rate: number;
+        };
+        AIAnswerCacheStats: {
+            /** Format: date-time */
+            since: string;
+            audiences: components["schemas"]["AIAnswerCacheAudienceStats"][];
+            units: number;
+            cached_questions: number;
+        };
+        AIKnowledgeGapQuestion: {
+            /** @enum {string} */
+            audience: "customer" | "agent";
+            locale: string;
+            /** @description PII masked */
+            question: string;
+            category: string;
+            occurrences: number;
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: uuid */
+            brand_id: string | null;
+            department_id: number | null;
+            /** Format: uuid */
+            conversation_uuid: string | null;
+        };
         AIKnowledgeSuggestion: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             id: number;
             /** Format: uuid */
             uuid: string;
             organization_id: number;
             topic: string;
-            conversation_id: number;
+            conversation_id: number | null;
             article_id: number | null;
             title: string;
             body: string;
             /** @enum {string} */
             status: "pending" | "approved" | "rejected";
             reviewed_by: number | null;
+            /**
+             * @description history: produced by the history pipeline (CF-217); conversation_id is then null.
+             * @enum {string}
+             */
+            source?: "conversation" | "history";
+            cluster_id?: number | null;
+            import_id?: number | null;
+            department_id?: number | null;
+            evidence_count?: number;
+            conflict_article_id?: number | null;
+            conflict_score?: number;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -18966,6 +20720,11 @@ export interface components {
             locale: "tr" | "en";
         };
         AIKnowledgeSourceInput: {
+            /**
+             * Format: uuid
+             * @description Department (CF-215). Omitted keeps it, null is organization-wide. Members without `tenant.departments.read_all` may only use their own departments (403).
+             */
+            department_uuid?: string | null;
             /** Format: uri */
             url: string;
             title: string;
@@ -18975,6 +20734,8 @@ export interface components {
             interval_hours: number;
         };
         AIKnowledgeSource: {
+            /** @description Department the item belongs to (CF-215); null = organization-wide. */
+            department?: components["schemas"]["DepartmentRef"] | null;
             id: number;
             /** Format: uuid */
             uuid: string;
@@ -19800,6 +21561,12 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: uuid
+             * @description Department of the article (CF-215); null = organization-wide
+             */
+            department_uuid?: string | null;
+            department_name?: string | null;
             collection_uuid: string | null;
             /** Format: int64 */
             helpful_count: number;
@@ -20681,6 +22448,65 @@ export interface components {
             code: string;
             message: string;
             details?: components["schemas"]["ErrorDetail"][];
+        };
+        /** @description Tauri updater dynamic server response (CF-240). */
+        DesktopUpdateManifest: {
+            version: string;
+            notes: string;
+            /** Format: date-time */
+            pub_date: string;
+            /**
+             * Format: uri
+             * @description Absolute package URL served by the API
+             */
+            url: string;
+            /** @description Tauri updater signature (.sig content) */
+            signature: string;
+        };
+        DesktopReleaseFile: {
+            name: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            /** @description Same-origin download path (/api/v1/public/desktop/files/...) */
+            url: string;
+        };
+        DesktopRelease: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            app: "agent" | "support";
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            version: string;
+            target: string;
+            /** @enum {string} */
+            status: "published" | "withdrawn";
+            notes: string;
+            os_signed: boolean;
+            updater: components["schemas"]["DesktopReleaseFile"];
+            installer: components["schemas"]["DesktopReleaseFile"] | null;
+            /** Format: date-time */
+            published_at: string;
+            /** Format: date-time */
+            withdrawn_at: string | null;
+            withdrawn_reason: string;
+        };
+        DesktopDownload: {
+            /** @enum {string} */
+            app: "agent" | "support";
+            target: string;
+            /** @enum {string} */
+            os: "darwin" | "windows" | "linux";
+            arch: string;
+            version: string;
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            /** @description false marks an unsigned internal test build */
+            os_signed: boolean;
+            file: components["schemas"]["DesktopReleaseFile"];
+            /** Format: date-time */
+            published_at: string;
         };
         ResponseMeta: {
             request_id: string;
@@ -22187,6 +24013,20 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             impersonated?: boolean;
+            /**
+             * @description Native client behind the session (CF-234). `desktop` = ClickFix
+             *     desktop app (its own session or its web view's). Absent for web /
+             *     mobile sessions.
+             * @enum {string}
+             */
+            client?: "desktop";
+            /**
+             * @description Desktop platform; set with `client`.
+             * @enum {string|null}
+             */
+            client_os?: "macos" | "windows" | "linux" | null;
+            /** @description Optional computer name the desktop app sent (max 64). */
+            device_name?: string | null;
         };
         SessionList: {
             items: components["schemas"]["AuthSession"][];
@@ -22312,6 +24152,53 @@ export interface components {
             };
         };
         EnvelopeQRLoginExchanged: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["QRLoginExchanged"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginCodeRequest: {
+            /** @description Opaque value from the desktop app, echoed in the callback. */
+            state: string;
+            /** @description PKCE S256 challenge, BASE64URL(SHA256(code_verifier)). */
+            code_challenge: string;
+            /** @enum {string} */
+            code_challenge_method: "S256";
+        };
+        DesktopLoginCode: {
+            /** @description 43-char base64url one-time code */
+            code: string;
+            /**
+             * @description `clickfix://auth/callback?code=...&state=...`
+             * @example clickfix://auth/callback?code=Zm9v...&state=abc...
+             */
+            redirect_url: string;
+            /** Format: date-time */
+            expires_at: string;
+            /**
+             * Format: int64
+             * @example 60
+             */
+            expires_in: number;
+        };
+        EnvelopeDesktopLoginCode: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DesktopLoginCode"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginExchangeRequest: {
+            code: string;
+            /** @description PKCE verifier (RFC 7636 §4.1). */
+            code_verifier: string;
+            /** @description Same value sent to `/codes`. */
+            state: string;
+            /** @enum {string} */
+            client_os: "macos" | "windows" | "linux";
+            /** @description Optional computer name shown in the device list. */
+            device_name?: string;
+        };
+        EnvelopeDesktopLoginExchanged: {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["QRLoginExchanged"];
@@ -23746,6 +25633,194 @@ export interface components {
             /** Format: date-time */
             joined_at: string;
         };
+        DepartmentRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+        };
+        DepartmentWorkingHours: {
+            days: {
+                /** @enum {string} */
+                day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+                open: boolean;
+                /** @example 09:00 */
+                start: string;
+                /** @example 18:00 */
+                end: string;
+            }[];
+        };
+        DepartmentAISettings: {
+            /** @description The customer AI may answer conversations of the department */
+            enabled: boolean;
+            /** @description Added to the AI's reply instructions */
+            instructions: string;
+            /** @description Tells the AI which first messages belong here */
+            routing_hint: string;
+        };
+        Department: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            /** @description `#RRGGBB` or empty */
+            color: string;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** @description Offered in the web widget's department picker */
+            widget_visible: boolean;
+            /** Format: int32 */
+            sort_order: number;
+            /**
+             * Format: uuid
+             * @description SLA policy of the department's conversations (before brand and company policies)
+             */
+            sla_policy_uuid: string | null;
+            timezone: string | null;
+            /** @description Own hours; null = the organization's. Teams without their own hours inherit them. */
+            working_hours: components["schemas"]["DepartmentWorkingHours"] | null;
+            ai: components["schemas"]["DepartmentAISettings"];
+            /** Format: int64 */
+            team_count: number;
+            teams: components["schemas"]["DepartmentRef"][];
+            leads: {
+                /** Format: uuid */
+                uuid: string;
+                email: string;
+                name: string;
+                surname: string;
+            }[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Create: `name` required. Patch: any subset. */
+        DepartmentInput: {
+            name?: string;
+            description?: string;
+            /** @example #2563EB */
+            color?: string;
+            /** Format: uuid */
+            brand_uuid?: string | null;
+            widget_visible?: boolean;
+            /** Format: int32 */
+            sort_order?: number;
+            /** Format: uuid */
+            sla_policy_uuid?: string | null;
+            /** @example Europe/Istanbul */
+            timezone?: string;
+            working_hours?: components["schemas"]["DepartmentWorkingHours"];
+            /** @description Drop the department's own hours and timezone */
+            inherit_hours?: boolean;
+            ai?: {
+                enabled?: boolean;
+                instructions?: string;
+                routing_hint?: string;
+            };
+            /** @description Complete team list of the department */
+            team_uuids?: string[];
+        };
+        DepartmentPage: {
+            items: components["schemas"]["Department"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        DepartmentShareInput: {
+            /** @enum {string} */
+            resource_kind: "article" | "source" | "context";
+            /** Format: uuid */
+            resource_uuid: string;
+        };
+        DepartmentShare: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            resource_kind: "article" | "source" | "context";
+            /** Format: uuid */
+            resource_uuid: string;
+            resource_title: string;
+            department: components["schemas"]["DepartmentRef"];
+            /** @description Department the item belongs to */
+            owner: components["schemas"]["DepartmentRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DepartmentTransfer: {
+            /** Format: uuid */
+            uuid: string;
+            from: components["schemas"]["DepartmentRef"] | null;
+            to: components["schemas"]["DepartmentRef"] | null;
+            /** @enum {string} */
+            actor_kind: "customer" | "ai" | "agent" | "rule";
+            /** Format: uuid */
+            actor_uuid: string | null;
+            actor_name: string;
+            confidence: number | null;
+            reason: string;
+            context_summary: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ConversationDepartment: {
+            department: components["schemas"]["DepartmentRef"] | null;
+            /** @enum {string|null} */
+            source: "customer" | "ai" | "agent" | "rule" | null;
+            /** @description The AI's confidence when it routed the first message (threshold 0.6) */
+            confidence: number | null;
+            /** Format: date-time */
+            routed_at: string | null;
+            transfers: components["schemas"]["DepartmentTransfer"][];
+        };
+        DepartmentTransferInput: {
+            /** Format: uuid */
+            department_uuid: string | null;
+            reason?: string;
+            /** @description What the receiving department needs to know */
+            context_summary?: string;
+            release_assignee?: boolean;
+        };
+        WidgetDepartment: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            description: string;
+            color: string;
+        };
+        EnvelopeDepartment: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Department"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DepartmentPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentShare: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DepartmentShare"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeDepartmentShares: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["DepartmentShare"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeConversationDepartment: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConversationDepartment"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         Team: {
             /** Format: uuid */
             uuid: string;
@@ -23763,10 +25838,139 @@ export interface components {
             leads: components["schemas"]["TeamMemberUser"][];
             /** @description Only on get, create, patch and the member routes */
             members?: components["schemas"]["TeamMember"][];
+            /** @description Department of the team (CF-215); null = none */
+            department?: components["schemas"]["DepartmentRef"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        /**
+         * @description Record kinds that carry a category (CF-218). `archive_record` (CF-217) and `knowledge_unit` (CF-216) answer 404 until their modules register.
+         * @enum {string}
+         */
+        CategorySubjectType: "conversation" | "archive_record" | "knowledge_unit" | "suggestion";
+        /**
+         * @description Who decided the category. `model` is the organization's own classifier (CF-219).
+         * @enum {string}
+         */
+        CategorySource: "embedding" | "ai" | "human" | "model";
+        Category: {
+            /** Format: uuid */
+            uuid: string;
+            /**
+             * Format: uuid
+             * @description null = organization-wide
+             */
+            department_uuid: string | null;
+            /** Format: uuid */
+            parent_uuid: string | null;
+            name: string;
+            slug: string;
+            description: string;
+            examples: string[];
+            position: number;
+            depth: number;
+            archived: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CategoryInput: {
+            name?: string;
+            slug?: string;
+            description?: string;
+            examples?: string[];
+            position?: number;
+            /** @description Parent uuid; empty string makes a root */
+            parent_uuid?: string;
+            /** @description Department uuid; empty string makes the node organization-wide */
+            department_uuid?: string;
+            archived?: boolean;
+        };
+        CategoryList: {
+            items: components["schemas"]["Category"][];
+        };
+        CategoryRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+        };
+        CategoryAssignment: {
+            subject_type: components["schemas"]["CategorySubjectType"];
+            /** Format: uuid */
+            subject_uuid: string;
+            category: null | components["schemas"]["CategoryRef"];
+            confidence: number;
+            source: components["schemas"]["CategorySource"];
+            /** @description Stage and version that decided (embedding/v1, ai/v1, human, none) */
+            classifier: string;
+            needs_review: boolean;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CategoryAssignmentResult: {
+            assignment: null | components["schemas"]["CategoryAssignment"];
+        };
+        CategoryAssignmentPage: {
+            items: components["schemas"]["CategoryAssignment"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        CategoryLabelInput: {
+            /** Format: uuid */
+            category_uuid: string;
+        };
+        /** @description One line of the label export (CF-219 training set). */
+        CategoryLabelExport: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: date-time */
+            created_at: string;
+            subject_type: components["schemas"]["CategorySubjectType"];
+            /** Format: uuid */
+            department_uuid: string | null;
+            /** @enum {string} */
+            action: "confirm" | "correct";
+            /** @description Record text with personal data masked */
+            text: string;
+            /** @description Empty when the vector could not be built */
+            embedding_model: string;
+            embedding: number[];
+            category: components["schemas"]["CategoryRef"];
+            previous_category: null | components["schemas"]["CategoryRef"];
+            previous_source: null | components["schemas"]["CategorySource"];
+            previous_confidence: number | null;
+            /** Format: uuid */
+            labeled_by: string;
+        };
+        EnvelopeCategory: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["Category"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryAssignmentResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryAssignmentResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeCategoryAssignmentPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["CategoryAssignmentPage"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         TeamPage: {
             items: components["schemas"]["Team"][];
@@ -23798,6 +26002,11 @@ export interface components {
             inherit_hours?: boolean;
             skills?: string[];
             members?: components["schemas"]["TeamInitialMember"][];
+            /**
+             * Format: uuid
+             * @description Department of the team (CF-215); null takes it out, omitted keeps it
+             */
+            department_uuid?: string | null;
         };
         SkillsInput: {
             skills: string[];
@@ -25447,6 +27656,266 @@ export interface components {
             author: components["schemas"]["InboxRef"] | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description Which sections the member may see (CF-221); a hidden section is returned empty. */
+        ContactProfileSections: {
+            conversations: boolean;
+            surveys: boolean;
+            appointments: boolean;
+            compliance: boolean;
+            feedback: boolean;
+            ai: boolean;
+        };
+        /** @description Counts over the conversations the member may see; csat_* over the last 90 days (csat_total all time); nps_latest / ces_latest the latest answer. */
+        ContactProfileStats: {
+            /** Format: int64 */
+            open_conversations: number;
+            /** Format: int64 */
+            closed_conversations: number;
+            /**
+             * Format: int64
+             * @description Open conversations past an SLA target.
+             */
+            sla_breached: number;
+            /**
+             * Format: int64
+             * @description Open, not breached, a target falls due within an hour.
+             */
+            sla_at_risk: number;
+            /** Format: int64 */
+            message_count: number;
+            /** Format: date-time */
+            first_conversation_at: string | null;
+            /** Format: date-time */
+            last_conversation_at: string | null;
+            /** Format: date-time */
+            last_inbound_at: string | null;
+            csat_average: number | null;
+            /** Format: int64 */
+            csat_count: number;
+            /** Format: int64 */
+            csat_total: number;
+            nps_latest: number | null;
+            ces_latest: number | null;
+            /** Format: int64 */
+            attachment_count: number;
+            /** Format: int64 */
+            note_count: number;
+        };
+        ContactProfileConversation: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: int64 */
+            number: number;
+            subject: string;
+            status: string;
+            channel_type: string;
+            priority: string;
+            /** Format: date-time */
+            last_message_at: string;
+            last_message_preview: string;
+            /** Format: date-time */
+            created_at: string;
+            message_count: number;
+            /** Format: date-time */
+            sla_breached_at: string | null;
+            /**
+             * Format: date-time
+             * @description Next SLA target (first response, next response or resolution).
+             */
+            sla_due_at: string | null;
+            /** @description Assigned teammate; empty when none. */
+            assignee: string;
+            /** @description Assigned team; empty when none. */
+            team: string;
+            tags: string[];
+        };
+        ContactProfileTag: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+            /** Format: int64 */
+            conversations: number;
+        };
+        /** @description A file of one of the contact's conversations; it opens from its conversation, which owns the download URL. */
+        ContactProfileAttachment: {
+            /** Format: uuid */
+            uuid: string;
+            filename: string;
+            content_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            conversation_uuid: string;
+            /** Format: int64 */
+            conversation_number: number;
+        };
+        ContactProfileAppointment: {
+            /** Format: uuid */
+            uuid: string;
+            title: string;
+            status: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            timezone: string;
+            location_kind: string;
+            /** @description Appointment type name. */
+            type: string;
+            host: string;
+        };
+        /** @description The latest decision for one purpose. */
+        ContactProfileConsent: {
+            /** Format: uuid */
+            uuid: string;
+            purpose: string;
+            granted: boolean;
+            notice_version: string;
+            source: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfilePrivacyRequest: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            kind: "export" | "erase";
+            /** @enum {string} */
+            status: "pending" | "processing" | "completed";
+            requested_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            expires_at: string | null;
+        };
+        ContactProfileFeedback: {
+            /** @enum {string} */
+            kind: "vote" | "comment";
+            /** Format: uuid */
+            request_uuid: string;
+            title: string;
+            status: string;
+            body: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfileForumPost: {
+            /** Format: uuid */
+            uuid: string;
+            slug: string;
+            title: string;
+            excerpt: string;
+            /** @enum {string} */
+            status: "pending" | "published" | "rejected";
+            is_topic: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactProfileStatusNotice: {
+            /** Format: uuid */
+            uuid: string;
+            title: string;
+            severity: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ContactAISummary: {
+            summary: string;
+            open_topics: string[];
+            /** @enum {string} */
+            sentiment: "positive" | "neutral" | "negative" | "unknown";
+            /** @enum {string} */
+            locale: "tr" | "en";
+            /** Format: date-time */
+            generated_at: string;
+            /** @description New activity happened after the summary was generated. */
+            stale: boolean;
+        };
+        /** @enum {string} */
+        ContactTimelineKind: "conversation_opened" | "conversation_resolved" | "csat" | "survey" | "note" | "appointment" | "consent" | "privacy_request" | "event" | "feedback" | "forum" | "status_notice" | "system";
+        ContactOverview: {
+            contact: components["schemas"]["Contact"];
+            company: components["schemas"]["Company"] | null;
+            stats: components["schemas"]["ContactProfileStats"];
+            /** @description Open ones first, then recent closed ones (up to 50). */
+            conversations: components["schemas"]["ContactProfileConversation"][];
+            tags: components["schemas"]["ContactProfileTag"][];
+            attachments: components["schemas"]["ContactProfileAttachment"][];
+            /** @description Upcoming first (soonest), then past ones. */
+            appointments: components["schemas"]["ContactProfileAppointment"][];
+            consents: components["schemas"]["ContactProfileConsent"][];
+            privacy_requests: components["schemas"]["ContactProfilePrivacyRequest"][];
+            feedback: components["schemas"]["ContactProfileFeedback"][];
+            forum_posts: components["schemas"]["ContactProfileForumPost"][];
+            status_notices: components["schemas"]["ContactProfileStatusNotice"][];
+            ai_summary: components["schemas"]["ContactAISummary"] | null;
+            sections: components["schemas"]["ContactProfileSections"];
+            /** @description Timeline kinds the member may see. */
+            timeline_kinds: components["schemas"]["ContactTimelineKind"][];
+        };
+        ContactTimelineItem: {
+            kind: components["schemas"]["ContactTimelineKind"];
+            /**
+             * Format: uuid
+             * @description Conversation, rating, survey answer, note, appointment, consent, request, event, feature request, forum post or incident uuid; null for system events.
+             */
+            ref: string | null;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @description Conversation subject, survey question, appointment title, consent purpose, request kind, event name, feature request or forum topic title, incident title, or the system action (contact.created, identity.added, contacts.updated, contacts.merged). */
+            title: string;
+            /** @description Note text, rating / survey comment, appointment notes, feedback comment or forum excerpt. */
+            body: string;
+            /** @description Teammate name; empty when unknown. */
+            actor: string;
+            /** @description Kind-specific fields (number, status, channel_type, score, survey_kind, starts_at, granted, request_kind, feedback_kind, slug, severity, properties, ...). */
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        ContactTimelinePage: {
+            items: components["schemas"]["ContactTimelineItem"][];
+            /** @description Opaque cursor for the next (older) page; null on the last page. */
+            next_before: string | null;
+        };
+        ContactNote: {
+            /** Format: uuid */
+            uuid: string;
+            body: string;
+            author: components["schemas"]["InboxRef"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EnvelopeContactOverview: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactOverview"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactTimeline: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactTimelinePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactNote: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactNote"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeContactAISummary: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ContactAISummary"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CompanyEventInput: {
             /** Format: uuid */
@@ -27788,6 +30257,208 @@ export interface components {
             plans: components["schemas"]["VideoPlanPolicy"][];
             configured: boolean;
         };
+        RemoteSupportPerson: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            avatar_url: string | null;
+        };
+        RemoteSupportSession: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: uuid */
+            conversation_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            agent: components["schemas"]["RemoteSupportPerson"] | null;
+            /** Format: date-time */
+            code_expires_at: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            /** Format: date-time */
+            view_consent_at?: string | null;
+            /** Format: date-time */
+            control_consent_at?: string | null;
+            /** Format: date-time */
+            control_revoked_at?: string | null;
+            control_active: boolean;
+            /** @description null: not asked (organization recording off). */
+            recording_consent?: boolean | null;
+            /** @enum {string} */
+            recording_status: "none" | "starting" | "active" | "complete" | "failed" | "deleted";
+            client_os?: string;
+            client_version?: string;
+            max_duration_minutes: number;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            /** @enum {string} */
+            ended_by: "" | "agent" | "customer" | "system" | "platform";
+            /** Format: date-time */
+            reported_at?: string | null;
+            billed_minutes: number;
+            /** @description Centrifugo channel remote_support:{uuid}. */
+            channel: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        RemoteSupportCreateInput: {
+            /**
+             * @default view
+             * @enum {string}
+             */
+            mode: "view" | "control";
+        };
+        RemoteSupportCreated: {
+            session: components["schemas"]["RemoteSupportSession"];
+            code: string;
+            /** @description clickfix-support://join?t=... (one-time). */
+            join_url: string;
+            download_url: string;
+            message_posted: boolean;
+        };
+        RemoteSupportGrant: {
+            server_url: string;
+            token: string;
+            identity: string;
+            room: string;
+            can_publish_data: boolean;
+            /** Format: date-time */
+            expires_at: string;
+            session?: components["schemas"]["RemoteSupportSession"];
+        };
+        RemoteSupportResolveInput: {
+            code?: string;
+            token?: string;
+            client_os?: string;
+            client_version?: string;
+        };
+        RemoteSupportResolved: {
+            /** Format: uuid */
+            session_uuid: string;
+            client_secret: string;
+            organization: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                logo_url: string | null;
+                verified: boolean;
+            };
+            agent: components["schemas"]["RemoteSupportPerson"];
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            recording_requested: boolean;
+            max_duration_minutes: number;
+            /** Format: date-time */
+            consent_deadline: string;
+            warning: string;
+            /** @enum {string} */
+            locale: "tr" | "en";
+        };
+        RemoteSupportClientInput: {
+            client_secret: string;
+        };
+        RemoteSupportConsentInput: {
+            client_secret: string;
+            /** @enum {boolean} */
+            view?: true;
+            control?: boolean;
+            recording?: boolean;
+        };
+        RemoteSupportReportInput: {
+            client_secret: string;
+            reason?: string;
+        };
+        RemoteSupportCustomerView: {
+            /** Format: uuid */
+            session_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            /** Format: date-time */
+            view_consent_at?: string | null;
+            control_active: boolean;
+            recording_consent?: boolean | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            reported: boolean;
+        };
+        RemoteSupportSettings: {
+            enabled: boolean;
+            allow_control: boolean;
+            /** @enum {string} */
+            recording: "off" | "optional";
+            max_duration_minutes: number;
+            recording_retention_days: number;
+            /** @enum {string} */
+            platform_state: "active" | "disabled" | "suspended";
+            platform_reason: string;
+            /** Format: date-time */
+            platform_changed_at?: string | null;
+            configured: boolean;
+            entitled: boolean;
+            ready: boolean;
+        };
+        RemoteSupportSettingsInput: {
+            enabled: boolean;
+            allow_control: boolean;
+            /** @enum {string} */
+            recording?: "off" | "optional";
+            /** @default 60 */
+            max_duration_minutes: number;
+            /** @default 30 */
+            recording_retention_days: number;
+        };
+        RemoteSupportPlatformStateInput: {
+            /** @enum {string} */
+            state: "active" | "disabled";
+            reason?: string;
+        };
+        RemoteSupportPlatformOrganization: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+            enabled: boolean;
+            /** @enum {string} */
+            platform_state: "active" | "disabled" | "suspended";
+            platform_reason: string;
+            /** Format: date-time */
+            platform_changed_at?: string | null;
+            reports_30d: number;
+            sessions_30d: number;
+        };
+        RemoteSupportPlatformReport: {
+            /** Format: uuid */
+            session_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            /** Format: date-time */
+            reported_at: string;
+            report_reason: string;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            organization_uuid: string;
+            organization_name: string;
+            agent_name: string;
+        };
         GuideStepAction: {
             /** @enum {string} */
             kind: "navigate" | "open_assistant" | "none";
@@ -28661,6 +31332,370 @@ export interface components {
             data: components["schemas"]["SystemPreview"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        HistoryImport: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            source: "upload" | "nightly" | "connector";
+            connector: string;
+            file_name: string;
+            /**
+             * @description paused means an AI limit stopped the run; the worker continues it at resume_at from where it stopped (CF-228).
+             * @enum {string}
+             */
+            status: "pending" | "running" | "paused" | "completed" | "failed" | "cancelled" | "rolled_back";
+            /** @enum {string} */
+            stage: "queued" | "reading" | "anonymizing" | "embedding" | "clustering" | "suggesting" | "done";
+            total_records: number;
+            processed_records: number;
+            skipped_records: number;
+            clusters_touched: number;
+            suggestions_created: number;
+            /** @description Candidates not suggested because a reviewer rejected the same idea. */
+            suggestions_suppressed: number;
+            consent_analysis: boolean;
+            consent_training: boolean;
+            /** Format: date-time */
+            consent_at: string;
+            consent_version: string;
+            raw_deleted: boolean;
+            /** Format: date-time */
+            raw_retain_until: string | null;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            window_start: string | null;
+            /** Format: date-time */
+            window_end: string | null;
+            cancel_requested: boolean;
+            /** @description English message; the panel shows error_code in the user's language. */
+            error: string;
+            /**
+             * @description Why the run paused or failed (CF-228); empty otherwise.
+             * @enum {string}
+             */
+            error_code: "" | "daily_limit" | "budget" | "concurrency" | "credits" | "quota" | "ai_disabled" | "not_configured" | "provider" | "invalid" | "unavailable" | "unsafe_record" | "raw_expired" | "unknown";
+            /**
+             * Format: date-time
+             * @description When a paused run continues (the daily limits reset at midnight Europe/Istanbul).
+             */
+            resume_at: string | null;
+            /** Format: date-time */
+            started_at: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description Expected AI use of an export before it is uploaded (CF-228). Embedding calls are exact for the file;
+         *     each suggestion adds calls_per_suggestion calls. Batch allowances are null when unlimited.
+         */
+        HistoryEstimate: {
+            /** @description Solved tickets the run would process. */
+            records: number;
+            embedding_calls: number;
+            calls_per_suggestion: number;
+            /** Format: int64 */
+            estimated_tokens: number;
+            /**
+             * Format: int64
+             * @description Estimated embedding cost in micro USD.
+             */
+            cost_micros: number;
+            ai_enabled: boolean;
+            /** Format: int64 */
+            batch_calls_per_day: number | null;
+            /** Format: int64 */
+            batch_calls_left: number | null;
+            /** Format: int64 */
+            batch_budget_micros_per_day: number | null;
+            /** Format: int64 */
+            batch_budget_micros_left: number | null;
+            /** @description The run will pause at today's batch limit and continue after the reset. */
+            exceeds_today: boolean;
+            /** @description Days (today included) the embeddings need; 0 when the batch share is too small to ever run. */
+            days_needed: number;
+            /** Format: date-time */
+            limit_resets_at: string;
+            raw_retention_hours: number;
+            /** @description The raw file's retention ends before the run would finish. */
+            exceeds_retention: boolean;
+            /** Format: date-time */
+            finishes_by: string | null;
+        };
+        EnvelopeHistoryEstimate: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryEstimate"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        HistoryCase: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            source: "upload" | "nightly" | "connector";
+            subject: string;
+            /** @description Anonymized customer messages. */
+            problem: string;
+            /** @description Anonymized resolution. */
+            resolution: string;
+            message_count: number;
+            /** @enum {string} */
+            locale: "tr" | "en";
+            category: string;
+            training_allowed: boolean;
+            /** Format: uuid */
+            brand_id: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            opened_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            import_uuid: string;
+            /** Format: uuid */
+            cluster_uuid: string | null;
+        };
+        HistoryCluster: {
+            /** Format: uuid */
+            uuid: string;
+            category: string;
+            label: string;
+            size: number;
+            evidence: number;
+            /** Format: uuid */
+            brand_id: string | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+            /** @enum {string|null} */
+            suggestion_status: "pending" | "approved" | "rejected" | null;
+        };
+        HistorySuggestion: {
+            /** Format: uuid */
+            uuid: string;
+            topic: string;
+            title: string;
+            body: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            /** @enum {string} */
+            source: "conversation" | "history";
+            evidence_count: number;
+            /** Format: uuid */
+            cluster_uuid: string | null;
+            cluster_size: number | null;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: uuid */
+            conflict_article_uuid: string | null;
+            conflict_article_title: string | null;
+            conflict_score: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        HistoryDecisionInput: {
+            /** @enum {string} */
+            decision: "approve" | "reject" | "correct";
+            reason: string;
+            /** @description Required for correct. */
+            title?: string;
+            /** @description Required for correct. */
+            body?: string;
+            /**
+             * @description Locale of the article draft.
+             * @enum {string}
+             */
+            locale: "tr" | "en";
+        };
+        HistoryDecisionResult: {
+            /** Format: uuid */
+            suggestion_uuid: string;
+            /** @enum {string} */
+            status: "approved" | "rejected";
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "corrected";
+            /** Format: uuid */
+            decision_uuid: string;
+        };
+        HistoryDecision: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            decision: "approved" | "rejected" | "corrected";
+            reason: string;
+            title: string;
+            correction: string;
+            /** Format: int64 */
+            department_id: number | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            suggestion_uuid: string | null;
+            decided_by_name: string | null;
+        };
+        HistorySettingsInput: {
+            /** @description Cases that must share one resolution before a suggestion. */
+            evidence_threshold: number;
+            cluster_similarity: number;
+            resolution_similarity: number;
+            /** @description A draft this close to a rejected one is not suggested. */
+            rejection_similarity: number;
+            /** @description The raw file is deleted when the run ends or after this many hours. */
+            raw_retention_hours: number;
+            /** @description 0 keeps the archive. */
+            archive_retention_days: number;
+            nightly_enabled: boolean;
+            nightly_consent_analysis: boolean;
+            nightly_consent_training: boolean;
+        };
+        HistorySettings: components["schemas"]["HistorySettingsInput"] & {
+            /** Format: date-time */
+            nightly_watermark: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        /** @description The history export schema clickfix.history/v1 (docs/gecmis-kayitlar.md). */
+        HistoryBundle: {
+            /** @enum {string} */
+            schema?: "clickfix.history/v1";
+            source_system?: string;
+            /** @enum {string} */
+            locale?: "tr" | "en";
+            agents?: {
+                id: string;
+                name?: string;
+            }[];
+            contacts?: {
+                id: string;
+                name?: string;
+                email?: string;
+                phone?: string;
+                company?: string;
+                tax_number?: string;
+                address?: string;
+            }[];
+            tickets: {
+                id: string;
+                contact_id?: string;
+                subject?: string;
+                /** @description solved, closed or resolved are processed; anything else is skipped. */
+                status?: string;
+                category?: string;
+                resolution?: string;
+                /** @enum {string} */
+                locale?: "tr" | "en";
+                /** Format: date-time */
+                created_at?: string;
+                /** Format: date-time */
+                closed_at?: string;
+            }[];
+            messages?: {
+                ticket_id: string;
+                /** @enum {string} */
+                author?: "customer" | "agent" | "system";
+                agent_id?: string;
+                body: string;
+                /** Format: date-time */
+                created_at?: string;
+            }[];
+        };
+        HistoryImportPage: {
+            items: components["schemas"]["HistoryImport"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryCasePage: {
+            items: components["schemas"]["HistoryCase"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryClusterPage: {
+            items: components["schemas"]["HistoryCluster"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistorySuggestionPage: {
+            items: components["schemas"]["HistorySuggestion"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        HistoryDecisionPage: {
+            items: components["schemas"]["HistoryDecision"][];
+            /** Format: int64 */
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        EnvelopeHistoryImport: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryImport"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryImportPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryImportPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryCasePage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryCasePage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryClusterPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryClusterPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistorySuggestionPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistorySuggestionPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryDecisionPage: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryDecisionPage"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistoryDecisionResult: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistoryDecisionResult"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeHistorySettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["HistorySettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
     };
     responses: {
         /** @description Validation or malformed request */
@@ -28794,6 +31829,8 @@ export interface components {
         InvitationUUID: string;
         /** @description Set-up run uuid (CF-140). */
         OnboardingSetupRunUUID: string;
+        CategorySubjectTypePath: components["schemas"]["CategorySubjectType"];
+        CategorySubjectUuidPath: string;
         /**
          * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
          *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
@@ -34605,6 +37642,87 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    postAuthDesktopCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginCode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopExchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopWebSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Web view session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     getNotifications: {
         parameters: {
             query?: {
@@ -35357,6 +38475,775 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantCategoriesMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategories: {
+        parameters: {
+            query?: {
+                department?: string;
+                include_archived?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category tree */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    postTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description Created category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCategoryReview: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                subject_type?: components["schemas"]["CategorySubjectType"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategoryLabelsExport: {
+        parameters: {
+            query?: {
+                since?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One CategoryLabelExport object per line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": components["schemas"]["CategoryLabelExport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    patchTenantCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryInput"];
+            };
+        };
+        responses: {
+            /** @description Updated category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryLabelInput"];
+            };
+        };
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantCategoryAssignment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantCategoryClassify: {
+        parameters: {
+            query?: {
+                force?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                subjectType: components["parameters"]["CategorySubjectTypePath"];
+                subjectUuid: components["parameters"]["CategorySubjectUuidPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeCategoryAssignmentResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getTenantDepartmentsMeta: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resource meta */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeResourceMeta"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+        };
+    };
+    getTenantDepartments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                q?: components["parameters"]["Q"];
+                brand?: string;
+                mine?: boolean;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Department page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    postTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentInput"];
+            };
+        };
+        responses: {
+            /** @description Created department */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTenantDepartment: {
+        parameters: {
+            query?: {
+                move_to?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    patchTenantDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentInput"];
+            };
+        };
+        responses: {
+            /** @description Department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getTenantDepartmentShares: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentShares"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantDepartmentShare: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentShareInput"];
+            };
+        };
+        responses: {
+            /** @description Share */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDepartmentShare"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    deleteTenantDepartmentShare: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+                shareUuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeStatus"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getTenantConversationDepartment: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Conversation department */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationDepartment"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    postTenantConversationDepartmentTransfer: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepartmentTransferInput"];
+            };
+        };
+        responses: {
+            /** @description Conversation department after the transfer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationDepartment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
         };
     };
     getTenantTeamsMeta: {
@@ -52633,6 +56520,222 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    getTenantContactOverview: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactOverview"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantContactTimeline: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated kinds to include (default every visible kind). */
+                kinds?: string;
+                /** @description Case-insensitive literal search in title, body and actor. */
+                q?: string;
+                /** @description Only items at or after this time (RFC 3339). */
+                from?: string;
+                /** @description Only items before this time (RFC 3339). */
+                to?: string;
+                /** @description Opaque cursor; the previous page's `next_before`. */
+                before?: string;
+                limit?: number;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactTimeline"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantContactNote: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    body: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactNote"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantContactNote: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postTenantContactAISummary: {
+        parameters: {
+            query?: {
+                locale?: "tr" | "en";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeContactAISummary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Missing permission, AI turned off (`AI_DISABLED`) or not in the plan (`AI_NOT_ENTITLED`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description The AI guard rejected the input or output (`AI_GUARD_REJECTED`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+            /** @description The AI provider did not return a usable answer (`AI_PROVIDER_UNAVAILABLE`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     exportTenantContacts: {
         parameters: {
             query?: {
@@ -53996,6 +58099,8 @@ export interface operations {
                 offset?: number;
                 q?: string;
                 locale?: "tr" | "en";
+                /** @description `none` = organization-wide only, or a department uuid (CF-215). */
+                department?: string;
                 visibility?: "public" | "internal";
                 /** @description draft: never published; published: has a published version; changed: published with a newer draft. */
                 state?: "draft" | "published" | "changed";
@@ -56574,6 +60679,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Department of the organization (CF-215). A department of another organization answers 404. */
+                department_uuid?: string;
             };
             header: {
                 /** @description Organization slug or UUID; authenticated membership required. */
@@ -56706,6 +60813,57 @@ export interface operations {
             };
             /** @description Source or provider unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateEvaluationCase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIEvaluationCaseInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationCase"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Organization-owned record not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -56855,6 +61013,132 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    getEvaluationWatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationWatch"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setEvaluationWatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIEvaluationWatch"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAIKnowledgePanel: {
+        parameters: {
+            query?: {
+                from?: string;
+                /** @description Exclusive end; at most 366 days after from. */
+                until?: string;
+                /** @description Department of the organization (CF-215). An unknown department, or one of another organization, answers 400 VALIDATION_ERROR. Sections whose source carries a department (AI runs, reply and triage jobs by their conversation's current department, suggestions, answer cache counters, categories, evaluation runs) are narrowed to it (CF-225). */
+                department_uuid?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIKnowledgePanel"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input or DEPARTMENTS_UNAVAILABLE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listKnowledgeSuggestions: {
@@ -57588,6 +61872,309 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    searchAIMemory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    question: string;
+                    /**
+                     * @default tr
+                     * @enum {string}
+                     */
+                    locale?: "tr" | "en";
+                    /**
+                     * Format: uuid
+                     * @description Scopes the lookup to the conversation's brand and leaves it out of case results.
+                     */
+                    conversation_uuid?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIMemoryResult"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Conversation not found or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAICaseMemories: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: "pending" | "approved" | "rejected";
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AICaseMemory"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    reviewAICaseMemory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    approve: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AICaseMemoryReview"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Case summary not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Summary is not anonymized and cannot be approved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAIKnowledgeUnits: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AIKnowledgeUnit"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAIAnswerCacheStats: {
+        parameters: {
+            query?: {
+                /** @description Defaults to 30 days ago; at most 366 days back. */
+                since?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: components["schemas"]["AIAnswerCacheStats"];
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAIKnowledgeGapQuestions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Defaults to 30 days ago; at most 366 days back. */
+                since?: string;
+            };
+            header: {
+                /** @description Organization slug or UUID; authenticated membership required. */
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            items: components["schemas"]["AIKnowledgeGapQuestion"][];
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     suggestKnowledgeFromConversation: {
@@ -66298,6 +70885,1172 @@ export interface operations {
             };
         };
     };
+    listConversationRemoteSupport: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportSession"][];
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCreated"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description REMOTE_SUPPORT_MINUTES_EXHAUSTED: the remote_support.minutes limit of the month is used up. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRemoteSupportSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    updateRemoteSupportSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSession"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRemoteSupportAgentToken: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportGrant"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    endRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSession"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    resolveRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportResolveInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportResolved"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    consentRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportConsentInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createRemoteSupportCustomerToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportClientInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportGrant"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    endRemoteSupportByCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportClientInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reportRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportReportInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPlatformRemoteSupportOrganizations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                state?: "active" | "disabled" | "suspended";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportPlatformOrganization"][];
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    setPlatformRemoteSupportState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportPlatformStateInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listPlatformRemoteSupportReports: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportPlatformReport"][];
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getDesktopUpdate: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path: {
+                app: "agent" | "support";
+                /** @description Tauri {{target}}-{{arch}}, e.g. darwin-aarch64, darwin-x86_64, windows-x86_64. */
+                target: string;
+                current_version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An update is available */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopUpdateManifest"];
+                };
+            };
+            /** @description Up to date */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listDesktopDownloads: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopDownload"][];
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    downloadDesktopFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+                kind: "updater" | "installer";
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPlatformDesktopReleases: {
+        parameters: {
+            query?: {
+                app?: "agent" | "support";
+                channel?: "stable" | "beta";
+                status?: "published" | "withdrawn";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopRelease"][];
+                            /** Format: int64 */
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    publishPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @enum {string} */
+                    app: "agent" | "support";
+                    /** @enum {string} */
+                    channel: "stable" | "beta";
+                    /** @description Canonical semver, e.g. 0.2.0 or 0.3.0-beta.1 */
+                    version: string;
+                    /** @example darwin-aarch64 */
+                    target: string;
+                    notes?: string;
+                    /** @description Content of the Tauri updater .sig file */
+                    signature: string;
+                    /** @description true: macOS Developer ID + notarized / Windows Authenticode; false: unsigned internal test build */
+                    os_signed: boolean;
+                    /**
+                     * Format: binary
+                     * @description .app.tar.gz (macOS), .exe or .msi (Windows), .AppImage (Linux)
+                     */
+                    updater: string;
+                    /**
+                     * Format: binary
+                     * @description Optional download page file (.dmg on macOS)
+                     */
+                    installer?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    withdrawPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTenantGuides: {
         parameters: {
             query?: {
@@ -68062,6 +73815,524 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listTenantHistoryImports: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImportPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    uploadTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @enum {string} */
+                    consent_analysis: "true";
+                    /** @enum {string} */
+                    consent_training?: "true" | "false";
+                    /** Format: uuid */
+                    brand_uuid?: string;
+                    /** Format: int64 */
+                    department_id?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            /** @description Storage or AI embedding is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    estimateTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryEstimate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    rollbackTenantHistoryImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryImport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistoryCases: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description Run uuid */
+                import?: string;
+                /** @description Cluster uuid */
+                cluster?: string;
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryCasePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistoryClusters: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryClusterPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantHistorySuggestions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+                /** @description Review status */
+                status?: "pending" | "approved" | "rejected";
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySuggestionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    decideTenantHistorySuggestion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryDecisionResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            /** @description Storage or AI embedding is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listTenantHistoryDecisions: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistoryDecisionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantHistorySettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    putTenantHistorySettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistorySettingsInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeHistorySettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantHistorySample: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryBundle"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
         };
     };
 }

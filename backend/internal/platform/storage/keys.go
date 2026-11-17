@@ -24,6 +24,13 @@ func ImportSourceObjectKey(jobUUID, ext string) string {
 	return fmt.Sprintf("imports/%s/source.%s", jobUUID, trimExt(ext))
 }
 
+// HistoryRawObjectKey builds orgs/{org}/history/{run}/raw.{ext}: the uploaded
+// history export (CF-217). It is private and deleted when the run ends or its
+// retention passes, whichever comes first.
+func HistoryRawObjectKey(org int64, runUUID, ext string) string {
+	return fmt.Sprintf("orgs/%d/history/%s/raw.%s", org, runUUID, trimExt(ext))
+}
+
 // AttachmentObjectKey builds orgs/{org}/attachments/{attachment}/original.
 // The object is private; the API streams it after an organization check. The
 // original filename lives in the database, never in the key.
@@ -46,4 +53,12 @@ func trimExt(ext string) string {
 // ReplayChunkKey keeps replay objects private and organization scoped.
 func ReplayChunkKey(org, session, chunk string) string {
 	return fmt.Sprintf("orgs/%s/replays/%s/%s.json.gz", org, session, chunk)
+}
+
+// DesktopReleaseObjectKey builds
+// desktop/releases/{app}/{channel}/{version}/{target}/{release}/{file}: a
+// desktop package (CF-240). The object is private; the API streams it. The
+// release uuid keeps a retried publish from overwriting an earlier upload.
+func DesktopReleaseObjectKey(app, channel, version, target, releaseUUID, file string) string {
+	return fmt.Sprintf("desktop/releases/%s/%s/%s/%s/%s/%s", app, channel, version, target, releaseUUID, file)
 }

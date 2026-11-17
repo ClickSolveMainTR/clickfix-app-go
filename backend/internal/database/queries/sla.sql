@@ -217,4 +217,12 @@ LIMIT 500;
 
 -- name: GetTeamWorkingHours :one
 -- A team's own hours (CF-5); NULL working_hours means the organization's.
-SELECT working_hours, timezone FROM teams WHERE organization_id = $1 AND id = $2;
+-- A team without its own hours inherits its department's (CF-215).
+SELECT COALESCE(t.working_hours, d.working_hours) AS working_hours, COALESCE(t.timezone, d.timezone) AS timezone
+FROM teams t
+LEFT JOIN departments d ON d.organization_id = t.organization_id AND d.id = t.department_id
+WHERE t.organization_id = $1 AND t.id = $2;
+
+-- name: GetDepartmentWorkingHours :one
+-- A department's own hours (CF-215); NULL working_hours means the organization's.
+SELECT working_hours, timezone, sla_policy_id FROM departments WHERE organization_id = $1 AND id = $2;

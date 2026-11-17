@@ -49,11 +49,23 @@ export function AIScreen() {
               </View>
               <Card title={t('ai.limits')}>
                 <View className="flex-row gap-3">
+                  {/* CF-229: what applies is the lower of the platform and tenant limits. */}
                   <Stat
                     label={t('ai.daily_calls')}
-                    value={p.daily_calls ? formatNumber(p.daily_calls) : t('ai.unlimited')}
+                    value={
+                      p.effective_limits.daily_calls.unlimited || p.effective_limits.daily_calls.limit == null
+                        ? t('ai.unlimited')
+                        : formatNumber(p.effective_limits.daily_calls.limit)
+                    }
                   />
-                  <Stat label={t('ai.concurrency')} value={formatNumber(p.concurrency)} />
+                  <Stat
+                    label={t('ai.concurrency')}
+                    value={
+                      p.effective_limits.concurrency.unlimited || p.effective_limits.concurrency.limit == null
+                        ? t('ai.unlimited')
+                        : formatNumber(p.effective_limits.concurrency.limit)
+                    }
+                  />
                 </View>
                 <Text variant="footnote" tone="muted">
                   {[p.mask_pii ? t('ai.mask_pii') : null, t('ai.limits_hint')].filter(Boolean).join(' · ')}

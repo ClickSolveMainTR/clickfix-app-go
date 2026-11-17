@@ -125,7 +125,7 @@
   "oauth.pick_page": "Bağlanacak sayfayı seçin:",
   "settings.title": "Kanal ayarları",
   "settings.ai": "AI ajanı",
-  "settings.ai_hint": "Bu kanaldaki konuşmaları önce AI ajanı yanıtlasın.",
+  "settings.ai_hint": "AI ajanı bu kanal türündeki konuşmaları önce yanıtlar. Ayar ajanın kanal listesini değiştirir; tüm {{channel}} kanallarını etkiler.",
   "settings.greeting": "Otomatik karşılama",
   "settings.greeting_placeholder": "Merhaba! Mesajınızı aldık, kısa süre içinde dönüş yapacağız.",
   "settings.hours": "Çalışma saatleri",
@@ -299,5 +299,8 @@
   "health.identity_code.WIDGET_IDENTITY_DISABLED": "widget'ta kimlik anahtarı yok.",
   "health.identity_code.WIDGET_IDENTITY_INVALID": "user_hash eşleşmiyor (anahtar veya imza hatalı).",
   "settings.hours_source": "Çalışma saatleri ve otomatik yanıtlar organizasyon genelinde tanımlıdır.",
-  "settings.hours_source_link": "Çalışma saatlerini aç"
+  "settings.hours_source_link": "Çalışma saatlerini aç",
+  "settings.ai_inactive": "AI ajanı şu an kapalı (kayıtlı ayar yok veya mod kapalı); bu kanal listeye eklense de yanıt vermez.",
+  "settings.ai_settings_link": "AI ayarlarını aç",
+  "settings.ai_read_only": "Değiştirmek için organizasyon ayarlarını düzenleme yetkisi gerekir."
 }

@@ -30,6 +30,9 @@ type Handler struct {
 }
 
 func fail(w http.ResponseWriter, r *http.Request, err error) {
+	if departmentsUnavailable(w, r, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		response.NotFound(w, r, "")
