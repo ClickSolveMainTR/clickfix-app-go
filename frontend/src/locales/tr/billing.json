@@ -37,6 +37,7 @@
   "validation.plan_code": "Küçük harfle başlayın; yalnızca a-z, 0-9, - ve _ kullanın.",
   "usage.monthly": "Bu ay · her ayın 1’inde sıfırlanır",
   "usage.current": "Güncel kullanım",
+  "usage.daily": "Bugün · İstanbul saatiyle gece yarısı sıfırlanır",
   "usage.over_hard": "limit aşıldı, yeni kullanım engellenir",
   "usage.over_soft": "limit aşıldı, uyarı modunda",
   "admin.title": "Faturalama",

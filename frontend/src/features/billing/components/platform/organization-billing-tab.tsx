@@ -67,7 +67,7 @@ import {
   useTransitionSubscription,
 } from "@/features/billing/hooks/use-platform-billing";
 import { formatBytes, formatCount } from "@/features/billing/lib/money";
-import { featureLabel } from "@/features/billing/lib/plans";
+import { DAILY_FEATURES, featureLabel } from "@/features/billing/lib/plans";
 import type {
   BillingHistoryEntry,
   BillingPlan,
@@ -965,7 +965,9 @@ function UsageRow({
             <p className="text-muted-foreground text-xs">
               {value.period === "month"
                 ? t("billing.usage.monthly")
-                : t("billing.usage.current")}
+                : DAILY_FEATURES.has(value.feature)
+                  ? t("billing.usage.daily")
+                  : t("billing.usage.current")}
               {over
                 ? ` · ${t(value.enforcement === "soft" ? "billing.usage.over_soft" : "billing.usage.over_hard")}`
                 : ""}
