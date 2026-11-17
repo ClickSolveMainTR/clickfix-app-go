@@ -122,3 +122,21 @@ func TestTwirpCalls(t *testing.T) {
 		t.Fatalf("paths %v", paths)
 	}
 }
+
+func TestUpdatePermissionSendsFullSet(t *testing.T) {
+	var got map[string]any
+	var path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+	if err := testClient(srv.URL).UpdatePermission(context.Background(), "rs_x", "rs:a:1", Permission{CanSubscribe: true}); err != nil {
+		t.Fatal(err)
+	}
+	perm, _ := got["permission"].(map[string]any)
+	if path != "/twirp/livekit.RoomService/UpdateParticipant" || got["identity"] != "rs:a:1" || perm["canPublishData"] != false || perm["canSubscribe"] != true {
+		t.Fatalf("unexpected request %s %+v", path, got)
+	}
+}

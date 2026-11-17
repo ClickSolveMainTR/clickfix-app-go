@@ -155,7 +155,7 @@ type Querier interface {
 	// (CF-223) a unit still on the old model is not served.
 	AnswerCacheGet(ctx context.Context, arg AnswerCacheGetParams) (AnswerCacheGetRow, error)
 	AnswerCachePut(ctx context.Context, arg AnswerCachePutParams) error
-	// One row per day, audience and department (NULL = organization wide, CF-225).
+	// One row per UTC day (readers filter on UTC dates), audience and department (NULL = organization wide, CF-225).
 	AnswerCacheStat(ctx context.Context, arg AnswerCacheStatParams) error
 	AnswerCacheStats(ctx context.Context, arg AnswerCacheStatsParams) ([]AnswerCacheStatsRow, error)
 	AnswerCacheTouch(ctx context.Context, arg AnswerCacheTouchParams) error
@@ -732,6 +732,7 @@ type Querier interface {
 	CountCustomFieldDefinitions(ctx context.Context, arg CountCustomFieldDefinitionsParams) (int64, error)
 	CountCustomObjectTypes(ctx context.Context, organizationID int64) (int64, error)
 	CountDepartments(ctx context.Context, arg CountDepartmentsParams) (int64, error)
+	CountDesktopReleases(ctx context.Context, arg CountDesktopReleasesParams) (int64, error)
 	CountExportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountImportJobsForActor(ctx context.Context, actorID int64) (int64, error)
 	CountIntegrationCompanies(ctx context.Context, arg CountIntegrationCompaniesParams) (int64, error)
@@ -790,6 +791,8 @@ type Querier interface {
 	// Departments (CF-215). Every query is scoped by organization_id.
 	CreateDepartment(ctx context.Context, arg CreateDepartmentParams) (Department, error)
 	CreateDepartmentShare(ctx context.Context, arg CreateDepartmentShareParams) (DepartmentKnowledgeShare, error)
+	// Masaüstü sürümleri (CF-240). Platform tablosu: organization_id yoktur.
+	CreateDesktopRelease(ctx context.Context, arg CreateDesktopReleaseParams) (DesktopRelease, error)
 	CreateExportJob(ctx context.Context, arg CreateExportJobParams) (ExportJob, error)
 	CreateImportJob(ctx context.Context, arg CreateImportJobParams) (ImportJob, error)
 	CreateIntegrationKey(ctx context.Context, arg CreateIntegrationKeyParams) (PublicApiKey, error)
@@ -1059,6 +1062,7 @@ type Querier interface {
 	// current state (user status, the identity's current phone).
 	GetActiveMCPOAuthToken(ctx context.Context, arg GetActiveMCPOAuthTokenParams) (GetActiveMCPOAuthTokenRow, error)
 	GetActiveOTPByEmailType(ctx context.Context, arg GetActiveOTPByEmailTypeParams) (OtpCode, error)
+	GetActiveRefreshTokenByUUIDForUser(ctx context.Context, arg GetActiveRefreshTokenByUUIDForUserParams) (RefreshToken, error)
 	GetActiveSupportGrant(ctx context.Context, organizationID int64) (SupportAccessGrant, error)
 	GetAgentPresence(ctx context.Context, arg GetAgentPresenceParams) (AgentPresence, error)
 	GetAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (AppLog, error)
@@ -1140,6 +1144,7 @@ type Querier interface {
 	GetDepartmentShare(ctx context.Context, arg GetDepartmentShareParams) (DepartmentKnowledgeShare, error)
 	// A department's own hours (CF-215); NULL working_hours means the organization's.
 	GetDepartmentWorkingHours(ctx context.Context, arg GetDepartmentWorkingHoursParams) (GetDepartmentWorkingHoursRow, error)
+	GetDesktopReleaseByUUID(ctx context.Context, argUuid uuid.UUID) (DesktopRelease, error)
 	GetEmailDomain(ctx context.Context, arg GetEmailDomainParams) (ChannelEmailDomain, error)
 	GetEmailIMAPState(ctx context.Context, arg GetEmailIMAPStateParams) (ChannelEmailImapState, error)
 	GetEventDeadLetter(ctx context.Context, id int64) (EventDeadLetter, error)
@@ -1534,6 +1539,8 @@ type Querier interface {
 	ListAllExportJobs(ctx context.Context, arg ListAllExportJobsParams) ([]ExportJob, error)
 	ListAllImportJobs(ctx context.Context, arg ListAllImportJobsParams) ([]ImportJob, error)
 	ListAllPermissionSlugs(ctx context.Context) ([]string, error)
+	// İndirme sayfası: tüm uygulama ve hedeflerin yayındaki sürümleri.
+	ListAllPublishedDesktopReleases(ctx context.Context, channels []string) ([]DesktopRelease, error)
 	ListAppLogSources(ctx context.Context) ([]string, error)
 	ListAppLogs(ctx context.Context, arg ListAppLogsParams) ([]AppLog, error)
 	ListAttachments(ctx context.Context, arg ListAttachmentsParams) ([]Attachment, error)
@@ -1631,6 +1638,7 @@ type Querier interface {
 	ListDepartmentTeams(ctx context.Context, arg ListDepartmentTeamsParams) ([]ListDepartmentTeamsRow, error)
 	ListDepartmentTransfers(ctx context.Context, arg ListDepartmentTransfersParams) ([]ListDepartmentTransfersRow, error)
 	ListDepartments(ctx context.Context, arg ListDepartmentsParams) ([]ListDepartmentsRow, error)
+	ListDesktopReleases(ctx context.Context, arg ListDesktopReleasesParams) ([]DesktopRelease, error)
 	// Users with held digest items; the caller decides who is due.
 	ListDigestCandidates(ctx context.Context) ([]NotificationPreference, error)
 	ListDomainEventLogByOrganization(ctx context.Context, arg ListDomainEventLogByOrganizationParams) ([]DomainEventLog, error)
@@ -1722,6 +1730,9 @@ type Querier interface {
 	// Platform operations on the organization plus everything recorded inside it.
 	ListPlatformOrganizationActivity(ctx context.Context, arg ListPlatformOrganizationActivityParams) ([]ListPlatformOrganizationActivityRow, error)
 	ListPublicHolidays(ctx context.Context, arg ListPublicHolidaysParams) ([]PublicHoliday, error)
+	// Bir uygulamanın bir hedefteki yayındaki sürümleri; en yenisi Go'da semver
+	// ile seçilir (metin sıralaması 0.10.0 < 0.9.0 yapar).
+	ListPublishedDesktopReleases(ctx context.Context, arg ListPublishedDesktopReleasesParams) ([]DesktopRelease, error)
 	ListPushSubscriptionsByUser(ctx context.Context, userID int64) ([]PushSubscription, error)
 	ListPushToStartLiveActivityTokens(ctx context.Context, arg ListPushToStartLiveActivityTokensParams) ([]LiveActivityToken, error)
 	// Unassigned open conversations of organizations with routing on.
@@ -2107,6 +2118,43 @@ type Querier interface {
 	// Rebuilds the counters a message move changes from the messages left.
 	RecountConversation(ctx context.Context, arg RecountConversationParams) (Conversation, error)
 	ReleaseMessageClaim(ctx context.Context, arg ReleaseMessageClaimParams) error
+	RemoteSupportActivate(ctx context.Context, arg RemoteSupportActivateParams) (RemoteSupportSession, error)
+	// A wrong code charged to the pending session that owns its lookup prefix.
+	RemoteSupportCodeAttempt(ctx context.Context, arg RemoteSupportCodeAttemptParams) (int32, error)
+	RemoteSupportCreateSession(ctx context.Context, arg RemoteSupportCreateSessionParams) (RemoteSupportSession, error)
+	RemoteSupportEnd(ctx context.Context, arg RemoteSupportEndParams) (RemoteSupportSession, error)
+	RemoteSupportExpiredRecordings(ctx context.Context) ([]RemoteSupportSession, error)
+	RemoteSupportMarkRecordingDeleted(ctx context.Context, arg RemoteSupportMarkRecordingDeletedParams) error
+	RemoteSupportMinutesSince(ctx context.Context, arg RemoteSupportMinutesSinceParams) (int64, error)
+	RemoteSupportOpenForConversation(ctx context.Context, arg RemoteSupportOpenForConversationParams) (int64, error)
+	// Sweep: every open session, with the conversation status so a closed
+	// conversation ends its session.
+	RemoteSupportOpenSessions(ctx context.Context) ([]RemoteSupportOpenSessionsRow, error)
+	RemoteSupportOpenSessionsForOrg(ctx context.Context, organizationID int64) ([]RemoteSupportSession, error)
+	RemoteSupportPendingByCode(ctx context.Context, codeLookup string) (RemoteSupportSession, error)
+	// Platform view: organizations that use remote support, were reported or
+	// are not active, with their report counts of the last 30 days.
+	RemoteSupportPlatformOrganizations(ctx context.Context, arg RemoteSupportPlatformOrganizationsParams) ([]RemoteSupportPlatformOrganizationsRow, error)
+	RemoteSupportPlatformReports(ctx context.Context, arg RemoteSupportPlatformReportsParams) ([]RemoteSupportPlatformReportsRow, error)
+	RemoteSupportRecentReports(ctx context.Context, arg RemoteSupportRecentReportsParams) (int64, error)
+	RemoteSupportReport(ctx context.Context, arg RemoteSupportReportParams) (RemoteSupportSession, error)
+	// Single use: the code and the join link stop working once resolved.
+	RemoteSupportResolve(ctx context.Context, arg RemoteSupportResolveParams) (RemoteSupportSession, error)
+	RemoteSupportSaveSettings(ctx context.Context, arg RemoteSupportSaveSettingsParams) (RemoteSupportSetting, error)
+	RemoteSupportSession(ctx context.Context, arg RemoteSupportSessionParams) (RemoteSupportSession, error)
+	RemoteSupportSessionByEgress(ctx context.Context, egressID string) (RemoteSupportSession, error)
+	RemoteSupportSessionByJoinToken(ctx context.Context, joinTokenHash string) (RemoteSupportSession, error)
+	RemoteSupportSessionByRoom(ctx context.Context, roomName string) (RemoteSupportSession, error)
+	RemoteSupportSessionByUUID(ctx context.Context, argUuid uuid.UUID) (RemoteSupportSession, error)
+	RemoteSupportSessionsForConversation(ctx context.Context, arg RemoteSupportSessionsForConversationParams) ([]RemoteSupportSession, error)
+	RemoteSupportSetBilled(ctx context.Context, arg RemoteSupportSetBilledParams) error
+	RemoteSupportSetConsent(ctx context.Context, arg RemoteSupportSetConsentParams) (RemoteSupportSession, error)
+	RemoteSupportSetEgress(ctx context.Context, arg RemoteSupportSetEgressParams) error
+	RemoteSupportSetPlatformState(ctx context.Context, arg RemoteSupportSetPlatformStateParams) (RemoteSupportSetting, error)
+	RemoteSupportSetRecordingStatus(ctx context.Context, arg RemoteSupportSetRecordingStatusParams) error
+	// CF-233 remote support sessions (internal/modules/remotesupport).
+	RemoteSupportSettings(ctx context.Context, organizationID int64) (RemoteSupportSetting, error)
+	RemoteSupportStartRecording(ctx context.Context, arg RemoteSupportStartRecordingParams) (RemoteSupportSession, error)
 	RemoveConversationParticipant(ctx context.Context, arg RemoveConversationParticipantParams) (int64, error)
 	RemoveConversationTag(ctx context.Context, arg RemoveConversationTagParams) (int64, error)
 	RemoveUserRoleBySlug(ctx context.Context, arg RemoveUserRoleBySlugParams) error
@@ -2480,6 +2528,9 @@ type Querier interface {
 	UpsertWidgetDraft(ctx context.Context, arg UpsertWidgetDraftParams) (WidgetDraft, error)
 	// Marking the code used is the claim; an expired or used code returns no row.
 	UseMCPOAuthCode(ctx context.Context, arg UseMCPOAuthCodeParams) (McpOauthCode, error)
+	// True while the user has an active ClickFix Masaüstü session (CF-236);
+	// notification e-mails then carry a "Masaüstünde aç" link.
+	UserHasDesktopSession(ctx context.Context, userID int64) (bool, error)
 	UserHasPlatformPermission(ctx context.Context, arg UserHasPlatformPermissionParams) (bool, error)
 	UserHasRoleSlug(ctx context.Context, arg UserHasRoleSlugParams) (bool, error)
 	VideoActiveRecording(ctx context.Context, arg VideoActiveRecordingParams) (VideoRecording, error)
@@ -2546,6 +2597,7 @@ type Querier interface {
 	// 14 days; -1 without answered conversations.
 	WidgetMedianFirstResponse(ctx context.Context, arg WidgetMedianFirstResponseParams) (float64, error)
 	WidgetReplayUsage(ctx context.Context, organizationID int64) (int64, error)
+	WithdrawDesktopRelease(ctx context.Context, arg WithdrawDesktopReleaseParams) (DesktopRelease, error)
 	WorkflowCount(ctx context.Context, organizationID int64) (int64, error)
 	WorkflowCreate(ctx context.Context, arg WorkflowCreateParams) (Workflow, error)
 	WorkflowDailyRuns(ctx context.Context, organizationID int64) (int64, error)

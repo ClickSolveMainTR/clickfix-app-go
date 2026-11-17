@@ -34,4 +34,4 @@ Bu dosya, repodaki zorunlu referans kurallarının tek kaynağıdır (eskiden it
 | WhatsApp kanal servisi | easytrade-whatsapp-channel-go | kök |
 | Resend inbound e-posta | 216detay-mail-system | kök |
 | Ürün mantığı: ticket AI ajanları, widget, SLA, iş bağlamı, token defteri, iç sohbet | clickfix-app (Laravel) | `app/Ai/*`, `docs/ticket-ai-agents/*`, `docs/widget/*`, `app/Models/*`, `app/Services/*` |
-| Sadece fikir ve akış (AGPL kod kopyalanmaz) | Chatwoot, Zammad, Plane, Twenty, Fider, Cachet, OneUptime, GoAlert, OpenReplay | - |
+| Sadece fikir ve akış (AGPL kod kopyalanmaz) | Chatwoot, Zammad, Plane, Twenty, Fider, Cachet, OneUptime, GoAlert, OpenReplay, RustDesk (uzaktan destek mimarisi; CF-231) | - |

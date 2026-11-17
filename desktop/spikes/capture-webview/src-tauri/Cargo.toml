@@ -1,0 +1,24 @@
+# CF-235 aday A: Tauri webview içinde getDisplayMedia. desktop/ çalışma alanına dahil değildir.
+[workspace]
+
+[package]
+name = "cf235-capture-webview"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"

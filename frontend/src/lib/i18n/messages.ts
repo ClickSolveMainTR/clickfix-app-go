@@ -65,6 +65,7 @@ import enCoaching from "@/locales/en/coaching.json";
 import enAutomationIntegrations from "@/locales/en/automation_integrations.json";
 import enIntegrationsConnect from "@/locales/en/integrations_connect.json";
 import enVideo from "@/locales/en/video.json";
+import enRemoteSupport from "@/locales/en/remote_support.json";
 import enGuides from "@/locales/en/guides.json";
 import enAssistant from "@/locales/en/assistant.json";
 import enRouting from "@/locales/en/routing.json";
@@ -152,6 +153,7 @@ import trCoaching from "@/locales/tr/coaching.json";
 import trAutomationIntegrations from "@/locales/tr/automation_integrations.json";
 import trIntegrationsConnect from "@/locales/tr/integrations_connect.json";
 import trVideo from "@/locales/tr/video.json";
+import trRemoteSupport from "@/locales/tr/remote_support.json";
 import trGuides from "@/locales/tr/guides.json";
 import trAssistant from "@/locales/tr/assistant.json";
 import trRouting from "@/locales/tr/routing.json";
@@ -213,6 +215,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     automation_integrations: trAutomationIntegrations,
     integrations_connect: trIntegrationsConnect,
     video: trVideo,
+    remote_support: trRemoteSupport,
     guides: trGuides,
     assistant: trAssistant,
     routing: trRouting,
@@ -296,6 +299,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     automation_integrations: enAutomationIntegrations,
     integrations_connect: enIntegrationsConnect,
     video: enVideo,
+    remote_support: enRemoteSupport,
     guides: enGuides,
     assistant: enAssistant,
     routing: enRouting,

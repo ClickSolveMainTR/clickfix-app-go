@@ -54,3 +54,11 @@ func trimExt(ext string) string {
 func ReplayChunkKey(org, session, chunk string) string {
 	return fmt.Sprintf("orgs/%s/replays/%s/%s.json.gz", org, session, chunk)
 }
+
+// DesktopReleaseObjectKey builds
+// desktop/releases/{app}/{channel}/{version}/{target}/{release}/{file}: a
+// desktop package (CF-240). The object is private; the API streams it. The
+// release uuid keeps a retried publish from overwriting an earlier upload.
+func DesktopReleaseObjectKey(app, channel, version, target, releaseUUID, file string) string {
+	return fmt.Sprintf("desktop/releases/%s/%s/%s/%s/%s/%s", app, channel, version, target, releaseUUID, file)
+}

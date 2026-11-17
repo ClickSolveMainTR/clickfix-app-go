@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/remotesupport"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/realtime"
 	"github.com/google/uuid"
 )
@@ -23,6 +24,7 @@ func TestCentrifugoConfigsDeclareBackendNamespaces(t *testing.T) {
 		realtime.OrgChannel(id),
 		realtime.QRLoginChannel("abc"),
 		"user:" + id.String(),
+		remotesupport.Channel(id),
 	}
 	for _, name := range []string{"config.json", "config.prod.json"} {
 		path := filepath.Join("..", "..", "..", "deploy", "centrifugo", name)

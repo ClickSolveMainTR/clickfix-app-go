@@ -454,6 +454,8 @@
   "portal.features.module.appointments": "Randevular ve takvim",
   "portal.features.replay.bytes": "Oturum kaydı depolama",
   "portal.features.replay.enabled": "Oturum kaydı",
+  "portal.features.remote_support.enabled": "Uzaktan destek",
+  "portal.features.remote_support.minutes": "Uzaktan destek dakikası",
   "portal.features.replay.retention_days": "Kayıt saklama süresi (gün)",
   "portal.features.security.sso": "Kurumsal SSO ve SCIM",
   "portal.features.video.enabled": "Görüntülü görüşme",

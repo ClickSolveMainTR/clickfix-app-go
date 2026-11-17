@@ -2885,6 +2885,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/desktop/codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-time code for the desktop app (signed-in browser)
+         * @description CF-234. Called by the `/desktop/login` page in the system browser
+         *     after the user signed in there (any method). Binds a one-time code to
+         *     the desktop app's `state` and PKCE S256 `code_challenge`. The code is
+         *     valid for 60 s, held in Redis (hashed key) and redeemable once. The
+         *     page sends the user to `redirect_url` (`clickfix://auth/callback`).
+         *     Not available while impersonating.
+         *
+         *     Errors: `400 VALIDATION_ERROR`, `403 FORBIDDEN` (impersonating or
+         *     disabled), `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED`
+         *     (20 / 15 min per user).
+         */
+        post: operations["postAuthDesktopCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a desktop code (desktop app)
+         * @description CF-234. Called by the desktop app (native client, through
+         *     `/api/mobile/v1`), never by browser JS (the panel BFF blocks it).
+         *     Trades the code from the callback plus the PKCE `code_verifier` and
+         *     `state` for the app's own session: the same token pair as
+         *     `/v1/auth/login` plus the user. The refresh session is labelled
+         *     `client=desktop` (and `client_os`, `device_name`) in
+         *     `GET /v1/auth/sessions`; the label survives refresh rotation.
+         *
+         *     Single use: a second exchange is refused and audited
+         *     (`desktop_login.code_reused`). A wrong verifier or state is audited
+         *     (`desktop_login.verifier_mismatch`); after 3 the code is deleted.
+         *     Expired, unknown, reused and mismatched codes all answer
+         *     `400 DESKTOP_LOGIN_INVALID`.
+         *
+         *     Errors: `400 DESKTOP_LOGIN_INVALID`, `400 VALIDATION_ERROR`,
+         *     `403 ACCOUNT_DEACTIVATED`, `403 FORBIDDEN`, `429 RATE_LIMITED`
+         *     (30 / 15 min per IP).
+         */
+        post: operations["postAuthDesktopExchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/desktop/web-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Separate session for the desktop app's web view (web server)
+         * @description CF-234. Called only by the web server's `POST /desktop/session` route
+         *     with the desktop app's access token; both proxies block it. Issues a
+         *     second session (also `client=desktop`) for the embedded web view, so
+         *     the app's keychain refresh token and the web view cookie rotate
+         *     independently. The caller's session must be an active desktop
+         *     session; impersonation sessions are refused.
+         *
+         *     Errors: `401`, `403 FORBIDDEN` (not a desktop session),
+         *     `403 ACCOUNT_DEACTIVATED`, `429 RATE_LIMITED` (30 / 15 min per user).
+         */
+        post: operations["postAuthDesktopWebSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications": {
         parameters: {
             query?: never;
@@ -16815,6 +16908,378 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/conversations/{uuid}/remote-support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support sessions of a conversation
+         * @description Organization scoped. Requires tenant.remote_support.use. The conversation must be visible to the caller (team rules). Latest 20.
+         */
+        get: operations["listConversationRemoteSupport"];
+        put?: never;
+        /**
+         * Start a remote support session
+         * @description Organization scoped. Requires tenant.remote_support.use. mode control also requires tenant.remote_support.control and the organization's allow_control. Returns the 9-digit code and the one-time join link once (only HMAC digests are stored); both expire after 15 minutes and work once. A customer-visible message with the download link and the code is posted on the conversation when its channel can carry it (message_posted).
+         */
+        post: operations["createRemoteSupportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support settings
+         * @description Organization scoped. Requires tenant.remote_support.settings. Includes the platform state and whether sessions can start (ready).
+         */
+        get: operations["getRemoteSupportSettings"];
+        /**
+         * Update remote support settings
+         * @description Organization scoped. Requires tenant.remote_support.settings. Remote support is off until enabled. Recording is off or optional (the customer is asked separately).
+         */
+        put: operations["updateRemoteSupportSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Remote support session status
+         * @description Organization scoped. Requires tenant.remote_support.use. Visible to the session's agent, tenant.remote_support.settings holders and members who can see the conversation. Live updates: Centrifugo channel remote_support:{uuid} (session agent and settings holders).
+         */
+        get: operations["getRemoteSupportSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Agent LiveKit token
+         * @description Organization scoped. Requires tenant.remote_support.use. Session agent only, after the customer's viewing consent. The agent never publishes media (subscribe only). can_publish_data (input events) is true only while the customer's control consent is in force, the organization allows control and the agent holds tenant.remote_support.control; revoking control removes it from the connected participant at once.
+         */
+        post: operations["createRemoteSupportAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/remote-support/{uuid}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a remote support session
+         * @description Organization scoped. Requires tenant.remote_support.use. Session agent, or tenant.remote_support.settings. Deletes the LiveKit room and meters the minutes. Idempotent.
+         */
+        post: operations["endRemoteSupportSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a code or join link
+         * @description Public (desktop app, no login). Exactly one of code (9 digits, spaces/dashes ignored) or token (from clickfix-support://join?t=...). Single use. Five wrong codes charged to one session invalidate it. Returns the organization, the agent, the requested mode, the scam warning and a client_secret for the next calls (returned only here).
+         */
+        post: operations["resolveRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give or withdraw consent
+         * @description Public, client_secret. view (required first, can only be given; stopping is /end), control (only when requested and allowed; false withdraws it), recording (only when the organization records; false declines or stops). Every step is audited.
+         */
+        post: operations["consentRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Customer LiveKit token
+         * @description Public, client_secret, after the viewing consent. Publishes only the screen_share source, receives data, publishes no data.
+         */
+        post: operations["createRemoteSupportCustomerToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Customer stops the session
+         * @description Public, client_secret. Ending before the viewing consent is recorded as declined.
+         */
+        post: operations["endRemoteSupportByCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/remote-support/{uuid}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a scam attempt
+         * @description Public, client_secret. Flags and ends the session. Three reports within 24 hours suspend the organization's remote support until the platform reviews it.
+         */
+        post: operations["reportRemoteSupport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Organizations using remote support
+         * @description Requires platform.remote_support.manage. Sorted by reports of the last 30 days.
+         */
+        get: operations["listPlatformRemoteSupportOrganizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/organizations/{uuid}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Kill switch for an organization
+         * @description Requires platform.remote_support.manage. disabled (reason required) ends every open session of the organization at once; active lifts a kill switch or an automatic suspension.
+         */
+        put: operations["setPlatformRemoteSupportState"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/remote-support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reported remote support sessions
+         * @description Requires platform.remote_support.manage. Newest first.
+         */
+        get: operations["listPlatformRemoteSupportReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/releases/{app}/{target}/{current_version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tauri updater check
+         * @description Public (desktop app, no login, no organization). Answers in the Tauri updater dynamic server format, not the envelope: 200 with the newest published release of the app for the target that is newer than current_version (semver precedence), or 204 when the client is up to date. A beta client also receives stable releases; a stable client never receives beta. Withdrawn releases are never offered.
+         */
+        get: operations["getDesktopUpdate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download page entries
+         * @description Public. The newest published release of each app per target with its file name, size, SHA-256 and a same-origin download path. macOS entries offer the .dmg; Windows entries offer the NSIS installer. os_signed false marks an unsigned internal test build.
+         */
+        get: operations["listDesktopDownloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/public/desktop/files/{uuid}/{kind}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a desktop package
+         * @description Public. Streams a package of a published release from object storage (the bucket stays private). The name must match the stored file name. Withdrawn releases answer 404.
+         */
+        get: operations["downloadDesktopFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List desktop releases
+         * @description Requires `platform.desktop_releases.manage`. Newest first.
+         */
+        get: operations["listPlatformDesktopReleases"];
+        put?: never;
+        /**
+         * Publish a desktop release
+         * @description Requires `platform.desktop_releases.manage`. Multipart form, at most 1 GiB. The files go to object storage and the SHA-256 is computed server-side. Stable versions have no pre-release part; beta versions must have one. Version, app, channel and target are unique together (409 DESKTOP_RELEASE_EXISTS). Used by desktop/scripts/publish-release.mjs.
+         */
+        post: operations["publishPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/platform/desktop/releases/{uuid}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a desktop release
+         * @description Requires `platform.desktop_releases.manage`. The release leaves the updater and the download page; its files stay in storage. Clients already on it move off when a higher version is published. 409 DESKTOP_RELEASE_WITHDRAWN when already withdrawn.
+         */
+        post: operations["withdrawPlatformDesktopRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/guides": {
         parameters: {
             query?: never;
@@ -21955,6 +22420,65 @@ export interface components {
             message: string;
             details?: components["schemas"]["ErrorDetail"][];
         };
+        /** @description Tauri updater dynamic server response (CF-240). */
+        DesktopUpdateManifest: {
+            version: string;
+            notes: string;
+            /** Format: date-time */
+            pub_date: string;
+            /**
+             * Format: uri
+             * @description Absolute package URL served by the API
+             */
+            url: string;
+            /** @description Tauri updater signature (.sig content) */
+            signature: string;
+        };
+        DesktopReleaseFile: {
+            name: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            /** @description Same-origin download path (/api/v1/public/desktop/files/...) */
+            url: string;
+        };
+        DesktopRelease: {
+            /** Format: uuid */
+            uuid: string;
+            /** @enum {string} */
+            app: "agent" | "support";
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            version: string;
+            target: string;
+            /** @enum {string} */
+            status: "published" | "withdrawn";
+            notes: string;
+            os_signed: boolean;
+            updater: components["schemas"]["DesktopReleaseFile"];
+            installer: components["schemas"]["DesktopReleaseFile"] | null;
+            /** Format: date-time */
+            published_at: string;
+            /** Format: date-time */
+            withdrawn_at: string | null;
+            withdrawn_reason: string;
+        };
+        DesktopDownload: {
+            /** @enum {string} */
+            app: "agent" | "support";
+            target: string;
+            /** @enum {string} */
+            os: "darwin" | "windows" | "linux";
+            arch: string;
+            version: string;
+            /** @enum {string} */
+            channel: "stable" | "beta";
+            /** @description false marks an unsigned internal test build */
+            os_signed: boolean;
+            file: components["schemas"]["DesktopReleaseFile"];
+            /** Format: date-time */
+            published_at: string;
+        };
         ResponseMeta: {
             request_id: string;
         };
@@ -23460,6 +23984,20 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
             impersonated?: boolean;
+            /**
+             * @description Native client behind the session (CF-234). `desktop` = ClickFix
+             *     desktop app (its own session or its web view's). Absent for web /
+             *     mobile sessions.
+             * @enum {string}
+             */
+            client?: "desktop";
+            /**
+             * @description Desktop platform; set with `client`.
+             * @enum {string|null}
+             */
+            client_os?: "macos" | "windows" | "linux" | null;
+            /** @description Optional computer name the desktop app sent (max 64). */
+            device_name?: string | null;
         };
         SessionList: {
             items: components["schemas"]["AuthSession"][];
@@ -23585,6 +24123,53 @@ export interface components {
             };
         };
         EnvelopeQRLoginExchanged: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["QRLoginExchanged"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginCodeRequest: {
+            /** @description Opaque value from the desktop app, echoed in the callback. */
+            state: string;
+            /** @description PKCE S256 challenge, BASE64URL(SHA256(code_verifier)). */
+            code_challenge: string;
+            /** @enum {string} */
+            code_challenge_method: "S256";
+        };
+        DesktopLoginCode: {
+            /** @description 43-char base64url one-time code */
+            code: string;
+            /**
+             * @description `clickfix://auth/callback?code=...&state=...`
+             * @example clickfix://auth/callback?code=Zm9v...&state=abc...
+             */
+            redirect_url: string;
+            /** Format: date-time */
+            expires_at: string;
+            /**
+             * Format: int64
+             * @example 60
+             */
+            expires_in: number;
+        };
+        EnvelopeDesktopLoginCode: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["DesktopLoginCode"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        DesktopLoginExchangeRequest: {
+            code: string;
+            /** @description PKCE verifier (RFC 7636 §4.1). */
+            code_verifier: string;
+            /** @description Same value sent to `/codes`. */
+            state: string;
+            /** @enum {string} */
+            client_os: "macos" | "windows" | "linux";
+            /** @description Optional computer name shown in the device list. */
+            device_name?: string;
+        };
+        EnvelopeDesktopLoginExchanged: {
             /** @enum {boolean} */
             success: true;
             data: components["schemas"]["QRLoginExchanged"];
@@ -29605,6 +30190,208 @@ export interface components {
             policy: components["schemas"]["VideoPolicy"];
             plans: components["schemas"]["VideoPlanPolicy"][];
             configured: boolean;
+        };
+        RemoteSupportPerson: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            avatar_url: string | null;
+        };
+        RemoteSupportSession: {
+            /** Format: uuid */
+            uuid: string;
+            /** Format: uuid */
+            conversation_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            agent: components["schemas"]["RemoteSupportPerson"] | null;
+            /** Format: date-time */
+            code_expires_at: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            /** Format: date-time */
+            view_consent_at?: string | null;
+            /** Format: date-time */
+            control_consent_at?: string | null;
+            /** Format: date-time */
+            control_revoked_at?: string | null;
+            control_active: boolean;
+            /** @description null: not asked (organization recording off). */
+            recording_consent?: boolean | null;
+            /** @enum {string} */
+            recording_status: "none" | "starting" | "active" | "complete" | "failed" | "deleted";
+            client_os?: string;
+            client_version?: string;
+            max_duration_minutes: number;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            /** @enum {string} */
+            ended_by: "" | "agent" | "customer" | "system" | "platform";
+            /** Format: date-time */
+            reported_at?: string | null;
+            billed_minutes: number;
+            /** @description Centrifugo channel remote_support:{uuid}. */
+            channel: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        RemoteSupportCreateInput: {
+            /**
+             * @default view
+             * @enum {string}
+             */
+            mode: "view" | "control";
+        };
+        RemoteSupportCreated: {
+            session: components["schemas"]["RemoteSupportSession"];
+            code: string;
+            /** @description clickfix-support://join?t=... (one-time). */
+            join_url: string;
+            download_url: string;
+            message_posted: boolean;
+        };
+        RemoteSupportGrant: {
+            server_url: string;
+            token: string;
+            identity: string;
+            room: string;
+            can_publish_data: boolean;
+            /** Format: date-time */
+            expires_at: string;
+            session?: components["schemas"]["RemoteSupportSession"];
+        };
+        RemoteSupportResolveInput: {
+            code?: string;
+            token?: string;
+            client_os?: string;
+            client_version?: string;
+        };
+        RemoteSupportResolved: {
+            /** Format: uuid */
+            session_uuid: string;
+            client_secret: string;
+            organization: {
+                /** Format: uuid */
+                uuid: string;
+                name: string;
+                logo_url: string | null;
+                verified: boolean;
+            };
+            agent: components["schemas"]["RemoteSupportPerson"];
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            recording_requested: boolean;
+            max_duration_minutes: number;
+            /** Format: date-time */
+            consent_deadline: string;
+            warning: string;
+            /** @enum {string} */
+            locale: "tr" | "en";
+        };
+        RemoteSupportClientInput: {
+            client_secret: string;
+        };
+        RemoteSupportConsentInput: {
+            client_secret: string;
+            /** @enum {boolean} */
+            view?: true;
+            control?: boolean;
+            recording?: boolean;
+        };
+        RemoteSupportReportInput: {
+            client_secret: string;
+            reason?: string;
+        };
+        RemoteSupportCustomerView: {
+            /** Format: uuid */
+            session_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            /** Format: date-time */
+            view_consent_at?: string | null;
+            control_active: boolean;
+            recording_consent?: boolean | null;
+            /** Format: date-time */
+            ends_at?: string | null;
+            /** Format: date-time */
+            ended_at?: string | null;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            reported: boolean;
+        };
+        RemoteSupportSettings: {
+            enabled: boolean;
+            allow_control: boolean;
+            /** @enum {string} */
+            recording: "off" | "optional";
+            max_duration_minutes: number;
+            recording_retention_days: number;
+            /** @enum {string} */
+            platform_state: "active" | "disabled" | "suspended";
+            platform_reason: string;
+            /** Format: date-time */
+            platform_changed_at?: string | null;
+            configured: boolean;
+            entitled: boolean;
+            ready: boolean;
+        };
+        RemoteSupportSettingsInput: {
+            enabled: boolean;
+            allow_control: boolean;
+            /** @enum {string} */
+            recording?: "off" | "optional";
+            /** @default 60 */
+            max_duration_minutes: number;
+            /** @default 30 */
+            recording_retention_days: number;
+        };
+        RemoteSupportPlatformStateInput: {
+            /** @enum {string} */
+            state: "active" | "disabled";
+            reason?: string;
+        };
+        RemoteSupportPlatformOrganization: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+            enabled: boolean;
+            /** @enum {string} */
+            platform_state: "active" | "disabled" | "suspended";
+            platform_reason: string;
+            /** Format: date-time */
+            platform_changed_at?: string | null;
+            reports_30d: number;
+            sessions_30d: number;
+        };
+        RemoteSupportPlatformReport: {
+            /** Format: uuid */
+            session_uuid: string;
+            /** @enum {string} */
+            status: "pending" | "joined" | "active" | "ended" | "expired" | "cancelled";
+            /** @enum {string} */
+            mode_requested: "view" | "control";
+            /** Format: date-time */
+            reported_at: string;
+            report_reason: string;
+            /** @enum {string} */
+            ended_reason: "" | "agent" | "customer" | "declined" | "code_expired" | "timeout" | "attempts" | "max_duration" | "conversation_closed" | "platform" | "reported";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            organization_uuid: string;
+            organization_name: string;
+            agent_name: string;
         };
         GuideStepAction: {
             /** @enum {string} */
@@ -36785,6 +37572,87 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginCode"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopExchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopLoginExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    postAuthDesktopWebSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Web view session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDesktopLoginExchanged"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
@@ -69945,6 +70813,1172 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    listConversationRemoteSupport: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportSession"][];
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCreated"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description REMOTE_SUPPORT_MINUTES_EXHAUSTED: the remote_support.minutes limit of the month is used up. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRemoteSupportSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    updateRemoteSupportSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSession"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    createRemoteSupportAgentToken: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportGrant"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    endRemoteSupportSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Organization": string;
+            };
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSession"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    resolveRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportResolveInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportResolved"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    consentRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportConsentInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createRemoteSupportCustomerToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportClientInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportGrant"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    endRemoteSupportByCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportClientInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reportRemoteSupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportReportInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportCustomerView"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Invalid session uuid or client secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_CODE_INVALID: unknown, used or expired code or join link (all look the same). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+            /** @description Too many attempts (per address, per code prefix / join token, per session). Fails closed when the rate limiter is unavailable. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPlatformRemoteSupportOrganizations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                state?: "active" | "disabled" | "suspended";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportPlatformOrganization"][];
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    setPlatformRemoteSupportState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteSupportPlatformStateInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["RemoteSupportSettings"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    listPlatformRemoteSupportReports: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["RemoteSupportPlatformReport"][];
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description Forbidden, REMOTE_SUPPORT_DISABLED (organization setting off), REMOTE_SUPPORT_SUSPENDED (platform kill switch or automatic suspension) or ENTITLEMENT_REQUIRED (plan without remote_support.enabled). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description REMOTE_SUPPORT_NOT_CONFIGURED (LiveKit not set), REMOTE_SUPPORT_CONFLICT (open session on the conversation, or conversation closed) or REMOTE_SUPPORT_CONSENT_REQUIRED (no viewing consent yet). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description REMOTE_SUPPORT_ENDED: the session has ended. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationError"];
+        };
+    };
+    getDesktopUpdate: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path: {
+                app: "agent" | "support";
+                /** @description Tauri {{target}}-{{arch}}, e.g. darwin-aarch64, darwin-x86_64, windows-x86_64. */
+                target: string;
+                current_version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An update is available */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopUpdateManifest"];
+                };
+            };
+            /** @description Up to date */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listDesktopDownloads: {
+        parameters: {
+            query?: {
+                channel?: "stable" | "beta";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopDownload"][];
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    downloadDesktopFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+                kind: "updater" | "installer";
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Package bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPlatformDesktopReleases: {
+        parameters: {
+            query?: {
+                app?: "agent" | "support";
+                channel?: "stable" | "beta";
+                status?: "published" | "withdrawn";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: {
+                            items: components["schemas"]["DesktopRelease"][];
+                            /** Format: int64 */
+                            total: number;
+                            limit: number;
+                            offset: number;
+                        };
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    publishPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @enum {string} */
+                    app: "agent" | "support";
+                    /** @enum {string} */
+                    channel: "stable" | "beta";
+                    /** @description Canonical semver, e.g. 0.2.0 or 0.3.0-beta.1 */
+                    version: string;
+                    /** @example darwin-aarch64 */
+                    target: string;
+                    notes?: string;
+                    /** @description Content of the Tauri updater .sig file */
+                    signature: string;
+                    /** @description true: macOS Developer ID + notarized / Windows Authenticode; false: unsigned internal test build */
+                    os_signed: boolean;
+                    /**
+                     * Format: binary
+                     * @description .app.tar.gz (macOS), .exe or .msi (Windows), .AppImage (Linux)
+                     */
+                    updater: string;
+                    /**
+                     * Format: binary
+                     * @description Optional download page file (.dmg on macOS)
+                     */
+                    installer?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    withdrawPlatformDesktopRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Withdrawn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        data: components["schemas"]["DesktopRelease"];
+                        meta: components["schemas"]["ResponseMeta"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
         };
     };
     listTenantGuides: {

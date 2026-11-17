@@ -68,9 +68,9 @@ ON CONFLICT(organization_id,audience,locale,scope_key,question_hash) DO UPDATE S
 -- name: AnswerCacheCount :one
 SELECT count(*) FROM ai_answer_cache WHERE organization_id=$1;
 -- name: AnswerCacheStat :exec
--- One row per day, audience and department (NULL = organization wide, CF-225).
+-- One row per UTC day (readers filter on UTC dates), audience and department (NULL = organization wide, CF-225).
 INSERT INTO ai_answer_cache_stats(organization_id,day,audience,department_id,exact_hits,semantic_hits,misses)
-VALUES($1,current_date,$2,sqlc.narg(department_id)::bigint,sqlc.arg(exact)::bigint,sqlc.arg(semantic)::bigint,sqlc.arg(miss)::bigint)
+VALUES($1,(now() AT TIME ZONE 'UTC')::date,$2,sqlc.narg(department_id)::bigint,sqlc.arg(exact)::bigint,sqlc.arg(semantic)::bigint,sqlc.arg(miss)::bigint)
 ON CONFLICT ON CONSTRAINT uq_ai_answer_cache_stats_day DO UPDATE SET exact_hits=ai_answer_cache_stats.exact_hits+excluded.exact_hits,
  semantic_hits=ai_answer_cache_stats.semantic_hits+excluded.semantic_hits,misses=ai_answer_cache_stats.misses+excluded.misses;
 -- name: AnswerCacheStats :many

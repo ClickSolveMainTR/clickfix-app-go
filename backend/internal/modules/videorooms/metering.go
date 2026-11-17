@@ -56,6 +56,10 @@ func (s *Service) handleEvent(ctx context.Context, ev livekit.Event) error {
 	if ev.CreatedAt > 0 {
 		at = time.Unix(int64(ev.CreatedAt), 0).UTC()
 	}
+	// Remote support rooms (rs_, CF-233) share this webhook endpoint.
+	if s.RemoteSupportEvent != nil && remoteSupportEvent(ev) {
+		return s.RemoteSupportEvent(ctx, ev)
+	}
 	switch ev.Event {
 	case "egress_started", "egress_updated", "egress_ended":
 		if ev.EgressInfo != nil {
@@ -100,6 +104,13 @@ func (s *Service) handleEvent(ctx context.Context, ev livekit.Event) error {
 		return s.closeSession(ctx, room, ev.Participant.SID, at)
 	}
 	return nil
+}
+
+func remoteSupportEvent(ev livekit.Event) bool {
+	if ev.EgressInfo != nil && strings.HasPrefix(ev.EgressInfo.RoomName, RemoteSupportRoomPrefix) {
+		return true
+	}
+	return ev.Room != nil && strings.HasPrefix(ev.Room.Name, RemoteSupportRoomPrefix)
 }
 
 // billable: our own participants are "u:" (members) and "g:" (guests).

@@ -177,6 +177,8 @@ export const routes = {
           `/settings/engineering/callback/${encodeURIComponent(provider)}`,
       },
       video: "/settings/video",
+      /** Remote support settings (CF-237). */
+      remoteSupport: "/settings/remote-support",
       customerHealth: "/settings/customer-health",
       roles: {
         root: "/settings/roles",
@@ -247,6 +249,8 @@ export const routes = {
     },
     /** Platform video module (CF-139). */
     video: "/platform/video",
+    /** Remote support kill switch and reports (CF-237). */
+    remoteSupport: "/platform/remote-support",
     /** ClickFix Asistan settings, module guides, product feedback (CF-141). */
     assistant: "/platform/assistant",
     guides: "/platform/guides",

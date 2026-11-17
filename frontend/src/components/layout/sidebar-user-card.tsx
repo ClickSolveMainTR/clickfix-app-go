@@ -20,6 +20,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { routes } from "@/config/routes";
+import { useDesktopPresence } from "@/features/desktop/hooks/use-desktop-bridge";
 import { useActiveOrganization } from "@/features/organizations";
 import { useMyPresence, type PresenceStatus } from "@/features/presence";
 import { useWorkforceClock } from "@/features/workforce/hooks/use-workforce-clock";
@@ -144,6 +145,8 @@ function AgentStatusCard() {
   const connection = usePresence();
   const { status, setStatus, isSaving } = useMyPresence();
   useWorkforceClock(status);
+  // ClickFix Masaüstü tray status menu (no-op in a browser).
+  useDesktopPresence(status, setStatus);
   if (!user) return null;
 
   // Without a socket teammates still see the server status; show the

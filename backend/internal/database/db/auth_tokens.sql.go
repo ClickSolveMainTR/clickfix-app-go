@@ -14,9 +14,9 @@ import (
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (user_id, token_hash, expires_at, user_agent, ip_address, impersonator_user_id)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at
+INSERT INTO refresh_tokens (user_id, token_hash, expires_at, user_agent, ip_address, impersonator_user_id, client, client_os, device_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at, client, client_os, device_name
 `
 
 type CreateRefreshTokenParams struct {
@@ -26,6 +26,9 @@ type CreateRefreshTokenParams struct {
 	UserAgent          pgtype.Text        `json:"user_agent"`
 	IpAddress          *netip.Addr        `json:"ip_address"`
 	ImpersonatorUserID pgtype.Int8        `json:"impersonator_user_id"`
+	Client             pgtype.Text        `json:"client"`
+	ClientOs           pgtype.Text        `json:"client_os"`
+	DeviceName         pgtype.Text        `json:"device_name"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
@@ -36,6 +39,9 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.UserAgent,
 		arg.IpAddress,
 		arg.ImpersonatorUserID,
+		arg.Client,
+		arg.ClientOs,
+		arg.DeviceName,
 	)
 	var i RefreshToken
 	err := row.Scan(
@@ -49,12 +55,50 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		&i.IpAddress,
 		&i.ImpersonatorUserID,
 		&i.CreatedAt,
+		&i.Client,
+		&i.ClientOs,
+		&i.DeviceName,
+	)
+	return i, err
+}
+
+const getActiveRefreshTokenByUUIDForUser = `-- name: GetActiveRefreshTokenByUUIDForUser :one
+SELECT id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at, client, client_os, device_name
+FROM refresh_tokens
+WHERE uuid = $1
+  AND user_id = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+`
+
+type GetActiveRefreshTokenByUUIDForUserParams struct {
+	Uuid   uuid.UUID `json:"uuid"`
+	UserID int64     `json:"user_id"`
+}
+
+func (q *Queries) GetActiveRefreshTokenByUUIDForUser(ctx context.Context, arg GetActiveRefreshTokenByUUIDForUserParams) (RefreshToken, error) {
+	row := q.db.QueryRow(ctx, getActiveRefreshTokenByUUIDForUser, arg.Uuid, arg.UserID)
+	var i RefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.UserAgent,
+		&i.IpAddress,
+		&i.ImpersonatorUserID,
+		&i.CreatedAt,
+		&i.Client,
+		&i.ClientOs,
+		&i.DeviceName,
 	)
 	return i, err
 }
 
 const getValidRefreshTokenByHash = `-- name: GetValidRefreshTokenByHash :one
-SELECT id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at
+SELECT id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at, client, client_os, device_name
 FROM refresh_tokens
 WHERE token_hash = $1
   AND revoked_at IS NULL
@@ -75,12 +119,15 @@ func (q *Queries) GetValidRefreshTokenByHash(ctx context.Context, tokenHash stri
 		&i.IpAddress,
 		&i.ImpersonatorUserID,
 		&i.CreatedAt,
+		&i.Client,
+		&i.ClientOs,
+		&i.DeviceName,
 	)
 	return i, err
 }
 
 const listActiveRefreshTokensByUserID = `-- name: ListActiveRefreshTokensByUserID :many
-SELECT id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at
+SELECT id, uuid, user_id, token_hash, expires_at, revoked_at, user_agent, ip_address, impersonator_user_id, created_at, client, client_os, device_name
 FROM refresh_tokens
 WHERE user_id = $1
   AND revoked_at IS NULL
@@ -108,6 +155,9 @@ func (q *Queries) ListActiveRefreshTokensByUserID(ctx context.Context, userID in
 			&i.IpAddress,
 			&i.ImpersonatorUserID,
 			&i.CreatedAt,
+			&i.Client,
+			&i.ClientOs,
+			&i.DeviceName,
 		); err != nil {
 			return nil, err
 		}
@@ -183,4 +233,24 @@ func (q *Queries) RevokeRefreshTokenByUUIDForUser(ctx context.Context, arg Revok
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const userHasDesktopSession = `-- name: UserHasDesktopSession :one
+SELECT EXISTS (
+  SELECT 1
+  FROM refresh_tokens
+  WHERE user_id = $1
+    AND client = 'desktop'
+    AND revoked_at IS NULL
+    AND expires_at > NOW()
+)::boolean AS has_session
+`
+
+// True while the user has an active ClickFix Masaüstü session (CF-236);
+// notification e-mails then carry a "Masaüstünde aç" link.
+func (q *Queries) UserHasDesktopSession(ctx context.Context, userID int64) (bool, error) {
+	row := q.db.QueryRow(ctx, userHasDesktopSession, userID)
+	var has_session bool
+	err := row.Scan(&has_session)
+	return has_session, err
 }

@@ -8,6 +8,7 @@ import {
   COMPARE_PATH,
   CONTACT_PATH,
   DATA_DELETION_PATH,
+  DOWNLOAD_PATH,
   DOCS_PATH,
   FEATURES_PATH,
   LEGAL_DOCS,
@@ -76,6 +77,10 @@ export function SiteFooter() {
   ];
   const resources = [
     { href: localizedHref(DOCS_PATH, locale), label: t("landing.nav.docs") },
+    {
+      href: localizedHref(DOWNLOAD_PATH, locale),
+      label: t("landing.nav.download"),
+    },
     {
       href: localizedHref(COMPARE_PATH, locale),
       label: t("landing.nav.compare"),

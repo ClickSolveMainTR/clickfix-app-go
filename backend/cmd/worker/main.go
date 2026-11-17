@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	appointmentsusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/appointments/usecase"
 	authrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/repository"
 	authuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/auth/usecase"
@@ -57,6 +58,7 @@ import (
 	orgrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/repository"
 	orguc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/organizations/usecase"
 	presenceusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/presence/usecase"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/remotesupport"
 	reportsrepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/repository"
 	reportsuc "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/reports/usecase"
 	routingusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/routing/usecase"
@@ -294,6 +296,8 @@ func main() {
 	// Departments (CF-215): AI routing of first messages and transfers.
 	departmentsSvc := departmentsusecase.New(pool, queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log
+	// Remote support sweep and recording retention (CF-233).
+	remoteSupportSvc := remotesupport.New(queries, cfg, entitlements.New(billingRepository, nil, cfg.App.Env), inboxCore.Conversations, publisher, activityRec, store, log)
 	departmentsSvc.Classifier, agentSvc.Departments = agentSvc, departmentsSvc
 	// Measurement set (CF-220) of the evaluation sweep: department sets and
 	// cache hit rate (CF-225).
@@ -342,7 +346,10 @@ func main() {
 		Handle(queue.TaskUptimeSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepMonitors(ctx) }).
 		Handle(queue.TaskOncallSweep, func(ctx context.Context, _ *asynq.Task) error { return oncallSvc.SweepAlerts(ctx) }).
 		Handle(queue.TaskVideoSweep, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.Sweep(ctx) }).
-		Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error { return videoSvc.PurgeExpired(ctx) }).
+		Handle(queue.TaskVideoRecordingPurge, func(ctx context.Context, _ *asynq.Task) error {
+			return errors.Join(videoSvc.PurgeExpired(ctx), remoteSupportSvc.PurgeRecordings(ctx))
+		}).
+		Handle(queue.TaskRemoteSupportSweep, func(ctx context.Context, _ *asynq.Task) error { return remoteSupportSvc.Sweep(ctx) }).
 		Handle(queue.TaskReportsSweep, func(ctx context.Context, _ *asynq.Task) error { return reportsSvc.Sweep(ctx) }).
 		Handle(retention.Task, func(ctx context.Context, _ *asynq.Task) error {
 			return (retention.Service{Q: queries, Store: store}).Purge(ctx)

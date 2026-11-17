@@ -77,6 +77,9 @@ export function NotificationPreferencesForm() {
 
   const pushHint = useMemo(() => {
     if (pushSupport?.supported === false) {
+      if (pushSupport.reason === "desktop") {
+        return t("auth.preferences.push_desktop");
+      }
       if (pushSupport.reason === "vapid") {
         return t("auth.preferences.push_unsupported_vapid");
       }
@@ -92,7 +95,10 @@ export function NotificationPreferencesForm() {
     let payload: NotificationPreferencesFormValues = { ...next };
 
     try {
-      if (next.push_enabled) {
+      if (pushSupport?.reason === "desktop") {
+        // ClickFix Masaüstü: the account-wide push switch (phone, other
+        // browsers) is saved as chosen; this web view never subscribes.
+      } else if (next.push_enabled) {
         if (!pushSupport?.supported) {
           payload = { ...next, push_enabled: false };
           toast.error(

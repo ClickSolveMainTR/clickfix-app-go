@@ -294,6 +294,9 @@ func (r *Postgres) SaveRefresh(ctx context.Context, userID int64, hash string, e
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt.UTC(), Valid: true},
 		UserAgent: ua, IpAddress: ip,
 		ImpersonatorUserID: impersonator,
+		Client:             optText(meta.Client.Kind),
+		ClientOs:           optText(meta.Client.OS),
+		DeviceName:         optText(meta.Client.DeviceName),
 	})
 	if err != nil {
 		return uuid.Nil, err
@@ -309,7 +312,7 @@ func (r *Postgres) GetRefreshSession(ctx context.Context, hash string) (model.Re
 		}
 		return model.RefreshSession{}, err
 	}
-	out := model.RefreshSession{UUID: row.Uuid, UserID: row.UserID}
+	out := model.RefreshSession{UUID: row.Uuid, UserID: row.UserID, Client: sessionClient(row)}
 	if row.ImpersonatorUserID.Valid {
 		id := row.ImpersonatorUserID.Int64
 		out.ImpersonatorUserID = &id
@@ -346,6 +349,17 @@ func (r *Postgres) ListActiveSessions(ctx context.Context, userID int64) ([]mode
 			CreatedAt:    row.CreatedAt.Time,
 			ExpiresAt:    row.ExpiresAt.Time,
 			Impersonated: row.ImpersonatorUserID.Valid,
+		}
+		if c := sessionClient(row); c.Kind != "" {
+			item.Client = c.Kind
+			if c.OS != "" {
+				osName := c.OS
+				item.ClientOS = &osName
+			}
+			if c.DeviceName != "" {
+				name := c.DeviceName
+				item.DeviceName = &name
+			}
 		}
 		if row.UserAgent.Valid && row.UserAgent.String != "" {
 			ua := row.UserAgent.String
@@ -1038,4 +1052,37 @@ func mapUserTOTP(row db.UserTotp) model.UserTOTP {
 		out.RecoveryHashes = []string{}
 	}
 	return out
+}
+
+// GetActiveSession loads one active refresh session of the user by its public
+// id (the access token "sid").
+func (r *Postgres) GetActiveSession(ctx context.Context, userID int64, sessionUUID uuid.UUID) (model.RefreshSession, error) {
+	row, err := r.q.GetActiveRefreshTokenByUUIDForUser(ctx, db.GetActiveRefreshTokenByUUIDForUserParams{
+		Uuid: sessionUUID, UserID: userID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.RefreshSession{}, ErrNotFound
+		}
+		return model.RefreshSession{}, err
+	}
+	out := model.RefreshSession{UUID: row.Uuid, UserID: row.UserID, Client: sessionClient(row)}
+	if row.ImpersonatorUserID.Valid {
+		id := row.ImpersonatorUserID.Int64
+		out.ImpersonatorUserID = &id
+	}
+	return out, nil
+}
+
+func sessionClient(row db.RefreshToken) model.SessionClient {
+	return model.SessionClient{
+		Kind: row.Client.String, OS: row.ClientOs.String, DeviceName: row.DeviceName.String,
+	}
+}
+
+func optText(v string) pgtype.Text {
+	if v == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: v, Valid: true}
 }

@@ -1,0 +1,11 @@
+{
+  "name": "clickfix-desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sidecar": "node scripts/build-sidecar.mjs",
+    "dev:agent": "pnpm --filter @clickfix-desktop/agent tauri dev",
+    "dev:support": "pnpm --filter @clickfix-desktop/support tauri dev"
+  },
+  "packageManager": "pnpm@11.22.0"
+}
