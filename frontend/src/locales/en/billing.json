@@ -37,6 +37,7 @@
   "validation.plan_code": "Start with a lowercase letter; use only a-z, 0-9, - and _.",
   "usage.monthly": "This month · resets on the 1st",
   "usage.current": "Current usage",
+  "usage.daily": "Today · resets at midnight Istanbul time",
   "usage.over_hard": "over the limit, new usage is blocked",
   "usage.over_soft": "over the limit, warning only",
   "admin.title": "Billing",

@@ -33,7 +33,8 @@ INSERT INTO billing_usage_denials(organization_id,event_key,feature,quantity,cod
 SELECT organization_id,uuid FROM billing_usage_periods WHERE closed_at IS NULL AND ends_at<=sqlc.arg(at_time)::timestamptz ORDER BY organization_id,id LIMIT 100;
 -- name: BillingLiveGauges :many
 -- Current counts of the gauge features nothing meters by event: the usage
--- view reads them live so seats and channels never show 0 while they exist.
+-- view reads them live so seats, channels and the daily AI limits never show
+-- 0 while they are in use.
 SELECT g.key::text AS key, g.quantity::bigint AS quantity FROM (
  SELECT 'seats' AS key, count(*) AS quantity FROM organization_members WHERE organization_id=sqlc.arg(organization_id)::bigint
  UNION ALL SELECT 'brands', count(*) FROM brands WHERE organization_id=sqlc.arg(organization_id)::bigint
@@ -42,4 +43,11 @@ SELECT g.key::text AS key, g.quantity::bigint AS quantity FROM (
  UNION ALL SELECT 'channels.whatsapp', count(*) FROM channel_instances WHERE organization_id=sqlc.arg(organization_id)::bigint AND deleted_at IS NULL AND channel_type='whatsapp'
  UNION ALL SELECT 'contacts', count(*) FROM contacts WHERE organization_id=sqlc.arg(organization_id)::bigint AND deleted_at IS NULL
  UNION ALL SELECT 'storage.bytes', COALESCE(sum(size_bytes),0) FROM attachments WHERE organization_id=sqlc.arg(organization_id)::bigint AND deleted_at IS NULL
+ -- Daily AI limits (CF-229, CF-242): the same counts AIUsageToday and
+ -- AIActive enforce, reset at midnight in Istanbul.
+ UNION ALL SELECT 'ai.daily_calls', count(*) FROM ai_runs WHERE organization_id=sqlc.arg(organization_id)::bigint AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
+  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul'
+ UNION ALL SELECT 'ai.daily_budget_micros', COALESCE(sum(GREATEST(cost_micros,reserved_cost_micros)),0) FROM ai_runs WHERE organization_id=sqlc.arg(organization_id)::bigint AND status<>'blocked' AND error_code<>'AI_PROVIDER_REJECTED'
+  AND created_at>=date_trunc('day',now() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul'
+ UNION ALL SELECT 'ai.concurrency', count(*) FROM ai_runs WHERE organization_id=sqlc.arg(organization_id)::bigint AND status='running'
 ) g;
