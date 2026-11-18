@@ -14,6 +14,7 @@ export const INBOX_SHORTCUTS = [
   { keys: ["M"], labelKey: "inbox.shortcuts.macro" },
   { keys: ["/"], labelKey: "inbox.shortcuts.canned" },
   { keys: ["X"], labelKey: "inbox.shortcuts.select" },
+  { keys: ["⇧", "U"], labelKey: "inbox.shortcuts.unread" },
   { keys: ["/"], labelKey: "inbox.shortcuts.search" },
   { keys: ["1", "–", "4"], labelKey: "inbox.shortcuts.views" },
   { keys: ["Esc"], labelKey: "inbox.shortcuts.escape" },

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Flag,
   Hash,
+  Mail,
   PanelRight,
   RotateCcw,
   UserRound,
@@ -77,12 +78,21 @@ type Props = {
   canAssign: boolean;
   contextOpen: boolean;
   onToggleContext: () => void;
+  /** Marks the conversation unread for the viewer and closes it (CF-247). */
+  onMarkUnread: () => void;
 };
 
 /** Conversation title bar with status, priority, assignee, tags and snooze. */
 export const ConversationHeader = forwardRef<HeaderHandle, Props>(
   function ConversationHeader(
-    { conversation: c, canManage, canAssign, contextOpen, onToggleContext },
+    {
+      conversation: c,
+      canManage,
+      canAssign,
+      contextOpen,
+      onToggleContext,
+      onMarkUnread,
+    },
     ref,
   ) {
     const { t } = useLocale();
@@ -360,6 +370,19 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
               </PopoverContent>
             </Popover>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            aria-label={t("inbox.read_state.mark_unread")}
+            title={`${t("inbox.read_state.mark_unread")} (⇧U)`}
+            onClick={onMarkUnread}
+          >
+            <Mail className="size-3.5" />
+            <span className="hidden 2xl:inline">
+              {t("inbox.read_state.mark_unread_short")}
+            </span>
+          </Button>
           <ReminderMenu conversation={c.uuid} />
           <CallButton phone={c.contact.phone} />
           <StartVideoButton

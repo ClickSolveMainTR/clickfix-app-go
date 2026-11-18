@@ -171,6 +171,7 @@
   "message.show_more": "Devamını göster",
   "message.show_less": "Daha az göster",
   "row.read": "Okundu işaretle",
+  "row.unread_action": "Okunmadı işaretle",
   "row.done_read": "{{name}} okundu işaretlendi",
   "events.updated": "Konuşma güncellendi",
   "events.repeated": "{{event}} ({{count}} kez)",

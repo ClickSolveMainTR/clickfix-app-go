@@ -1,15 +1,29 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type Ref,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Clock3,
   Flame,
   Inbox as InboxIcon,
+  Mail,
+  MailOpen,
   StickyNote,
   TextSearch,
 } from "lucide-react";
 
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrandBadge } from "@/features/brands/components/brand-badge";
 import { SlaBadge } from "@/features/sla/components/sla-badge";
@@ -39,6 +53,8 @@ type Props = {
   /** Bulk selection (CF-51). */
   selected?: ReadonlySet<string>;
   onToggle?: (uuid: string) => void;
+  /** Row menu: mark read / unread for the viewer (CF-247). */
+  onReadState?: (uuid: string, unread: boolean) => void;
 };
 
 /** Virtualized conversation list: thousands of rows stay smooth. */
@@ -52,6 +68,7 @@ export function ConversationList({
   onSelect,
   selected,
   onToggle,
+  onReadState,
 }: Props) {
   const { t } = useLocale();
   const parentRef = useRef<HTMLDivElement>(null);
@@ -134,11 +151,40 @@ export function ConversationList({
             >
               {c ? (
                 <div className="group/row relative h-full">
-                  <ConversationRow
-                    conversation={c}
-                    active={c.uuid === activeUuid}
-                    onSelect={onSelect}
-                  />
+                  {onReadState ? (
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>
+                        <ConversationRow
+                          conversation={c}
+                          active={c.uuid === activeUuid}
+                          onSelect={onSelect}
+                        />
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-56">
+                        {c.unread_count > 0 ? (
+                          <ContextMenuItem
+                            onSelect={() => onReadState(c.uuid, false)}
+                          >
+                            <MailOpen className="size-4" />
+                            {t("inbox.read_state.mark_read")}
+                          </ContextMenuItem>
+                        ) : (
+                          <ContextMenuItem
+                            onSelect={() => onReadState(c.uuid, true)}
+                          >
+                            <Mail className="size-4" />
+                            {t("inbox.read_state.mark_unread")}
+                          </ContextMenuItem>
+                        )}
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ) : (
+                    <ConversationRow
+                      conversation={c}
+                      active={c.uuid === activeUuid}
+                      onSelect={onSelect}
+                    />
+                  )}
                   {onToggle && (
                     <input
                       type="checkbox"
@@ -169,20 +215,26 @@ export function ConversationList({
   );
 }
 
+// Rest props and ref come from ContextMenuTrigger (asChild).
 const ConversationRow = memo(function ConversationRow({
   conversation: c,
   active,
   onSelect,
+  ref,
+  ...rest
 }: {
   conversation: Conversation;
   active: boolean;
   onSelect: (uuid: string) => void;
-}) {
+  ref?: Ref<HTMLButtonElement>;
+} & Omit<ComponentPropsWithoutRef<"button">, "onSelect">) {
   const { t, locale } = useLocale();
   const unread = c.unread_count > 0;
   const name = contactLabel(c);
   return (
     <button
+      {...rest}
+      ref={ref}
       type="button"
       id={`conv-${c.uuid}`}
       role="option"

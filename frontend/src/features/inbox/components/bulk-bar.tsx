@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   Flag,
   Hash,
+  Mail,
+  MailOpen,
   UserRoundCheck,
   X,
 } from "lucide-react";
@@ -97,6 +99,28 @@ export function BulkBar({
       <span className="mr-1 font-medium tabular-nums">
         {t("inbox.bulk.selected", { count: selected.length })}
       </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        className="hover:bg-background/10 h-7 px-2 text-xs"
+        aria-label={t("inbox.read_state.mark_read")}
+        title={t("inbox.read_state.mark_read")}
+        onClick={() => void run("read")}
+      >
+        <MailOpen className="size-3.5" />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        className="hover:bg-background/10 h-7 px-2 text-xs"
+        aria-label={t("inbox.read_state.mark_unread")}
+        title={t("inbox.read_state.mark_unread")}
+        onClick={() => void run("unread")}
+      >
+        <Mail className="size-3.5" />
+      </Button>
       {canManage && (
         <Button
           size="sm"
