@@ -51,7 +51,7 @@ SELECT sqlc.embed(c),
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
-       st.uuid AS status_uuid, st.name AS status_name,
+       st.uuid AS status_uuid, st.name AS status_name, st.color AS status_color,
        COALESCE((SELECT array_agg(t.uuid ORDER BY lower(t.name)) FROM conversation_tags x
                  JOIN tags t ON t.organization_id = x.organization_id AND t.id = x.tag_id
                  WHERE x.organization_id = c.organization_id AND x.conversation_id = c.id), '{}')::uuid[] AS tag_uuids,
@@ -83,6 +83,7 @@ SELECT sqlc.embed(c),
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
+       st.uuid AS status_uuid, st.name AS status_name, st.color AS status_color,
        COALESCE((SELECT array_agg(t.uuid ORDER BY lower(t.name)) FROM conversation_tags x
                  JOIN tags t ON t.organization_id = x.organization_id AND t.id = x.tag_id
                  WHERE x.organization_id = c.organization_id AND x.conversation_id = c.id), '{}')::uuid[] AS tag_uuids,
@@ -98,6 +99,7 @@ LEFT JOIN companies co ON co.organization_id = c.organization_id AND co.id = c.c
 LEFT JOIN channel_instances inst ON inst.organization_id = c.organization_id AND inst.id = c.channel_instance_id
 LEFT JOIN users u ON u.id = c.assignee_user_id
 LEFT JOIN teams tm ON tm.organization_id = c.organization_id AND tm.id = c.assignee_team_id
+LEFT JOIN conversation_statuses st ON st.organization_id = c.organization_id AND st.id = c.status_id
 LEFT JOIN conversation_reads r ON r.organization_id = c.organization_id AND r.conversation_id = c.id AND r.user_id = sqlc.arg(viewer_id)::bigint
 WHERE c.organization_id = sqlc.arg(organization_id)
  AND (sqlc.narg(brand_id)::uuid IS NULL OR c.brand_id=sqlc.narg(brand_id)::uuid)
@@ -404,6 +406,41 @@ SELECT * FROM conversation_statuses WHERE organization_id = $1 ORDER BY category
 
 -- name: GetConversationStatusByUUID :one
 SELECT * FROM conversation_statuses WHERE organization_id = $1 AND uuid = $2;
+
+-- name: GetConversationStatusByID :one
+SELECT * FROM conversation_statuses WHERE organization_id = $1 AND id = $2;
+
+-- name: ListConversationStatusesWithUsage :many
+-- The settings screen (CF-249): every custom status with the number of
+-- conversations that use it.
+SELECT st.*,
+       (SELECT COUNT(*) FROM conversations c
+        WHERE c.organization_id = st.organization_id AND c.status_id = st.id AND c.deleted_at IS NULL)::bigint AS usage_count
+FROM conversation_statuses st
+WHERE st.organization_id = $1
+ORDER BY st.sort_order, st.id;
+
+-- name: NextConversationStatusOrder :one
+SELECT COALESCE(MAX(sort_order), -1)::int + 1 FROM conversation_statuses WHERE organization_id = $1;
+
+-- name: ConversationStatusSlugTaken :one
+SELECT EXISTS (SELECT 1 FROM conversation_statuses WHERE organization_id = $1 AND slug = $2)::boolean;
+
+-- name: UpdateConversationStatusDef :one
+UPDATE conversation_statuses SET name = sqlc.arg(name), color = sqlc.arg(color), category = sqlc.arg(category),
+    sort_order = sqlc.arg(sort_order)
+WHERE organization_id = sqlc.arg(organization_id) AND id = sqlc.arg(id)
+RETURNING *;
+
+-- name: ClearConversationStatusMismatch :execrows
+-- A custom status moved to another base category: conversations whose base
+-- status no longer matches lose it (they keep their base status).
+UPDATE conversations SET status_id = NULL
+WHERE organization_id = sqlc.arg(organization_id) AND status_id = sqlc.arg(status_id) AND status <> sqlc.arg(category)::text;
+
+-- name: DeleteConversationStatusDef :execrows
+-- Conversations keep their base status; status_id is set NULL by the FK.
+DELETE FROM conversation_statuses WHERE organization_id = $1 AND id = $2;
 
 -- Tags --------------------------------------------------------------------------
 

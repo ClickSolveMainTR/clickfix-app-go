@@ -12,6 +12,7 @@ export type Message = components["schemas"]["Message"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type MessageCreate = components["schemas"]["MessageCreate"];
 export type Tag = components["schemas"]["Tag"];
+export type CustomStatus = components["schemas"]["ConversationCustomStatus"];
 export type InboxAgent = components["schemas"]["InboxAgent"];
 export type Viewer = components["schemas"]["ConversationViewer"];
 export type ConversationView = components["schemas"]["ConversationView"];

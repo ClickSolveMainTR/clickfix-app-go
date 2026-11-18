@@ -12,6 +12,7 @@ import {
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrandBadge } from "@/features/brands/components/brand-badge";
+import { StatusDot } from "@/features/conversation-statuses/components/status-dot";
 import { SlaBadge } from "@/features/sla/components/sla-badge";
 import { cn } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
@@ -285,6 +286,12 @@ const ConversationRow = memo(function ConversationRow({
             <span className="truncate">{c.assignee.name}</span>
           ) : (
             <span className="italic">{t("inbox.list.unassigned")}</span>
+          )}
+          {c.custom_status && (
+            <span className="flex min-w-0 items-center gap-1">
+              <StatusDot color={c.custom_status.color} />
+              <span className="truncate">{c.custom_status.name}</span>
+            </span>
           )}
           {c.status === "snoozed" && c.snoozed_until && (
             <span className="flex items-center gap-0.5">

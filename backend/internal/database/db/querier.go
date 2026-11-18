@@ -633,6 +633,9 @@ type Querier interface {
 	// Rotated refresh tokens stay until they expire, for reuse detection.
 	CleanupMCPOAuthTokens(ctx context.Context) (int64, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
+	// A custom status moved to another base category: conversations whose base
+	// status no longer matches lose it (they keep their base status).
+	ClearConversationStatusMismatch(ctx context.Context, arg ClearConversationStatusMismatchParams) (int64, error)
 	ClearDefaultBusinessHours(ctx context.Context, organizationID int64) error
 	ClearWidgetIdentityRejection(ctx context.Context, arg ClearWidgetIdentityRejectionParams) error
 	CoachingComplete(ctx context.Context, arg CoachingCompleteParams) (int64, error)
@@ -707,6 +710,7 @@ type Querier interface {
 	// with the latest inbound message of a conversation.
 	ConversationScreenContext(ctx context.Context, arg ConversationScreenContextParams) (ConversationScreenContextRow, error)
 	ConversationStatusFacets(ctx context.Context, arg ConversationStatusFacetsParams) ([]ConversationStatusFacetsRow, error)
+	ConversationStatusSlugTaken(ctx context.Context, arg ConversationStatusSlugTakenParams) (bool, error)
 	// The single-conversation form of the team visibility rule above (detail,
 	// messages, replies, realtime conversation channel).
 	ConversationVisibleTo(ctx context.Context, arg ConversationVisibleToParams) (bool, error)
@@ -858,6 +862,8 @@ type Querier interface {
 	DeleteContactUnknownField(ctx context.Context, arg DeleteContactUnknownFieldParams) error
 	DeleteConversationLink(ctx context.Context, arg DeleteConversationLinkParams) (int64, error)
 	DeleteConversationSLAMetric(ctx context.Context, arg DeleteConversationSLAMetricParams) error
+	// Conversations keep their base status; status_id is set NULL by the FK.
+	DeleteConversationStatusDef(ctx context.Context, arg DeleteConversationStatusDefParams) (int64, error)
 	DeleteConversationView(ctx context.Context, arg DeleteConversationViewParams) (int64, error)
 	DeleteCustomObjectRecord(ctx context.Context, arg DeleteCustomObjectRecordParams) (int64, error)
 	DeleteDepartment(ctx context.Context, arg DeleteDepartmentParams) (int64, error)
@@ -1135,6 +1141,7 @@ type Querier interface {
 	GetConversationOrganization(ctx context.Context, argUuid uuid.UUID) (GetConversationOrganizationRow, error)
 	GetConversationParentID(ctx context.Context, arg GetConversationParentIDParams) (int64, error)
 	GetConversationRating(ctx context.Context, arg GetConversationRatingParams) (ConversationRating, error)
+	GetConversationStatusByID(ctx context.Context, arg GetConversationStatusByIDParams) (ConversationStatus, error)
 	GetConversationStatusByUUID(ctx context.Context, arg GetConversationStatusByUUIDParams) (ConversationStatus, error)
 	GetConversationView(ctx context.Context, arg GetConversationViewParams) (GetConversationViewRow, error)
 	GetConversationView2(ctx context.Context, arg GetConversationView2Params) (ConversationView, error)
@@ -1622,6 +1629,9 @@ type Querier interface {
 	ListConversationReminders(ctx context.Context, arg ListConversationRemindersParams) ([]ConversationReminder, error)
 	ListConversationSLAMetrics(ctx context.Context, arg ListConversationSLAMetricsParams) ([]ConversationSlaMetric, error)
 	ListConversationStatuses(ctx context.Context, organizationID int64) ([]ConversationStatus, error)
+	// The settings screen (CF-249): every custom status with the number of
+	// conversations that use it.
+	ListConversationStatusesWithUsage(ctx context.Context, organizationID int64) ([]ListConversationStatusesWithUsageRow, error)
 	ListConversationTagUUIDs(ctx context.Context, arg ListConversationTagUUIDsParams) ([]uuid.UUID, error)
 	ListConversationTags(ctx context.Context, arg ListConversationTagsParams) ([]Tag, error)
 	// Saved views (CF-47) --------------------------------------------------------
@@ -1948,6 +1958,7 @@ type Querier interface {
 	MoveSideConversations(ctx context.Context, arg MoveSideConversationsParams) error
 	// CF-25: conversations, messages, tags, participants, mentions and reads.
 	NextConversationNumber(ctx context.Context, organizationID int64) (int64, error)
+	NextConversationStatusOrder(ctx context.Context, organizationID int64) (int32, error)
 	NextRequestFormPosition(ctx context.Context, organizationID int64) (int32, error)
 	NextRoutingRulePosition(ctx context.Context, organizationID int64) (int32, error)
 	NextSLAPolicyPosition(ctx context.Context, organizationID int64) (int32, error)
@@ -2452,6 +2463,7 @@ type Querier interface {
 	// One write for status, priority, assignment, subject and SLA due dates; the
 	// usecase loads the row, applies the change and writes every column back.
 	UpdateConversationState(ctx context.Context, arg UpdateConversationStateParams) (Conversation, error)
+	UpdateConversationStatusDef(ctx context.Context, arg UpdateConversationStatusDefParams) (ConversationStatus, error)
 	UpdateConversationViewRow(ctx context.Context, arg UpdateConversationViewRowParams) (ConversationView, error)
 	UpdateCustomFieldDefinition(ctx context.Context, arg UpdateCustomFieldDefinitionParams) (CustomFieldDefinition, error)
 	UpdateCustomObjectRecord(ctx context.Context, arg UpdateCustomObjectRecordParams) (CustomObjectRecord, error)

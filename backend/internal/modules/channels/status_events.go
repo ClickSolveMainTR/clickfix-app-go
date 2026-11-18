@@ -2,10 +2,14 @@ package channels
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels/usecase"
+	platformchannels "github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 )
@@ -63,5 +67,23 @@ func StatusEventFrom(ev events.Event) (usecase.StatusEvent, bool) {
 	return usecase.StatusEvent{
 		EventID: ev.EventID, OrganizationID: *ev.TenantID, ConversationID: *ev.EntityID,
 		From: from, To: to, At: ev.OccurredAt,
+		FromCustom: customStatusFrom(ev.Payload["from_custom_status"]), ToCustom: customStatusFrom(ev.Payload["to_custom_status"]),
 	}, true
+}
+
+// customStatusFrom reads a custom status of the payload (CF-249): the
+// struct the inbox put there, or its JSON object after the outbox.
+func customStatusFrom(v any) *platformchannels.CustomStatus {
+	if v == nil {
+		return nil
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var out platformchannels.CustomStatus
+	if err := json.Unmarshal(raw, &out); err != nil || out.UUID == uuid.Nil {
+		return nil
+	}
+	return &out
 }

@@ -22,6 +22,7 @@ import type {
   SideConversationCreate,
   SideConversationList,
   Tag,
+  CustomStatus,
   Viewer,
   BulkAction,
   BulkResult,
@@ -197,6 +198,16 @@ export const inboxService = {
       }),
       { silent: true },
     );
+  },
+
+  /** The organization's own statuses for the header picker (CF-249). */
+  async customStatuses() {
+    const res = await unwrap<{ items: CustomStatus[] }>(
+      await apiClient.GET("/v1/tenant/conversation-statuses", {
+        params: { header: header() },
+      }),
+    );
+    return res.items;
   },
 
   async tags() {

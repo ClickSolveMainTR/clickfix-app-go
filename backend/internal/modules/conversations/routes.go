@@ -70,6 +70,12 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("POST /v1/tenant/side-conversations/{uuid}/messages", h.ReplySideConversation, read, reply)
 	route("PATCH /v1/tenant/side-conversations/{uuid}", h.UpdateSideConversation, read, reply)
 
+	// CF-249: the organization's own conversation statuses.
+	route("GET /v1/tenant/conversation-statuses", h.CustomStatuses, read)
+	route("POST /v1/tenant/conversation-statuses", h.CreateCustomStatus, manage)
+	route("PATCH /v1/tenant/conversation-statuses/{uuid}", h.UpdateCustomStatus, manage)
+	route("DELETE /v1/tenant/conversation-statuses/{uuid}", h.DeleteCustomStatus, manage)
+
 	route("GET /v1/tenant/tags", h.Tags, read)
 	route("POST /v1/tenant/tags", h.CreateTag, manage)
 	route("PATCH /v1/tenant/tags/{uuid}", h.UpdateTag, manage)

@@ -274,12 +274,15 @@ func (h *Handler) Read(w http.ResponseWriter, r *http.Request) {
 
 // updateRequest uses raw JSON for assignee so null (unassign) and absent differ.
 type updateRequest struct {
-	Status       *string          `json:"status"`
-	Priority     *string          `json:"priority"`
-	Subject      *string          `json:"subject"`
-	Assignee     *json.RawMessage `json:"assignee"`
-	Team         *json.RawMessage `json:"team"`
-	SnoozedUntil *time.Time       `json:"snoozed_until"`
+	Status   *string `json:"status"`
+	Priority *string `json:"priority"`
+	Subject  *string `json:"subject"`
+	// Assignee, Team, CustomStatus: absent = unchanged, null = remove
+	// (a value type so a JSON null is seen, unlike a pointer).
+	Assignee     json.RawMessage `json:"assignee"`
+	Team         json.RawMessage `json:"team"`
+	CustomStatus json.RawMessage `json:"custom_status"`
+	SnoozedUntil *time.Time      `json:"snoozed_until"`
 }
 
 // Update changes status, priority, subject or assignee.
@@ -292,12 +295,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	stateChange := req.Status != nil || req.Priority != nil || req.Subject != nil || req.SnoozedUntil != nil
+	stateChange := req.Status != nil || req.Priority != nil || req.Subject != nil || req.SnoozedUntil != nil || len(req.CustomStatus) > 0
 	if stateChange && !scope.Has(rbac.PermTenantConversationsManage) {
 		response.Forbidden(w, r, "Missing permission: "+rbac.PermTenantConversationsManage)
 		return
 	}
-	if (req.Assignee != nil || req.Team != nil) && !scope.Has(rbac.PermTenantConversationsAssign) && !scope.Has(rbac.PermTenantConversationsManage) {
+	if (len(req.Assignee) > 0 || len(req.Team) > 0) && !scope.Has(rbac.PermTenantConversationsAssign) && !scope.Has(rbac.PermTenantConversationsManage) {
 		response.Forbidden(w, r, "Missing permission: "+rbac.PermTenantConversationsAssign)
 		return
 	}
@@ -306,11 +309,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		OrganizationID: scope.ID, ConversationUUID: id, Actor: actor,
 		Status: req.Status, Priority: req.Priority, Subject: req.Subject, SnoozedUntil: req.SnoozedUntil,
 	}
-	if req.Assignee != nil {
+	if len(req.Assignee) > 0 {
 		var target *uuid.UUID
-		if string(*req.Assignee) != "null" {
+		if string(req.Assignee) != "null" {
 			var u uuid.UUID
-			if err := json.Unmarshal(*req.Assignee, &u); err != nil {
+			if err := json.Unmarshal(req.Assignee, &u); err != nil {
 				invalid(w, r, "assignee must be a user uuid or null")
 				return
 			}
@@ -318,11 +321,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Assignee = &target
 	}
-	if req.Team != nil {
+	if len(req.Team) > 0 {
 		var team *uuid.UUID
-		if string(*req.Team) != "null" {
+		if string(req.Team) != "null" {
 			var u uuid.UUID
-			if err := json.Unmarshal(*req.Team, &u); err != nil {
+			if err := json.Unmarshal(req.Team, &u); err != nil {
 				invalid(w, r, "team must be a team uuid or null")
 				return
 			}
@@ -330,12 +333,24 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Team = &team
 	}
+	if len(req.CustomStatus) > 0 {
+		var st *uuid.UUID
+		if string(req.CustomStatus) != "null" {
+			var u uuid.UUID
+			if err := json.Unmarshal(req.CustomStatus, &u); err != nil {
+				invalid(w, r, "custom_status must be a custom status uuid or null")
+				return
+			}
+			st = &u
+		}
+		in.CustomStatus = &st
+	}
 	if _, err := h.svc.Update(r.Context(), in); err != nil {
 		writeError(w, r, err)
 		return
 	}
 	h.record(r, scope, actor, "conversations.updated", id, map[string]any{
-		"status": req.Status, "priority": req.Priority, "assignee_changed": req.Assignee != nil,
+		"status": req.Status, "priority": req.Priority, "assignee_changed": len(req.Assignee) > 0, "custom_status_changed": len(req.CustomStatus) > 0,
 	})
 	d, err := h.svc.Get(r.Context(), scope.ID, actor.ID, id)
 	if err != nil {
@@ -526,6 +541,8 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.Conflict(w, r, CodeNoChannel, "This conversation has no channel to reply on")
 	case errors.Is(err, usecase.ErrTagExists):
 		response.Conflict(w, r, CodeTagExists, "A tag with this name already exists")
+	case errors.Is(err, usecase.ErrStatusExists):
+		response.Conflict(w, r, CodeStatusExists, "A status with this name already exists")
 	case errors.Is(err, usecase.ErrInvalid):
 		invalid(w, r, strings.TrimPrefix(err.Error(), usecase.ErrInvalid.Error()+": "))
 	default:

@@ -570,7 +570,10 @@ type ConversationStatus string
 
 // ConversationUpdate defines model for ConversationUpdate.
 type ConversationUpdate struct {
-	Assignee     *openapi_types.UUID   `json:"assignee,omitempty"`
+	Assignee *openapi_types.UUID `json:"assignee,omitempty"`
+
+	// CustomStatus Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
+	CustomStatus *openapi_types.UUID   `json:"custom_status,omitempty"`
 	Priority     *ConversationPriority `json:"priority,omitempty"`
 	SnoozedUntil *time.Time            `json:"snoozed_until,omitempty"`
 	Status       *ConversationStatus   `json:"status,omitempty"`
