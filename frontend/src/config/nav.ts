@@ -40,6 +40,7 @@ import {
   MessageCircle,
   GitPullRequest,
   Palette,
+  PenLine,
   Cable,
   Plug,
   ScrollText,
@@ -678,6 +679,14 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.knowledge.root,
           icon: BookOpen,
           permission: permissions.tenant.settings.read,
+        },
+        {
+          id: "settings-closing-texts",
+          titleKey: "layout.nav_closing_texts",
+          href: routes.cms.settings.closingTexts,
+          icon: PenLine,
+          permission: permissions.tenant.macros.write,
+          keywordsKey: "layout.nav_closing_texts_keywords",
         },
         {
           id: "settings-categories",

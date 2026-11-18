@@ -26,6 +26,10 @@ import { Button } from "@/components/ui/button";
 import { cn, fileSize } from "@/lib/utils";
 import { useLocale } from "@/providers/locale-provider";
 
+import {
+  ClosingTextPicker,
+  useConversationClosingTexts,
+} from "@/features/closing-texts";
 import { useCannedResponses } from "@/features/macros/hooks/use-macros";
 import {
   macrosService,
@@ -46,6 +50,7 @@ import {
   useSendMessage,
 } from "../hooks/use-inbox";
 import { pickAgentDraft } from "../lib/agent-draft";
+import { closingState } from "../lib/closing-text";
 import { aiCodeKey } from "../lib/copilot";
 import { useDrafts } from "../lib/drafts";
 import { initials } from "../lib/format";
@@ -110,6 +115,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const pendingCaret = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const send = useSendMessage(uuid);
+  // CF-250: closing text appended to the reply; the server remembers the
+  // agent's pick and offers it (else the default) as `selected`.
+  const closing = useConversationClosingTexts(uuid, canReply);
+  const [closingPick, setClosingPick] = useState<string | null>(null);
+  const closingText = closingState(
+    closing.data,
+    closingPick,
+    canReply && mode === "reply",
+  );
   const agents = useInboxAgents();
   const copilot = useCopilot(uuid);
   // AI off / not configured / not in the plan: copilot actions are disabled
@@ -261,6 +275,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         ...(ready.length > 0
           ? { attachments: ready.map((u) => u.uuid as string) }
           : {}),
+        ...(closingText.send ? { closing_text: closingText.send } : {}),
       },
       {
         onError: () => {
@@ -284,6 +299,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     newSinceCompose,
     confirmNew,
     onTypingChange,
+    closingText.send,
   ]);
 
   const pickMention = (agent: InboxAgent) => {
@@ -589,6 +605,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           }}
           className="placeholder:text-muted-foreground block w-full resize-none bg-transparent px-3 py-2 text-sm leading-relaxed outline-none"
         />
+        {closingText.preview ? (
+          <p
+            className="text-muted-foreground mx-3 mb-2 line-clamp-3 border-l-2 pl-2 text-xs whitespace-pre-line"
+            title={t("closing_texts.picker.preview")}
+          >
+            {closingText.preview}
+          </p>
+        ) : null}
         {cannedQuery != null && cannedCandidates.length > 0 && (
           <div
             role="listbox"
@@ -727,6 +751,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               }}
             />
           )}
+          {closingText.show && closing.data ? (
+            <ClosingTextPicker
+              options={closing.data}
+              value={closingText.value}
+              onChange={setClosingPick}
+              disabled={!allowed}
+            />
+          ) : null}
           <span className="text-muted-foreground ml-auto hidden text-[11px] sm:inline">
             {t("inbox.composer.send_hint")}
           </span>
