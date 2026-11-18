@@ -272,6 +272,19 @@ func (h *Handler) Read(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, r, http.StatusOK, map[string]any{"read": true})
 }
 
+// Unread marks the conversation unread for the caller (CF-247).
+func (h *Handler) Unread(w http.ResponseWriter, r *http.Request) {
+	scope, actor, id, ok := whoAndID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.MarkUnread(r.Context(), scope.ID, actor, id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"unread": true})
+}
+
 // updateRequest uses raw JSON for assignee so null (unassign) and absent differ.
 type updateRequest struct {
 	Status   *string `json:"status"`

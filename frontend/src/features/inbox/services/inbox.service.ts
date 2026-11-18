@@ -210,6 +210,15 @@ export const inboxService = {
     return res.items;
   },
 
+  /** Marks the conversation unread for the caller again (CF-247). */
+  async markUnread(uuid: string) {
+    return unwrap(
+      await apiClient.POST("/v1/tenant/conversations/{uuid}/unread", {
+        params: { header: header(), path: { uuid } },
+      }),
+    );
+  },
+
   async tags() {
     const res = await unwrap<{ items: Tag[] }>(
       await apiClient.GET("/v1/tenant/tags", { params: { header: header() } }),

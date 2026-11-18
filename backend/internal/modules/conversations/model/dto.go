@@ -144,6 +144,10 @@ const (
 	// (draft, handoff or automatic reply); the composer refetches the job
 	// list to show a draft (CF-246).
 	EventAIJobFinished = "ai.job_finished"
+	// EventReadState: a member marked conversations read or unread by hand
+	// (CF-247). Read markers are per member, so only the member in
+	// actor_uuid refetches its list and badges (its other tabs, devices).
+	EventReadState = "conversation.read_state"
 )
 
 // LiveEvent is one realtime inbox event. Message is set for message events

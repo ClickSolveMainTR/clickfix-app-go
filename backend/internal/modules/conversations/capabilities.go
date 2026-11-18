@@ -252,6 +252,14 @@ func Capabilities() []*capability.Capability {
 			Apply: capability.Endpoint{Method: http.MethodPost, Path: conversationsPath + "/{conversation_uuid}/reminders", Body: []string{"due_at", "condition", "note"}, Route: "/inbox"}.Do(),
 		},
 		{
+			Name: "conversations.mark_unread", Module: "conversations", Kind: capability.Write,
+			Permission: rbac.PermTenantConversationsRead, Surfaces: surfaces, Routes: inboxRoutes,
+			Title:       title("Okunmadı olarak işaretle", "Mark as unread"),
+			Description: "Mark a conversation unread for me again (CF-247): the latest customer message counts as unread; other agents are not affected.",
+			Input:       object([]string{"conversation_uuid"}, map[string]any{"conversation_uuid": conv}),
+			Apply:       capability.Endpoint{Method: http.MethodPost, Path: conversationsPath + "/{conversation_uuid}/unread", Fixed: map[string]any{}, Body: []string{}, Route: "/inbox"}.Do(),
+		},
+		{
 			Name: "tags.create", Module: "tags", Kind: capability.Write,
 			Permission: rbac.PermTenantConversationsManage, Surfaces: surfaces, Routes: inboxRoutes,
 			Title:       title("Etiket oluştur", "Create a tag"),

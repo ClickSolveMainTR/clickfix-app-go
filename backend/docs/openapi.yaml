@@ -13375,6 +13375,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /v1/tenant/conversations/{uuid}/unread:
+    post:
+      tags: [Tenant]
+      operationId: markTenantConversationUnread
+      summary: Mark the conversation unread for the caller
+      description: "Requires `tenant.conversations.read`. Moves the caller's read marker back so the latest customer message (without one, the latest message the caller did not write) counts as unread again; other members' markers stay. The marker never moves forward here. The caller's inbox channel receives `conversation.read_state` with `actor_uuid`, so its other tabs refetch."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Unread
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeUnread" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
   /v1/tenant/conversations/{uuid}/tags:
     post:
       tags: [Tenant]
@@ -40887,7 +40909,7 @@ paths:
       tags: [Tenant]
       operationId: bulkTenantConversations
       summary: Apply one action to many conversations
-      description: "Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`). Up to 200 conversations; each change lands on its timeline. The response operation can be undone for 24 hours."
+      description: "Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`; read / unread only `tenant.conversations.read`, they move the caller's own read marker). Up to 200 conversations; each change lands on its timeline (read / unread do not). The response operation can be undone for 24 hours; a read / unread operation only by the member who ran it."
       security:
         - bearerAuth: []
       parameters:
@@ -58307,6 +58329,18 @@ components:
             read: { type: boolean, enum: [true] }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
+    EnvelopeUnread:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [unread]
+          properties:
+            unread: { type: boolean, enum: [true] }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     EnvelopeDeleted:
       type: object
       required: [success, data, meta]
@@ -63737,8 +63771,8 @@ components:
       additionalProperties: false
       properties:
         conversations: { type: array, minItems: 1, maxItems: 200, items: { type: string, format: uuid } }
-        action: { type: string, enum: [assign, status, priority, snooze, tag, untag] }
-        value: { type: string, description: "assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name" }
+        action: { type: string, enum: [assign, status, priority, snooze, tag, untag, read, unread] }
+        value: { type: string, description: "assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name; read / unread: unused" }
 
     ConversationBulkResult:
       type: object
