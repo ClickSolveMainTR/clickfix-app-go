@@ -14,6 +14,7 @@ export type MessageCreate = components["schemas"]["MessageCreate"];
 export type MessageEdited = components["schemas"]["MessageEdited"];
 export type MessageEditEntry = components["schemas"]["MessageEditEntry"];
 export type Tag = components["schemas"]["Tag"];
+export type CustomStatus = components["schemas"]["ConversationCustomStatus"];
 export type InboxAgent = components["schemas"]["InboxAgent"];
 export type Viewer = components["schemas"]["ConversationViewer"];
 export type ConversationView = components["schemas"]["ConversationView"];
@@ -76,7 +77,8 @@ export type InboxLiveEvent = {
     | "message.created"
     | "message.updated"
     | "conversation.viewers"
-    | "ai.job_finished";
+    | "ai.job_finished"
+    | "conversation.read_state";
   conversation_uuid: string;
   message?: Message;
   viewers?: Viewer[];

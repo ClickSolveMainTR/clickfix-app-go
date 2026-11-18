@@ -517,7 +517,8 @@ function TimelineEvent({ message: m }: { message: OptimisticMessage }) {
       const [status] = (a.to ?? "").split("|");
       text = t("inbox.events.status_changed", {
         actor,
-        status: t(`inbox.status.${status}`),
+        // CF-249: the organization's own status name when one was set.
+        status: a.to_custom || t(`inbox.status.${status}`),
       });
       break;
     }

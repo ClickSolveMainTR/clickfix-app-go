@@ -357,6 +357,18 @@ type StatusChange struct {
 	To               string
 	SnoozedUntil     *time.Time
 	At               time.Time
+	// FromCustomStatus / CustomStatus are the organization's own statuses
+	// before and after the change (CF-249); nil when none.
+	FromCustomStatus *CustomStatus
+	CustomStatus     *CustomStatus
+}
+
+// CustomStatus is an organization's own conversation status ("İşleniyor")
+// on top of the base status.
+type CustomStatus struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
 }
 
 // StatusNotifier is implemented by channels that tell the connected

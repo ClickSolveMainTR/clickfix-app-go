@@ -118,7 +118,8 @@ func (a *Adapter) Send(ctx context.Context,
 // NotifyStatus posts a signed status_changed event (CF-245) when an agent
 // or a rule changes the conversation's status. The event id is stable
 // across retries and is sent as Idempotency-Key; receivers drop repeats.
-// A snoozed conversation has to=snoozed and snoozed_until.
+// A snoozed conversation has to=snoozed and snoozed_until; custom_status
+// is the organization's own status on top of to (CF-249).
 func (a *Adapter) NotifyStatus(ctx context.Context, inst channels.Instance, ch channels.StatusChange) error {
 	if _, err := a.Connect(ctx, inst); err != nil {
 		return channels.Permanent("configuration", err)
@@ -138,6 +139,9 @@ func (a *Adapter) NotifyStatus(ctx context.Context, inst channels.Instance, ch c
 	if ch.SnoozedUntil != nil {
 		payload["snoozed_until"] = ch.SnoozedUntil.UTC()
 	}
+	// CF-249: the organization's own status (null when none).
+	payload["custom_status"] = ch.CustomStatus
+	payload["from_custom_status"] = ch.FromCustomStatus
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err

@@ -12,8 +12,10 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  CircleDot,
   Flag,
   Hash,
+  Mail,
   PanelRight,
   RotateCcw,
   UserRound,
@@ -38,6 +40,7 @@ import {
 } from "@/components/ui/popover";
 import { useApplyMacro, useMacros } from "@/features/macros/hooks/use-macros";
 import { BrandBadge } from "@/features/brands/components/brand-badge";
+import { StatusDot } from "@/features/conversation-statuses/components/status-dot";
 import { useTeamsList } from "@/features/teams/hooks/use-teams";
 import { RemoteSupportButton } from "@/features/remote-support/components/remote-support-button";
 import { StartVideoButton } from "@/features/video/components/start-video-button";
@@ -48,6 +51,7 @@ import { useLocale } from "@/providers/locale-provider";
 import {
   useConversationTag,
   useInboxAgents,
+  useInboxCustomStatuses,
   useInboxTags,
   useUpdateConversation,
 } from "../hooks/use-inbox";
@@ -57,13 +61,26 @@ import {
   contactLabel,
   initials,
 } from "../lib/format";
-import type { ConversationDetail, ConversationPriority } from "../types";
+import type {
+  ConversationDetail,
+  ConversationPriority,
+  ConversationStatus,
+} from "../types";
 import { ScreenContextChip } from "./screen-context-chip";
 import { ChannelGlyph } from "./channel-glyph";
 import { ReminderMenu } from "./reminder-menu";
 
 export type Picker =
-  "assign" | "team" | "tag" | "priority" | "snooze" | "macro";
+  "status" | "assign" | "team" | "tag" | "priority" | "snooze" | "macro";
+
+/** Base statuses in the picker; snoozed opens the snooze times. */
+const BASE_STATUSES: ConversationStatus[] = [
+  "open",
+  "pending",
+  "snoozed",
+  "resolved",
+  "closed",
+];
 
 export type HeaderHandle = {
   open: (picker: Picker) => void;
@@ -77,12 +94,21 @@ type Props = {
   canAssign: boolean;
   contextOpen: boolean;
   onToggleContext: () => void;
+  /** Marks the conversation unread for the viewer and closes it (CF-247). */
+  onMarkUnread: () => void;
 };
 
 /** Conversation title bar with status, priority, assignee, tags and snooze. */
 export const ConversationHeader = forwardRef<HeaderHandle, Props>(
   function ConversationHeader(
-    { conversation: c, canManage, canAssign, contextOpen, onToggleContext },
+    {
+      conversation: c,
+      canManage,
+      canAssign,
+      contextOpen,
+      onToggleContext,
+      onMarkUnread,
+    },
     ref,
   ) {
     const { t } = useLocale();
@@ -92,6 +118,7 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
     const tagging = useConversationTag(c.uuid);
     const agents = useInboxAgents();
     const tags = useInboxTags();
+    const customStatuses = useInboxCustomStatuses();
     const teams = useTeamsList({ limit: 100, offset: 0 }, canAssign);
     const resolved = c.status === "resolved" || c.status === "closed";
     const macros = useMacros();
@@ -141,6 +168,80 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {/* Status (CF-249): base statuses and the organization's own. */}
+          <Popover {...pickerProps("status")}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canManage}
+                className="h-8 gap-1.5"
+                aria-label={t("inbox.header.status")}
+              >
+                {c.custom_status ? (
+                  <StatusDot color={c.custom_status.color} />
+                ) : (
+                  <CircleDot className="size-3.5" />
+                )}
+                <span className="max-w-28 truncate">
+                  {c.custom_status?.name ?? t(`inbox.status.${c.status}`)}
+                </span>
+                <ChevronDown className="size-3 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-60 p-0" align="end">
+              <Command>
+                <CommandList>
+                  <CommandGroup heading={t("inbox.header.status")}>
+                    {BASE_STATUSES.map((s) => (
+                      <CommandItem
+                        key={s}
+                        value={`base ${s}`}
+                        onSelect={() => {
+                          if (s === "snoozed") {
+                            setPicker("snooze");
+                            return;
+                          }
+                          update.mutate({ status: s, custom_status: null });
+                          setPicker(null);
+                        }}
+                      >
+                        <CircleDot className="text-muted-foreground size-3.5" />
+                        {t(`inbox.status.${s}`)}
+                        {c.status === s && !c.custom_status && (
+                          <Check className="ml-auto size-3.5" />
+                        )}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                  {(customStatuses.data?.length ?? 0) > 0 && (
+                    <CommandGroup heading={t("inbox.header.custom_statuses")}>
+                      {(customStatuses.data ?? []).map((s) => (
+                        <CommandItem
+                          key={s.uuid}
+                          value={`custom ${s.uuid} ${s.name}`}
+                          onSelect={() => {
+                            update.mutate({ custom_status: s.uuid });
+                            setPicker(null);
+                          }}
+                        >
+                          <StatusDot color={s.color} className="mx-0.5" />
+                          <span className="truncate">{s.name}</span>
+                          <span className="text-muted-foreground ml-auto text-[11px]">
+                            {t(`inbox.status.${s.category}`)}
+                          </span>
+                          {c.custom_status?.uuid === s.uuid && (
+                            <Check className="size-3.5" />
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
           {/* Assignee */}
           <Popover {...pickerProps("assign")}>
             <PopoverTrigger asChild>
@@ -360,6 +461,19 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
               </PopoverContent>
             </Popover>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            aria-label={t("inbox.read_state.mark_unread")}
+            title={`${t("inbox.read_state.mark_unread")} (⇧U)`}
+            onClick={onMarkUnread}
+          >
+            <Mail className="size-3.5" />
+            <span className="hidden 2xl:inline">
+              {t("inbox.read_state.mark_unread_short")}
+            </span>
+          </Button>
           <ReminderMenu conversation={c.uuid} />
           <CallButton phone={c.contact.phone} />
           <StartVideoButton
@@ -393,6 +507,7 @@ export const ConversationHeader = forwardRef<HeaderHandle, Props>(
                           update.mutate({
                             status: "snoozed",
                             snoozed_until: o.at.toISOString(),
+                            custom_status: null,
                           });
                           setPicker(null);
                         }}

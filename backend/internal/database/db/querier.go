@@ -633,6 +633,11 @@ type Querier interface {
 	// Rotated refresh tokens stay until they expire, for reuse detection.
 	CleanupMCPOAuthTokens(ctx context.Context) (int64, error)
 	ClearAppSettingsLogo(ctx context.Context) (AppSetting, error)
+	// Drops the other default of the same organization/brand before one is set.
+	ClearClosingTextDefault(ctx context.Context, arg ClearClosingTextDefaultParams) error
+	// A custom status moved to another base category: conversations whose base
+	// status no longer matches lose it (they keep their base status).
+	ClearConversationStatusMismatch(ctx context.Context, arg ClearConversationStatusMismatchParams) (int64, error)
 	ClearDefaultBusinessHours(ctx context.Context, organizationID int64) error
 	ClearWidgetIdentityRejection(ctx context.Context, arg ClearWidgetIdentityRejectionParams) error
 	CoachingComplete(ctx context.Context, arg CoachingCompleteParams) (int64, error)
@@ -707,6 +712,7 @@ type Querier interface {
 	// with the latest inbound message of a conversation.
 	ConversationScreenContext(ctx context.Context, arg ConversationScreenContextParams) (ConversationScreenContextRow, error)
 	ConversationStatusFacets(ctx context.Context, arg ConversationStatusFacetsParams) ([]ConversationStatusFacetsRow, error)
+	ConversationStatusSlugTaken(ctx context.Context, arg ConversationStatusSlugTakenParams) (bool, error)
 	// The single-conversation form of the team visibility rule above (detail,
 	// messages, replies, realtime conversation channel).
 	ConversationVisibleTo(ctx context.Context, arg ConversationVisibleToParams) (bool, error)
@@ -835,6 +841,8 @@ type Querier interface {
 	CustomFieldsOfContact(ctx context.Context, arg CustomFieldsOfContactParams) (CustomFieldsOfContactRow, error)
 	// Self-service account deletion: keep every row, mark the user disabled.
 	DeactivateUser(ctx context.Context, arg DeactivateUserParams) (User, error)
+	// The brand default wins over the organization default.
+	DefaultClosingText(ctx context.Context, arg DefaultClosingTextParams) (ClosingText, error)
 	DeleteAppLogByUUID(ctx context.Context, argUuid uuid.UUID) (int64, error)
 	DeleteAppLogsByUUIDs(ctx context.Context, uuids []uuid.UUID) (int64, error)
 	DeleteAppLogsMatching(ctx context.Context, arg DeleteAppLogsMatchingParams) (int64, error)
@@ -846,6 +854,7 @@ type Querier interface {
 	DeleteCapacityLimits(ctx context.Context, arg DeleteCapacityLimitsParams) error
 	DeleteCategory(ctx context.Context, arg DeleteCategoryParams) (int64, error)
 	DeleteCategoryAssignment(ctx context.Context, arg DeleteCategoryAssignmentParams) (int64, error)
+	DeleteClosingText(ctx context.Context, arg DeleteClosingTextParams) (int64, error)
 	DeleteCompanyNote(ctx context.Context, arg DeleteCompanyNoteParams) (int64, error)
 	DeleteCompanyRevenue(ctx context.Context, arg DeleteCompanyRevenueParams) (int64, error)
 	// Erase and merge drop the cached summaries (they name the person).
@@ -858,6 +867,8 @@ type Querier interface {
 	DeleteContactUnknownField(ctx context.Context, arg DeleteContactUnknownFieldParams) error
 	DeleteConversationLink(ctx context.Context, arg DeleteConversationLinkParams) (int64, error)
 	DeleteConversationSLAMetric(ctx context.Context, arg DeleteConversationSLAMetricParams) error
+	// Conversations keep their base status; status_id is set NULL by the FK.
+	DeleteConversationStatusDef(ctx context.Context, arg DeleteConversationStatusDefParams) (int64, error)
 	DeleteConversationView(ctx context.Context, arg DeleteConversationViewParams) (int64, error)
 	DeleteCustomObjectRecord(ctx context.Context, arg DeleteCustomObjectRecordParams) (int64, error)
 	DeleteDepartment(ctx context.Context, arg DeleteDepartmentParams) (int64, error)
@@ -1102,6 +1113,10 @@ type Querier interface {
 	GetChannelInstanceByUUID(ctx context.Context, arg GetChannelInstanceByUUIDParams) (ChannelInstance, error)
 	GetChannelInstancesByUUIDs(ctx context.Context, arg GetChannelInstancesByUUIDsParams) ([]GetChannelInstancesByUUIDsRow, error)
 	GetChannelVoiceCall(ctx context.Context, arg GetChannelVoiceCallParams) (ChannelVoiceCall, error)
+	GetClosingText(ctx context.Context, arg GetClosingTextParams) (ClosingText, error)
+	GetClosingTextByID(ctx context.Context, arg GetClosingTextByIDParams) (ClosingText, error)
+	GetClosingTextChoice(ctx context.Context, arg GetClosingTextChoiceParams) (GetClosingTextChoiceRow, error)
+	GetClosingTextSettings(ctx context.Context, organizationID int64) (ClosingTextSetting, error)
 	GetCompanyAccountOwner(ctx context.Context, arg GetCompanyAccountOwnerParams) (pgtype.Int8, error)
 	GetCompanyByDomain(ctx context.Context, arg GetCompanyByDomainParams) (Company, error)
 	GetCompanyByExternalID(ctx context.Context, arg GetCompanyByExternalIDParams) (Company, error)
@@ -1140,6 +1155,9 @@ type Querier interface {
 	GetConversationOrganization(ctx context.Context, argUuid uuid.UUID) (GetConversationOrganizationRow, error)
 	GetConversationParentID(ctx context.Context, arg GetConversationParentIDParams) (int64, error)
 	GetConversationRating(ctx context.Context, arg GetConversationRatingParams) (ConversationRating, error)
+	// The viewer's read marker (0 when it never opened the conversation).
+	GetConversationReadMarker(ctx context.Context, arg GetConversationReadMarkerParams) (int64, error)
+	GetConversationStatusByID(ctx context.Context, arg GetConversationStatusByIDParams) (ConversationStatus, error)
 	GetConversationStatusByUUID(ctx context.Context, arg GetConversationStatusByUUIDParams) (ConversationStatus, error)
 	GetConversationView(ctx context.Context, arg GetConversationViewParams) (GetConversationViewRow, error)
 	GetConversationView2(ctx context.Context, arg GetConversationView2Params) (ConversationView, error)
@@ -1375,6 +1393,7 @@ type Querier interface {
 	// CF-25 / CF-8: channel instances (the inboxes of an organization).
 	// The uuid is chosen by the caller: the sealed credentials are bound to it.
 	InsertChannelInstance(ctx context.Context, arg InsertChannelInstanceParams) (ChannelInstance, error)
+	InsertClosingText(ctx context.Context, arg InsertClosingTextParams) (ClosingText, error)
 	// CF-25: contacts, companies and channel identities.
 	InsertCompany(ctx context.Context, arg InsertCompanyParams) (Company, error)
 	InsertCompanyHealthHistory(ctx context.Context, arg InsertCompanyHealthHistoryParams) error
@@ -1578,6 +1597,10 @@ type Querier interface {
 	ListCategoryReviewQueue(ctx context.Context, arg ListCategoryReviewQueueParams) ([]ListCategoryReviewQueueRow, error)
 	ListChannelInstances(ctx context.Context, arg ListChannelInstancesParams) ([]ChannelInstance, error)
 	ListChannelVoiceCalls(ctx context.Context, arg ListChannelVoiceCallsParams) ([]ListChannelVoiceCallsRow, error)
+	// CF-250: closing texts appended to agent replies.
+	ListClosingTexts(ctx context.Context, organizationID int64) ([]ClosingText, error)
+	// Organization-wide texts plus the ones of the conversation's brand.
+	ListClosingTextsForBrand(ctx context.Context, arg ListClosingTextsForBrandParams) ([]ClosingText, error)
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	ListCompanyConversations(ctx context.Context, arg ListCompanyConversationsParams) ([]ListCompanyConversationsRow, error)
 	ListCompanyHealthByCompanyIDs(ctx context.Context, arg ListCompanyHealthByCompanyIDsParams) ([]CompanyHealth, error)
@@ -1628,6 +1651,9 @@ type Querier interface {
 	ListConversationReminders(ctx context.Context, arg ListConversationRemindersParams) ([]ConversationReminder, error)
 	ListConversationSLAMetrics(ctx context.Context, arg ListConversationSLAMetricsParams) ([]ConversationSlaMetric, error)
 	ListConversationStatuses(ctx context.Context, organizationID int64) ([]ConversationStatus, error)
+	// The settings screen (CF-249): every custom status with the number of
+	// conversations that use it.
+	ListConversationStatusesWithUsage(ctx context.Context, organizationID int64) ([]ListConversationStatusesWithUsageRow, error)
 	ListConversationTagUUIDs(ctx context.Context, arg ListConversationTagUUIDsParams) ([]uuid.UUID, error)
 	ListConversationTags(ctx context.Context, arg ListConversationTagsParams) ([]Tag, error)
 	// Saved views (CF-47) --------------------------------------------------------
@@ -1956,6 +1982,7 @@ type Querier interface {
 	MoveSideConversations(ctx context.Context, arg MoveSideConversationsParams) error
 	// CF-25: conversations, messages, tags, participants, mentions and reads.
 	NextConversationNumber(ctx context.Context, organizationID int64) (int64, error)
+	NextConversationStatusOrder(ctx context.Context, organizationID int64) (int32, error)
 	NextRequestFormPosition(ctx context.Context, organizationID int64) (int32, error)
 	NextRoutingRulePosition(ctx context.Context, organizationID int64) (int32, error)
 	NextSLAPolicyPosition(ctx context.Context, organizationID int64) (int32, error)
@@ -2318,6 +2345,7 @@ type Querier interface {
 	// A failed check moves an active inbox to error (it shows "reconnect");
 	// a passing one clears error back to active.
 	SetChannelInstanceHealth(ctx context.Context, arg SetChannelInstanceHealthParams) (ChannelInstance, error)
+	SetClosingTextChoice(ctx context.Context, arg SetClosingTextChoiceParams) error
 	// The company matched by domain takes the proved external id when it has
 	// none (the id was looked up first, so no other live company holds it).
 	SetCompanyExternalIDIfEmpty(ctx context.Context, arg SetCompanyExternalIDIfEmptyParams) error
@@ -2338,6 +2366,8 @@ type Querier interface {
 	// The inbox list shows the edited text when the edited message is still
 	// the newest one of the conversation.
 	SetConversationPreviewIfLatest(ctx context.Context, arg SetConversationPreviewIfLatestParams) error
+	// CF-247: puts the marker exactly at message_id (mark unread, undo).
+	SetConversationReadMarker(ctx context.Context, arg SetConversationReadMarkerParams) error
 	SetConversationSLA(ctx context.Context, arg SetConversationSLAParams) error
 	SetConversationTeam(ctx context.Context, arg SetConversationTeamParams) error
 	SetCustomFieldDefinitionArchived(ctx context.Context, arg SetCustomFieldDefinitionArchivedParams) (CustomFieldDefinition, error)
@@ -2448,6 +2478,10 @@ type Querier interface {
 	TranscriptVoiceSource(ctx context.Context, arg TranscriptVoiceSourceParams) (TranscriptVoiceSourceRow, error)
 	// Transaction-scoped platform worker lock, key derived from the instance id.
 	TryEmailIMAPLock(ctx context.Context, lockKey int64) (bool, error)
+	// CF-247: the read marker that leaves the latest customer message unread
+	// (without one, the latest message the viewer did not write); 0 when
+	// the conversation has no such message.
+	UnreadTargetMessageID(ctx context.Context, arg UnreadTargetMessageIDParams) (int64, error)
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateAutomationRule(ctx context.Context, arg UpdateAutomationRuleParams) (AutomationRule, error)
@@ -2456,6 +2490,7 @@ type Querier interface {
 	UpdateCannedResponse(ctx context.Context, arg UpdateCannedResponseParams) (CannedResponse, error)
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateChannelInstance(ctx context.Context, arg UpdateChannelInstanceParams) (ChannelInstance, error)
+	UpdateClosingText(ctx context.Context, arg UpdateClosingTextParams) (ClosingText, error)
 	// CF-206: a changed external id was never proved; the badge goes with it.
 	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
 	// CF-206: a company set by hand was not proved by the contact.
@@ -2463,6 +2498,7 @@ type Querier interface {
 	// One write for status, priority, assignment, subject and SLA due dates; the
 	// usecase loads the row, applies the change and writes every column back.
 	UpdateConversationState(ctx context.Context, arg UpdateConversationStateParams) (Conversation, error)
+	UpdateConversationStatusDef(ctx context.Context, arg UpdateConversationStatusDefParams) (ConversationStatus, error)
 	UpdateConversationViewRow(ctx context.Context, arg UpdateConversationViewRowParams) (ConversationView, error)
 	UpdateCustomFieldDefinition(ctx context.Context, arg UpdateCustomFieldDefinitionParams) (CustomFieldDefinition, error)
 	UpdateCustomObjectRecord(ctx context.Context, arg UpdateCustomObjectRecordParams) (CustomObjectRecord, error)
@@ -2514,6 +2550,7 @@ type Querier interface {
 	UpsertAutoReplySettings(ctx context.Context, arg UpsertAutoReplySettingsParams) error
 	UpsertCategoryAssignment(ctx context.Context, arg UpsertCategoryAssignmentParams) (CategoryAssignment, error)
 	UpsertChannelVoiceCall(ctx context.Context, arg UpsertChannelVoiceCallParams) error
+	UpsertClosingTextSettings(ctx context.Context, arg UpsertClosingTextSettingsParams) (ClosingTextSetting, error)
 	UpsertCompanyHealth(ctx context.Context, arg UpsertCompanyHealthParams) (CompanyHealth, error)
 	UpsertCompanyHealthSettings(ctx context.Context, arg UpsertCompanyHealthSettingsParams) (CompanyHealthSetting, error)
 	UpsertCompanyRevenue(ctx context.Context, arg UpsertCompanyRevenueParams) (CompanyRevenue, error)

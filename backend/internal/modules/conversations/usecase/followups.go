@@ -181,6 +181,10 @@ const (
 	BulkSnooze   = "snooze"
 	BulkTag      = "tag"
 	BulkUntag    = "untag"
+	// BulkRead, BulkUnread move the caller's own read marker (CF-247);
+	// they need no permission beyond reading the conversations.
+	BulkRead   = "read"
+	BulkUnread = "unread"
 )
 
 // MaxBulk bounds one bulk request.
@@ -214,6 +218,7 @@ type bulkItem struct {
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
 	Priority     string     `json:"priority"`
 	Assignee     *uuid.UUID `json:"assignee,omitempty"`
+	ReadMarker   *int64     `json:"read_marker,omitempty"`
 	Changed      bool       `json:"changed"`
 }
 
@@ -232,6 +237,7 @@ func (s *Service) Bulk(ctx context.Context, in BulkInput) (BulkResult, error) {
 		if !in.Perms.Manage {
 			return BulkResult{}, ErrForbidden
 		}
+	case BulkRead, BulkUnread:
 	default:
 		return BulkResult{}, fmt.Errorf("%w: unknown action", ErrInvalid)
 	}
@@ -315,6 +321,17 @@ func (s *Service) Bulk(ctx context.Context, in BulkInput) (BulkResult, error) {
 			if tagID != uuid.Nil {
 				_, err = s.TagConversation(ctx, in.OrganizationID, c.Uuid, actor, tagID, "", false)
 			}
+		case BulkRead, BulkUnread:
+			var prev int64
+			if in.Action == BulkRead {
+				prev, err = s.markRead(ctx, in.OrganizationID, in.Actor.ID, c.Uuid)
+			} else {
+				prev, err = s.markUnread(ctx, in.OrganizationID, in.Actor.ID, c.Uuid)
+			}
+			if err == nil {
+				item.ReadMarker = &prev
+				s.notifyReadState(ctx, in.OrganizationID, in.Actor, c.Uuid)
+			}
 		}
 		if err != nil {
 			s.log.Warn("conversation_bulk_item_failed", "conversation", c.Uuid, "action", in.Action, "error", err)
@@ -357,8 +374,16 @@ func (s *Service) UndoBulk(ctx context.Context, orgID int64, actor Actor, perms 
 	if op.RevertedAt.Valid || s.now().Sub(op.CreatedAt.Time) > BulkUndoWindow {
 		return BulkResult{}, ErrUndoExpired
 	}
-	if !perms.Manage && (op.Action != BulkAssign || !perms.Assign) {
-		return BulkResult{}, ErrForbidden
+	switch op.Action {
+	case BulkRead, BulkUnread:
+		// Read markers are the actor's own: only it may put them back.
+		if !op.ActorID.Valid || op.ActorID.Int64 != actor.ID {
+			return BulkResult{}, ErrForbidden
+		}
+	default:
+		if !perms.Manage && (op.Action != BulkAssign || !perms.Assign) {
+			return BulkResult{}, ErrForbidden
+		}
 	}
 	var items []bulkItem
 	if err := json.Unmarshal(op.Items, &items); err != nil {
@@ -402,6 +427,13 @@ func (s *Service) UndoBulk(ctx context.Context, orgID int64, actor Actor, perms 
 			}
 		case BulkUntag:
 			_, err = s.TagConversation(ctx, orgID, it.Conversation, actor, uuid.Nil, op.Value, true)
+		case BulkRead, BulkUnread:
+			if it.ReadMarker != nil {
+				err = s.restoreReadMarker(ctx, orgID, actor.ID, it.Conversation, *it.ReadMarker)
+				if err == nil {
+					s.notifyReadState(ctx, orgID, actor, it.Conversation)
+				}
+			}
 		}
 		if err != nil {
 			res.Failed++

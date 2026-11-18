@@ -46,9 +46,15 @@ export type CannedInput = components['schemas']['CannedInput'];
 
 /** Realtime event on `inbox:{org_uuid}` (backend model.LiveEvent). */
 type InboxLiveEvent = {
-  type: 'conversation.created' | 'conversation.updated' | 'message.created' | 'message.updated';
+  type:
+    | 'conversation.created'
+    | 'conversation.updated'
+    | 'message.created'
+    | 'message.updated'
+    | 'conversation.read_state';
   conversation_uuid: string;
   message?: Message;
+  actor_uuid?: string;
 };
 
 const PAGE_SIZE = 30;
@@ -259,12 +265,44 @@ export function useMarkRead(uuid: string) {
 }
 
 /**
+ * Marks the conversation unread for the member again (CF-247): the latest
+ * customer message counts as unread; the badge shows at once, then refetches.
+ */
+export function useMarkUnread(uuid: string) {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  return useCallback(() => {
+    if (!org || !uuid) return;
+    qc.setQueriesData<InfiniteData<ConversationPage>>({ queryKey: inboxKeys.lists(org) }, (data) =>
+      data
+        ? {
+            ...data,
+            pages: data.pages.map((p) => ({
+              ...p,
+              items: p.items.map((c) => (c.uuid === uuid ? { ...c, unread_count: Math.max(c.unread_count, 1) } : c)),
+            })),
+          }
+        : data,
+    );
+    void unwrap(
+      api.POST('/v1/tenant/conversations/{uuid}/unread', { params: { header: orgHeader(), path: { uuid } } }),
+    )
+      .catch(() => undefined)
+      .finally(() => {
+        void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+        void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
+      });
+  }, [org, qc, uuid]);
+}
+
+/**
  * Subscribes to the organization's inbox channel: messages land in the open
  * conversation at once; lists and badges refetch (debounced). `onInbound`
  * fires for a customer message in `activeUuid` (the open screen marks it read).
  */
 export function useInboxLive(activeUuid?: string, onInbound?: () => void) {
   const { org, orgUuid, canRead } = useInboxScope();
+  const me = useSession((st) => st.me?.user?.uuid);
   const qc = useQueryClient();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -278,6 +316,9 @@ export function useInboxLive(activeUuid?: string, onInbound?: () => void) {
   useChannel(orgUuid && canRead ? `inbox:${orgUuid}` : null, (raw) => {
     const ev = raw as InboxLiveEvent | null;
     if (!ev?.type || !ev.conversation_uuid) return;
+    // Read markers are per member (CF-247): only the member who marked
+    // read / unread on another device refetches.
+    if (ev.type === 'conversation.read_state' && ev.actor_uuid !== me) return;
     if (ev.message) upsertMessage(qc, inboxKeys.messages(org, ev.conversation_uuid), ev.message);
     if (ev.type === 'conversation.updated' || ev.type === 'conversation.created')
       void qc.invalidateQueries({ queryKey: inboxKeys.detail(org, ev.conversation_uuid) });

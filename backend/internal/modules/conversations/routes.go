@@ -49,12 +49,14 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/conversations/{uuid}/diagnostics", h.Diagnostics, read)
 	route("GET /v1/tenant/conversations/{uuid}/messages", h.Messages, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages", h.Post, read)
+	route("GET /v1/tenant/conversations/{uuid}/closing-texts", h.ClosingTexts, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages/{message}/retry", h.Retry, read, reply)
 	// CF-248: an agent corrects their own reply; the usecase checks author,
 	// kind and the edit window.
 	route("PATCH /v1/tenant/conversations/{uuid}/messages/{message}", h.EditMessage, read, reply)
 	route("GET /v1/tenant/conversations/{uuid}/messages/{message}/edits", h.MessageEdits, read)
 	route("POST /v1/tenant/conversations/{uuid}/read", h.Read, read)
+	route("POST /v1/tenant/conversations/{uuid}/unread", h.Unread, read)
 	route("POST /v1/tenant/conversations/{uuid}/presence", h.Presence, read)
 	route("DELETE /v1/tenant/conversations/{uuid}/presence", h.Leave, read)
 	route("GET /v1/tenant/conversations/{uuid}/reminders", h.Reminders, read)
@@ -73,6 +75,12 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/side-conversations/{uuid}", h.SideConversation, read)
 	route("POST /v1/tenant/side-conversations/{uuid}/messages", h.ReplySideConversation, read, reply)
 	route("PATCH /v1/tenant/side-conversations/{uuid}", h.UpdateSideConversation, read, reply)
+
+	// CF-249: the organization's own conversation statuses.
+	route("GET /v1/tenant/conversation-statuses", h.CustomStatuses, read)
+	route("POST /v1/tenant/conversation-statuses", h.CreateCustomStatus, manage)
+	route("PATCH /v1/tenant/conversation-statuses/{uuid}", h.UpdateCustomStatus, manage)
+	route("DELETE /v1/tenant/conversation-statuses/{uuid}", h.DeleteCustomStatus, manage)
 
 	route("GET /v1/tenant/tags", h.Tags, read)
 	route("POST /v1/tenant/tags", h.CreateTag, manage)

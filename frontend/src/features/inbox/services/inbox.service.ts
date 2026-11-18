@@ -24,6 +24,7 @@ import type {
   SideConversationCreate,
   SideConversationList,
   Tag,
+  CustomStatus,
   Viewer,
   BulkAction,
   BulkResult,
@@ -221,6 +222,25 @@ export const inboxService = {
         params: { header: header(), path: { uuid } },
       }),
       { silent: true },
+    );
+  },
+
+  /** The organization's own statuses for the header picker (CF-249). */
+  async customStatuses() {
+    const res = await unwrap<{ items: CustomStatus[] }>(
+      await apiClient.GET("/v1/tenant/conversation-statuses", {
+        params: { header: header() },
+      }),
+    );
+    return res.items;
+  },
+
+  /** Marks the conversation unread for the caller again (CF-247). */
+  async markUnread(uuid: string) {
+    return unwrap(
+      await apiClient.POST("/v1/tenant/conversations/{uuid}/unread", {
+        params: { header: header(), path: { uuid } },
+      }),
     );
   },
 

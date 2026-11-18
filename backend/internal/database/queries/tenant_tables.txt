@@ -142,6 +142,9 @@ billing_bank_statement_lines
 request_forms
 # Canned responses and macros (CF-48)
 canned_responses
+closing_texts
+closing_text_settings
+closing_text_choices
 macros
 
 # Customer revenue (CF-86)

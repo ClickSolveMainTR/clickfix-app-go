@@ -126,11 +126,13 @@ func TestToolsCallTheSameRoutes(t *testing.T) {
 	run("search_conversations", Args{"q": "iade", "limit": float64(5)})
 	run("reply", Args{"conversation_uuid": id, "content": "Merhaba", "client_id": id})
 	run("set_status", Args{"conversation_uuid": id, "status": "resolved"})
+	run("set_status", Args{"conversation_uuid": id, "custom_status_uuid": id}) // CF-249
 	run("list_contacts", Args{"offset": float64(10)})
 	want := []string{
 		"GET /v1/tenant/conversations?limit=5&q=iade null",
 		`POST /v1/tenant/conversations/` + id + `/messages {"client_id":"` + id + `","content":"Merhaba"}`,
-		`PATCH /v1/tenant/conversations/` + id + ` {"status":"resolved"}`,
+		`PATCH /v1/tenant/conversations/` + id + ` {"custom_status":null,"status":"resolved"}`,
+		`PATCH /v1/tenant/conversations/` + id + ` {"custom_status":"` + id + `"}`,
 		"GET /v1/tenant/contacts?offset=10 null",
 	}
 	if !slices.Equal(api.calls, want) {
