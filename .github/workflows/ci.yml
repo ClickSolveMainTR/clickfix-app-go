@@ -353,6 +353,19 @@ jobs:
       - name: Go SDK tests
         working-directory: sdks/go
         run: go test -p 2 ./...
+      # The Dart visitor client (CF-203): pnpm check above compared its generated
+      # part with the contract; here it must still analyze and pass its tests, so
+      # a contract change that breaks the Dart client fails this job too. Pure
+      # Dart (no Flutter); the SDK matches the Dart of the pinned Flutter release.
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.7
+      - name: Dart visitor client analyzes and tests
+        working-directory: sdks/flutter/clickfix_visitor
+        run: |
+          dart pub get --no-example   # example/ is a Flutter app; the flutter job builds it
+          dart analyze --fatal-infos
+          dart test
       # Integration guide samples (CF-199): the code embedded in the guide
       # pages is this code, type-checked, compiled and run against the stub API.
       # The runnable example apps (Expo, React Native, ...) live and run in
@@ -546,19 +559,26 @@ jobs:
           chown -R "$owner" "$GITHUB_WORKSPACE" || true
           [ -d "$RUNNER_TOOL_CACHE" ] && chown -R "$owner" "$RUNNER_TOOL_CACHE" || true
 
-  # Flutter webview package (CF-203, sdks/flutter/clickfix_webview): analyzer,
-  # formatter, unit + widget tests, the example app compiled to a Flutter
-  # bundle (no Android SDK / Xcode needed) and the pub.dev publish dry run.
-  # The toolchain is installed by subosito/flutter-action (the self-hosted
-  # runners have no Flutter); the version is pinned to what the package was
+  # Flutter packages (CF-203): the webview package sdks/flutter/clickfix_webview
+  # and the native Dart visitor client sdks/flutter/clickfix_visitor (its
+  # lib/src/generated/ comes from `make sdks`; the sdks job checks it is
+  # current). For each: analyzer, formatter, tests, the example app compiled to
+  # a Flutter bundle (no Android SDK / Xcode needed) and the pub.dev publish dry
+  # run. The toolchain is installed by subosito/flutter-action (the self-hosted
+  # runners have no Flutter); the version is pinned to what the packages were
   # developed with. The dry run needs a LICENSE file in the package root:
   # while it is missing the step warns and skips instead of failing.
   flutter:
     needs: [changes]
     if: needs.changes.outputs.flutter == 'true'
     runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted","clickfix"]') }}
+    name: flutter ${{ matrix.package }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [clickfix_webview, clickfix_visitor]
     env:
-      FLUTTER_PKG: sdks/flutter/clickfix_webview
+      FLUTTER_PKG: sdks/flutter/${{ matrix.package }}
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -574,9 +594,11 @@ jobs:
         run: |
           dart analyze --fatal-infos
           dart format --output=none --set-exit-if-changed .
+      # clickfix_visitor is pure Dart (package:test); the webview package uses flutter_test.
       - name: Tests
         working-directory: ${{ env.FLUTTER_PKG }}
-        run: flutter test
+        run: |
+          if grep -q '^  flutter:' pubspec.yaml; then flutter test; else dart test; fi
       - name: Example app compiles
         working-directory: ${{ env.FLUTTER_PKG }}/example
         run: |
@@ -594,7 +616,7 @@ jobs:
             exit 0
           fi
           dart pub publish --dry-run
-          echo "clickfix_webview $(sed -n 's/^version: *//p' pubspec.yaml) -> pub.dev" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ matrix.package }} $(sed -n 's/^version: *//p' pubspec.yaml) -> pub.dev" >> "$GITHUB_STEP_SUMMARY"
 
   # Lint, format, types, unit tests and the production build.
   frontend:
@@ -996,8 +1018,9 @@ jobs:
   # owns the scopes); without it the job skips with a summary note and never
   # fails main. Versions and changelogs live in sdks/<package>/CHANGELOG.md.
   #
-  # The same job publishes the Flutter package clickfix_webview to pub.dev
-  # (CF-203) when its pubspec version is not on pub.dev yet. Needs the
+  # The same job publishes the Flutter packages clickfix_webview and
+  # clickfix_visitor to pub.dev (CF-203) when their pubspec version is not on
+  # pub.dev yet. Needs the
   # PUB_CREDENTIALS repository secret: the content of the pub-credentials.json
   # file of the pub.dev publisher account (created by `dart pub token add
   # https://pub.dev` / a first `dart pub publish` on that machine). Without
@@ -1064,28 +1087,36 @@ jobs:
             (cd "$p" && pnpm publish --no-git-checks --access public)
             echo "published $(jq -r .name "$p/package.json")@$(jq -r .version "$p/package.json")" >> "$GITHUB_STEP_SUMMARY"
           done
-      - name: Flutter version to publish
+      - name: Flutter versions to publish
         id: pub
         env:
           HAS_PUB: ${{ secrets.PUB_CREDENTIALS != '' }}
-          PKG: sdks/flutter/clickfix_webview
         run: |
           if [ "$HAS_PUB" != "true" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "PUB_CREDENTIALS secret is not set: pub.dev publish skipped (docs/entegrasyon-kilavuzu.md, SDK yayını)" >> "$GITHUB_STEP_SUMMARY"; exit 0
           fi
-          if [ ! -f "$PKG/LICENSE" ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "$PKG/LICENSE is missing: pub.dev publish skipped" >> "$GITHUB_STEP_SUMMARY"; exit 0
-          fi
-          name=$(sed -n 's/^name: *//p' "$PKG/pubspec.yaml"); version=$(sed -n 's/^version: *//p' "$PKG/pubspec.yaml")
-          if curl -fsS "https://pub.dev/api/packages/$name" | jq -e --arg v "$version" 'any(.versions[].version; . == $v)' >/dev/null; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "$name $version is already on pub.dev" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "package=$name" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
-          fi
+          list=""
+          for p in clickfix_webview clickfix_visitor; do
+            pkg="sdks/flutter/$p"
+            if [ ! -f "$pkg/LICENSE" ]; then
+              echo "$pkg/LICENSE is missing: pub.dev publish skipped" >> "$GITHUB_STEP_SUMMARY"; continue
+            fi
+            name=$(sed -n 's/^name: *//p' "$pkg/pubspec.yaml"); version=$(sed -n 's/^version: *//p' "$pkg/pubspec.yaml")
+            # 404 = the package is not on pub.dev yet (first release); anything else
+            # but 200 stops the job instead of publishing blind.
+            code=$(curl -s -o "$RUNNER_TEMP/pub-$p.json" -w '%{http_code}' "https://pub.dev/api/packages/$name")
+            case "$code" in
+              200)
+                if jq -e --arg v "$version" 'any(.versions[].version; . == $v)' "$RUNNER_TEMP/pub-$p.json" >/dev/null; then
+                  echo "$name $version is already on pub.dev" >> "$GITHUB_STEP_SUMMARY"
+                else list="$list $p"; fi ;;
+              404) list="$list $p" ;;
+              *) echo "::error::pub.dev check for $name returned HTTP $code"; exit 1 ;;
+            esac
+          done
+          echo "packages=${list# }" >> "$GITHUB_OUTPUT"
+          [ -n "$list" ] && echo "run=true" >> "$GITHUB_OUTPUT" || echo "run=false" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@v2
         if: steps.pub.outputs.run == 'true'
         with:
@@ -1094,18 +1125,23 @@ jobs:
           cache: true
       - name: Publish to pub.dev
         if: steps.pub.outputs.run == 'true'
-        working-directory: sdks/flutter/clickfix_webview
         env:
           PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
           XDG_CONFIG_HOME: ${{ runner.temp }}/pub-config
+          PACKAGES: ${{ steps.pub.outputs.packages }}
         run: |
           mkdir -p "$XDG_CONFIG_HOME/dart"
           printf '%s' "$PUB_CREDENTIALS" > "$XDG_CONFIG_HOME/dart/pub-credentials.json"
           trap 'rm -rf "$XDG_CONFIG_HOME"' EXIT
-          flutter pub get
-          flutter test
-          dart pub publish --force
-          echo "published ${{ steps.pub.outputs.package }} ${{ steps.pub.outputs.version }} to pub.dev" >> "$GITHUB_STEP_SUMMARY"
+          for p in $PACKAGES; do
+            (
+              cd "sdks/flutter/$p"
+              flutter pub get
+              if grep -q '^  flutter:' pubspec.yaml; then flutter test; else dart test; fi
+              dart pub publish --force
+            )
+            echo "published $p $(sed -n 's/^version: *//p' "sdks/flutter/$p/pubspec.yaml") to pub.dev" >> "$GITHUB_STEP_SUMMARY"
+          done
 
   # Every green main run not cancelled by a newer push tags its HEAD with the
   # next v0.N (first one: v0.1); Dokploy deploys on v0.* tag pushes and pulls
@@ -1141,7 +1177,8 @@ jobs:
   # public repository ClickSolveMainTR/clickfix-sdks (read-only mirror, MIT)
   # and each package version is tagged there: node/vX.Y.Z, react-widget/vX.Y.Z,
   # visitor-core/vX.Y.Z, react-native/vX.Y.Z, expo/vX.Y.Z, go/vX.Y.Z (Go module path
-  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z. Packagist
+  # github.com/ClickSolveMainTR/clickfix-sdks/go), flutter/vX.Y.Z
+  # (clickfix_webview), flutter-visitor/vX.Y.Z (clickfix_visitor). Packagist
   # needs composer.json at the repository root, so sdks/php and sdks/laravel are
   # also pushed to their own mirrors (clickfix-php, clickfix-laravel) and tagged
   # vX.Y.Z there (version = newest "## X.Y.Z" heading of the package CHANGELOG).
@@ -1203,6 +1240,7 @@ jobs:
           done
           [ -f sdks/go/VERSION ] && sdk_tags+=("go/v$(tr -d '[:space:]' < sdks/go/VERSION)")
           [ -f sdks/flutter/clickfix_webview/pubspec.yaml ] && sdk_tags+=("flutter/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_webview/pubspec.yaml)")
+          [ -f sdks/flutter/clickfix_visitor/pubspec.yaml ] && sdk_tags+=("flutter-visitor/v$(sed -n 's/^version: *//p' sdks/flutter/clickfix_visitor/pubspec.yaml)")
           new_sdk_tags=()
           for t in "${sdk_tags[@]}"; do has_tag clickfix-sdks "$t" || new_sdk_tags+=("$t"); done
           if [ ${#new_sdk_tags[@]} -eq 0 ]; then

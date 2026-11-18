@@ -297,6 +297,8 @@ Event::listen(MessageReceived::class, function (MessageReceived $event) {
 
 Mobil uygulamalar widget'ı oturumu taşıyan güvenli bir webview'de gösterir; Flutter için hazır paket [`clickfix_webview`](https://pub.dev/packages/clickfix_webview) köprü sözleşmesini `ClickFixController` + `ClickFixWebView` olarak uygular. Kurulum, yöntem tablosu ve örnekler: [Mobil: webview ve Flutter](/docs/integration-guide/mobile#flutter). Örnek uygulama: [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
 
+Webview yerine yerel ekranlar için [`clickfix_visitor`](https://pub.dev/packages/clickfix_visitor) OpenAPI'den üretilmiş Dart ziyaretçi istemcisidir (uygulama anahtarı, oturum, identify, konuşma, mesaj, yoklama; arayüzsüz): [Mobil: Flutter yerel istemcisi](/docs/integration-guide/mobile#flutter-native).
+
 ## Ortak davranış [#common]
 
 ### Sayfalama [#pagination]
