@@ -23,10 +23,13 @@ import (
 
 // Error codes of the inbox endpoints.
 const (
-	CodeNoChannel   = "CONVERSATION_NO_CHANNEL"
-	CodeTagExists   = "TAG_EXISTS"
-	maxBodyBytes    = 128 << 10
-	activityResouce = "conversations"
+	CodeNoChannel = "CONVERSATION_NO_CHANNEL"
+	CodeTagExists = "TAG_EXISTS"
+	// CF-248: editing a sent message.
+	CodeEditWindowClosed = "MESSAGE_EDIT_WINDOW_CLOSED"
+	CodeNotEditable      = "MESSAGE_NOT_EDITABLE"
+	maxBodyBytes         = 128 << 10
+	activityResouce      = "conversations"
 )
 
 // Handler serves the inbox.
@@ -239,6 +242,62 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	response.JSON(w, r, status, posted.Message)
+}
+
+type editRequest struct {
+	Content string `json:"content"`
+}
+
+// EditMessage corrects the caller's own reply (CF-248). The answer says
+// whether the channel updates the contact's copy (channel_edit).
+func (h *Handler) EditMessage(w http.ResponseWriter, r *http.Request) {
+	scope, actor, id, ok := whoAndID(w, r)
+	if !ok {
+		return
+	}
+	msg, err := uuid.Parse(r.PathValue("message"))
+	if err != nil {
+		response.NotFound(w, r, "Message not found")
+		return
+	}
+	var req editRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	actor = h.svc.Named(r.Context(), actor)
+	out, err := h.svc.EditMessage(r.Context(), usecase.EditInput{
+		OrganizationID: scope.ID, ConversationUUID: id, MessageUUID: msg,
+		EditorID: actor.ID, EditorUUID: actor.UUID, EditorName: actor.Name, Content: req.Content,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	// The audit row keeps lengths only: message texts stay out of the log.
+	h.record(r, scope, actor, "conversations.message_edited", id, map[string]any{
+		"message_uuid": msg, "channel_edit": out.ChannelEdit,
+		"previous_length": len([]rune(out.Previous)), "length": len([]rune(out.Message.Content)),
+	})
+	response.JSON(w, r, http.StatusOK, out)
+}
+
+// MessageEdits lists the earlier versions of an edited message.
+func (h *Handler) MessageEdits(w http.ResponseWriter, r *http.Request) {
+	scope, _, id, ok := whoAndID(w, r)
+	if !ok {
+		return
+	}
+	msg, err := uuid.Parse(r.PathValue("message"))
+	if err != nil {
+		response.NotFound(w, r, "Message not found")
+		return
+	}
+	items, err := h.svc.MessageEdits(r.Context(), scope.ID, id, msg)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, map[string]any{"items": items})
 }
 
 // Retry queues a failed outbound message again.
@@ -526,6 +585,12 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		response.Conflict(w, r, CodeNoChannel, "This conversation has no channel to reply on")
 	case errors.Is(err, usecase.ErrTagExists):
 		response.Conflict(w, r, CodeTagExists, "A tag with this name already exists")
+	case errors.Is(err, usecase.ErrNotAuthor):
+		response.Forbidden(w, r, "Only the author can edit this message")
+	case errors.Is(err, usecase.ErrEditWindowClosed):
+		response.Conflict(w, r, CodeEditWindowClosed, "The edit window of this message has passed")
+	case errors.Is(err, usecase.ErrNotEditable):
+		response.Conflict(w, r, CodeNotEditable, strings.TrimPrefix(err.Error(), usecase.ErrNotEditable.Error()+": "))
 	case errors.Is(err, usecase.ErrInvalid):
 		invalid(w, r, strings.TrimPrefix(err.Error(), usecase.ErrInvalid.Error()+": "))
 	default:

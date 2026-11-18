@@ -366,6 +366,40 @@ type StatusNotifier interface {
 	NotifyStatus(ctx context.Context, inst Instance, change StatusChange) error
 }
 
+// MessageEdit is an agent's correction of a reply the channel already
+// delivered (CF-248). EventID is stable across retries and is the
+// receiver's idempotency key; MessageUUID is the id the reply was sent with.
+type MessageEdit struct {
+	EventID          uuid.UUID
+	MessageUUID      uuid.UUID
+	ConversationUUID uuid.UUID
+	// ExternalID is the provider id Send returned for the reply.
+	ExternalID string
+	ThreadID   string
+	To         Recipient
+	Text       string
+	EditedAt   time.Time
+}
+
+// MessageEditor is implemented by channels that can update a delivered
+// message for the contact (REST API channel: a signed message_edited
+// event; web widget: a realtime update). On other channels an edit only
+// changes ClickFix's copy and the inbox warns the agent. Errors follow
+// Send: Permanent ones are not retried.
+type MessageEditor interface {
+	EditMessage(ctx context.Context, inst Instance, edit MessageEdit) error
+}
+
+// CanEdit reports whether a channel type updates delivered messages.
+func (r *Registry) CanEdit(channelType string) bool {
+	a, ok := r.Get(channelType)
+	if !ok {
+		return false
+	}
+	_, ok = a.(MessageEditor)
+	return ok
+}
+
 // Errors.
 var (
 	// ErrUnknownType: no adapter registered for the type.

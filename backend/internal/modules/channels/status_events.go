@@ -8,6 +8,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels/usecase"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
+	"github.com/google/uuid"
 )
 
 // StatusConsumerName is the durable consumer that forwards conversation
@@ -35,6 +36,50 @@ func (n *StatusNotifier) Consumer() eventdispatch.Consumer {
 		MaxRetry: 8, Timeout: 30 * time.Second,
 		Handle: n.Handle,
 	}
+}
+
+// EditConsumerName is the durable consumer that forwards edited replies to
+// channels implementing channels.MessageEditor (CF-248).
+const EditConsumerName = "channel_message_edit"
+
+// EditConsumer returns the consumer of edited replies. Only edits of a
+// reply the channel already delivered are forwarded (notify_channel).
+func (n *StatusNotifier) EditConsumer() eventdispatch.Consumer {
+	return eventdispatch.Consumer{
+		Name:     EditConsumerName,
+		Events:   []string{events.ConversationsUpdated},
+		MaxRetry: 8, Timeout: 30 * time.Second,
+		Handle: n.HandleEdit,
+	}
+}
+
+// HandleEdit forwards one edited reply.
+func (n *StatusNotifier) HandleEdit(ctx context.Context, ev events.Event) error {
+	ev2, ok := EditEventFrom(ev)
+	if !ok {
+		return nil
+	}
+	if n == nil || n.Channels == nil {
+		return errChannelsNotReady
+	}
+	return n.Channels.NotifyEdit(ctx, ev2)
+}
+
+// EditEventFrom reads an edited reply from an inbox event.
+func EditEventFrom(ev events.Event) (usecase.EditEvent, bool) {
+	change, _ := ev.Payload["change"].(string)
+	notify, _ := ev.Payload["notify_channel"].(bool)
+	if change != "message_edited" || !notify || ev.TenantID == nil || ev.EntityID == nil || ev.EntityType != "conversation" {
+		return usecase.EditEvent{}, false
+	}
+	raw, _ := ev.Payload["message_uuid"].(string)
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return usecase.EditEvent{}, false
+	}
+	return usecase.EditEvent{
+		EventID: ev.EventID, OrganizationID: *ev.TenantID, ConversationID: *ev.EntityID, MessageUUID: id, At: ev.OccurredAt,
+	}, true
 }
 
 // Handle forwards one event.

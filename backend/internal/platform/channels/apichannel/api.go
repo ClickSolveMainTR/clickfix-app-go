@@ -145,6 +145,37 @@ func (a *Adapter) NotifyStatus(ctx context.Context, inst channels.Instance, ch c
 	return a.post(ctx, inst, "status_changed", ch.EventID.String(), body)
 }
 
+// EditMessage posts a signed message_edited event (CF-248) when an agent
+// corrects a reply already delivered to the organization's endpoint.
+// message_id is the id of the original reply (its Idempotency-Key); the
+// event id is the Idempotency-Key of this event and stays the same on
+// retries. text is the whole new text, not a diff.
+func (a *Adapter) EditMessage(ctx context.Context, inst channels.Instance, e channels.MessageEdit) error {
+	if _, err := a.Connect(ctx, inst); err != nil {
+		return channels.Permanent("configuration", err)
+	}
+	if e.EventID == uuid.Nil || e.MessageUUID == uuid.Nil || e.ConversationUUID == uuid.Nil {
+		return channels.Permanent("edit_event", errors.New("event id, message and conversation required"))
+	}
+	if e.Text == "" || len([]rune(e.Text)) > 32000 {
+		return channels.Permanent("unsupported_media", errors.New("API channel accepts text only"))
+	}
+	at := e.EditedAt
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	body, err := json.Marshal(map[string]any{
+		"id": e.EventID, "type": "message_edited",
+		"message_id": e.MessageUUID, "conversation_id": e.ConversationUUID,
+		"recipient_id": e.To.ExternalID, "thread_id": e.ThreadID,
+		"text": e.Text, "edited_at": at.UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	return a.post(ctx, inst, "message_edited", e.EventID.String(), body)
+}
+
 // post sends one signed body to the organization's webhook URL. event sets
 // X-ClickFix-Event when not empty (message deliveries carry none, as
 // before CF-245).
@@ -209,4 +240,5 @@ var (
 	_ channels.Adapter        = (*Adapter)(nil)
 	_ channels.DeliveryTester = (*Adapter)(nil)
 	_ channels.StatusNotifier = (*Adapter)(nil)
+	_ channels.MessageEditor  = (*Adapter)(nil)
 )

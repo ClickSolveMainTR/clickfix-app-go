@@ -904,6 +904,11 @@ type Querier interface {
 	// one replaces the previous token.
 	DisableSupersededPushToStartTokens(ctx context.Context, arg DisableSupersededPushToStartTokensParams) error
 	DismissUnknownCustomFieldKey(ctx context.Context, arg DismissUnknownCustomFieldKeyParams) (int64, error)
+	// CF-248: editing a sent message.
+	// Rewrites an agent's own public reply. Messages being handed to the
+	// channel (pending) are never rewritten, so a send never carries a text the
+	// edit history does not know.
+	EditOutboundMessage(ctx context.Context, arg EditOutboundMessageParams) (Message, error)
 	// E-mail notification delivery since $1: sent, retrying (failed with attempts
 	// left), dead-lettered (failed, no attempts left) and still waiting.
 	EmailDeliveryHealth(ctx context.Context, since pgtype.Timestamptz) (EmailDeliveryHealthRow, error)
@@ -1392,6 +1397,7 @@ type Querier interface {
 	// instance, client_id per conversation): a duplicate returns no row and the
 	// caller loads the stored one.
 	InsertMessage(ctx context.Context, arg InsertMessageParams) (Message, error)
+	InsertMessageEdit(ctx context.Context, arg InsertMessageEditParams) (MessageEdit, error)
 	InsertMessageMention(ctx context.Context, arg InsertMessageMentionParams) (int64, error)
 	InsertNotificationDigestItem(ctx context.Context, arg InsertNotificationDigestItemParams) error
 	InsertNotificationHistory(ctx context.Context, arg InsertNotificationHistoryParams) (NotificationHistory, error)
@@ -1693,6 +1699,8 @@ type Querier interface {
 	ListMergedIntoConversation(ctx context.Context, arg ListMergedIntoConversationParams) ([]ListMergedIntoConversationRow, error)
 	ListMessageAttachments(ctx context.Context, arg ListMessageAttachmentsParams) ([]ListMessageAttachmentsRow, error)
 	ListMessageAttachmentsByOwners(ctx context.Context, arg ListMessageAttachmentsByOwnersParams) ([]Attachment, error)
+	// Oldest first: previous_content of the first row is the original text.
+	ListMessageEdits(ctx context.Context, arg ListMessageEditsParams) ([]ListMessageEditsRow, error)
 	ListMessageMentions(ctx context.Context, arg ListMessageMentionsParams) ([]ListMessageMentionsRow, error)
 	ListNotificationsForUser(ctx context.Context, arg ListNotificationsForUserParams) ([]Notification, error)
 	ListOAuthAccountsByUserID(ctx context.Context, userID int64) ([]ListOAuthAccountsByUserIDRow, error)
@@ -2327,6 +2335,9 @@ type Querier interface {
 	SetConversationDepartment(ctx context.Context, arg SetConversationDepartmentParams) (int64, error)
 	// Writes a form submission onto the conversation it started.
 	SetConversationFormData(ctx context.Context, arg SetConversationFormDataParams) error
+	// The inbox list shows the edited text when the edited message is still
+	// the newest one of the conversation.
+	SetConversationPreviewIfLatest(ctx context.Context, arg SetConversationPreviewIfLatestParams) error
 	SetConversationSLA(ctx context.Context, arg SetConversationSLAParams) error
 	SetConversationTeam(ctx context.Context, arg SetConversationTeamParams) error
 	SetCustomFieldDefinitionArchived(ctx context.Context, arg SetCustomFieldDefinitionArchivedParams) (CustomFieldDefinition, error)

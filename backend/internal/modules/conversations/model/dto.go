@@ -70,7 +70,11 @@ type Conversation struct {
 	ExternalThreadID *string `json:"external_thread_id"`
 	// WindowOpen: a free-form reply is allowed now (channels with a reply
 	// window, e.g. 24 hours on WhatsApp); WindowEndsAt when it closes.
-	WindowOpen   bool       `json:"window_open"`
+	WindowOpen bool `json:"window_open"`
+	// ChannelEdits: the channel updates a delivered reply for the contact
+	// when an agent edits it (REST API channel, web widget, CF-248); on
+	// other channels the contact keeps the first text.
+	ChannelEdits bool       `json:"channel_edits"`
 	WindowEndsAt *time.Time `json:"window_ends_at"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
@@ -122,6 +126,9 @@ type Message struct {
 	DeliveredAt      *time.Time          `json:"delivered_at"`
 	ReadAt           *time.Time          `json:"read_at"`
 	CreatedAt        time.Time           `json:"created_at"`
+	// EditedAt is when the author last corrected the message (CF-248);
+	// null when never edited.
+	EditedAt *time.Time `json:"edited_at"`
 }
 
 // Realtime event types published on the organization inbox channel.

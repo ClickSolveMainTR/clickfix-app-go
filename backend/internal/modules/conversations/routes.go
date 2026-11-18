@@ -50,6 +50,10 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/conversations/{uuid}/messages", h.Messages, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages", h.Post, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages/{message}/retry", h.Retry, read, reply)
+	// CF-248: an agent corrects their own reply; the usecase checks author,
+	// kind and the edit window.
+	route("PATCH /v1/tenant/conversations/{uuid}/messages/{message}", h.EditMessage, read, reply)
+	route("GET /v1/tenant/conversations/{uuid}/messages/{message}/edits", h.MessageEdits, read)
 	route("POST /v1/tenant/conversations/{uuid}/read", h.Read, read)
 	route("POST /v1/tenant/conversations/{uuid}/presence", h.Presence, read)
 	route("DELETE /v1/tenant/conversations/{uuid}/presence", h.Leave, read)

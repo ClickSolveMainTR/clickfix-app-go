@@ -1262,6 +1262,9 @@ type Message struct {
 	Attachments []Attachment `json:"attachments"`
 	CreatedAt   time.Time    `json:"created_at"`
 	ReadAt      *time.Time   `json:"read_at"`
+	// EditedAt is set when an agent corrected the reply (CF-248); Content
+	// is the corrected text.
+	EditedAt *time.Time `json:"edited_at"`
 }
 
 // MessagePage is a page of messages, oldest first.
@@ -1334,6 +1337,7 @@ func (s *Service) messages(ctx context.Context, org int64, rows []db.ListWidgetM
 		m := Message{
 			UUID: r.Uuid, Direction: r.Direction, SenderType: r.SenderType, Kind: r.Kind, Content: r.Content,
 			Status: r.Status, Attachments: []Attachment{}, CreatedAt: r.CreatedAt.Time.UTC(), ReadAt: timePtr(r.ReadAt),
+			EditedAt: timePtr(r.EditedAt),
 		}
 		if r.ClientID.Valid {
 			id := uuid.UUID(r.ClientID.Bytes)

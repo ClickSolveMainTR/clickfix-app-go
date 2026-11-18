@@ -3297,6 +3297,16 @@ type Message struct {
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 }
 
+type MessageEdit struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	OrganizationID  int64              `json:"organization_id"`
+	MessageID       int64              `json:"message_id"`
+	EditorUserID    pgtype.Int8        `json:"editor_user_id"`
+	PreviousContent string             `json:"previous_content"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type MessageMention struct {
 	OrganizationID int64              `json:"organization_id"`
 	MessageID      int64              `json:"message_id"`

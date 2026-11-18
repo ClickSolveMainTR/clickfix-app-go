@@ -56,7 +56,8 @@ type Deps struct {
 	// only when APNs is configured.
 	LiveActivities *mobileextusecase.Service
 	// ChannelStatus tells REST API channel endpoints about conversation
-	// status changes (CF-245).
+	// status changes (CF-245) and channels that can update a delivered
+	// reply about edits (CF-248).
 	ChannelStatus *channelsmodule.StatusNotifier
 	// Categories classifies new conversations (CF-218).
 	Categories *categoriesusecase.Service
@@ -108,7 +109,7 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 		consumers = append(consumers, deps.LiveActivities.Consumer())
 	}
 	if deps.ChannelStatus != nil {
-		consumers = append(consumers, deps.ChannelStatus.Consumer())
+		consumers = append(consumers, deps.ChannelStatus.Consumer(), deps.ChannelStatus.EditConsumer())
 	}
 	if deps.Webhooks != nil {
 		consumers = append(consumers, eventdispatch.WebhookConsumer(deps.Webhooks))

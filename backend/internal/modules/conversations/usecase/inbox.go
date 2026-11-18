@@ -924,6 +924,7 @@ func (s *Service) toConversation(c db.Conversation, unread int, tags []uuid.UUID
 		out.TagUUIDs = append(out.TagUUIDs, t.String())
 	}
 	if s.registry != nil {
+		out.ChannelEdits = s.registry.CanEdit(c.ChannelType)
 		if a, ok := s.registry.Get(c.ChannelType); ok {
 			caps := a.Capabilities()
 			if caps.ReplyWindow > 0 {
