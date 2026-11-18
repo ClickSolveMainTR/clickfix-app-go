@@ -345,7 +345,7 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	}
 	trace := newReplyTrace(msg)
 	// Retrieval depends on the conversation, not triage's category/intent.
-	// Keep reply/procedure/autonomy checks after triage. Cancel and join on all exits.
+	// Cancel and join on all exits.
 	var knowledge <-chan core.RetrievalResult
 	replying := cfg.Mode != "off" && cfg.Mode != "summary" && !conv.AssigneeUserID.Valid && conv.Status != "closed" && conv.Status != "resolved" && cfg.Active(conv.ChannelType, s.open(ctx, org))
 	// CF-251: retrieval starts now and runs while the knowledge layer is
@@ -645,9 +645,9 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			options.Tools, options.Runner = append(options.Tools, tools...), runner
 		}
 		trace.tools = len(options.Tools)
-		// unanswered ends the job when no usable answer came back: the
-		// customer hears the generic handoff notice, never an unchecked text.
-		unanswered := func(reason string, result model.Reply) error {
+		// giveUp ends the job when no usable answer came back: the customer
+		// hears the generic handoff notice, never an unchecked text.
+		giveUp := func(reason string, result model.Reply) error {
 			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered, "")
 			outcome := "handoff_silent"
 			if sent {
@@ -670,10 +670,10 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		if runErr != nil {
 			slog.WarnContext(ctx, "ai_reply_failed", "organization_id", org, "conversation_id", conv.ID, "run_uuid", run.UUID,
 				"timed_out", errors.Is(runErr, context.DeadlineExceeded), "error", clipInput(runErr.Error(), 300))
-			return unanswered("AI unavailable, guard rejected, or credits exhausted", model.Reply{Summary: ai.NewMasker().Mask(msg.Content)})
+			return giveUp("AI unavailable, guard rejected, or credits exhausted", model.Reply{Summary: ai.NewMasker().Mask(msg.Content)})
 		}
 		if err = json.Unmarshal([]byte(run.Text), &answer); err != nil {
-			return unanswered("Invalid answer", model.Reply{})
+			return giveUp("Invalid answer", model.Reply{})
 		}
 		// Only the knowledge layer sets these, never model output.
 		answer.UnitUUID, answer.Memory = nil, ""
