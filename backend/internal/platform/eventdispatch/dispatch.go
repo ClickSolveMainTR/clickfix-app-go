@@ -68,6 +68,10 @@ type Consumer struct {
 	Handle   Handler
 	MaxRetry int
 	Timeout  time.Duration
+	// Queue is the Asynq queue of this consumer's tasks; "" is the shared
+	// events queue. A latency-bound consumer names its own queue so the
+	// other consumers' backlog cannot delay it (CF-251).
+	Queue string
 }
 
 func (c Consumer) matches(name string) bool {
@@ -118,6 +122,9 @@ func (r *Registry) Register(c Consumer) error {
 	}
 	if c.Timeout <= 0 {
 		c.Timeout = DefaultTimeout
+	}
+	if c.Queue = strings.TrimSpace(c.Queue); c.Queue == "" {
+		c.Queue = queue.QueueEvents
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -227,7 +234,7 @@ func (d *Dispatcher) enqueue(c Consumer, eventName string, eventID uuid.UUID, en
 		task = asynq.NewTaskWithHeaders(TaskConsume, body, map[string]string{reqid.Header: trace.RequestID})
 	}
 	_, err = d.enq.Enqueue(task,
-		asynq.Queue(queue.QueueEvents),
+		asynq.Queue(c.Queue),
 		asynq.TaskID(taskID),
 		asynq.MaxRetry(c.MaxRetry),
 		asynq.Timeout(c.Timeout),
@@ -278,6 +285,26 @@ func NewProcessor(reg *Registry, pool *pgxpool.Pool, q *db.Queries, log *slog.Lo
 	return &Processor{reg: reg, pool: pool, q: q, log: log}
 }
 
+// Delivery is the timeline of the event a consumer is handling: when it
+// happened, when its task was enqueued and when the handler started. A
+// latency-bound consumer logs its end-to-end time from it (CF-251).
+type Delivery struct {
+	OccurredAt, EnqueuedAt, StartedAt time.Time
+}
+
+type deliveryKey struct{}
+
+// WithDelivery attaches d to ctx.
+func WithDelivery(ctx context.Context, d Delivery) context.Context {
+	return context.WithValue(ctx, deliveryKey{}, d)
+}
+
+// DeliveryOf returns the timeline of the running consumer task, if any.
+func DeliveryOf(ctx context.Context) (Delivery, bool) {
+	d, ok := ctx.Value(deliveryKey{}).(Delivery)
+	return d, ok
+}
+
 // ProcessTask is the asynq handler for TaskConsume.
 func (p *Processor) ProcessTask(ctx context.Context, task *asynq.Task) error {
 	var payload TaskPayload
@@ -305,8 +332,9 @@ func (p *Processor) ProcessTask(ctx context.Context, task *asynq.Task) error {
 			queueWait = time.Since(payload.EnqueuedAt).Milliseconds()
 		}
 		p.log.InfoContext(ctx, "ai_stage", "stage", "job_started", "event_id", ev.EventID, "request_id", ev.RequestID,
-			"received_at", ev.OccurredAt, "received_to_start_ms", receivedToStart, "queue_wait_ms", queueWait, "debounce_ms", 0)
+			"received_at", ev.OccurredAt, "received_to_start_ms", receivedToStart, "queue_wait_ms", queueWait, "debounce_ms", 0, "queue", c.Queue)
 	}
+	ctx = WithDelivery(ctx, Delivery{OccurredAt: ev.OccurredAt, EnqueuedAt: payload.EnqueuedAt, StartedAt: time.Now()})
 	err = p.process(ctx, c, ev)
 	if err == nil {
 		return nil

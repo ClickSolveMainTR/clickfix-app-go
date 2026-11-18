@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/database/db"
@@ -224,7 +225,15 @@ func (s *Service) OnMessage(ctx context.Context, org int64, message uuid.UUID) e
 // calls it when it hands off a conversation it was answering, could not
 // answer safely, or the customer asked for a person). At most once per
 // conversation; sent reports whether this call posted the notice.
-func (s *Service) NotifyHandoff(ctx context.Context, org, conversationID int64) (bool, error) {
+//
+// message is the AI agent's own handoff message for this customer (CF-251):
+// what it understood and which details the team needs. When given, it
+// replaces the generic notice and is closed by the handoff statement: the
+// organization's own handoff text when it wrote one, HandoffSentence
+// otherwise (the default notice repeats the request for details the message
+// already makes). The organization's switch still decides whether anything
+// is sent: a disabled handoff notice sends neither.
+func (s *Service) NotifyHandoff(ctx context.Context, org, conversationID int64, message string) (bool, error) {
 	if s.poster == nil {
 		return false, nil
 	}
@@ -239,9 +248,17 @@ func (s *Service) NotifyHandoff(ctx context.Context, org, conversationID int64) 
 	if err != nil {
 		return false, err
 	}
-	text := settings.Render(KindHandoff, s.locale(ctx, org), nil)
+	locale := s.locale(ctx, org)
+	text := settings.Render(KindHandoff, locale, nil)
 	if text == "" {
 		return false, nil
+	}
+	if message = strings.TrimSpace(message); message != "" {
+		closing := HandoffSentence(locale)
+		if text != Defaults().Render(KindHandoff, locale, nil) {
+			closing = text
+		}
+		text = message + "\n\n" + closing
 	}
 	if _, err := s.poster.PostAuto(ctx, org, conversationID, KindHandoff, text); err != nil {
 		s.log.Warn("auto_reply_post_failed", "organization_id", org, "conversation_id", conversationID, "kind", KindHandoff, "error", err)

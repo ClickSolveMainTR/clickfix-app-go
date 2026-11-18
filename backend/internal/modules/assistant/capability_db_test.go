@@ -221,21 +221,22 @@ func TestCapabilityTypeErrorsAndHiddenTools(t *testing.T) {
 	ctx := context.Background()
 	pc := assistant.Context{Surface: "web", Route: "/things"}
 	th, _ := f.svc.CreateThread(ctx, f.scope.ID, f.user, pc)
-	// A wrong type fails the schema of the tool loop: the turn ends with
-	// the fallback answer and nothing is proposed.
+	// A wrong type fails the schema of the tool loop: the call is not run,
+	// the model reads an error result (CF-251) and nothing is proposed.
 	f.prov.steps = []ai.Result{call("c1", "things_create", `{"params":{"name":1,"url":"https://example.com"}}`)}
 	res, err := f.svc.Send(ctx, f.caller(rbac.PermTenantChannelsManage), th.UUID, "oluştur", pc)
 	if err != nil || len(res.Reply.Actions) != 0 || len(tc.applied) != 0 {
 		t.Fatalf("type error: %+v %v", res.Reply, err)
 	}
 	// Without the permission the tool is not offered and a forged call is
-	// denied by the loop.
+	// refused by the loop.
+	unprivileged := len(f.prov.reqs)
 	f.prov.steps = []ai.Result{call("c1", "things_create", `{"params":{"name":"a","url":"https://example.com"}}`)}
 	res, err = f.svc.Send(ctx, f.caller(), th.UUID, "oluştur", pc)
-	if err != nil || len(res.Reply.Actions) != 0 {
+	if err != nil || len(res.Reply.Actions) != 0 || len(tc.applied) != 0 {
 		t.Fatalf("forged call: %+v %v", res.Reply, err)
 	}
-	for _, req := range f.prov.reqs[1:] {
+	for _, req := range f.prov.reqs[unprivileged:] {
 		raw, _ := json.Marshal(req.Turns)
 		if !strings.Contains(string(raw), "oluştur") || len(req.Tools) == 0 {
 			continue // the title request

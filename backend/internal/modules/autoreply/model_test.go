@@ -66,3 +66,13 @@ func TestRenderAndDefaults(t *testing.T) {
 		t.Fatal("too long text accepted")
 	}
 }
+
+// CF-251: the sentence that closes the AI agent's own handoff message.
+func TestHandoffSentence(t *testing.T) {
+	if tr, en := HandoffSentence("tr"), HandoffSentence("en-US"); !strings.Contains(tr, "ekibimize aktardım") || !strings.Contains(en, "passed your conversation to our team") {
+		t.Fatalf("tr=%q en=%q", tr, en)
+	}
+	if HandoffSentence("") != HandoffSentence("tr") {
+		t.Fatal("an unknown locale reads Turkish, like the other texts")
+	}
+}

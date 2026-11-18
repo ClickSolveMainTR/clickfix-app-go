@@ -3,6 +3,7 @@ package config
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestParseQueueQueues(t *testing.T) {
@@ -37,6 +38,14 @@ func TestQueueEnvironmentStartupValidation(t *testing.T) {
 	}
 	if !cfg.Queue.SchedulerEnabled {
 		t.Fatal("scheduler must default to enabled")
+	}
+	// CF-251: an idle worker picks a new job up within 200 ms unless told otherwise.
+	if cfg.Queue.TaskCheckInterval != 200*time.Millisecond {
+		t.Fatalf("task check interval=%s", cfg.Queue.TaskCheckInterval)
+	}
+	t.Setenv("QUEUE_TASK_CHECK_INTERVAL", "100ms")
+	if cfg, err = Load(); err != nil || cfg.Queue.TaskCheckInterval != 100*time.Millisecond {
+		t.Fatalf("task check interval=%s err=%v", cfg.Queue.TaskCheckInterval, err)
 	}
 	t.Setenv("QUEUE_SCHEDULER_ENABLED", "false")
 	t.Setenv("QUEUE_QUEUES", "sync:2")

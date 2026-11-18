@@ -62,7 +62,7 @@ func (s *Service) PostAuto(ctx context.Context, org, conversationID int64, kind,
 		return uuid.Nil, err
 	}
 	if !app.Duplicate {
-		if err = s.queueSend(ctx, org, app.Message.ID, 0); err != nil {
+		if err = s.queueSendPriority(ctx, org, app.Message.ID); err != nil {
 			s.log.Error("auto_reply_enqueue_failed", "message_uuid", app.Message.Uuid, "error", err)
 		}
 		s.notify(ctx, org, model.LiveEvent{Type: model.EventMessageCreated, ConversationUUID: app.Conversation.Uuid})

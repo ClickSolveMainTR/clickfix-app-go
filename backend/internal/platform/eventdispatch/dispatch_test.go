@@ -350,3 +350,53 @@ func waitFor(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met within 20s")
 }
+
+// queueEnqueuer records the queue every task was sent to.
+type queueEnqueuer struct{ queues map[string]string }
+
+func (q *queueEnqueuer) Enqueue(_ *asynq.Task, opts ...asynq.Option) (*asynq.TaskInfo, error) {
+	id, name := "", ""
+	for _, o := range opts {
+		switch o.Type() {
+		case asynq.TaskIDOpt:
+			id = o.Value().(string)
+		case asynq.QueueOpt:
+			name = o.Value().(string)
+		}
+	}
+	q.queues[strings.SplitN(id, ":", 2)[0]] = name
+	return &asynq.TaskInfo{ID: id, Queue: name}, nil
+}
+
+// CF-251: a consumer may name its own queue, so a latency-bound consumer
+// (the AI reply) does not wait behind the shared events backlog. The others
+// stay on the events queue.
+func TestConsumerQueueRouting(t *testing.T) {
+	noop := func(context.Context, events.Event) error { return nil }
+	reg, err := eventdispatch.NewRegistry(
+		eventdispatch.Consumer{Name: "fast", Queue: queue.QueueAI, Events: []string{events.MessagesReceived}, Handle: noop},
+		eventdispatch.Consumer{Name: "slow", Events: []string{events.MessagesReceived}, Handle: noop},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enq := &queueEnqueuer{queues: map[string]string{}}
+	ev := events.New(events.MessagesReceived)
+	if err := eventdispatch.NewDispatcher(reg, enq, nil, nil).Fanout(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	if enq.queues["fast"] != queue.QueueAI || enq.queues["slow"] != queue.QueueEvents {
+		t.Fatalf("queues=%v", enq.queues)
+	}
+}
+
+// The handler can read when its event happened and how long its task waited.
+func TestDeliveryTimeline(t *testing.T) {
+	if _, ok := eventdispatch.DeliveryOf(context.Background()); ok {
+		t.Fatal("no delivery outside a consumer task")
+	}
+	want := eventdispatch.Delivery{OccurredAt: time.Unix(10, 0), EnqueuedAt: time.Unix(11, 0), StartedAt: time.Unix(12, 0)}
+	if got, ok := eventdispatch.DeliveryOf(eventdispatch.WithDelivery(context.Background(), want)); !ok || got != want {
+		t.Fatalf("delivery=%+v", got)
+	}
+}

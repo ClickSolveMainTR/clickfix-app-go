@@ -198,6 +198,7 @@ func validateResult(req Request, out Result) (Result, error) {
 		}
 	}
 	if len(req.Schema) > 0 && len(out.Calls) == 0 {
+		out.Text = conformJSON(req.Schema, out.Text)
 		if err := validateJSON(req.Schema, []byte(out.Text)); err != nil {
 			return out, err
 		}
@@ -349,8 +350,11 @@ type denySchemaLoader struct{}
 func (denySchemaLoader) Load(string) (any, error) { return nil, ErrInvalidOutput }
 
 func validateJSON(schema map[string]any, data []byte) error {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return &invalidOutput{reason: "empty"}
+	}
 	if !json.Valid(data) {
-		return ErrInvalidOutput
+		return &invalidOutput{reason: "not_json"}
 	}
 	normalized, err := json.Marshal(schema)
 	if err != nil {
@@ -373,13 +377,52 @@ func validateJSON(schema map[string]any, data []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err = decoder.Decode(&value); err != nil {
-		return ErrInvalidOutput
+		return &invalidOutput{reason: "not_json"}
 	}
 	removeOptionalNulls(document, value)
 	if err = compiled.Validate(value); err != nil {
-		return ErrInvalidOutput
+		return &invalidOutput{reason: schemaViolation(err)}
 	}
 	return nil
+}
+
+// invalidOutput is ErrInvalidOutput with the reason for logs: which schema
+// keyword failed where. It never carries a value of the document.
+type invalidOutput struct{ reason string }
+
+func (e *invalidOutput) Error() string { return "ai: invalid output (" + e.reason + ")" }
+func (e *invalidOutput) Unwrap() error { return ErrInvalidOutput }
+
+// InvalidReason is the loggable cause of an ErrInvalidOutput ("" when unknown).
+func InvalidReason(err error) string {
+	var invalid *invalidOutput
+	if errors.As(err, &invalid) {
+		return invalid.reason
+	}
+	return ""
+}
+
+// schemaViolation names the first failed keyword and its instance path,
+// e.g. "/summary:maxLength".
+func schemaViolation(err error) string {
+	var failed *jsonschema.ValidationError
+	if !errors.As(err, &failed) {
+		return "schema"
+	}
+	for len(failed.Causes) > 0 {
+		failed = failed.Causes[0]
+	}
+	keyword := "schema"
+	if failed.ErrorKind != nil {
+		if path := failed.ErrorKind.KeywordPath(); len(path) > 0 {
+			keyword = path[len(path)-1]
+		}
+	}
+	reason := "/" + strings.Join(failed.InstanceLocation, "/") + ":" + keyword
+	if len(reason) > 120 {
+		reason = reason[:120]
+	}
+	return reason
 }
 
 // ValidateJSON validates structured agent output even for in-process fake providers.

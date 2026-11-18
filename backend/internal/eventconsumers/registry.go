@@ -73,7 +73,7 @@ func New(deps Deps) (*eventdispatch.Registry, error) {
 		consumers = append(consumers, deps.Reports.Consumer())
 	}
 	if deps.Agents != nil {
-		consumers = append(consumers, deps.Agents.Consumer())
+		consumers = append(consumers, deps.Agents.Consumer(), deps.Agents.ResolutionConsumer())
 	}
 	if deps.Knowledge != nil {
 		consumers = append(consumers, deps.Knowledge.Consumer())

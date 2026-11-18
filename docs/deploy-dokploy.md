@@ -33,11 +33,12 @@ volume ve ağ adları `NAME_PREFIX=clickfix` ile başlar. Özel ağ adı `clickf
 | `backend` | backend imajı, `APP_ROLE=server` | app (+ dokploy-network, domain için Dokploy ekler) | `api.getclickfix.com` → `:8080` |
 | `worker` | backend imajı, `APP_ROLE=worker`; müşteri işleri ve tek scheduler | app | hayır |
 | `worker-sync` | aynı backend imajı ve worker binary; yalnız `sync` kuyruğu | app | hayır |
+| `ai-reply` | aynı backend imajı ve worker binary; yalnız `ai` kuyruğu (müşteriye AI cevabı, CF-251). `QUEUE_AI_REPLICAS` ile ölçeklenir | app | hayır |
 | `frontend` | frontend imajı (Next.js BFF) | app + dokploy-network | `getclickfix.com`, `www`, `widget` → `:3000` |
 | `livekit` | `livekit/livekit-server:v1.13.11` + `deploy/livekit/` yapılandırması (CF-139) | app + dokploy-network | `video.getclickfix.com` → `:7880` (wss). Medya portları host'ta yayınlanır, aşağıda |
 | `livekit-egress` | `livekit/egress:v1.15.0` (kayıtlar) | app | hayır |
 
-Migration'lar her deploy'da `migrate` servisinde çalışır. Backend, worker ve worker-sync ancak migration başarıyla bitince açılır.
+Migration'lar her deploy'da `migrate` servisinde çalışır. Backend, worker, worker-sync ve ai-reply ancak migration başarıyla bitince açılır.
 
 ## Domain'ler
 
@@ -221,6 +222,29 @@ Anahtarlar boşken `livekit` ve `livekit-egress` konteynerleri boşta bekler (de
 - `backend` servisi domain aldığı için Dokploy onu `dokploy-network`'e de bağlar. Bu ağda `backend` adı başka bir
   yığının nitelenmemiş `backend` aramasına cevap verebilir. Sunucudaki diğer yığınlar nitelenmiş adlar kullandığı
   için şu an sorun yok. Yeni bir yığın eklenirken buna dikkat edin.
+
+### Müşteriye AI cevabı worker'ı (CF-251)
+
+`ai-reply` yalnız `ai` kuyruğunu tüketir: gelen müşteri mesajını cevaplayan
+`ai.conversation` tüketicisi ve onun gönderdiği mesajların teslimi. Başka hiçbir
+arka plan işi bu serviste çalışmaz; dışa aktarma, senkronizasyon, webhook ya da
+uzun bir backfill ana `worker`'ı doldursa bile cevap beklemez. Ana `worker` da
+`ai` kuyruğunu yedek olarak dinler (`ai-reply` kapalıysa cevaplar durmaz).
+
+- Eşzamanlılık: `QUEUE_AI_CONCURRENCY` (varsayılan 16; bir cevap birkaç saniye
+  sürdüğü için replika başına dakikada yüzlerce cevap). Yük artınca
+  `QUEUE_AI_REPLICAS` yükseltilir; servis durum tutmaz ve `container_name` taşımaz.
+- Her iş çalışırken bir veritabanı bağlantısı tutar: `QUEUE_AI_DB_MAX_CONNS`
+  (varsayılan 24, replika başına) eşzamanlılığın üstünde kalmalı. Varsayılanlarla
+  havuz tavanları toplamı 84'tür (backend, worker, worker-sync 20'şer + ai-reply 24)
+  ve Postgres'in varsayılan `max_connections=100` sınırına sığar; replika ya da
+  eşzamanlılık artırılırken Postgres `max_connections` da yükseltilmelidir.
+- Organizasyon başına eşzamanlı AI çağrısı ayrıca `ai.concurrency` plan hakkıyla
+  sınırlıdır (varsayılan 3). Sınır doluyken cevap 5 sn'ye kadar boş yer bekler;
+  yoğun müşterilerde bu hakkı yükseltin.
+- Ölçüm: her cevap işi `ai_reply_latency` log satırı yazar
+  (`received_to_reply_ms` = mesajın kaydı → cevabın gönderimi; `queue_wait_ms`,
+  `triage_ms`, `prepare_ms`, `model_ms`, `outcome`). Hedef p50 < 5 sn, p90 < 10 sn.
 
 ### Sağlayıcı polling worker'ı
 
