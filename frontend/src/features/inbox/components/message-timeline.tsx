@@ -354,7 +354,8 @@ const MessageItem = memo(function MessageItem({
         )}
       </div>
       {(onSplit || onEdit) && !m.optimistic && (
-        <DropdownMenu>
+        // Not modal: the item opens a dialog, which then owns focus.
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
