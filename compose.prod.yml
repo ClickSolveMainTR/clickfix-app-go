@@ -555,7 +555,8 @@ services:
   # Nothing else runs here, so exports, syncs, webhooks or a long backfill in
   # the main worker cannot delay an answer. It keeps no state and has no
   # container_name: scale it with QUEUE_AI_REPLICAS. Each task holds one DB
-  # connection while it runs, hence DB_MAX_CONNS above the concurrency.
+  # connection while it runs, hence DB_MAX_CONNS above the concurrency; the
+  # defaults keep all pools together under Postgres' max_connections=100.
   ai-reply:
     <<: *backend-image
     environment:
@@ -563,10 +564,10 @@ services:
       APP_ROLE: worker
       AUTO_MIGRATE: "false"
       QUEUE_QUEUES: ai
-      QUEUE_CONCURRENCY: ${QUEUE_AI_CONCURRENCY:-32}
+      QUEUE_CONCURRENCY: ${QUEUE_AI_CONCURRENCY:-16}
       QUEUE_SCHEDULER_ENABLED: "false"
       QUEUE_TASK_CHECK_INTERVAL: ${QUEUE_AI_TASK_CHECK_INTERVAL:-100ms}
-      DB_MAX_CONNS: ${QUEUE_AI_DB_MAX_CONNS:-48}
+      DB_MAX_CONNS: ${QUEUE_AI_DB_MAX_CONNS:-24}
     depends_on:
       migrate:
         condition: service_completed_successfully

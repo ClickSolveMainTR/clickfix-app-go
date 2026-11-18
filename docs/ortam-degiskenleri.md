@@ -136,9 +136,9 @@ betikteki `allow` listesindedir.
 | `QUEUE_SCHEDULER_ENABLED` | `true` | Periyodik görevleri kaydetme/başlatma. Yalnız bir worker instance'ında açık olmalı; sync ve ek tüketici replikalarında `false`. In-process worker için de geçerlidir. |
 | `QUEUE_SYNC_CONCURRENCY` | `4` | Compose `worker-sync` servisinin `QUEUE_CONCURRENCY` değeri; ana worker eşzamanlılığından bağımsızdır. |
 | `QUEUE_TASK_CHECK_INTERVAL` | `200ms` | Boştaki worker'ın Redis'e yeni iş sorma aralığı; bir işin en kötü alınma gecikmesidir (CF-251). |
-| `QUEUE_AI_CONCURRENCY` | `32` | Compose `ai-reply` servisinin `QUEUE_CONCURRENCY` değeri: replika başına eşzamanlı müşteri cevabı (CF-251). |
+| `QUEUE_AI_CONCURRENCY` | `16` | Compose `ai-reply` servisinin `QUEUE_CONCURRENCY` değeri: replika başına eşzamanlı müşteri cevabı (CF-251). |
 | `QUEUE_AI_REPLICAS` | `1` | `ai-reply` replika sayısı. Servis durum tutmaz; yük artınca yükseltin. |
-| `QUEUE_AI_DB_MAX_CONNS` | `48` | `ai-reply` veritabanı havuzu. Her iş çalışırken bir bağlantı tutar; `QUEUE_AI_CONCURRENCY` değerinin üstünde kalmalı. |
+| `QUEUE_AI_DB_MAX_CONNS` | `24` | `ai-reply` veritabanı havuzu (replika başına). Her iş çalışırken bir bağlantı tutar; `QUEUE_AI_CONCURRENCY` değerinin üstünde kalmalı. Replika ya da eşzamanlılık artarken Postgres `max_connections` (varsayılan 100) bütçesini aşmamalı. |
 | `QUEUE_AI_TASK_CHECK_INTERVAL` | `100ms` | `ai-reply` servisinin Redis yoklama aralığı. |
 | `AI_REPLY_TIMEOUT` | `20s` | Tek müşteri cevabı üretiminin süre sınırı. Aşılırsa müşteriye devir mesajı gider (CF-251). |
 

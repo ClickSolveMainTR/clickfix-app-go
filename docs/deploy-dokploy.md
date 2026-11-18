@@ -231,10 +231,14 @@ arka plan işi bu serviste çalışmaz; dışa aktarma, senkronizasyon, webhook 
 uzun bir backfill ana `worker`'ı doldursa bile cevap beklemez. Ana `worker` da
 `ai` kuyruğunu yedek olarak dinler (`ai-reply` kapalıysa cevaplar durmaz).
 
-- Eşzamanlılık: `QUEUE_AI_CONCURRENCY` (varsayılan 32). Yük artınca önce
+- Eşzamanlılık: `QUEUE_AI_CONCURRENCY` (varsayılan 16; bir cevap birkaç saniye
+  sürdüğü için replika başına dakikada yüzlerce cevap). Yük artınca
   `QUEUE_AI_REPLICAS` yükseltilir; servis durum tutmaz ve `container_name` taşımaz.
 - Her iş çalışırken bir veritabanı bağlantısı tutar: `QUEUE_AI_DB_MAX_CONNS`
-  eşzamanlılığın üstünde kalmalı ve Postgres `max_connections` bütçesine sığmalı.
+  (varsayılan 24, replika başına) eşzamanlılığın üstünde kalmalı. Varsayılanlarla
+  havuz tavanları toplamı 84'tür (backend, worker, worker-sync 20'şer + ai-reply 24)
+  ve Postgres'in varsayılan `max_connections=100` sınırına sığar; replika ya da
+  eşzamanlılık artırılırken Postgres `max_connections` da yükseltilmelidir.
 - Organizasyon başına eşzamanlı AI çağrısı ayrıca `ai.concurrency` plan hakkıyla
   sınırlıdır (varsayılan 3). Sınır doluyken cevap 5 sn'ye kadar boş yer bekler;
   yoğun müşterilerde bu hakkı yükseltin.
