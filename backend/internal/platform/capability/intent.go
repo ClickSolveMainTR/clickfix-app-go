@@ -31,6 +31,7 @@ var ModuleKeywords = map[string][]string{
 	"contacts":      {"kisi", "musteri", "contact", "customer", "telefon", "e-posta adres", "email address"},
 	"companies":     {"firma", "sirket", "company", "account", "hesap sagl", "health"},
 	"macros":        {"makro", "hazir yanit", "kalip yanit", "canned", "macro", "saved repl", "template repl"},
+	"closing_texts": {"bitis metni", "bitis metin", "kapanis metni", "imza", "closing text", "sign-off", "signoff", "signature"},
 	"knowledge":     {"bilgi bankas", "makale", "yardim merkez", "dokuman", "knowledge", "article", "help center", "faq", "sss", "koleksiyon", "collection"},
 	"tags":          {"etiket", "tag", "label"},
 	"reports":       {"rapor", "analiz", "istatistik", "metrik", "performans", "csat", "memnuniyet", "anket", "survey", "nps", "report", "analytics", "stat", "metric", "dashboard", "kac tane", "how many", "bu hafta", "this week", "trend"},

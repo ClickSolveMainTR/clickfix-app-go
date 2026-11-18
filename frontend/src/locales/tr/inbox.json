@@ -46,6 +46,8 @@
   "header.tags": "Etiket",
   "header.search_tag": "Etiket ara veya oluştur…",
   "header.create_tag": "“{{name}}” etiketini oluştur",
+  "header.status": "Durum",
+  "header.custom_statuses": "Özel durumlar",
   "header.snooze": "Ertele",
   "header.resolve": "Çöz",
   "header.reopen": "Yeniden aç",

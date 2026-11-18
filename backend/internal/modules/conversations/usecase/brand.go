@@ -72,7 +72,8 @@ func (s *Service) applyEmailBrand(ctx context.Context, conv db.Conversation, ins
 		}
 		out.Text = replace.Replace(t.Body)
 	}
-	if b.Signature != "" {
+	// A closing text (CF-250) already ends the reply: do not sign it twice.
+	if b.Signature != "" && out.Attributes[AttrClosingText] == nil {
 		out.Text += "\n\n" + b.Signature
 	}
 	return nil

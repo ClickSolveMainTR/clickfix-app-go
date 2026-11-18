@@ -401,6 +401,11 @@ export interface components {
              * @description Team uuid; null removes the team (tenant.conversations.assign)
              */
             team?: string | null;
+            /**
+             * Format: uuid
+             * @description Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
+             */
+            custom_status?: string | null;
             /** Format: date-time */
             snoozed_until?: string;
         };

@@ -81,6 +81,7 @@ import (
 	categorieshandler "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/handler"
 	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/closingtexts"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/coaching"
 	compliancemodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/compliance"
 	compliancerepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/compliance/repository"
@@ -686,6 +687,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(deps.DB, deps.Queries), Resolver: tenantResolver, Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
 	brands.RegisterRoutes(operationsRouter, &brands.Service{Repo: billingRepository, Entitlements: entitlementService, Files: attachmentsSvc})
 	oncall.RegisterRoutes(operationsRouter, oncallSvc)
+	closingtexts.RegisterRoutes(operationsRouter, &closingtexts.Service{Pool: deps.DB, Q: deps.Queries})
 	// Video rooms (CF-139): LiveKit rooms metered against the video_minutes wallet.
 
 	videoLimiter := ratelimit.New(deps.Redis, cfg.App.Env)
@@ -790,6 +792,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 		// assistant and MCP.
 		Register(contactsmodule.Capabilities()...).
 		Register(macrosmodule.Capabilities()...).
+		Register(closingtexts.Capabilities()...).
 		Register(kbmodule.Capabilities()...).
 		Register(appointmentsmodule.Capabilities()...).
 		Register(reportsmodule.Capabilities()...).
