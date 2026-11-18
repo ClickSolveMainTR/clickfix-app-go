@@ -1669,6 +1669,7 @@ class WidgetMessage {
     required this.attachments,
     required this.createdAt,
     this.readAt,
+    this.editedAt,
   });
 
   /// Decodes a `WidgetMessage`; [at] is the JSON path used in errors.
@@ -1684,6 +1685,7 @@ class WidgetMessage {
     attachments: _list(json['attachments'], '$at.attachments', (e, p) => WidgetAttachment.fromJson(_json(e, p), p)),
     createdAt: _dateTime(json['created_at'], '$at.created_at'),
     readAt: _optional(json['read_at'], '$at.read_at', (e, p) => _dateTime(e, p)),
+    editedAt: _optional(json['edited_at'], '$at.edited_at', (e, p) => _dateTime(e, p)),
   );
 
   /// `uuid`.
@@ -1721,6 +1723,9 @@ class WidgetMessage {
   /// `read_at`.
   final DateTime? readAt;
 
+  /// An agent corrected the reply; content is the corrected text
+  final DateTime? editedAt;
+
   /// The JSON object the API expects; unset optional properties are left out.
   Map<String, Object?> toJson() => {
     'uuid': uuid,
@@ -1734,6 +1739,7 @@ class WidgetMessage {
     'attachments': [for (final e in attachments) e.toJson()],
     'created_at': createdAt.toUtc().toIso8601String(),
     'read_at': switch (readAt) { null => null, final v => v.toUtc().toIso8601String() },
+    if (editedAt case final v?) 'edited_at': v.toUtc().toIso8601String(),
   };
 }
 
