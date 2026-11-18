@@ -60,6 +60,8 @@ func NewWorker(cfg config.Config, log *slog.Logger, deliver DeliverNotificationF
 	server := asynq.NewServer(RedisOpt(cfg.Redis), asynq.Config{
 		Concurrency: concurrency,
 		Queues:      workerQueues(cfg.Queue.Queues),
+		// How soon an idle worker sees a new task (asynq's own default is 1s).
+		TaskCheckInterval: cfg.Queue.TaskCheckInterval,
 		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
 			handleTaskFailure(taskContext(ctx, task), log, task, err)
 		}),
@@ -264,6 +266,7 @@ func workerQueues(value string) map[string]int {
 		QueueBulk:          2,
 		QueueSearch:        2,
 		QueueEvents:        3,
+		QueueAI:            6,
 		QueueMaintenance:   1,
 		QueueMessaging:     3,
 	}

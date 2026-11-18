@@ -193,6 +193,17 @@ func (s *Service) queueSend(ctx context.Context, orgID, messageID int64, delay t
 	return s.queue.EnqueueSend(ctx, orgID, messageID, delay)
 }
 
+// queueSendPriority queues an AI or automatic message on the AI lane when
+// the queue has one (CF-251); otherwise it is an ordinary send.
+func (s *Service) queueSendPriority(ctx context.Context, orgID, messageID int64) error {
+	if fast, ok := s.queue.(interface {
+		EnqueueSendPriority(ctx context.Context, orgID, messageID int64) error
+	}); ok {
+		return fast.EnqueueSendPriority(ctx, orgID, messageID)
+	}
+	return s.queueSend(ctx, orgID, messageID, 0)
+}
+
 // Retry queues a failed outbound message again.
 func (s *Service) Retry(ctx context.Context, orgID int64, messageUUID uuid.UUID) error {
 	m, err := s.store.Q().GetMessageByUUID(ctx, db.GetMessageByUUIDParams{OrganizationID: orgID, Uuid: messageUUID})

@@ -32,7 +32,31 @@ type Service struct {
 	Repo    *repository.Store
 	Routes  map[string]ai.Route
 	RAG     Retriever
+	// ConcurrencyWait is how long a live run waits for a free slot of the
+	// organization's concurrency limit before it fails (CF-251). 0 fails at
+	// once, as batch runs always do.
+	ConcurrencyWait time.Duration
 }
+
+// reserve is Repo.Reserve with a short wait on the concurrency limit. A
+// customer reply used to fail (and hand off) the moment a few messages of
+// one organization arrived together; runs now take a couple of seconds, so
+// a slot frees up within the wait.
+func (s *Service) reserve(ctx context.Context, insert db.AIInsertRunParams) (db.AiRun, db.AiPolicy, error) {
+	deadline := time.Now().Add(s.ConcurrencyWait)
+	for {
+		run, policy, err := s.Repo.Reserve(ctx, insert)
+		if !errors.Is(err, model.ErrConcurrency) || ai.LaneOf(ctx) == ai.LaneBatch || !time.Now().Before(deadline) {
+			return run, policy, err
+		}
+		select {
+		case <-ctx.Done():
+			return run, policy, err
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+}
+
 type RunResult struct {
 	UUID uuid.UUID `json:"uuid"`
 	ai.Result
@@ -196,7 +220,11 @@ func (s *Service) RunAgent(ctx context.Context, org, actor int64, in model.RunIn
 	reservationRoute.InputPrice = max(route.InputPrice, route.CacheReadPrice, route.CacheCreatePrice)
 	insert.ReservedCostMicros = reservationRoute.Cost(maxInput, maxOutput)
 	insert.RetrievedChunks = repository.JSON(out.Citations)
-	_, reservedPolicy, reserveErr := s.Repo.Reserve(ctx, insert)
+	reserveStarted := time.Now()
+	_, reservedPolicy, reserveErr := s.reserve(ctx, insert)
+	if waited := time.Since(reserveStarted); waited > 100*time.Millisecond {
+		slog.InfoContext(ctx, "ai_stage", "stage", "reserve_wait", "task", recordedTask, "run_uuid", out.UUID, "duration_ms", waited.Milliseconds(), "failed", reserveErr != nil)
+	}
 	if err = reserveErr; err != nil {
 		if blockErr := s.Repo.Block(ctx, insert); blockErr != nil {
 			return out, blockErr
@@ -218,9 +246,19 @@ func (s *Service) RunAgent(ctx context.Context, org, actor int64, in model.RunIn
 	} else {
 		result, err = route.Provider.Generate(ctx, req)
 	}
+	// error is our own error text or the provider's error type and message;
+	// neither carries request or response content.
+	failure := ""
+	if err != nil {
+		failure = err.Error()
+		if len(failure) > 200 {
+			failure = failure[:200]
+		}
+	}
 	slog.InfoContext(ctx, "ai_stage", "stage", "model", "task", recordedTask, "run_uuid", out.UUID,
 		"duration_ms", time.Since(started).Milliseconds(), "stop_reason", result.StopReason,
-		"cache_read_input_tokens", result.CacheReadTokens, "cache_creation_input_tokens", result.CacheCreateTokens)
+		"cache_read_input_tokens", result.CacheReadTokens, "cache_creation_input_tokens", result.CacheCreateTokens,
+		"tools", len(options.Tools), "tool_calls", len(result.Calls), "output_tokens", result.OutputTokens, "error", failure)
 	providerErr := err
 	if err == nil && len(options.Schema) > 0 {
 		err = ai.ValidateJSON(options.Schema, []byte(result.Text))

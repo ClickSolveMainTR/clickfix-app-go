@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/config"
 	airepo "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/aicore/repository"
@@ -39,6 +40,20 @@ func price(key string) int64 {
 	return n
 }
 
+// concurrencyWait is how long a live AI run waits for a slot of the
+// organization's concurrency limit (CF-251).
+const concurrencyWait = 5 * time.Second
+
+// ReplyTimeout is AI_REPLY_TIMEOUT, the deadline of one customer reply
+// generation (a Go duration such as "15s"); 0 keeps the default.
+func ReplyTimeout() time.Duration {
+	d, err := time.ParseDuration(strings.TrimSpace(os.Getenv("AI_REPLY_TIMEOUT")))
+	if err != nil || d < time.Second || d > 2*time.Minute {
+		return 0
+	}
+	return d
+}
+
 // New reads provider credentials only from process environment, never request data.
 // No hard-coded live rates: operators must configure effective prices before execution.
 func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.Service, search config.SearchConfig) *System {
@@ -52,6 +67,12 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 		route := ai.Route{Provider: anthropic, ProviderName: ai.ProviderAnthropic, Model: ai.ModelForTask(task), InputPrice: price(prefix + "_INPUT_PRICE_MICROS"), OutputPrice: price(prefix + "_OUTPUT_PRICE_MICROS")}
 		route.CacheReadPrice = price(prefix + "_CACHE_READ_PRICE_MICROS")
 		route.CacheCreatePrice = price(prefix + "_CACHE_CREATE_PRICE_MICROS")
+		// AI_<TASK>_MODEL picks another Anthropic model for a task (for
+		// example a faster reply model, CF-251); its prices are the
+		// AI_<TASK>_*_PRICE_MICROS of the same task.
+		if model := strings.TrimSpace(os.Getenv(prefix + "_MODEL")); strings.HasPrefix(model, "claude-") {
+			route.Model = model
+		}
 		if os.Getenv(prefix+"_PROVIDER") == ai.ProviderOpenAI {
 			available = openai.Key != ""
 			route.Provider = openai
@@ -88,6 +109,6 @@ func New(pool *pgxpool.Pool, billing *billingrepo.Repository, ent *entitlements.
 	if openai.Key == "" {
 		speech.Raw = nil
 	}
-	core := &aiusecase.Service{Repo: aiStore, Routes: routes, RAG: rag}
+	core := &aiusecase.Service{Repo: aiStore, Routes: routes, RAG: rag, ConcurrencyWait: concurrencyWait}
 	return &System{Reembed: reembed, Speech: speech, KB: kb, RAG: rag, AI: core, Memory: memusecase.New(pool, core, rag.Embedder)}
 }

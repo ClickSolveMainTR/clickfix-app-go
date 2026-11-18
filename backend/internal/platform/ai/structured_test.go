@@ -108,3 +108,44 @@ func TestLocalValidationKeepsUnknownNullAndStringBounds(t *testing.T) {
 		t.Fatal("local rejection must release credits")
 	}
 }
+
+// CF-251: constraints the provider cannot enforce are applied by the
+// application instead of failing the run: a summary a few characters over
+// maxLength, a confidence above 1 or an eleventh tag. Everything else that
+// does not match still fails, with a loggable reason and no document value.
+func TestConformAppliesApplicationOnlyConstraints(t *testing.T) {
+	schema := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"summary", "confidence", "tags"}, "properties": map[string]any{
+		"summary":    map[string]any{"type": "string", "maxLength": 5},
+		"confidence": map[string]any{"type": "number", "minimum": 0, "maximum": 1},
+		"tags":       map[string]any{"type": "array", "maxItems": 2, "items": map[string]any{"type": "string", "maxLength": 3}},
+		"note":       map[string]any{"anyOf": []any{map[string]any{"type": "string", "maxLength": 2}, map[string]any{"type": "null"}}},
+	}}
+	out, err := validateResult(Request{Schema: schema}, Result{Text: `{"summary":"çok uzun özet","confidence":1.4,"tags":["abcdef","b","c"],"note":"xyz"}`, Calls: []ToolCall{}})
+	if err != nil {
+		t.Fatalf("clamped output must validate: %v", err)
+	}
+	var got struct {
+		Summary    string   `json:"summary"`
+		Confidence float64  `json:"confidence"`
+		Tags       []string `json:"tags"`
+		Note       string   `json:"note"`
+	}
+	if json.Unmarshal([]byte(out.Text), &got) != nil || got.Summary != "çok u" || got.Confidence != 1 || len(got.Tags) != 2 || got.Tags[0] != "abc" || got.Note != "xy" {
+		t.Fatalf("conformed=%s", out.Text)
+	}
+	valid := `{"summary":"ok","confidence":0.5,"tags":[]}`
+	if out, err = validateResult(Request{Schema: schema}, Result{Text: valid, Calls: []ToolCall{}}); err != nil || out.Text != valid {
+		t.Fatalf("a valid answer must pass through untouched: %q %v", out.Text, err)
+	}
+	for text, reason := range map[string]string{
+		``:                          "empty",
+		`{"summary":"x"`:            "not_json",
+		`{"summary":"x","tags":[]}`: "/:required",
+		`{"summary":7,"confidence":0.5,"tags":[]}`: "/summary:type",
+	} {
+		_, err := validateResult(Request{Schema: schema}, Result{Text: text, Calls: []ToolCall{}})
+		if !errors.Is(err, ErrInvalidOutput) || InvalidReason(err) != reason {
+			t.Errorf("%q: err=%v reason=%q want %q", text, err, InvalidReason(err), reason)
+		}
+	}
+}

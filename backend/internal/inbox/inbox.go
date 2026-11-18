@@ -384,6 +384,10 @@ func (q sendQueue) EnqueueSend(ctx context.Context, orgID, messageID int64, dela
 	return q.c.EnqueueConversationSend(ctx, orgID, messageID, delay)
 }
 
+func (q sendQueue) EnqueueSendPriority(ctx context.Context, orgID, messageID int64) error {
+	return q.c.EnqueueConversationSendPriority(ctx, orgID, messageID)
+}
+
 // defaultSendsPerMinute bounds one instance's outbound rate unless its
 // settings carry send_rate_per_minute.
 const defaultSendsPerMinute = 120

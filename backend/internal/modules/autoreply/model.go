@@ -74,6 +74,16 @@ func Defaults() Settings {
 	}
 }
 
+// HandoffSentence is the fixed sentence that closes the AI agent's own
+// handoff message (CF-251), so the customer always reads that a person takes
+// over, whatever the model wrote before it.
+func HandoffSentence(locale string) string {
+	if strings.HasPrefix(strings.ToLower(locale), "en") {
+		return "I have passed your conversation to our team; a representative will get back to you shortly."
+	}
+	return "Konuşmanızı ekibimize aktardım; bir temsilci en kısa sürede size dönecek."
+}
+
 // Normalize fills missing texts from the defaults and trims the rest; it
 // reports a text that is too long.
 func Normalize(in Settings) (Settings, error) {

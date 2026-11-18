@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -42,9 +44,7 @@ func anthropicParams(req Request) anthropic.MessageNewParams {
 	if req.Effort != "" {
 		params.OutputConfig.Effort = anthropic.OutputConfigEffort(req.Effort)
 	}
-	if req.Model == "claude-sonnet-5-5" && (req.Effort == "low" || req.Effort == "medium") && len(req.Tools) == 0 {
-		params.Thinking = anthropic.ThinkingConfigParamUnion{OfBetweenTools: &anthropic.ThinkingConfigBetweenToolsParam{}}
-	}
+	params.Thinking = fastThinking(req)
 	for _, turn := range req.Turns {
 		blocks := []anthropic.ContentBlockParamUnion{}
 		if turn.Text != "" && turn.Role != "tool" {
@@ -56,7 +56,7 @@ func anthropicParams(req Request) anthropic.MessageNewParams {
 		role := anthropic.MessageParamRole(turn.Role)
 		if turn.Role == "tool" {
 			role = anthropic.MessageParamRoleUser
-			blocks = append(blocks, anthropic.NewToolResultBlock(turn.ToolCallID, turn.Text, false))
+			blocks = append(blocks, anthropic.NewToolResultBlock(turn.ToolCallID, turn.Text, turn.ToolError))
 		}
 		if len(blocks) == 0 {
 			continue // Anthropic rejects empty content.
@@ -83,8 +83,43 @@ func anthropicParams(req Request) anthropic.MessageNewParams {
 	return params
 }
 
+// fastThinking turns extended thinking off for latency-bound tasks (effort low
+// or medium: triage, customer replies, copilot). Leaving the field out is not
+// "off" on the current models: they think adaptively, which adds seconds to
+// every turn and spends max_tokens before the answer starts (CF-251: a reply
+// cut off at max_tokens after 15 s). Sonnet 5.5 takes between_tools, with or
+// without tools; Haiku 5.5 takes disabled. Other models keep their default.
+func fastThinking(req Request) anthropic.ThinkingConfigParamUnion {
+	if req.Effort != "low" && req.Effort != "medium" {
+		return anthropic.ThinkingConfigParamUnion{}
+	}
+	switch req.Model {
+	case "claude-sonnet-5-5":
+		return anthropic.ThinkingConfigParamUnion{OfBetweenTools: &anthropic.ThinkingConfigBetweenToolsParam{}}
+	case "claude-haiku-5-5":
+		return anthropic.ThinkingConfigParamUnion{OfDisabled: &anthropic.ThinkingConfigDisabledParam{}}
+	}
+	return anthropic.ThinkingConfigParamUnion{}
+}
+
+// thinkingRefused reports a request the provider refused before running it
+// (HTTP 400) while it carried our thinking override. Such a request is sent
+// once more with the model's default thinking: a slower answer is better
+// than none if a model stops accepting the override.
+func thinkingRefused(params anthropic.MessageNewParams, err error) bool {
+	var rejected *Rejected
+	return errors.As(err, &rejected) && rejected.Status == http.StatusBadRequest &&
+		(params.Thinking.OfBetweenTools != nil || params.Thinking.OfDisabled != nil)
+}
+
 func (p *HTTPProvider) anthropicGenerate(ctx context.Context, req Request) (Result, error) {
-	msg, err := p.anthropicMessages().New(ctx, anthropicParams(req))
+	params := anthropicParams(req)
+	msg, err := p.anthropicMessages().New(ctx, params)
+	if thinkingRefused(params, err) {
+		slog.WarnContext(ctx, "ai_thinking_override_refused", "model", req.Model, "run_uuid", req.TraceID)
+		params.Thinking = anthropic.ThinkingConfigParamUnion{}
+		msg, err = p.anthropicMessages().New(ctx, params)
+	}
 	if err != nil {
 		return Result{}, providerError(err)
 	}
@@ -107,7 +142,13 @@ func (p *HTTPProvider) anthropicGenerate(ctx context.Context, req Request) (Resu
 // anthropicStreamBody sends a streaming request and hands back the raw SSE body.
 func (p *HTTPProvider) anthropicStreamBody(ctx context.Context, req Request) (io.ReadCloser, error) {
 	var resp *http.Response
-	_, err := p.anthropicMessages().New(ctx, anthropicParams(req), option.WithJSONSet("stream", true), option.WithResponseBodyInto(&resp))
+	params := anthropicParams(req)
+	_, err := p.anthropicMessages().New(ctx, params, option.WithJSONSet("stream", true), option.WithResponseBodyInto(&resp))
+	if thinkingRefused(params, err) {
+		slog.WarnContext(ctx, "ai_thinking_override_refused", "model", req.Model, "run_uuid", req.TraceID)
+		params.Thinking = anthropic.ThinkingConfigParamUnion{}
+		_, err = p.anthropicMessages().New(ctx, params, option.WithJSONSet("stream", true), option.WithResponseBodyInto(&resp))
+	}
 	if err != nil {
 		return nil, providerError(err)
 	}

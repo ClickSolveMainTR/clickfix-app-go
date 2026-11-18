@@ -43,6 +43,9 @@ type Turn struct {
 	Text       string     `json:"text"`
 	Calls      []ToolCall `json:"calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
+	// ToolError marks a tool turn whose result is a failure the model must
+	// not treat as data (is_error on the Messages API).
+	ToolError bool `json:"tool_error,omitempty"`
 }
 type Request struct {
 	TraceID      string

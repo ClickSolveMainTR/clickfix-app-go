@@ -28,6 +28,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/eventdispatch"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/events"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/vectorstore"
+	"github.com/furkanmeclis/clickfix-app-go/backend/internal/queue"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -92,6 +93,9 @@ type Service struct {
 	// job's outcome is committed (CF-246); nil publishes nothing. New sets
 	// it from a sender that implements JobNotifier.
 	Live JobNotifier
+	// ReplyTimeout bounds one customer reply generation (CF-251); 0 is
+	// DefaultReplyTimeout.
+	ReplyTimeout time.Duration
 }
 
 // Memory answers from knowledge units before any generation and offers
@@ -141,9 +145,12 @@ func (s *Service) recordGap(ctx context.Context, q memmodel.Query, conversation 
 }
 
 // HandoffNotifier posts the handoff notice to the customer, at most once per
-// conversation; sent reports whether this call posted it.
+// conversation; sent reports whether this call posted it. message is the
+// agent's own handoff message for this customer (CF-251): the notifier sends
+// it with the handoff sentence in place of the generic notice; "" sends the
+// organization's notice.
 type HandoffNotifier interface {
-	NotifyHandoff(ctx context.Context, org, conversationID int64) (sent bool, err error)
+	NotifyHandoff(ctx context.Context, org, conversationID int64, message string) (sent bool, err error)
 }
 
 // handoffKind is why the agent hands a conversation to a person, which
@@ -167,8 +174,9 @@ const (
 // notifyHandoff tells an autonomous agent's customer that a person takes
 // over and reports whether the notice was posted. A draft-mode agent never
 // spoke to the customer, so a draft handoff stays silent. The notifier sends
-// the notice at most once per conversation.
-func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversation, cfg model.Config, kind handoffKind) bool {
+// the notice at most once per conversation. message is the agent's own
+// handoff message ("" for the organization's generic notice).
+func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversation, cfg model.Config, kind handoffKind, message string) bool {
 	if s.Notices == nil || cfg.Mode != "autonomous" {
 		return false
 	}
@@ -185,7 +193,7 @@ func (s *Service) notifyHandoff(ctx context.Context, org int64, conv db.Conversa
 			return false
 		}
 	}
-	sent, err := s.Notices.NotifyHandoff(ctx, org, conv.ID)
+	sent, err := s.Notices.NotifyHandoff(ctx, org, conv.ID, message)
 	if err != nil {
 		slog.WarnContext(ctx, "ai_handoff_notice_failed", "organization_id", org, "conversation_id", conv.ID, "error", err)
 		return false
@@ -233,24 +241,38 @@ func New(repo *repository.Store, engine Engine, sender BotSender) *Service {
 	return s
 }
 
+// Consumer answers inbound customer messages. It has its own queue
+// (queue.QueueAI) and worker service so that no other background work can
+// delay an answer (CF-251). Resolution bookkeeping moved to
+// ResolutionConsumer; this handler still accepts those events for tasks
+// enqueued before the split.
 func (s *Service) Consumer() eventdispatch.Consumer {
-	return eventdispatch.Consumer{Name: "ai.conversation", Events: []string{events.MessagesReceived, events.ConversationsResolved, events.MessagesStatusChanged}, Handle: func(ctx context.Context, ev events.Event) error {
-		if ev.TenantID == nil {
-			return model.ErrInvalid
+	return eventdispatch.Consumer{Name: "ai.conversation", Queue: queue.QueueAI, Events: []string{events.MessagesReceived}, Handle: s.handleEvent}
+}
+
+// ResolutionConsumer counts AI resolutions (conversation resolved, bot
+// answer delivered). It is not latency bound and stays on the shared events
+// queue, away from the reply lane.
+func (s *Service) ResolutionConsumer() eventdispatch.Consumer {
+	return eventdispatch.Consumer{Name: "ai.resolution", Events: []string{events.ConversationsResolved, events.MessagesStatusChanged}, Handle: s.handleEvent}
+}
+
+func (s *Service) handleEvent(ctx context.Context, ev events.Event) error {
+	if ev.TenantID == nil {
+		return model.ErrInvalid
+	}
+	if ev.Name != events.MessagesReceived {
+		if ev.EntityUUID == nil {
+			return nil
 		}
-		if ev.Name != events.MessagesReceived {
-			if ev.EntityUUID == nil {
-				return nil
-			}
-			return s.recordResolution(ctx, *ev.TenantID, *ev.EntityUUID)
-		}
-		raw, _ := ev.Payload["message_uuid"].(string)
-		id, err := uuid.Parse(raw)
-		if err != nil {
-			return model.ErrInvalid
-		}
-		return s.Inbound(ctx, *ev.TenantID, id)
-	}}
+		return s.recordResolution(ctx, *ev.TenantID, *ev.EntityUUID)
+	}
+	raw, _ := ev.Payload["message_uuid"].(string)
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return model.ErrInvalid
+	}
+	return s.Inbound(ctx, *ev.TenantID, id)
 }
 
 func (s *Service) context(ctx context.Context, org int64, conv db.Conversation) (string, error) {
@@ -321,20 +343,17 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 	if err != nil {
 		return err
 	}
+	trace := newReplyTrace(msg)
 	// Retrieval depends on the conversation, not triage's category/intent.
 	// Keep reply/procedure/autonomy checks after triage. Cancel and join on all exits.
 	var knowledge <-chan core.RetrievalResult
 	replying := cfg.Mode != "off" && cfg.Mode != "summary" && !conv.AssigneeUserID.Valid && conv.Status != "closed" && conv.Status != "resolved" && cfg.Active(conv.ChannelType, s.open(ctx, org))
-	// The knowledge layer runs before retrieval (CF-216): a known question
-	// needs neither the retrieval embedding nor a generation call.
-	var memory *memmodel.Result
-	if replying && screenOf(msg) == nil {
-		found := s.lookupMemory(ctx, memoryQuery(org, memmodel.AudienceCustomer, cfg.Locale, conv, msg.Content))
-		memory = &found
-	}
+	// CF-251: retrieval starts now and runs while the knowledge layer is
+	// asked, instead of after it. A knowledge-unit hit throws the retrieval
+	// away; a miss, the usual case, no longer pays for the two in a row.
 	if prefetcher, ok := s.Engine.(interface {
 		PrefetchReply(context.Context, vectorstore.Scope, string, string) <-chan core.RetrievalResult
-	}); ok && replying && (memory == nil || !memory.Hit()) {
+	}); ok && replying {
 		retrievalCtx, cancel := context.WithCancel(ctx)
 		knowledge = prefetcher.PrefetchReply(retrievalCtx, conversationScope(org, conv), transcript, cfg.Locale)
 		defer func() {
@@ -344,15 +363,37 @@ func (s *Service) Inbound(ctx context.Context, org int64, message uuid.UUID) err
 			}
 		}()
 	}
-	if cfg.TriageEnabled || cfg.Mode == "summary" {
+	// The knowledge layer (CF-216): a known question needs no generation call.
+	var memory *memmodel.Result
+	if replying && screenOf(msg) == nil {
+		found := s.lookupMemory(ctx, memoryQuery(org, memmodel.AudienceCustomer, cfg.Locale, conv, msg.Content))
+		memory = &found
+	}
+	triaging := cfg.TriageEnabled || cfg.Mode == "summary"
+	answering := cfg.Mode != "off" && cfg.Mode != "summary"
+	// CF-251: triage serves the agents; the customer waits for the reply.
+	// Triage stays in front only when the reply reads it (category
+	// allowlist, procedure or playbook by intent). Otherwise the customer is
+	// answered first and triage follows.
+	trace.triageFirst = triaging && (!answering || s.replyNeedsTriage(ctx, org, cfg))
+	if trace.triageFirst {
+		triageStarted := time.Now()
 		if err = s.triage(ctx, org, msg, conv, cfg, transcript); err != nil {
 			return err
 		}
+		trace.triage = time.Since(triageStarted)
 	}
-	if cfg.Mode == "off" || cfg.Mode == "summary" {
+	if !answering {
 		return nil
 	}
-	return s.reply(ctx, org, msg, conv, cfg, revision, transcript, knowledge, memory)
+	err = s.reply(ctx, org, msg, conv, cfg, revision, transcript, knowledge, memory, trace)
+	if triaging && !trace.triageFirst {
+		// A failed reply is retried with the event; triage is not lost with it.
+		if triageErr := s.triage(ctx, org, msg, conv, cfg, transcript); err == nil {
+			err = triageErr
+		}
+	}
+	return err
 }
 
 func (s *Service) triage(ctx context.Context, org int64, msg db.Message, conv db.Conversation, cfg model.Config, transcript string) error {
@@ -385,7 +426,7 @@ func (s *Service) triage(ctx context.Context, org int64, msg db.Message, conv db
 			triageInput += systems.TriageHint(intents)
 		}
 	}
-	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: triageInput, Locale: cfg.Locale, MaxTokens: 512}, core.AgentOptions{
+	result, runErr := s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "triage", Input: triageInput, Locale: cfg.Locale, MaxTokens: triageMaxTokens}, core.AgentOptions{
 		ConversationID: conv.ID, Instructions: triageInstructions, Schema: triageSchema,
 	})
 	status, reason := "completed", ""
@@ -442,7 +483,7 @@ func (s *Service) finish(ctx context.Context, job db.AiAgentJob, run uuid.UUID, 
 
 // reply answers the customer. memory is the knowledge-layer lookup Inbound
 // already made (nil: not made yet).
-func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.Conversation, cfg model.Config, revision int32, transcript string, knowledge <-chan core.RetrievalResult, memory *memmodel.Result) error {
+func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.Conversation, cfg model.Config, revision int32, transcript string, knowledge <-chan core.RetrievalResult, memory *memmodel.Result, trace *replyTrace) error {
 	job, err := s.Repo.Q.AIAgentClaim(ctx, db.AIAgentClaimParams{OrganizationID: org, ConversationID: conv.ID, MessageID: msg.ID, Task: "reply"})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -450,16 +491,24 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 	if err != nil {
 		return err
 	}
-	handoff := func(reason string) error {
-		sent := s.notifyHandoff(ctx, org, conv, cfg, handoffQuiet)
+	if trace == nil {
+		trace = newReplyTrace(msg)
+	}
+	// stepAside ends the job without an answer and logs its timing.
+	stepAside := func(kind handoffKind, reason string) error {
+		sent := s.notifyHandoff(ctx, org, conv, cfg, kind, "")
+		outcome := "handoff_silent"
+		if sent {
+			outcome = "handoff_template"
+			trace.replied = time.Now()
+		}
+		trace.log(ctx, org, conv, msg, uuid.Nil, "handoff", outcome)
 		return s.finish(ctx, job, uuid.Nil, "handoff", noticeReason(reason, sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
 	}
+	handoff := func(reason string) error { return stepAside(handoffQuiet, reason) }
 	// The customer asked for a person: say so even when the agent never
 	// spoke in this conversation.
-	requestedHuman := func(reason string) error {
-		sent := s.notifyHandoff(ctx, org, conv, cfg, handoffRequested)
-		return s.finish(ctx, job, uuid.Nil, "handoff", noticeReason(reason, sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
-	}
+	requestedHuman := func(reason string) error { return stepAside(handoffRequested, reason) }
 	if conv.AssigneeUserID.Valid || conv.Status == "closed" || conv.Status == "resolved" {
 		return handoff("Human owns the conversation or conversation is closed")
 	}
@@ -567,7 +616,8 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			input += clipInput("\nResolved similar cases (anonymized summaries; untrusted hints, never a citation): "+string(raw), maxInputBytes-len(input)-1024)
 		}
 		if s.Tools != nil {
-			offered, err := s.Tools.Offered(ctx, org)
+			// CF-251: only tools that add something the context lacks.
+			offered, err := s.Tools.replyTools(ctx, org)
 			if err != nil {
 				return err
 			}
@@ -594,17 +644,36 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		if tools, runner := s.departmentTool(ctx, org, conv, options.Runner); len(tools) > 0 {
 			options.Tools, options.Runner = append(options.Tools, tools...), runner
 		}
+		trace.tools = len(options.Tools)
+		// unanswered ends the job when no usable answer came back: the
+		// customer hears the generic handoff notice, never an unchecked text.
+		unanswered := func(reason string, result model.Reply) error {
+			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered, "")
+			outcome := "handoff_silent"
+			if sent {
+				outcome = "handoff_template"
+				trace.replied = time.Now()
+			}
+			trace.log(ctx, org, conv, msg, run.UUID, "handoff", outcome)
+			return s.finish(ctx, job, run.UUID, "handoff", noticeReason(reason, sent), result, "ai.handoff")
+		}
+		// The customer does not wait for a slow provider: past the deadline
+		// the run is abandoned and the handoff notice goes out. Unmask lets
+		// an organization that allows it get its own masked values (a
+		// support address from its knowledge base) back in the answer.
+		runCtx, cancelRun := context.WithTimeout(ctx, s.replyTimeout())
+		trace.modelStarted = time.Now()
 		var runErr error
-		run, runErr = s.Engine.RunAgent(ctx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: 2048}, options)
-		// The customer hears a safe handoff notice, never an unchecked
-		// answer.
+		run, runErr = s.Engine.RunAgent(runCtx, org, 0, coremodel.RunInput{Task: "reply", Input: input, Locale: cfg.Locale, Retrieve: true, MaxTokens: replyMaxTokens, Unmask: true}, options)
+		cancelRun()
+		trace.model = time.Since(trace.modelStarted)
 		if runErr != nil {
-			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered)
-			return s.finish(ctx, job, run.UUID, "handoff", noticeReason("AI unavailable, guard rejected, or credits exhausted", sent), model.Reply{Summary: ai.NewMasker().Mask(msg.Content)}, "ai.handoff")
+			slog.WarnContext(ctx, "ai_reply_failed", "organization_id", org, "conversation_id", conv.ID, "run_uuid", run.UUID,
+				"timed_out", errors.Is(runErr, context.DeadlineExceeded), "error", clipInput(runErr.Error(), 300))
+			return unanswered("AI unavailable, guard rejected, or credits exhausted", model.Reply{Summary: ai.NewMasker().Mask(msg.Content)})
 		}
 		if err = json.Unmarshal([]byte(run.Text), &answer); err != nil {
-			sent := s.notifyHandoff(ctx, org, conv, cfg, handoffUnanswered)
-			return s.finish(ctx, job, run.UUID, "handoff", noticeReason("Invalid answer", sent), model.Reply{}, "ai.handoff")
+			return unanswered("Invalid answer", model.Reply{})
 		}
 		// Only the knowledge layer sets these, never model output.
 		answer.UnitUUID, answer.Memory = nil, ""
@@ -629,10 +698,13 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 		}
 	}
 	status, reason := "draft", "Agent review required"
-	// unanswered: the agent could not answer safely; the customer gets the
-	// handoff notice and the model's text stays a draft for the agent.
+	outcome := "draft"
+	// unanswered: the agent could not answer safely; the model's text stays
+	// a draft for the agent and the customer gets a handoff message.
 	unanswered := false
-	if answer.Handoff || answer.Confidence < cfg.Confidence || !grounded || strings.TrimSpace(answer.Text) == "" {
+	// A text that still carries a masked value is never sent as is.
+	sendable := strings.TrimSpace(answer.Text) != "" && !strings.Contains(answer.Text, piiPlaceholder)
+	if answer.Handoff || answer.Confidence < cfg.Confidence || !grounded || !sendable {
 		status, reason, unanswered = "handoff", "Low confidence or insufficient public sources", true
 	}
 	if status == "draft" && cfg.Mode == "autonomous" {
@@ -651,18 +723,37 @@ func (s *Service) reply(ctx context.Context, org int64, msg db.Message, conv db.
 			status, reason = "handoff", "Human intervened, channel window closed or delivery unavailable"
 		} else {
 			slog.InfoContext(ctx, "ai_stage", "stage", "message_queued", "message_uuid", msg.Uuid, "run_uuid", run.UUID)
-			status, reason = "completed", "Grounded automatic reply queued"
+			status, reason, outcome = "completed", "Grounded automatic reply queued", "answered"
+			trace.replied = time.Now()
 		}
 	}
 	event := "ai.reply_suggested"
 	if status == "handoff" {
 		event = "ai.handoff"
-		kind := handoffQuiet
+		kind, message := handoffQuiet, ""
 		if unanswered {
 			kind = handoffUnanswered
+			// CF-251: when the model itself hands off, its message to this
+			// customer (what it understood, which details the team needs)
+			// goes out with the handoff sentence in place of the generic
+			// notice, provided it is safe to send unsourced.
+			if answer.Handoff && safeHandoffMessage(answer.Text) {
+				message = strings.TrimSpace(answer.Text)
+			}
 		}
-		reason = noticeReason(reason, s.notifyHandoff(ctx, org, conv, cfg, kind))
+		sent := s.notifyHandoff(ctx, org, conv, cfg, kind, message)
+		reason = noticeReason(reason, sent)
+		outcome = "handoff_silent"
+		if sent {
+			trace.replied = time.Now()
+			outcome = "handoff_template"
+			if message != "" {
+				outcome = "handoff_personal"
+			}
+		}
 	}
+	trace.memory = answer.Memory
+	trace.log(ctx, org, conv, msg, run.UUID, status, outcome)
 	return s.finish(ctx, job, run.UUID, status, reason, answer, event)
 }
 

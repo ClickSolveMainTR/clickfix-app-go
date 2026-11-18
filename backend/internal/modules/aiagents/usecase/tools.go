@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/access"
 	convmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/model"
 	conv "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/conversations/usecase"
+	kbmodel "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/knowledge/model"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/ai"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/crypto"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/platform/customfields"
@@ -270,7 +272,7 @@ func (s *ToolService) execute(ctx context.Context, org, actor int64, c db.Conver
 		if err != nil {
 			return "", err
 		}
-		output = rows
+		output = compactHistory(rows)
 	case "knowledge_search":
 		if s.Core == nil || s.Core.RAG == nil {
 			return "", ai.ErrUnavailable
@@ -279,7 +281,7 @@ func (s *ToolService) execute(ctx context.Context, org, actor int64, c db.Conver
 		if err != nil {
 			return "", err
 		}
-		output = citations
+		output = compactCitations(citations)
 	case "create_note":
 		if s.Conversations == nil || actor <= 0 {
 			return "", model.ErrInvalid
@@ -376,6 +378,43 @@ func (s *ToolService) execute(ctx context.Context, org, actor int64, c db.Conver
 		return "", model.ErrInvalid
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+// toolOutputBudget keeps a built-in tool's JSON under the 4096-byte limit of a
+// tool result. Whole message rows and whole knowledge chunks went over it on
+// any real conversation, so conversation_history and knowledge_search failed
+// and took the reply run down with them (CF-251).
+const toolOutputBudget = 3600
+
+// compactHistory keeps the newest messages that fit, oldest first.
+func compactHistory(rows []db.Message) []map[string]any {
+	out := []map[string]any{}
+	size := 0
+	for i := len(rows) - 1; i >= 0; i-- {
+		line := map[string]any{"sender": rows[i].SenderType, "at": rows[i].CreatedAt.Time.UTC().Format(time.RFC3339), "text": clipInput(rows[i].Content, 600)}
+		raw, _ := json.Marshal(line)
+		if size+len(raw)+1 > toolOutputBudget {
+			break
+		}
+		size += len(raw) + 1
+		out = append(out, line)
+	}
+	slices.Reverse(out)
+	return out
+}
+
+// compactCitations keeps what the model cites and reads (ids, title, text),
+// sharing the budget between the chunks.
+func compactCitations(citations []kbmodel.Citation) []map[string]any {
+	out := []map[string]any{}
+	if len(citations) == 0 {
+		return out
+	}
+	each := max(toolOutputBudget/len(citations)-220, 120)
+	for _, c := range citations {
+		out = append(out, map[string]any{"chunk_uuid": c.ChunkUUID, "article_uuid": c.ArticleUUID, "title": clipInput(c.Title, 100), "content": clipInput(c.Content, each)})
+	}
+	return out
 }
 
 func issueTools() []ai.Tool {

@@ -81,6 +81,7 @@ x-backend-environment: &backend-environment
   QUEUE_QUEUES: ${QUEUE_QUEUES:-}
   QUEUE_SCHEDULER_ENABLED: ${QUEUE_SCHEDULER_ENABLED:-true}
   QUEUE_SYNC_CONCURRENCY: ${QUEUE_SYNC_CONCURRENCY:-4}
+  QUEUE_TASK_CHECK_INTERVAL: ${QUEUE_TASK_CHECK_INTERVAL:-}
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
   VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
   VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:destek@getclickfix.com}
@@ -173,6 +174,7 @@ x-backend-environment: &backend-environment
   AI_TRIAGE_FALLBACK_OUTPUT_PRICE_MICROS: ${AI_TRIAGE_FALLBACK_OUTPUT_PRICE_MICROS:-}
   AI_REPLY_PROVIDER: ${AI_REPLY_PROVIDER:-}
   AI_REPLY_MODEL: ${AI_REPLY_MODEL:-}
+  AI_REPLY_TIMEOUT: ${AI_REPLY_TIMEOUT:-}
   AI_REPLY_INPUT_PRICE_MICROS: ${AI_REPLY_INPUT_PRICE_MICROS:-}
   AI_REPLY_OUTPUT_PRICE_MICROS: ${AI_REPLY_OUTPUT_PRICE_MICROS:-}
   AI_REPLY_CACHE_CREATE_PRICE_MICROS: ${AI_REPLY_CACHE_CREATE_PRICE_MICROS:-}
@@ -502,7 +504,8 @@ services:
       <<: *backend-environment
       APP_ROLE: worker
       AUTO_MIGRATE: "false"
-      QUEUE_QUEUES: ${QUEUE_QUEUES:-default:1,notifications:2,exports:2,imports:2,bulk:2,search:2,events:3,maintenance:1,messaging:3}
+      # "ai" is served here only as a fallback; the ai-reply service below owns it.
+      QUEUE_QUEUES: ${QUEUE_QUEUES:-default:1,notifications:2,exports:2,imports:2,bulk:2,search:2,events:3,maintenance:1,messaging:3,ai:6}
       QUEUE_SCHEDULER_ENABLED: ${QUEUE_SCHEDULER_ENABLED:-true}
     depends_on:
       migrate:
@@ -540,6 +543,43 @@ services:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
+    mem_limit: 512m
+    stop_grace_period: 35s
+    restart: unless-stopped
+    networks:
+      - app
+
+  # CF-251: the customer-facing AI lane. Same image and worker binary, but it
+  # serves only the "ai" queue: the ai.conversation consumer (an inbound
+  # customer message -> AI answer) and the delivery of the messages it posts.
+  # Nothing else runs here, so exports, syncs, webhooks or a long backfill in
+  # the main worker cannot delay an answer. It keeps no state and has no
+  # container_name: scale it with QUEUE_AI_REPLICAS. Each task holds one DB
+  # connection while it runs, hence DB_MAX_CONNS above the concurrency.
+  ai-reply:
+    <<: *backend-image
+    environment:
+      <<: *backend-environment
+      APP_ROLE: worker
+      AUTO_MIGRATE: "false"
+      QUEUE_QUEUES: ai
+      QUEUE_CONCURRENCY: ${QUEUE_AI_CONCURRENCY:-32}
+      QUEUE_SCHEDULER_ENABLED: "false"
+      QUEUE_TASK_CHECK_INTERVAL: ${QUEUE_AI_TASK_CHECK_INTERVAL:-100ms}
+      DB_MAX_CONNS: ${QUEUE_AI_DB_MAX_CONNS:-48}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      centrifugo:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    deploy:
+      replicas: ${QUEUE_AI_REPLICAS:-1}
     mem_limit: 512m
     stop_grace_period: 35s
     restart: unless-stopped
