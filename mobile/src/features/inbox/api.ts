@@ -1,4 +1,10 @@
-import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { attachmentFetch, api, orgHeader, unwrap } from '@/core/api/client';
@@ -237,7 +243,9 @@ export function useMarkRead(uuid: string) {
   const qc = useQueryClient();
   return useCallback(() => {
     if (!org || !uuid) return;
-    void unwrap(api.POST('/v1/tenant/conversations/{uuid}/read', { params: { header: orgHeader(), path: { uuid } } }))
+    void unwrap(
+      api.POST('/v1/tenant/conversations/{uuid}/read', { params: { header: orgHeader(), path: { uuid } } }),
+    )
       .then(() => {
         void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
         qc.setQueriesData<InfiniteData<ConversationPage>>({ queryKey: inboxKeys.lists(org) }, (data) =>
@@ -276,7 +284,9 @@ export function useMarkUnread(uuid: string) {
           }
         : data,
     );
-    void unwrap(api.POST('/v1/tenant/conversations/{uuid}/unread', { params: { header: orgHeader(), path: { uuid } } }))
+    void unwrap(
+      api.POST('/v1/tenant/conversations/{uuid}/unread', { params: { header: orgHeader(), path: { uuid } } }),
+    )
       .catch(() => undefined)
       .finally(() => {
         void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
@@ -341,7 +351,9 @@ export function useConversationSla(uuid: string) {
     enabled: !!org && !!uuid,
     staleTime: 30_000,
     queryFn: () =>
-      unwrap(api.GET('/v1/tenant/conversations/{uuid}/sla', { params: { header: orgHeader(), path: { uuid } } })),
+      unwrap(
+        api.GET('/v1/tenant/conversations/{uuid}/sla', { params: { header: orgHeader(), path: { uuid } } }),
+      ),
   });
 }
 
@@ -377,7 +389,9 @@ export function uploadAttachment(file: LocalFile, onProgress?: (fraction: number
       // openapi-fetch leaves FormData alone, so fetch sets the multipart boundary.
       body: form as unknown as { file: string },
       bodySerializer: (b) => b as unknown as FormData,
-      ...(onProgress ? { fetch: (request: Request) => attachmentFetch(request, { body: form, onProgress }) } : {}),
+      ...(onProgress
+        ? { fetch: (request: Request) => attachmentFetch(request, { body: form, onProgress }) }
+        : {}),
     }),
   );
 }
@@ -437,7 +451,9 @@ export function useCannedMutations() {
     }),
     remove: useMutation({
       mutationFn: (uuid: string) =>
-        unwrap(api.DELETE('/v1/tenant/canned-responses/{uuid}', { params: { header: orgHeader(), path: { uuid } } })),
+        unwrap(
+          api.DELETE('/v1/tenant/canned-responses/{uuid}', { params: { header: orgHeader(), path: { uuid } } }),
+        ),
       onSuccess: done,
     }),
   };
@@ -495,7 +511,8 @@ export function useSavedViews() {
     queryKey: [...inboxKeys.counts(org), 'views'] as const,
     enabled: !!org && canRead && !!views.data?.items.length,
     staleTime: 30_000,
-    queryFn: () => unwrap(api.GET('/v1/tenant/conversation-views/counts', { params: { header: orgHeader() } })),
+    queryFn: () =>
+      unwrap(api.GET('/v1/tenant/conversation-views/counts', { params: { header: orgHeader() } })),
   });
   return { views: views.data?.items ?? [], counts: (counts.data?.counts ?? {}) as Record<string, number> };
 }
