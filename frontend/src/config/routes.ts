@@ -209,6 +209,8 @@ export const routes = {
       },
       /** Category taxonomy, review queue and label export (CF-218). */
       categories: "/settings/categories",
+      /** Closing texts appended to replies (CF-250). */
+      closingTexts: "/settings/closing-texts",
       /** Custom conversation statuses (CF-249). */
       conversationStatuses: "/settings/conversation-statuses",
     },

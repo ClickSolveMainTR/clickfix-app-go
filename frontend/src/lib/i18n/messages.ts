@@ -44,6 +44,7 @@ import enPlatformHealth from "@/locales/en/platform_health.json";
 import enEngineering from "@/locales/en/engineering.json";
 import enTeams from "@/locales/en/teams.json";
 import enCategories from "@/locales/en/categories.json";
+import enClosingTexts from "@/locales/en/closing_texts.json";
 import enConversationStatuses from "@/locales/en/conversation_statuses.json";
 import enDepartments from "@/locales/en/departments.json";
 import enChannels from "@/locales/en/channels.json";
@@ -133,6 +134,7 @@ import trPlatformHealth from "@/locales/tr/platform_health.json";
 import trEngineering from "@/locales/tr/engineering.json";
 import trTeams from "@/locales/tr/teams.json";
 import trCategories from "@/locales/tr/categories.json";
+import trClosingTexts from "@/locales/tr/closing_texts.json";
 import trConversationStatuses from "@/locales/tr/conversation_statuses.json";
 import trDepartments from "@/locales/tr/departments.json";
 import trChannels from "@/locales/tr/channels.json";
@@ -195,6 +197,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     platform_health: trPlatformHealth,
     teams: trTeams,
     categories: trCategories,
+    closing_texts: trClosingTexts,
     conversation_statuses: trConversationStatuses,
     departments: trDepartments,
     engineering: trEngineering,
@@ -280,6 +283,7 @@ const catalogs: Record<AppLocale, Record<string, MessageDictionary>> = {
     platform_health: enPlatformHealth,
     teams: enTeams,
     categories: enCategories,
+    closing_texts: enClosingTexts,
     conversation_statuses: enConversationStatuses,
     departments: enDepartments,
     engineering: enEngineering,

@@ -183,6 +183,9 @@ type postRequest struct {
 	ReplyTo     *uuid.UUID  `json:"reply_to"`
 	Mentions    []uuid.UUID `json:"mentions"`
 	Attachments []uuid.UUID `json:"attachments"`
+	// ClosingText is a closing text uuid or "none" (CF-250); left out, the
+	// agent's last pick or the default is used.
+	ClosingText *string `json:"closing_text"`
 	Template    *struct {
 		Name       string   `json:"name"`
 		Language   string   `json:"language"`
@@ -223,6 +226,20 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 	if req.Template != nil {
 		in.Template = &channels.Template{Name: req.Template.Name, Language: req.Template.Language, Parameters: req.Template.Parameters}
 	}
+	in.Closing = usecase.Closing{Mode: usecase.ClosingAuto}
+	if req.ClosingText != nil {
+		switch v := strings.TrimSpace(*req.ClosingText); v {
+		case "none", "":
+			in.Closing.Mode = usecase.ClosingNone
+		default:
+			id, err := uuid.Parse(v)
+			if err != nil {
+				response.ValidationError(w, r, []response.Detail{{Field: "closing_text", Message: "must be a closing text uuid or none"}})
+				return
+			}
+			in.Closing = usecase.Closing{Mode: usecase.ClosingPick, UUID: id}
+		}
+	}
 	ids, err := h.svc.AgentIDs(r.Context(), scope.ID, req.Mentions)
 	if err != nil {
 		writeError(w, r, err)
@@ -239,6 +256,21 @@ func (h *Handler) Post(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK
 	}
 	response.JSON(w, r, status, posted.Message)
+}
+
+// ClosingTexts lists the closing texts usable on the conversation, rendered
+// for it, with the composer's starting pick (CF-250).
+func (h *Handler) ClosingTexts(w http.ResponseWriter, r *http.Request) {
+	scope, actor, id, ok := whoAndID(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.svc.ClosingOptionsFor(r.Context(), scope.ID, actor, id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 // Retry queues a failed outbound message again.

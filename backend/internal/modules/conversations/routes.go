@@ -49,6 +49,7 @@ func RegisterRoutes(mux *http.ServeMux, h *handler.Handler, tokens *jwt.Manager,
 	route("GET /v1/tenant/conversations/{uuid}/diagnostics", h.Diagnostics, read)
 	route("GET /v1/tenant/conversations/{uuid}/messages", h.Messages, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages", h.Post, read)
+	route("GET /v1/tenant/conversations/{uuid}/closing-texts", h.ClosingTexts, read)
 	route("POST /v1/tenant/conversations/{uuid}/messages/{message}/retry", h.Retry, read, reply)
 	route("POST /v1/tenant/conversations/{uuid}/read", h.Read, read)
 	route("POST /v1/tenant/conversations/{uuid}/unread", h.Unread, read)

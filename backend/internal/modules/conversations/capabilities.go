@@ -136,12 +136,18 @@ func Capabilities() []*capability.Capability {
 			Name: "conversations.reply", MCPName: "reply", Module: "conversations", Kind: capability.Write,
 			Permission: rbac.PermTenantConversationsReply, Surfaces: surfaces, Routes: inboxRoutes,
 			Title:       title("Müşteriye yanıt gönder", "Send a reply"),
-			Description: "Send a reply to the customer. Reuse client_id when retrying the same reply.",
+			Description: "Send a reply to the customer. Reuse client_id when retrying the same reply. closing_text: a closing text uuid (closing_texts_list) or none; left out, the agent's last pick or the default is appended.",
 			Input: object([]string{"conversation_uuid", "content"},
-				map[string]any{"conversation_uuid": conv, "content": capability.Titled("Yanıt", textField), "client_id": uuidField}),
+				map[string]any{"conversation_uuid": conv, "content": capability.Titled("Yanıt", textField), "client_id": uuidField,
+					"closing_text": map[string]any{"type": "string", "title": "Bitiş metni", "maxLength": 36, "description": "closing text uuid or none"}}),
 			Validate: func(p capability.Params) error {
 				if text(p, "content") == "" {
 					return capability.Invalid("content is required")
+				}
+				if c := text(p, "closing_text"); c != "" && c != "none" {
+					if err := checkUUIDs(p, "closing_text"); err != nil {
+						return capability.Invalid("closing_text must be a closing text uuid or none")
+					}
 				}
 				return checkUUIDs(p, "conversation_uuid", "client_id")
 			},
@@ -149,6 +155,9 @@ func Capabilities() []*capability.Capability {
 				body := map[string]any{"content": text(p, "content")}
 				if id := text(p, "client_id"); id != "" {
 					body["client_id"] = id
+				}
+				if c := text(p, "closing_text"); c != "" {
+					body["closing_text"] = c
 				}
 				res, err := raw(ctx, e, http.MethodPost, conversationsPath+"/"+text(p, "conversation_uuid")+"/messages", body)
 				res.Route = "/conversations/" + text(p, "conversation_uuid")
