@@ -5908,6 +5908,8 @@ export interface paths {
          *     redelivered id answers with the same conversation). Status changes made
          *     in ClickFix POST APIChannelStatusChanged to webhook_url (header
          *     `X-ClickFix-Event: status_changed`, Idempotency-Key = event id).
+         *     Agent edits of a delivered reply POST APIChannelMessageEdited (header
+         *     `X-ClickFix-Event: message_edited`, CF-248).
          *
          *     Slack uses X-Slack-Signature and X-Slack-Request-Timestamp; POST URL verification
          *     echoes text/plain. Teams uses Bot Framework RS256 JWT (issuer, app audience,
@@ -6557,6 +6559,58 @@ export interface paths {
          *     private notes.
          */
         post: operations["postTenantConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/messages/{message}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit your own reply
+         * @description CF-248. Requires `tenant.conversations.reply`. Only the author of a
+         *     public text reply may edit it, within 15 minutes of sending; notes,
+         *     templates and contact messages are not editable (`409
+         *     MESSAGE_NOT_EDITABLE`, also while the reply is being handed to the
+         *     channel), an older reply answers `409 MESSAGE_EDIT_WINDOW_CLOSED` and
+         *     another agent's reply `403`. The previous text is kept in the edit
+         *     history, `edited_at` is set and inbox clients get `message.updated`.
+         *     `channel_edit` says what the contact sees: `notified` (the channel
+         *     updates its copy: the REST API channel receives a signed
+         *     `message_edited` event, the web widget replaces the text), `unsupported`
+         *     (the channel cannot change a delivered message; the contact keeps the
+         *     first text) or `not_sent` (queued or failed; the next delivery
+         *     carries the new text).
+         */
+        patch: operations["editTenantConversationMessage"];
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/messages/{message}/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Edit history of a message
+         * @description CF-248. Requires `tenant.conversations.read`. Earlier versions, oldest first; the first `previous_content` is the original text.
+         */
+        get: operations["listTenantConversationMessageEdits"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18103,6 +18157,26 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
+    apiChannelMessageEdited: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell an organization's custom channel that an agent edited a reply
+         * @description CF-248. Sent when an agent corrects a reply already delivered to webhook_url. Same signature headers as the reply, plus X-ClickFix-Event: message_edited. message_id is the reply's id; Idempotency-Key is the event id and stays the same on retries; process each only once. text is the whole new text. Temporary failures are retried with backoff; 4xx except 408/429 is permanent.
+         */
+        post: operations["deliverAPIChannelMessageEdited"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/history/imports": {
         parameters: {
             query?: never;
@@ -19783,6 +19857,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             read_at: string | null;
+            /**
+             * Format: date-time
+             * @description CF-248: an agent corrected the reply; content is the corrected text
+             */
+            edited_at?: string | null;
         };
         WidgetSent: {
             /** Format: uuid */
@@ -24540,6 +24619,30 @@ export interface components {
             /** Format: date-time */
             changed_at: string;
         };
+        /** @description CF-248: an agent's correction of a reply, posted to the organization's webhook URL. */
+        APIChannelMessageEdited: {
+            /**
+             * Format: uuid
+             * @description Event id; equals Idempotency-Key
+             */
+            id: string;
+            /** @enum {string} */
+            type: "message_edited";
+            /**
+             * Format: uuid
+             * @description The id of the edited reply (its Idempotency-Key)
+             */
+            message_id: string;
+            /** Format: uuid */
+            conversation_id: string;
+            recipient_id: string;
+            /** @description The thread_id of the customer's messages; empty when none was sent */
+            thread_id: string;
+            /** @description The whole new text; replace the reply's text with it */
+            text: string;
+            /** Format: date-time */
+            edited_at: string;
+        };
         /** @description JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key. */
         APIChannelReply: {
             /** Format: uuid */
@@ -25256,6 +25359,8 @@ export interface components {
             external_thread_id?: string | null;
             /** @description A free-form reply is allowed now (channel reply window) */
             window_open: boolean;
+            /** @description CF-248: the channel updates a delivered reply for the contact when an agent edits it (REST API channel, web widget) */
+            channel_edits?: boolean;
             /** Format: date-time */
             window_ends_at: string | null;
             /** Format: date-time */
@@ -25499,6 +25604,46 @@ export interface components {
             read_at: string | null;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: date-time
+             * @description CF-248: when the author last edited the message; null when never edited
+             */
+            edited_at?: string | null;
+        };
+        MessageEdit: {
+            /** @description The whole new text */
+            content: string;
+        };
+        MessageEdited: {
+            message: components["schemas"]["Message"];
+            /**
+             * @description notified: the channel updates the contact's copy; unsupported: the contact keeps the first text; not_sent: the next delivery carries the new text
+             * @enum {string}
+             */
+            channel_edit: "notified" | "unsupported" | "not_sent";
+        };
+        EnvelopeMessageEdited: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["MessageEdited"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        MessageEditEntry: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description The text before this edit */
+            previous_content: string;
+            editor: components["schemas"]["InboxRef"] | null;
+            /** Format: date-time */
+            edited_at: string;
+        };
+        EnvelopeMessageEdits: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["MessageEditEntry"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
         };
         MessageCreate: {
             content?: string;
@@ -45421,6 +45566,80 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    editTenantConversationMessage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                message: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Edited */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeMessageEdited"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationMessageEdits: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                message: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Edit history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeMessageEdits"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -73773,6 +73992,68 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["APIChannelStatusChanged"];
+            };
+        };
+        responses: {
+            /** @description Durably accepted, including duplicate id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Durably accepted, including duplicate id */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent content rejection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent authentication rejection */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit, retried with backoff */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporary receiver failure, retried with backoff */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverAPIChannelMessageEdited: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-ClickFix-Event": "message_edited";
+                "X-ClickFix-Timestamp": string;
+                "X-ClickFix-Signature": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["APIChannelMessageEdited"];
             };
         };
         responses: {

@@ -275,6 +275,42 @@ export function useSendMessage(uuid: string) {
   });
 }
 
+/**
+ * Edits the caller's own reply (CF-248). The answer (and the realtime
+ * message.updated) replaces the cached message; lists refetch for the
+ * preview.
+ */
+export function useEditMessage(uuid: string) {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  return useAppMutation({
+    mutationFn: ({ message, content }: { message: string; content: string }) =>
+      inboxService.editMessage(uuid, message, content),
+    onSuccess: (out) => {
+      upsertMessage(qc, inboxKeys.messages(org, uuid), out.message);
+      void qc.invalidateQueries({
+        queryKey: [...inboxKeys.all(org), "edits", uuid, out.message.uuid],
+      });
+      void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+    },
+  });
+}
+
+/** Edit history of a message, loaded when the agent opens it. */
+export function useMessageEdits(
+  uuid: string,
+  message: string,
+  enabled: boolean,
+) {
+  const { org } = useInboxScope();
+  return useQuery({
+    queryKey: [...inboxKeys.all(org), "edits", uuid, message],
+    queryFn: () => inboxService.messageEdits(uuid, message),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useRetryMessage(uuid: string) {
   return useAppMutation({
     mutationFn: (message: string) => inboxService.retry(uuid, message),

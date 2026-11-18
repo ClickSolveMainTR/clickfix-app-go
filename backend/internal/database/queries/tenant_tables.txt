@@ -40,6 +40,7 @@ conversation_links
 side_conversations
 side_conversation_messages
 message_mentions
+message_edits
 tags
 
 # Channels

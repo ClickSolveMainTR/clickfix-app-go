@@ -403,7 +403,7 @@ derived:
 
       The request is verified with the channel's signing secret, not an API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + raw_body)). Requests whose timestamp is older than 5 minutes are rejected. A message with the same `id` is stored once. Retry on `5xx`.
 
-      The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies and status changes (`status_changed`) refer to it as `conversation_id`.
+      The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies, edits of replies (`message_edited`) and status changes (`status_changed`) refer to it as `conversation_id`.
     tr:
       summary: Müşteri mesajı gönder
       description: |
@@ -411,7 +411,7 @@ derived:
 
         İstek API anahtarıyla değil kanalın imza anahtarıyla doğrulanır: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(imza_anahtarı, timestamp + "." + ham_gövde)). Zaman damgası 5 dakikadan eskiyse istek reddedilir. Aynı `id` ile gelen mesaj bir kez kaydedilir. `5xx` yanıtında tekrar deneyin.
 
-        Yanıt, mesajın girdiği konuşmayı (`conversation_uuid`) ve `message_uuid` değerini taşır; tekrarlanan `id` aynı konuşmayla yanıtlanır. `conversation_uuid` değerini kendi `thread_id` değerinizle saklayın: temsilci yanıtları ve durum değişiklikleri (`status_changed`) ona `conversation_id` olarak başvurur.
+        Yanıt, mesajın girdiği konuşmayı (`conversation_uuid`) ve `message_uuid` değerini taşır; tekrarlanan `id` aynı konuşmayla yanıtlanır. `conversation_uuid` değerini kendi `thread_id` değerinizle saklayın: temsilci yanıtları, yanıt düzenlemeleri (`message_edited`) ve durum değişiklikleri (`status_changed`) ona `conversation_id` olarak başvurur.
     security: [{ apiChannelSignature: [] }]
     parameters:
       - name: instance
@@ -469,6 +469,17 @@ webhooks:
         Bir temsilci, kural ya da birleştirme API kanalındaki bir konuşmanın durumunu değiştirdiğinde (çözüldü, kapandı, yeniden açıldı, beklemede, ertelendi) ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Event: status_changed`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (olay `id` değeri; her tekrarda aynıdır) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. `conversation_id`, mesaj yanıtındaki `conversation_uuid`; `thread_id` sizin gönderdiğiniz konudur. Temsilci yanıtlarında `X-ClickFix-Event` başlığı yoktur; tek uç nokta ikisini ayırabilir. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
     examples:
       request: { id: "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a", type: status_changed, conversation_id: "8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f", thread_id: "order-991", from: open, to: resolved, changed_at: "2026-11-11T10:02:00Z" }
+  apiChannelMessageEdited:
+    tag: API channel
+    summary: Agent reply edited (API channel)
+    description: |
+      When an agent corrects a reply that was already delivered to your endpoint (within 15 minutes of sending), ClickFix sends a `POST` with this body to the URL configured on the channel. The request carries `X-ClickFix-Event: message_edited`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (the signing method above) and `Idempotency-Key` (the event `id`, the same on every retry); process every key only once. `message_id` is the `id` of the edited reply (the `Idempotency-Key` it arrived with) and `text` is the whole new text: replace the reply's text with it and mark it edited. Several edits of one reply arrive as separate events; the one with the latest `edited_at` wins. Temporary failures are retried with increasing delays; `4xx` responses other than `408` and `429` count as permanent failures.
+    tr:
+      summary: Temsilci yanıtı düzenlendi (API kanalı)
+      description: |
+        Bir temsilci uç noktanıza zaten iletilmiş bir yanıtı düzelttiğinde (gönderimden sonraki 15 dakika içinde) ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Event: message_edited`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (olay `id` değeri; her tekrarda aynıdır) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. `message_id`, düzenlenen yanıtın `id` değeridir (yanıtın geldiği `Idempotency-Key`); `text` yeni metnin tamamıdır: yanıtın metnini onunla değiştirip düzenlendi olarak işaretleyin. Bir yanıtın birden çok düzenlemesi ayrı olaylar olarak gelir; `edited_at` değeri en yeni olan geçerlidir. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
+    examples:
+      request: { id: "6b5a4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d", type: message_edited, message_id: "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f", conversation_id: "8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f", recipient_id: "customer-42", thread_id: "order-991", text: "Your order ships tomorrow.", edited_at: "2026-11-11T10:05:00Z" }
 
 # Turkish for texts that come straight from backend/docs/openapi.yaml (parameter
 # and response descriptions, shared components); exact match on the English
@@ -499,6 +510,9 @@ translations:
     "Event id; equals Idempotency-Key": "Olay kimliği; Idempotency-Key ile aynıdır"
     "The thread_id of the customer's messages; empty when none was sent": "Müşteri mesajlarının thread_id değeri; gönderilmediyse boş"
     "Previous status": "Önceki durum"
+    "An agent's correction of a reply, posted to the organization's webhook URL.": "Bir temsilcinin yanıtta yaptığı düzeltme; organizasyonun webhook adresine gönderilir."
+    "The id of the edited reply (its Idempotency-Key)": "Düzenlenen yanıtın kimliği (yanıtın Idempotency-Key değeri)"
+    "The whole new text; replace the reply's text with it": "Yeni metnin tamamı; yanıtın metnini bununla değiştirin"
     "Only when to is snoozed": "Yalnızca to snoozed olduğunda"
     "Exact channel thread id (the REST API channel's thread_id).": "Kanalın konu kimliği, tam eşleşme (REST API kanalının thread_id değeri)."
     "Conversation events only; equals entity_uuid.": "Yalnızca konuşma olaylarında; entity_uuid ile aynıdır."

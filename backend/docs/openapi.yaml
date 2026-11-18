@@ -10327,6 +10327,8 @@ paths:
         redelivered id answers with the same conversation). Status changes made
         in ClickFix POST APIChannelStatusChanged to webhook_url (header
         `X-ClickFix-Event: status_changed`, Idempotency-Key = event id).
+        Agent edits of a delivered reply POST APIChannelMessageEdited (header
+        `X-ClickFix-Event: message_edited`, CF-248).
 
         Slack uses X-Slack-Signature and X-Slack-Request-Timestamp; POST URL verification
         echoes text/plain. Teams uses Bot Framework RS256 JWT (issuer, app audience,
@@ -13325,6 +13327,72 @@ paths:
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/conversations/{uuid}/messages/{message}:
+    patch:
+      tags: [Tenant]
+      operationId: editTenantConversationMessage
+      summary: Edit your own reply
+      description: |
+        CF-248. Requires `tenant.conversations.reply`. Only the author of a
+        public text reply may edit it, within 15 minutes of sending; notes,
+        templates and contact messages are not editable (`409
+        MESSAGE_NOT_EDITABLE`, also while the reply is being handed to the
+        channel), an older reply answers `409 MESSAGE_EDIT_WINDOW_CLOSED` and
+        another agent's reply `403`. The previous text is kept in the edit
+        history, `edited_at` is set and inbox clients get `message.updated`.
+        `channel_edit` says what the contact sees: `notified` (the channel
+        updates its copy: the REST API channel receives a signed
+        `message_edited` event, the web widget replaces the text), `unsupported`
+        (the channel cannot change a delivered message; the contact keeps the
+        first text) or `not_sent` (queued or failed; the next delivery
+        carries the new text).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - { name: message, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageEdit" }
+      responses:
+        "200":
+          description: Edited
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeMessageEdited" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/conversations/{uuid}/messages/{message}/edits:
+    get:
+      tags: [Tenant]
+      operationId: listTenantConversationMessageEdits
+      summary: Edit history of a message
+      description: CF-248. Requires `tenant.conversations.read`. Earlier versions, oldest first; the first `previous_content` is the original text.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+        - { name: message, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Edit history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeMessageEdits" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/conversations/{uuid}/messages/{message}/retry:
@@ -44094,6 +44162,44 @@ webhooks:
         "429": { description: "Rate limit, retried with backoff" }
         "500": { description: "Temporary receiver failure, retried with backoff" }
 
+  apiChannelMessageEdited:
+    post:
+      tags: [Tenant]
+      operationId: deliverAPIChannelMessageEdited
+      x-public: true
+      summary: Tell an organization's custom channel that an agent edited a reply
+      description: "CF-248. Sent when an agent corrects a reply already delivered to webhook_url. Same signature headers as the reply, plus X-ClickFix-Event: message_edited. message_id is the reply's id; Idempotency-Key is the event id and stays the same on retries; process each only once. text is the whole new text. Temporary failures are retried with backoff; 4xx except 408/429 is permanent."
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema: { type: string, enum: [message_edited] }
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema: { type: string, description: Unix seconds }
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema: { type: string, description: "sha256= followed by hex HMAC-SHA256" }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/APIChannelMessageEdited" }
+      responses:
+        "200": { description: "Durably accepted, including duplicate id" }
+        "204": { description: "Durably accepted, including duplicate id" }
+        "400": { description: Permanent content rejection }
+        "401": { description: Permanent authentication rejection }
+        "429": { description: "Rate limit, retried with backoff" }
+        "500": { description: "Temporary receiver failure, retried with backoff" }
+
   /v1/tenant/history/imports:
     get:
       tags: [Tenant]
@@ -46312,6 +46418,7 @@ components:
           items: { $ref: "#/components/schemas/WidgetAttachment" }
         created_at: { type: string, format: date-time }
         read_at: { type: [string, "null"], format: date-time }
+        edited_at: { type: [string, "null"], format: date-time, description: "CF-248: an agent corrected the reply; content is the corrected text" }
     WidgetSent:
       type: object
       required: [conversation_uuid, message, created]
@@ -56802,6 +56909,19 @@ components:
         to: { type: string, enum: [open, pending, snoozed, resolved, closed] }
         snoozed_until: { type: string, format: date-time, description: Only when to is snoozed }
         changed_at: { type: string, format: date-time }
+    APIChannelMessageEdited:
+      type: object
+      description: "CF-248: an agent's correction of a reply, posted to the organization's webhook URL."
+      required: [id, type, message_id, conversation_id, recipient_id, thread_id, text, edited_at]
+      properties:
+        id: { type: string, format: uuid, description: Event id; equals Idempotency-Key }
+        type: { type: string, enum: [message_edited] }
+        message_id: { type: string, format: uuid, description: "The id of the edited reply (its Idempotency-Key)" }
+        conversation_id: { type: string, format: uuid }
+        recipient_id: { type: string }
+        thread_id: { type: string, description: "The thread_id of the customer's messages; empty when none was sent" }
+        text: { type: string, description: "The whole new text; replace the reply's text with it" }
+        edited_at: { type: string, format: date-time }
     APIChannelReply:
       type: object
       description: JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key.
@@ -57744,6 +57864,7 @@ components:
         resolved_at: { type: [string, "null"], format: date-time }
         external_thread_id: { type: [string, "null"], description: "CF-245: the channel's thread id (the REST API channel's thread_id); null when the channel has none." }
         window_open: { type: boolean, description: A free-form reply is allowed now (channel reply window) }
+        channel_edits: { type: boolean, description: "CF-248: the channel updates a delivered reply for the contact when an agent edits it (REST API channel, web widget)" }
         window_ends_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -58008,6 +58129,56 @@ components:
         delivered_at: { type: [string, "null"], format: date-time }
         read_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+        edited_at: { type: [string, "null"], format: date-time, description: "CF-248: when the author last edited the message; null when never edited" }
+
+    MessageEdit:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 10000, description: The whole new text }
+
+    MessageEdited:
+      type: object
+      required: [message, channel_edit]
+      properties:
+        message: { $ref: "#/components/schemas/Message" }
+        channel_edit:
+          type: string
+          enum: [notified, unsupported, not_sent]
+          description: "notified: the channel updates the contact's copy; unsupported: the contact keeps the first text; not_sent: the next delivery carries the new text"
+
+    EnvelopeMessageEdited:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/MessageEdited" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    MessageEditEntry:
+      type: object
+      required: [uuid, previous_content, editor, edited_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        previous_content: { type: string, description: The text before this edit }
+        editor:
+          oneOf:
+            - $ref: "#/components/schemas/InboxRef"
+            - type: "null"
+        edited_at: { type: string, format: date-time }
+
+    EnvelopeMessageEdits:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/MessageEditEntry" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     MessageCreate:
       type: object

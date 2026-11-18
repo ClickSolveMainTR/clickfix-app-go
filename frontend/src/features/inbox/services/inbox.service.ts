@@ -16,6 +16,8 @@ import type {
   InboxFilters,
   Message,
   MessageCreate,
+  MessageEditEntry,
+  MessageEdited,
   MessagePage,
   LinkRelation,
   SideConversation,
@@ -169,6 +171,29 @@ export const inboxService = {
         params: { header: header(), path: { uuid } },
         body,
       }),
+    );
+  },
+
+  /** Corrects the caller's own reply (CF-248). */
+  async editMessage(uuid: string, message: string, content: string) {
+    return unwrap<MessageEdited>(
+      await apiClient.PATCH(
+        "/v1/tenant/conversations/{uuid}/messages/{message}",
+        {
+          params: { header: header(), path: { uuid, message } },
+          body: { content },
+        },
+      ),
+    );
+  },
+
+  /** Earlier versions of an edited message, oldest first. */
+  async messageEdits(uuid: string, message: string) {
+    return unwrap<{ items: MessageEditEntry[] }>(
+      await apiClient.GET(
+        "/v1/tenant/conversations/{uuid}/messages/{message}/edits",
+        { params: { header: header(), path: { uuid, message } } },
+      ),
     );
   },
 
