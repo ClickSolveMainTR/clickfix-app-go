@@ -16,7 +16,9 @@ import (
 
 // Closing texts (CF-250): an agent picks one in the composer and it is
 // appended to the end of the reply before it is stored, so every channel
-// (API included) sends the same text the timeline shows.
+// (API included) sends the same text the timeline shows. Autonomous AI
+// replies are the exception: aiClosing appends the default at delivery only,
+// so their stored text has none.
 
 // Closing modes of a post.
 const (
