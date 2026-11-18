@@ -99,6 +99,17 @@ type StatusChangePayload struct {
 	TicketID       *int64 `json:"ticket_id,omitempty"`
 	From           string `json:"from"`
 	To             string `json:"to"`
+	// FromCustomStatus / ToCustomStatus: the organization's own status on
+	// top of the base one (conversations, CF-249); null when none.
+	FromCustomStatus *CustomStatusRef `json:"from_custom_status,omitempty"`
+	ToCustomStatus   *CustomStatusRef `json:"to_custom_status,omitempty"`
+}
+
+// CustomStatusRef is a custom conversation status ("İşleniyor").
+type CustomStatusRef struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
 }
 
 // MessagePayload: message.received / sent. Direction is inbound or outbound;

@@ -82,7 +82,7 @@ func toMessage(m db.Message, conv uuid.UUID, sender model.Sender) model.Message 
 		Content: m.Content, Attributes: attrs, Private: m.Private, Status: m.Status,
 		Error: m.Error, ClientID: uuidPtr(m.ClientID), Mentions: []model.Ref{}, Attachments: []model.MessageAttachment{},
 		SentAt: timePtr(m.SentAt), DeliveredAt: timePtr(m.DeliveredAt), ReadAt: timePtr(m.ReadAt),
-		CreatedAt: m.CreatedAt.Time.UTC(),
+		CreatedAt: m.CreatedAt.Time.UTC(), EditedAt: timePtr(m.EditedAt),
 	}
 }
 

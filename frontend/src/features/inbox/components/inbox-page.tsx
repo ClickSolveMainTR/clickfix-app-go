@@ -12,6 +12,7 @@ import {
   Hash,
   Inbox,
   Keyboard,
+  Mail,
   MessageSquareReply,
   RotateCcw,
   Search,
@@ -45,6 +46,7 @@ import {
   useInboxScope,
   useMarkRead,
   useMessages,
+  useReadState,
   useRetryMessage,
 } from "../hooks/use-inbox";
 import { isTyping } from "../lib/shortcuts";
@@ -66,6 +68,7 @@ import { ConversationList } from "./conversation-list";
 import { MessageTimeline } from "./message-timeline";
 import { BulkBar } from "./bulk-bar";
 import { SplitDialog } from "./split-dialog";
+import { EditMessageDialog } from "./edit-message-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { ViewersBar } from "./viewers-bar";
 
@@ -108,6 +111,7 @@ export function InboxPage() {
   const params = useSearchParams();
   const scope = useInboxScope();
   const [splitting, setSplitting] = useState<OptimisticMessage | null>(null);
+  const [editing, setEditing] = useState<OptimisticMessage | null>(null);
 
   const view = asView(params.get("view"));
   const status = asStatus(params.get("status"));
@@ -202,6 +206,7 @@ export function InboxPage() {
   const messages = useMessages(activeUuid);
   const retry = useRetryMessage(activeUuid ?? "");
   const markRead = useMarkRead(activeUuid);
+  const readState = useReadState();
   const [typing, setTyping] = useState(false);
   const viewers = useConversationPresence(activeUuid, typing);
 
@@ -216,6 +221,25 @@ export function InboxPage() {
     (uuid: string | null) => setParams({ c: uuid }),
     [setParams],
   );
+
+  // Marking unread (CF-247) closes the conversation when it is the open
+  // one: an open conversation is marked read again.
+  const { mutate: mutateUnread } = readState.markUnread;
+  const { mutate: mutateRead } = readState.markRead;
+  const setReadState = useCallback(
+    (uuid: string, unread: boolean) => {
+      if (!unread) {
+        mutateRead(uuid);
+        return;
+      }
+      if (uuid === activeUuid) select(null);
+      mutateUnread(uuid);
+    },
+    [activeUuid, select, mutateRead, mutateUnread],
+  );
+  const markUnreadActive = useCallback(() => {
+    if (activeUuid) setReadState(activeUuid, true);
+  }, [activeUuid, setReadState]);
 
   const move = useCallback(
     (step: 1 | -1) => {
@@ -348,6 +372,14 @@ export function InboxPage() {
       });
     }
     out.push({
+      id: "inbox.unread",
+      label: t("inbox.read_state.mark_unread"),
+      group: cg,
+      icon: Mail,
+      keywords: "okunmadı unread",
+      run: markUnreadActive,
+    });
+    out.push({
       id: "inbox.contact",
       label: t("inbox.palette.open_contact", {
         name: conversation.contact.name || conversation.contact.email || "",
@@ -363,6 +395,7 @@ export function InboxPage() {
     savedViews.data,
     macros.data,
     applyMacro,
+    markUnreadActive,
     scope.canManage,
     scope.canAssign,
     scope.canNote,
@@ -478,6 +511,9 @@ export function InboxPage() {
           case "q":
             composerRef.current?.copilot("ask");
             return true;
+          case "U":
+            markUnreadActive();
+            return true;
         }
         return false;
       })();
@@ -493,6 +529,7 @@ export function InboxPage() {
     setParams,
     selected,
     toggleSelected,
+    markUnreadActive,
   ]);
 
   if (!scope.org) {
@@ -661,6 +698,7 @@ export function InboxPage() {
             onSelect={select}
             selected={selected}
             onToggle={toggleSelected}
+            onReadState={setReadState}
           />
         </div>
         <div className="text-muted-foreground flex items-center justify-between border-t px-3 py-1.5 text-[11px]">
@@ -708,6 +746,7 @@ export function InboxPage() {
               onToggleContext={() =>
                 isXl ? setContextOpen((o) => !o) : setSheetOpen((o) => !o)
               }
+              onMarkUnread={markUnreadActive}
             />
             <MessageTimeline
               conversationUuid={activeUuid}
@@ -718,7 +757,15 @@ export function InboxPage() {
               onLoadOlder={() => void messages.fetchNextPage()}
               onRetry={(m) => retry.mutate(m)}
               onSplit={scope.canManage ? setSplitting : undefined}
+              onEdit={scope.canReply ? setEditing : undefined}
             />
+            {editing && (
+              <EditMessageDialog
+                conversation={detail.data}
+                message={editing}
+                onClose={() => setEditing(null)}
+              />
+            )}
             <ViewersBar viewers={viewers} />
             {splitting && (
               <SplitDialog

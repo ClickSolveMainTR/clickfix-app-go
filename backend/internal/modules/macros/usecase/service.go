@@ -499,6 +499,7 @@ func (s *Service) Apply(ctx context.Context, v Viewer, perms Permissions, macroI
 			_, err = s.inbox.Post(ctx, convusecase.PostInput{
 				OrganizationID: v.OrganizationID, ConversationUUID: conversation, AuthorID: v.UserID,
 				AuthorUUID: v.UserUUID, AuthorName: actor.Name, Content: Render(a.Value, vars), Private: a.Type == ActionNote,
+				Closing: convusecase.Closing{Mode: convusecase.ClosingAuto},
 			})
 		case ActionStatus:
 			st := a.Value

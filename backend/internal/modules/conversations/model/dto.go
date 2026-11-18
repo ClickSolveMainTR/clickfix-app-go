@@ -12,6 +12,14 @@ type Ref struct {
 	Name string    `json:"name"`
 }
 
+// CustomStatusRef is the organization's own status of a conversation
+// (CF-249, "İşleniyor"); the conversation's status is its base category.
+type CustomStatusRef struct {
+	UUID  uuid.UUID `json:"uuid"`
+	Name  string    `json:"name"`
+	Color string    `json:"color"`
+}
+
 // ContactRef is the contact of a conversation as the inbox list shows it.
 type ContactRef struct {
 	UUID  uuid.UUID `json:"uuid"`
@@ -35,42 +43,46 @@ type CompanyRef struct {
 
 // Conversation is one inbox row / conversation header.
 type Conversation struct {
-	BrandID              *uuid.UUID  `json:"brand_id"`
-	UUID                 uuid.UUID   `json:"uuid"`
-	Number               int64       `json:"number"`
-	ChannelType          string      `json:"channel_type"`
-	Inbox                *Ref        `json:"inbox"`
-	Contact              ContactRef  `json:"contact"`
-	Company              *CompanyRef `json:"company"`
-	Subject              string      `json:"subject"`
-	Status               string      `json:"status"`
-	CustomStatus         *Ref        `json:"custom_status"`
-	Priority             string      `json:"priority"`
-	Source               string      `json:"source"`
-	Assignee             *Ref        `json:"assignee"`
-	Team                 *Ref        `json:"team"`
-	TagUUIDs             []string    `json:"tag_uuids"`
-	CustomFields         any         `json:"custom_fields"`
-	UnreadCount          int         `json:"unread_count"`
-	MessageCount         int         `json:"message_count"`
-	LastMessagePreview   string      `json:"last_message_preview"`
-	LastMessageDirection string      `json:"last_message_direction"`
-	LastMessageAt        time.Time   `json:"last_message_at"`
-	LastInboundAt        *time.Time  `json:"last_inbound_at"`
-	WaitingSince         *time.Time  `json:"waiting_since"`
-	FirstResponseAt      *time.Time  `json:"first_response_at"`
-	FirstResponseDueAt   *time.Time  `json:"first_response_due_at"`
-	NextResponseDueAt    *time.Time  `json:"next_response_due_at"`
-	ResolutionDueAt      *time.Time  `json:"resolution_due_at"`
-	SLABreachedAt        *time.Time  `json:"sla_breached_at"`
-	SnoozedUntil         *time.Time  `json:"snoozed_until"`
-	ResolvedAt           *time.Time  `json:"resolved_at"`
+	BrandID              *uuid.UUID       `json:"brand_id"`
+	UUID                 uuid.UUID        `json:"uuid"`
+	Number               int64            `json:"number"`
+	ChannelType          string           `json:"channel_type"`
+	Inbox                *Ref             `json:"inbox"`
+	Contact              ContactRef       `json:"contact"`
+	Company              *CompanyRef      `json:"company"`
+	Subject              string           `json:"subject"`
+	Status               string           `json:"status"`
+	CustomStatus         *CustomStatusRef `json:"custom_status"`
+	Priority             string           `json:"priority"`
+	Source               string           `json:"source"`
+	Assignee             *Ref             `json:"assignee"`
+	Team                 *Ref             `json:"team"`
+	TagUUIDs             []string         `json:"tag_uuids"`
+	CustomFields         any              `json:"custom_fields"`
+	UnreadCount          int              `json:"unread_count"`
+	MessageCount         int              `json:"message_count"`
+	LastMessagePreview   string           `json:"last_message_preview"`
+	LastMessageDirection string           `json:"last_message_direction"`
+	LastMessageAt        time.Time        `json:"last_message_at"`
+	LastInboundAt        *time.Time       `json:"last_inbound_at"`
+	WaitingSince         *time.Time       `json:"waiting_since"`
+	FirstResponseAt      *time.Time       `json:"first_response_at"`
+	FirstResponseDueAt   *time.Time       `json:"first_response_due_at"`
+	NextResponseDueAt    *time.Time       `json:"next_response_due_at"`
+	ResolutionDueAt      *time.Time       `json:"resolution_due_at"`
+	SLABreachedAt        *time.Time       `json:"sla_breached_at"`
+	SnoozedUntil         *time.Time       `json:"snoozed_until"`
+	ResolvedAt           *time.Time       `json:"resolved_at"`
 	// ExternalThreadID is the channel's thread id (the REST API channel's
 	// thread_id, CF-245); null when the channel has none.
 	ExternalThreadID *string `json:"external_thread_id"`
 	// WindowOpen: a free-form reply is allowed now (channels with a reply
 	// window, e.g. 24 hours on WhatsApp); WindowEndsAt when it closes.
-	WindowOpen   bool       `json:"window_open"`
+	WindowOpen bool `json:"window_open"`
+	// ChannelEdits: the channel updates a delivered reply for the contact
+	// when an agent edits it (REST API channel, web widget, CF-248); on
+	// other channels the contact keeps the first text.
+	ChannelEdits bool       `json:"channel_edits"`
 	WindowEndsAt *time.Time `json:"window_ends_at"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
@@ -122,6 +134,9 @@ type Message struct {
 	DeliveredAt      *time.Time          `json:"delivered_at"`
 	ReadAt           *time.Time          `json:"read_at"`
 	CreatedAt        time.Time           `json:"created_at"`
+	// EditedAt is when the author last corrected the message (CF-248);
+	// null when never edited.
+	EditedAt *time.Time `json:"edited_at"`
 }
 
 // Realtime event types published on the organization inbox channel.
@@ -136,6 +151,10 @@ const (
 	// (draft, handoff or automatic reply); the composer refetches the job
 	// list to show a draft (CF-246).
 	EventAIJobFinished = "ai.job_finished"
+	// EventReadState: a member marked conversations read or unread by hand
+	// (CF-247). Read markers are per member, so only the member in
+	// actor_uuid refetches its list and badges (its other tabs, devices).
+	EventReadState = "conversation.read_state"
 )
 
 // LiveEvent is one realtime inbox event. Message is set for message events

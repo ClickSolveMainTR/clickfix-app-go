@@ -308,6 +308,7 @@ Yazma araçlarının hepsi onay kartından geçer. MCP'de yazma araçları `mcp:
 | | etiket ekle/kaldır, etiket listesi/oluştur | `conversations.add_tag`, `conversations.remove_tag`, `tags.list`, `tags.create` | ✓ | |
 | | makro uygula | `conversations.apply_macro` | ✓ | makronun her eylemi ayrıca yetkiyle denetlenir |
 | | hatırlatıcı | `conversations.remind` | ✓ | |
+| | okunmadı olarak işaretle | `conversations.mark_unread` | ✓ | CF-247; yalnız çağıranın okuma imleci geri alınır |
 | | birleştir, böl, toplu işlem, yan konuşma, co-browse, dışa aktarma | — | — | geri alınması zor ya da gerçek zamanlı ekran gerektiriyor; panelde kalır, asistan sayfaya yönlendirir |
 | contacts | kişi ara/aç/oluştur/güncelle/sil | `contacts.list`, `contacts.get`, `contacts.create`, `contacts.update`, `contacts.delete` | ✓ (silme A) | silme yıkıcı, yalnız asistanda; MCP `list_contacts` artık `/v1/tenant/contacts` kullanır (aynı `q/limit/offset`) |
 | | firma ara/özet/oluştur/güncelle/not | `companies.list`, `companies.get`, `companies.create`, `companies.update`, `companies.add_note` | ✓ | |

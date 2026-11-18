@@ -322,6 +322,27 @@ func (q *Queries) ClaimMessageForSend(ctx context.Context, arg ClaimMessageForSe
 	return i, err
 }
 
+const clearConversationStatusMismatch = `-- name: ClearConversationStatusMismatch :execrows
+UPDATE conversations SET status_id = NULL
+WHERE organization_id = $1 AND status_id = $2 AND status <> $3::text
+`
+
+type ClearConversationStatusMismatchParams struct {
+	OrganizationID int64       `json:"organization_id"`
+	StatusID       pgtype.Int8 `json:"status_id"`
+	Category       string      `json:"category"`
+}
+
+// A custom status moved to another base category: conversations whose base
+// status no longer matches lose it (they keep their base status).
+func (q *Queries) ClearConversationStatusMismatch(ctx context.Context, arg ClearConversationStatusMismatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearConversationStatusMismatch, arg.OrganizationID, arg.StatusID, arg.Category)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const conversationInboxCounts = `-- name: ConversationInboxCounts :one
 SELECT
     COUNT(*) FILTER (WHERE c.status IN ('open', 'pending'))::bigint AS open_total,
@@ -428,6 +449,22 @@ func (q *Queries) ConversationStatusFacets(ctx context.Context, arg Conversation
 		return nil, err
 	}
 	return items, nil
+}
+
+const conversationStatusSlugTaken = `-- name: ConversationStatusSlugTaken :one
+SELECT EXISTS (SELECT 1 FROM conversation_statuses WHERE organization_id = $1 AND slug = $2)::boolean
+`
+
+type ConversationStatusSlugTakenParams struct {
+	OrganizationID int64  `json:"organization_id"`
+	Slug           string `json:"slug"`
+}
+
+func (q *Queries) ConversationStatusSlugTaken(ctx context.Context, arg ConversationStatusSlugTakenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, conversationStatusSlugTaken, arg.OrganizationID, arg.Slug)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const conversationVisibleTo = `-- name: ConversationVisibleTo :one
@@ -587,6 +624,24 @@ func (q *Queries) CountConversations(ctx context.Context, arg CountConversations
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const deleteConversationStatusDef = `-- name: DeleteConversationStatusDef :execrows
+DELETE FROM conversation_statuses WHERE organization_id = $1 AND id = $2
+`
+
+type DeleteConversationStatusDefParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+// Conversations keep their base status; status_id is set NULL by the FK.
+func (q *Queries) DeleteConversationStatusDef(ctx context.Context, arg DeleteConversationStatusDefParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteConversationStatusDef, arg.OrganizationID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteConversationView = `-- name: DeleteConversationView :execrows
@@ -1004,6 +1059,53 @@ func (q *Queries) GetConversationExternalRefs(ctx context.Context, arg GetConver
 	return i, err
 }
 
+const getConversationReadMarker = `-- name: GetConversationReadMarker :one
+SELECT COALESCE((SELECT r.last_read_message_id FROM conversation_reads r
+                 WHERE r.organization_id = $1 AND r.conversation_id = $2 AND r.user_id = $3), 0)::bigint
+`
+
+type GetConversationReadMarkerParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	UserID         int64 `json:"user_id"`
+}
+
+// The viewer's read marker (0 when it never opened the conversation).
+func (q *Queries) GetConversationReadMarker(ctx context.Context, arg GetConversationReadMarkerParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getConversationReadMarker, arg.OrganizationID, arg.ConversationID, arg.UserID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const getConversationStatusByID = `-- name: GetConversationStatusByID :one
+SELECT id, uuid, organization_id, name, slug, category, color, sort_order, is_default, created_at, updated_at FROM conversation_statuses WHERE organization_id = $1 AND id = $2
+`
+
+type GetConversationStatusByIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) GetConversationStatusByID(ctx context.Context, arg GetConversationStatusByIDParams) (ConversationStatus, error) {
+	row := q.db.QueryRow(ctx, getConversationStatusByID, arg.OrganizationID, arg.ID)
+	var i ConversationStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Slug,
+		&i.Category,
+		&i.Color,
+		&i.SortOrder,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getConversationStatusByUUID = `-- name: GetConversationStatusByUUID :one
 SELECT id, uuid, organization_id, name, slug, category, color, sort_order, is_default, created_at, updated_at FROM conversation_statuses WHERE organization_id = $1 AND uuid = $2
 `
@@ -1040,7 +1142,7 @@ SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_inst
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
-       st.uuid AS status_uuid, st.name AS status_name,
+       st.uuid AS status_uuid, st.name AS status_name, st.color AS status_color,
        COALESCE((SELECT array_agg(t.uuid ORDER BY lower(t.name)) FROM conversation_tags x
                  JOIN tags t ON t.organization_id = x.organization_id AND t.id = x.tag_id
                  WHERE x.organization_id = c.organization_id AND x.conversation_id = c.id), '{}')::uuid[] AS tag_uuids,
@@ -1087,6 +1189,7 @@ type GetConversationViewRow struct {
 	TeamName            pgtype.Text        `json:"team_name"`
 	StatusUuid          pgtype.UUID        `json:"status_uuid"`
 	StatusName          pgtype.Text        `json:"status_name"`
+	StatusColor         pgtype.Text        `json:"status_color"`
 	TagUuids            []uuid.UUID        `json:"tag_uuids"`
 	UnreadCount         int32              `json:"unread_count"`
 }
@@ -1158,6 +1261,7 @@ func (q *Queries) GetConversationView(ctx context.Context, arg GetConversationVi
 		&i.TeamName,
 		&i.StatusUuid,
 		&i.StatusName,
+		&i.StatusColor,
 		&i.TagUuids,
 		&i.UnreadCount,
 	)
@@ -2114,6 +2218,65 @@ func (q *Queries) ListConversationStatuses(ctx context.Context, organizationID i
 	return items, nil
 }
 
+const listConversationStatusesWithUsage = `-- name: ListConversationStatusesWithUsage :many
+SELECT st.id, st.uuid, st.organization_id, st.name, st.slug, st.category, st.color, st.sort_order, st.is_default, st.created_at, st.updated_at,
+       (SELECT COUNT(*) FROM conversations c
+        WHERE c.organization_id = st.organization_id AND c.status_id = st.id AND c.deleted_at IS NULL)::bigint AS usage_count
+FROM conversation_statuses st
+WHERE st.organization_id = $1
+ORDER BY st.sort_order, st.id
+`
+
+type ListConversationStatusesWithUsageRow struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	Name           string             `json:"name"`
+	Slug           string             `json:"slug"`
+	Category       string             `json:"category"`
+	Color          string             `json:"color"`
+	SortOrder      int32              `json:"sort_order"`
+	IsDefault      bool               `json:"is_default"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	UsageCount     int64              `json:"usage_count"`
+}
+
+// The settings screen (CF-249): every custom status with the number of
+// conversations that use it.
+func (q *Queries) ListConversationStatusesWithUsage(ctx context.Context, organizationID int64) ([]ListConversationStatusesWithUsageRow, error) {
+	rows, err := q.db.Query(ctx, listConversationStatusesWithUsage, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationStatusesWithUsageRow{}
+	for rows.Next() {
+		var i ListConversationStatusesWithUsageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uuid,
+			&i.OrganizationID,
+			&i.Name,
+			&i.Slug,
+			&i.Category,
+			&i.Color,
+			&i.SortOrder,
+			&i.IsDefault,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UsageCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConversationTags = `-- name: ListConversationTags :many
 SELECT t.id, t.uuid, t.organization_id, t.name, t.color, t.created_at FROM conversation_tags x
 JOIN tags t ON t.organization_id = x.organization_id AND t.id = x.tag_id
@@ -2208,6 +2371,7 @@ SELECT c.id, c.uuid, c.organization_id, c.number, c.channel_type, c.channel_inst
        inst.uuid AS channel_instance_uuid, inst.name AS channel_instance_name,
        u.uuid AS assignee_uuid, u.name AS assignee_name, u.surname AS assignee_surname,
        tm.uuid AS team_uuid, tm.name AS team_name,
+       st.uuid AS status_uuid, st.name AS status_name, st.color AS status_color,
        COALESCE((SELECT array_agg(t.uuid ORDER BY lower(t.name)) FROM conversation_tags x
                  JOIN tags t ON t.organization_id = x.organization_id AND t.id = x.tag_id
                  WHERE x.organization_id = c.organization_id AND x.conversation_id = c.id), '{}')::uuid[] AS tag_uuids,
@@ -2223,6 +2387,7 @@ LEFT JOIN companies co ON co.organization_id = c.organization_id AND co.id = c.c
 LEFT JOIN channel_instances inst ON inst.organization_id = c.organization_id AND inst.id = c.channel_instance_id
 LEFT JOIN users u ON u.id = c.assignee_user_id
 LEFT JOIN teams tm ON tm.organization_id = c.organization_id AND tm.id = c.assignee_team_id
+LEFT JOIN conversation_statuses st ON st.organization_id = c.organization_id AND st.id = c.status_id
 LEFT JOIN conversation_reads r ON r.organization_id = c.organization_id AND r.conversation_id = c.id AND r.user_id = $1::bigint
 WHERE c.organization_id = $2
  AND ($3::uuid IS NULL OR c.brand_id=$3::uuid)
@@ -2345,6 +2510,9 @@ type ListConversationsRow struct {
 	AssigneeSurname     pgtype.Text        `json:"assignee_surname"`
 	TeamUuid            pgtype.UUID        `json:"team_uuid"`
 	TeamName            pgtype.Text        `json:"team_name"`
+	StatusUuid          pgtype.UUID        `json:"status_uuid"`
+	StatusName          pgtype.Text        `json:"status_name"`
+	StatusColor         pgtype.Text        `json:"status_color"`
 	TagUuids            []uuid.UUID        `json:"tag_uuids"`
 	UnreadCount         int32              `json:"unread_count"`
 }
@@ -2453,6 +2621,9 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.AssigneeSurname,
 			&i.TeamUuid,
 			&i.TeamName,
+			&i.StatusUuid,
+			&i.StatusName,
+			&i.StatusColor,
 			&i.TagUuids,
 			&i.UnreadCount,
 		); err != nil {
@@ -2886,6 +3057,17 @@ func (q *Queries) NextConversationNumber(ctx context.Context, organizationID int
 	return last_number, err
 }
 
+const nextConversationStatusOrder = `-- name: NextConversationStatusOrder :one
+SELECT COALESCE(MAX(sort_order), -1)::int + 1 FROM conversation_statuses WHERE organization_id = $1
+`
+
+func (q *Queries) NextConversationStatusOrder(ctx context.Context, organizationID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, nextConversationStatusOrder, organizationID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const releaseMessageClaim = `-- name: ReleaseMessageClaim :exec
 UPDATE messages SET status = 'queued', error = $1::text
 WHERE organization_id = $2 AND id = $3 AND status = 'pending'
@@ -2936,6 +3118,32 @@ func (q *Queries) RemoveConversationTag(ctx context.Context, arg RemoveConversat
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setConversationReadMarker = `-- name: SetConversationReadMarker :exec
+INSERT INTO conversation_reads (organization_id, conversation_id, user_id, last_read_message_id, last_read_at)
+VALUES ($1, $2, $3, $4, NOW())
+ON CONFLICT (conversation_id, user_id) DO UPDATE SET
+    last_read_message_id = EXCLUDED.last_read_message_id,
+    last_read_at = NOW()
+`
+
+type SetConversationReadMarkerParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	UserID         int64 `json:"user_id"`
+	MessageID      int64 `json:"message_id"`
+}
+
+// CF-247: puts the marker exactly at message_id (mark unread, undo).
+func (q *Queries) SetConversationReadMarker(ctx context.Context, arg SetConversationReadMarkerParams) error {
+	_, err := q.db.Exec(ctx, setConversationReadMarker,
+		arg.OrganizationID,
+		arg.ConversationID,
+		arg.UserID,
+		arg.MessageID,
+	)
+	return err
 }
 
 const setConversationSLA = `-- name: SetConversationSLA :exec
@@ -3078,6 +3286,32 @@ func (q *Queries) SoftDeleteMessage(ctx context.Context, arg SoftDeleteMessagePa
 	return i, err
 }
 
+const unreadTargetMessageID = `-- name: UnreadTargetMessageID :one
+SELECT GREATEST(COALESCE(
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction = 'in' AND m.deleted_at IS NULL),
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction <> 'internal' AND m.deleted_at IS NULL
+       AND (m.sender_user_id IS NULL OR m.sender_user_id <> $3::bigint)),
+    1) - 1, 0)::bigint
+`
+
+type UnreadTargetMessageIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	ViewerID       int64 `json:"viewer_id"`
+}
+
+// CF-247: the read marker that leaves the latest customer message unread
+// (without one, the latest message the viewer did not write); 0 when
+// the conversation has no such message.
+func (q *Queries) UnreadTargetMessageID(ctx context.Context, arg UnreadTargetMessageIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, unreadTargetMessageID, arg.OrganizationID, arg.ConversationID, arg.ViewerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateConversationState = `-- name: UpdateConversationState :one
 UPDATE conversations SET
     subject = $1,
@@ -3179,6 +3413,48 @@ func (q *Queries) UpdateConversationState(ctx context.Context, arg UpdateConvers
 		&i.DepartmentSource,
 		&i.DepartmentConfidence,
 		&i.DepartmentRoutedAt,
+	)
+	return i, err
+}
+
+const updateConversationStatusDef = `-- name: UpdateConversationStatusDef :one
+UPDATE conversation_statuses SET name = $1, color = $2, category = $3,
+    sort_order = $4
+WHERE organization_id = $5 AND id = $6
+RETURNING id, uuid, organization_id, name, slug, category, color, sort_order, is_default, created_at, updated_at
+`
+
+type UpdateConversationStatusDefParams struct {
+	Name           string `json:"name"`
+	Color          string `json:"color"`
+	Category       string `json:"category"`
+	SortOrder      int32  `json:"sort_order"`
+	OrganizationID int64  `json:"organization_id"`
+	ID             int64  `json:"id"`
+}
+
+func (q *Queries) UpdateConversationStatusDef(ctx context.Context, arg UpdateConversationStatusDefParams) (ConversationStatus, error) {
+	row := q.db.QueryRow(ctx, updateConversationStatusDef,
+		arg.Name,
+		arg.Color,
+		arg.Category,
+		arg.SortOrder,
+		arg.OrganizationID,
+		arg.ID,
+	)
+	var i ConversationStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Uuid,
+		&i.OrganizationID,
+		&i.Name,
+		&i.Slug,
+		&i.Category,
+		&i.Color,
+		&i.SortOrder,
+		&i.IsDefault,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

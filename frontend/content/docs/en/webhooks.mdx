@@ -69,7 +69,7 @@ Body:
 }
 ```
 
-The content of `data` depends on the event. On conversation and message events (`conversation.*`, `message.*`) `data.conversation_uuid` is always the conversation's id; read it with `GET /v1/public-api/conversations/{uuid}`. On status events (`conversation.resolved`, `conversation.reopened`, `conversation.status_changed`) `data.from` and `data.to` give the previous and the new status. Read the related resource through the API for full details.
+The content of `data` depends on the event. On conversation and message events (`conversation.*`, `message.*`) `data.conversation_uuid` is always the conversation's id; read it with `GET /v1/public-api/conversations/{uuid}`. On status events (`conversation.resolved`, `conversation.reopened`, `conversation.status_changed`) `data.from` and `data.to` give the previous and the new status; `data.from_custom_status` and `data.to_custom_status` give the organization's own status (`{ uuid, name, color }`, for example "In progress") or `null`. Read the related resource through the API for full details. When an agent edits a reply, `conversation.updated` carries `data.change: "message_edited"` and `data.message_uuid`.
 
 ## Verifying the signature [#verifying-the-signature]
 

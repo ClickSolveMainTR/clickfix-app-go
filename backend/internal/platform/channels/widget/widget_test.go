@@ -179,3 +179,28 @@ func TestAdapterSendPublishesToVisitorChannel(t *testing.T) {
 		t.Fatal("short identity secret accepted")
 	}
 }
+
+// CF-248: an edited reply reaches the visitor's open widgets.
+func TestEditMessagePublishes(t *testing.T) {
+	pub := &pubRec{}
+	a := New(pub, nil)
+	inst := channels.Instance{UUID: uuid.New()}
+	msg, conv := uuid.New(), uuid.New()
+	at := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	if err := a.EditMessage(context.Background(), inst, channels.MessageEdit{
+		MessageUUID: msg, ConversationUUID: conv, To: channels.Recipient{ExternalID: "v-1"}, Text: "düzeltildi", EditedAt: at,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ev, ok := pub.data.(Event)
+	if !ok || pub.channel != VisitorChannel(inst.UUID, "v-1") || ev.Type != EventMessageEdited || ev.Text != "düzeltildi" ||
+		ev.MessageUUID == nil || *ev.MessageUUID != msg || ev.EditedAt == nil || !ev.EditedAt.Equal(at) {
+		t.Fatalf("published %q %+v", pub.channel, pub.data)
+	}
+	if err := a.EditMessage(context.Background(), inst, channels.MessageEdit{MessageUUID: msg}); !channels.IsPermanent(err) {
+		t.Fatalf("no visitor: %v", err)
+	}
+	if !channels.NewRegistry(a).CanEdit(channels.TypeWidget) || channels.NewRegistry(a).CanEdit(channels.TypeEmail) {
+		t.Fatal("CanEdit")
+	}
+}

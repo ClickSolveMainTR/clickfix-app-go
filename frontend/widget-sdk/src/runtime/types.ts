@@ -70,6 +70,8 @@ export type Message = {
   attachments: Attachment[];
   created_at: string;
   read_at: string | null;
+  /** An agent corrected the reply (CF-248). */
+  edited_at?: string | null;
   pending?: boolean;
   failed?: boolean;
   queued?: boolean;

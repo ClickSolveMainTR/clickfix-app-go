@@ -24,6 +24,11 @@ const (
 // Statuses lists every base status.
 var Statuses = []string{StatusOpen, StatusPending, StatusSnoozed, StatusResolved, StatusClosed}
 
+// CustomStatusCategories are the base categories a custom status may map
+// onto (CF-249): snoozed needs a wake-up time and closed is final, so
+// neither takes a custom name.
+var CustomStatusCategories = []string{StatusOpen, StatusPending, StatusResolved}
+
 // Priorities.
 const (
 	PriorityLow    = "low"

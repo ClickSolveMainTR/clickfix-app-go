@@ -56,6 +56,21 @@ func TestNotifyStatusSignedAndIdempotent(t *testing.T) {
 	if _, ok := got["changed_at"]; !ok {
 		t.Error("changed_at missing")
 	}
+	if v, ok := got["custom_status"]; !ok || v != nil {
+		t.Errorf("custom_status = %v (present %v), want null", v, ok)
+	}
+
+	// CF-249: the organization's own status travels with the base status.
+	custom := uuid.New()
+	withCustom := channels.StatusChange{EventID: uuid.New(), ConversationUUID: conv, From: "pending", To: "open",
+		CustomStatus: &channels.CustomStatus{UUID: custom, Name: "İşleniyor", Color: "#3b82f6"}}
+	if err := a.NotifyStatus(context.Background(), inst, withCustom); err != nil {
+		t.Fatal(err)
+	}
+	cs, _ := got["custom_status"].(map[string]any)
+	if got["to"] != "open" || cs["uuid"] != custom.String() || cs["name"] != "İşleniyor" || cs["color"] != "#3b82f6" || got["from_custom_status"] != nil {
+		t.Fatalf("custom status body %v", got)
+	}
 	// A rejected event is not retried; a server error is.
 	status = 410
 	if err := a.NotifyStatus(context.Background(), inst, ch); !channels.IsPermanent(err) {

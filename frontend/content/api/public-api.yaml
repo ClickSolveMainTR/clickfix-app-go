@@ -2948,7 +2948,7 @@ paths:
 
         The request is verified with the channel's signing secret, not an API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + raw_body)). Requests whose timestamp is older than 5 minutes are rejected. A message with the same `id` is stored once. Retry on `5xx`.
 
-        The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies and status changes (`status_changed`) refer to it as `conversation_id`.
+        The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies, edits of replies (`message_edited`) and status changes (`status_changed`) refer to it as `conversation_id`.
       security:
         - apiChannelSignature: []
       parameters:
@@ -3205,6 +3205,69 @@ webhooks:
           description: Rate limit, retried with backoff
         "500":
           description: Temporary receiver failure, retried with backoff
+  apiChannelMessageEdited:
+    post:
+      tags:
+        - API channel
+      operationId: deliverAPIChannelMessageEdited
+      summary: Agent reply edited (API channel)
+      description: |
+        When an agent corrects a reply that was already delivered to your endpoint (within 15 minutes of sending), ClickFix sends a `POST` with this body to the URL configured on the channel. The request carries `X-ClickFix-Event: message_edited`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (the signing method above) and `Idempotency-Key` (the event `id`, the same on every retry); process every key only once. `message_id` is the `id` of the edited reply (the `Idempotency-Key` it arrived with) and `text` is the whole new text: replace the reply's text with it and mark it edited. Several edits of one reply arrive as separate events; the one with the latest `edited_at` wins. Temporary failures are retried with increasing delays; `4xx` responses other than `408` and `429` count as permanent failures.
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - message_edited
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            description: Unix seconds
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            description: sha256= followed by hex HMAC-SHA256
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/APIChannelMessageEdited"
+            example:
+              id: 6b5a4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d
+              type: message_edited
+              message_id: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
+              conversation_id: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+              recipient_id: customer-42
+              thread_id: order-991
+              text: Your order ships tomorrow.
+              edited_at: 2026-11-11T10:05:00Z
+      responses:
+        "200":
+          description: Durably accepted, including duplicate id
+        "204":
+          description: Durably accepted, including duplicate id
+        "400":
+          description: Permanent content rejection
+        "401":
+          description: Permanent authentication rejection
+        "429":
+          description: Rate limit, retried with backoff
+        "500":
+          description: Temporary receiver failure, retried with backoff
 components:
   schemas:
     APIChannelMessage:
@@ -3235,6 +3298,45 @@ components:
         reply_to:
           type: string
         at:
+          type: string
+          format: date-time
+    APIChannelMessageEdited:
+      type: object
+      description: An agent's correction of a reply, posted to the organization's webhook URL.
+      required:
+        - id
+        - type
+        - message_id
+        - conversation_id
+        - recipient_id
+        - thread_id
+        - text
+        - edited_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Event id; equals Idempotency-Key
+        type:
+          type: string
+          enum:
+            - message_edited
+        message_id:
+          type: string
+          format: uuid
+          description: The id of the edited reply (its Idempotency-Key)
+        conversation_id:
+          type: string
+          format: uuid
+        recipient_id:
+          type: string
+        thread_id:
+          type: string
+          description: The thread_id of the customer's messages; empty when none was sent
+        text:
+          type: string
+          description: The whole new text; replace the reply's text with it
+        edited_at:
           type: string
           format: date-time
     APIChannelReply:
@@ -3306,6 +3408,16 @@ components:
         changed_at:
           type: string
           format: date-time
+        custom_status:
+          description: "The organization's own status on top of to (for example İşleniyor with to: open); null when none. A change of only the custom status is sent with from equal to to."
+          oneOf:
+            - $ref: "#/components/schemas/ConversationCustomStatusRef"
+            - type: "null"
+        from_custom_status:
+          description: The custom status before the change; null when none.
+          oneOf:
+            - $ref: "#/components/schemas/ConversationCustomStatusRef"
+            - type: "null"
     CompanyEvent:
       type: object
       required:
@@ -3656,6 +3768,21 @@ components:
           type: string
           maxLength: 200
           description: The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+    ConversationCustomStatusRef:
+      type: object
+      description: An organization's own conversation status.
+      required:
+        - uuid
+        - name
+        - color
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          type: string
     ConversationPriority:
       type: string
       enum:
@@ -3693,6 +3820,12 @@ components:
             - "null"
           format: uuid
           description: Team uuid; null removes the team (tenant.conversations.assign)
+        custom_status:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
         snoozed_until:
           type: string
           format: date-time

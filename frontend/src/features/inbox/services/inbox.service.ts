@@ -16,12 +16,15 @@ import type {
   InboxFilters,
   Message,
   MessageCreate,
+  MessageEditEntry,
+  MessageEdited,
   MessagePage,
   LinkRelation,
   SideConversation,
   SideConversationCreate,
   SideConversationList,
   Tag,
+  CustomStatus,
   Viewer,
   BulkAction,
   BulkResult,
@@ -172,6 +175,29 @@ export const inboxService = {
     );
   },
 
+  /** Corrects the caller's own reply (CF-248). */
+  async editMessage(uuid: string, message: string, content: string) {
+    return unwrap<MessageEdited>(
+      await apiClient.PATCH(
+        "/v1/tenant/conversations/{uuid}/messages/{message}",
+        {
+          params: { header: header(), path: { uuid, message } },
+          body: { content },
+        },
+      ),
+    );
+  },
+
+  /** Earlier versions of an edited message, oldest first. */
+  async messageEdits(uuid: string, message: string) {
+    return unwrap<{ items: MessageEditEntry[] }>(
+      await apiClient.GET(
+        "/v1/tenant/conversations/{uuid}/messages/{message}/edits",
+        { params: { header: header(), path: { uuid, message } } },
+      ),
+    );
+  },
+
   async retry(uuid: string, message: string) {
     return unwrap(
       await apiClient.POST(
@@ -196,6 +222,25 @@ export const inboxService = {
         params: { header: header(), path: { uuid } },
       }),
       { silent: true },
+    );
+  },
+
+  /** The organization's own statuses for the header picker (CF-249). */
+  async customStatuses() {
+    const res = await unwrap<{ items: CustomStatus[] }>(
+      await apiClient.GET("/v1/tenant/conversation-statuses", {
+        params: { header: header() },
+      }),
+    );
+    return res.items;
+  },
+
+  /** Marks the conversation unread for the caller again (CF-247). */
+  async markUnread(uuid: string) {
+    return unwrap(
+      await apiClient.POST("/v1/tenant/conversations/{uuid}/unread", {
+        params: { header: header(), path: { uuid } },
+      }),
     );
   },
 

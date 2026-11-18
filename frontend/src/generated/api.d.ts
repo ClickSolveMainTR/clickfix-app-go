@@ -5908,6 +5908,8 @@ export interface paths {
          *     redelivered id answers with the same conversation). Status changes made
          *     in ClickFix POST APIChannelStatusChanged to webhook_url (header
          *     `X-ClickFix-Event: status_changed`, Idempotency-Key = event id).
+         *     Agent edits of a delivered reply POST APIChannelMessageEdited (header
+         *     `X-ClickFix-Event: message_edited`, CF-248).
          *
          *     Slack uses X-Slack-Signature and X-Slack-Request-Timestamp; POST URL verification
          *     echoes text/plain. Teams uses Bot Framework RS256 JWT (issuer, app audience,
@@ -6504,8 +6506,10 @@ export interface paths {
         head?: never;
         /**
          * Change status, priority, subject or assignee
-         * @description Status, priority, subject and snooze require `tenant.conversations.manage`;
+         * @description Status, priority, subject, snooze and `custom_status` require `tenant.conversations.manage`;
          *     `assignee` requires `tenant.conversations.assign` (or manage). `assignee: null` unassigns.
+         *     `custom_status` sets one of the organization's own statuses (CF-249); the
+         *     base `status` becomes its category. Other changes keep it.
          *     `status: snoozed` needs a future `snoozed_until`. Each change is
          *     written to the timeline as a system event and published as a domain
          *     event (`conversations.assigned|resolved|reopened|updated`).
@@ -6554,9 +6558,84 @@ export interface paths {
          *     delivered → read, or failed). `client_id` makes a retried send
          *     idempotent (`200` with the stored message). `attachments` are the
          *     caller's own unattached uploads. `mentions` (agent uuids) notify on
-         *     private notes.
+         *     private notes. `closing_text` (CF-250) is a closing text uuid or
+         *     `none`; left out, the caller's last pick (else the default) is
+         *     appended to replies. An explicit value is remembered as the caller's
+         *     pick. Template messages and notes never get one.
          */
         post: operations["postTenantConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/messages/{message}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit your own reply
+         * @description CF-248. Requires `tenant.conversations.reply`. Only the author of a
+         *     public text reply may edit it, within 15 minutes of sending; notes,
+         *     templates and contact messages are not editable (`409
+         *     MESSAGE_NOT_EDITABLE`, also while the reply is being handed to the
+         *     channel), an older reply answers `409 MESSAGE_EDIT_WINDOW_CLOSED` and
+         *     another agent's reply `403`. The previous text is kept in the edit
+         *     history, `edited_at` is set and inbox clients get `message.updated`.
+         *     `channel_edit` says what the contact sees: `notified` (the channel
+         *     updates its copy: the REST API channel receives a signed
+         *     `message_edited` event, the web widget replaces the text), `unsupported`
+         *     (the channel cannot change a delivered message; the contact keeps the
+         *     first text) or `not_sent` (queued or failed; the next delivery
+         *     carries the new text).
+         */
+        patch: operations["editTenantConversationMessage"];
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/messages/{message}/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Edit history of a message
+         * @description CF-248. Requires `tenant.conversations.read`. Earlier versions, oldest first; the first `previous_content` is the original text.
+         */
+        get: operations["listTenantConversationMessageEdits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/closing-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closing texts usable on a conversation
+         * @description CF-250. Requires `tenant.conversations.read`. Organization-wide texts plus the conversation brand's, rendered for the conversation in the contact's language; `selected` is the composer's starting pick (the caller's last pick, else the default; null = none).
+         */
+        get: operations["listTenantConversationClosingTexts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6597,6 +6676,26 @@ export interface paths {
          * @description Requires `tenant.conversations.read`.
          */
         post: operations["markTenantConversationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark the conversation unread for the caller
+         * @description Requires `tenant.conversations.read`. Moves the caller's read marker back so the latest customer message (without one, the latest message the caller did not write) counts as unread again; other members' markers stay. The marker never moves forward here. The caller's inbox channel receives `conversation.read_state` with `actor_uuid`, so its other tabs refetch.
+         */
+        post: operations["markTenantConversationUnread"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8523,6 +8622,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversation-statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom conversation statuses
+         * @description Requires `tenant.conversations.read`. The organization's own statuses
+         *     (CF-249) in display order, with the number of conversations using
+         *     each. Every organization starts with "İşleniyor" (category open).
+         */
+        get: operations["listTenantConversationStatuses"];
+        put?: never;
+        /**
+         * Create a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Category is open, pending or resolved; a used name (case-insensitive) is 409 STATUS_EXISTS.
+         */
+        post: operations["createTenantConversationStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversation-statuses/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Conversations using it keep their status.
+         */
+        delete: operations["deleteTenantConversationStatus"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Moving it to another category
+         *     removes it from conversations whose status no longer matches; their
+         *     status stays.
+         */
+        patch: operations["updateTenantConversationStatus"];
         trace?: never;
     };
     "/v1/tenant/tags": {
@@ -15251,6 +15402,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/closing-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List closing texts
+         * @description CF-250. Requires `tenant.conversations.read`. Organization-wide texts first, then brand texts; with the organization setting and the variables a text may use.
+         */
+        get: operations["listTenantClosingTexts"];
+        put?: never;
+        /**
+         * Create a closing text
+         * @description Requires `tenant.macros.write`. At most 100 per organization. `is_default` replaces the previous default of the same organization/brand. Bodies may use {{agent.name}}, {{agent.first_name}}, {{agent.email}}, {{contact.name}}, {{contact.first_name}}, {{brand.name}}, {{organization.name}}, {{conversation.number}}, {{conversation.subject}}.
+         */
+        post: operations["createTenantClosingText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/closing-texts/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a closing text
+         * @description Requires `tenant.conversations.read`.
+         */
+        get: operations["getTenantClosingText"];
+        /**
+         * Replace a closing text
+         * @description Requires `tenant.macros.write`.
+         */
+        put: operations["updateTenantClosingText"];
+        post?: never;
+        /**
+         * Delete a closing text
+         * @description Requires `tenant.macros.write`. Agents who last picked it fall back to the default.
+         */
+        delete: operations["deleteTenantClosingText"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/closing-text-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the closing text settings
+         * @description Requires `tenant.macros.write`. `apply_to_ai` appends the default closing text to autonomous AI replies (off by default).
+         */
+        put: operations["updateTenantClosingTextSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/macros": {
         parameters: {
             query?: never;
@@ -15422,7 +15645,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to many conversations
-         * @description Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`). Up to 200 conversations; each change lands on its timeline. The response operation can be undone for 24 hours.
+         * @description Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`; read / unread only `tenant.conversations.read`, they move the caller's own read marker). Up to 200 conversations; each change lands on its timeline (read / unread do not). The response operation can be undone for 24 hours; a read / unread operation only by the member who ran it.
          */
         post: operations["bulkTenantConversations"];
         delete?: never;
@@ -18103,6 +18326,26 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
+    apiChannelMessageEdited: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tell an organization's custom channel that an agent edited a reply
+         * @description CF-248. Sent when an agent corrects a reply already delivered to webhook_url. Same signature headers as the reply, plus X-ClickFix-Event: message_edited. message_id is the reply's id; Idempotency-Key is the event id and stays the same on retries; process each only once. text is the whole new text. Temporary failures are retried with backoff; 4xx except 408/429 is permanent.
+         */
+        post: operations["deliverAPIChannelMessageEdited"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/history/imports": {
         parameters: {
             query?: never;
@@ -19783,6 +20026,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             read_at: string | null;
+            /**
+             * Format: date-time
+             * @description CF-248: an agent corrected the reply; content is the corrected text
+             */
+            edited_at?: string | null;
         };
         WidgetSent: {
             /** Format: uuid */
@@ -24539,6 +24787,34 @@ export interface components {
             snoozed_until?: string;
             /** Format: date-time */
             changed_at: string;
+            /** @description The organization's own status on top of to (for example İşleniyor with to: open); null when none. A change of only the custom status is sent with from equal to to. */
+            custom_status?: components["schemas"]["ConversationCustomStatusRef"] | null;
+            /** @description The custom status before the change; null when none. */
+            from_custom_status?: components["schemas"]["ConversationCustomStatusRef"] | null;
+        };
+        /** @description CF-248: an agent's correction of a reply, posted to the organization's webhook URL. */
+        APIChannelMessageEdited: {
+            /**
+             * Format: uuid
+             * @description Event id; equals Idempotency-Key
+             */
+            id: string;
+            /** @enum {string} */
+            type: "message_edited";
+            /**
+             * Format: uuid
+             * @description The id of the edited reply (its Idempotency-Key)
+             */
+            message_id: string;
+            /** Format: uuid */
+            conversation_id: string;
+            recipient_id: string;
+            /** @description The thread_id of the customer's messages; empty when none was sent */
+            thread_id: string;
+            /** @description The whole new text; replace the reply's text with it */
+            text: string;
+            /** Format: date-time */
+            edited_at: string;
         };
         /** @description JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key. */
         APIChannelReply: {
@@ -25181,6 +25457,59 @@ export interface components {
             uuid: string;
             name: string;
         };
+        /** @description An organization's own conversation status (CF-249). */
+        ConversationCustomStatusRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+        };
+        /**
+         * @description Base status a custom status maps onto.
+         * @enum {string}
+         */
+        ConversationCustomStatusCategory: "open" | "pending" | "resolved";
+        ConversationCustomStatus: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+            color: string;
+            category: components["schemas"]["ConversationCustomStatusCategory"];
+            /** Format: int32 */
+            sort_order: number;
+            /**
+             * Format: int64
+             * @description Conversations using it (0 in create and update answers)
+             */
+            usage_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description name and category are required on create; omitted fields stay on update. */
+        ConversationCustomStatusInput: {
+            name?: string;
+            color?: string;
+            category?: components["schemas"]["ConversationCustomStatusCategory"];
+            /** Format: int32 */
+            sort_order?: number;
+        };
+        EnvelopeConversationCustomStatus: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConversationCustomStatus"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeConversationCustomStatusList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["ConversationCustomStatus"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
         ConversationContact: {
             /** Format: uuid */
             uuid: string;
@@ -25217,7 +25546,8 @@ export interface components {
             company: components["schemas"]["ConversationCompany"] | null;
             subject: string;
             status: components["schemas"]["ConversationStatus"];
-            custom_status: components["schemas"]["InboxRef"] | null;
+            /** @description The organization's own status on top of status (CF-249), e.g. İşleniyor; null when none */
+            custom_status: components["schemas"]["ConversationCustomStatusRef"] | null;
             priority: components["schemas"]["ConversationPriority"];
             /** @enum {string} */
             source: "inbound" | "outbound";
@@ -25256,6 +25586,8 @@ export interface components {
             external_thread_id?: string | null;
             /** @description A free-form reply is allowed now (channel reply window) */
             window_open: boolean;
+            /** @description CF-248: the channel updates a delivered reply for the contact when an agent edits it (REST API channel, web widget) */
+            channel_edits?: boolean;
             /** Format: date-time */
             window_ends_at: string | null;
             /** Format: date-time */
@@ -25425,6 +25757,11 @@ export interface components {
              * @description Team uuid; null removes the team (tenant.conversations.assign)
              */
             team?: string | null;
+            /**
+             * Format: uuid
+             * @description Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
+             */
+            custom_status?: string | null;
             /** Format: date-time */
             snoozed_until?: string;
         };
@@ -25499,6 +25836,46 @@ export interface components {
             read_at: string | null;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: date-time
+             * @description CF-248: when the author last edited the message; null when never edited
+             */
+            edited_at?: string | null;
+        };
+        MessageEdit: {
+            /** @description The whole new text */
+            content: string;
+        };
+        MessageEdited: {
+            message: components["schemas"]["Message"];
+            /**
+             * @description notified: the channel updates the contact's copy; unsupported: the contact keeps the first text; not_sent: the next delivery carries the new text
+             * @enum {string}
+             */
+            channel_edit: "notified" | "unsupported" | "not_sent";
+        };
+        EnvelopeMessageEdited: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["MessageEdited"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        MessageEditEntry: {
+            /** Format: uuid */
+            uuid: string;
+            /** @description The text before this edit */
+            previous_content: string;
+            editor: components["schemas"]["InboxRef"] | null;
+            /** Format: date-time */
+            edited_at: string;
+        };
+        EnvelopeMessageEdits: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["MessageEditEntry"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
         };
         MessageCreate: {
             content?: string;
@@ -25509,6 +25886,8 @@ export interface components {
             reply_to?: string;
             mentions?: string[];
             attachments?: string[];
+            /** @description closing text uuid or none */
+            closing_text?: string;
             template?: {
                 name: string;
                 language?: string;
@@ -25595,6 +25974,15 @@ export interface components {
             data: {
                 /** @enum {boolean} */
                 read: true;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeUnread: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                /** @enum {boolean} */
+                unread: true;
             };
             meta: components["schemas"]["ResponseMeta"];
         };
@@ -29182,6 +29570,83 @@ export interface components {
             description?: string;
             actions: components["schemas"]["MacroAction"][];
         };
+        ClosingTextInput: {
+            name: string;
+            body_tr: string;
+            /** @description empty falls back to body_tr */
+            body_en?: string;
+            is_default?: boolean;
+            position?: number;
+            /**
+             * Format: uuid
+             * @description null = organization-wide
+             */
+            brand_uuid?: string | null;
+        };
+        ClosingText: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            body_tr: string;
+            body_en: string;
+            is_default: boolean;
+            position: number;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ClosingTextSettings: {
+            apply_to_ai: boolean;
+        };
+        ClosingTextList: {
+            items: components["schemas"]["ClosingText"][];
+            settings: components["schemas"]["ClosingTextSettings"];
+            variables: string[];
+        };
+        ClosingTextOption: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            /** @description rendered for the conversation */
+            text: string;
+            is_default: boolean;
+            /** Format: uuid */
+            brand_uuid: string | null;
+        };
+        ClosingTextOptions: {
+            items: components["schemas"]["ClosingTextOption"][];
+            /** Format: uuid */
+            selected: string | null;
+            /** @enum {string} */
+            language: "tr" | "en";
+        };
+        EnvelopeClosingText: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingText"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextSettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextSettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextOptions"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeCanned: {
             /** @enum {boolean} */
             success: true;
@@ -29315,8 +29780,8 @@ export interface components {
         ConversationBulkInput: {
             conversations: string[];
             /** @enum {string} */
-            action: "assign" | "status" | "priority" | "snooze" | "tag" | "untag";
-            /** @description assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name */
+            action: "assign" | "status" | "priority" | "snooze" | "tag" | "untag" | "read" | "unread";
+            /** @description assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name; read / unread: unused */
             value?: string;
         };
         ConversationBulkResult: {
@@ -45424,6 +45889,113 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    editTenantConversationMessage: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                message: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageEdit"];
+            };
+        };
+        responses: {
+            /** @description Edited */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeMessageEdited"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationMessageEdits: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+                message: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Edit history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeMessageEdits"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationClosingTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextOptions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     retryTenantConversationMessage: {
         parameters: {
             query?: never;
@@ -45484,6 +46056,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeRead"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    markTenantConversationUnread: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeUnread"];
                 };
             };
             401: components["responses"]["Unauthenticated"];
@@ -50107,6 +50712,142 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationStatuses: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom statuses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatusList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCustomStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Custom status */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCustomStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Custom status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -66383,6 +67124,209 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listTenantClosingTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantClosingTextSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTenantMacros: {
         parameters: {
             query?: never;
@@ -73773,6 +74717,68 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["APIChannelStatusChanged"];
+            };
+        };
+        responses: {
+            /** @description Durably accepted, including duplicate id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Durably accepted, including duplicate id */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent content rejection */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Permanent authentication rejection */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit, retried with backoff */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporary receiver failure, retried with backoff */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deliverAPIChannelMessageEdited: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-ClickFix-Event": "message_edited";
+                "X-ClickFix-Timestamp": string;
+                "X-ClickFix-Signature": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["APIChannelMessageEdited"];
             };
         };
         responses: {

@@ -1651,6 +1651,34 @@ type ChannelVoiceCall struct {
 	MissedNotifiedAt   pgtype.Timestamptz `json:"missed_notified_at"`
 }
 
+type ClosingText struct {
+	ID             int64              `json:"id"`
+	Uuid           uuid.UUID          `json:"uuid"`
+	OrganizationID int64              `json:"organization_id"`
+	BrandID        pgtype.UUID        `json:"brand_id"`
+	Name           string             `json:"name"`
+	BodyTr         string             `json:"body_tr"`
+	BodyEn         string             `json:"body_en"`
+	IsDefault      bool               `json:"is_default"`
+	Position       int32              `json:"position"`
+	CreatedBy      pgtype.Int8        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ClosingTextChoice struct {
+	OrganizationID int64              `json:"organization_id"`
+	UserID         int64              `json:"user_id"`
+	ClosingTextID  pgtype.Int8        `json:"closing_text_id"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ClosingTextSetting struct {
+	OrganizationID int64              `json:"organization_id"`
+	ApplyToAi      bool               `json:"apply_to_ai"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CoachingItem struct {
 	ID             int64              `json:"id"`
 	Uuid           uuid.UUID          `json:"uuid"`
@@ -3295,6 +3323,16 @@ type Message struct {
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	EditedAt          pgtype.Timestamptz `json:"edited_at"`
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type MessageEdit struct {
+	ID              int64              `json:"id"`
+	Uuid            uuid.UUID          `json:"uuid"`
+	OrganizationID  int64              `json:"organization_id"`
+	MessageID       int64              `json:"message_id"`
+	EditorUserID    pgtype.Int8        `json:"editor_user_id"`
+	PreviousContent string             `json:"previous_content"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type MessageMention struct {

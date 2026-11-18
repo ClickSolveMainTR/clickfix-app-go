@@ -41,6 +41,8 @@ export const inboxKeys = {
   aiAvailability: (org: string) =>
     [...inboxKeys.all(org), "ai-availability"] as const,
   tags: (org: string) => [...inboxKeys.all(org), "tags"] as const,
+  customStatuses: (org: string) =>
+    [...inboxKeys.all(org), "custom-statuses"] as const,
   detail: (org: string, uuid: string) =>
     [...inboxKeys.all(org), "detail", uuid] as const,
   messages: (org: string, uuid: string) =>
@@ -126,6 +128,17 @@ export function useInboxTags() {
   return useQuery({
     queryKey: inboxKeys.tags(org),
     queryFn: () => inboxService.tags(),
+    enabled: Boolean(org) && canRead,
+    staleTime: 60_000,
+  });
+}
+
+/** Custom statuses for the status picker (CF-249). */
+export function useInboxCustomStatuses() {
+  const { org, canRead } = useInboxScope();
+  return useQuery({
+    queryKey: inboxKeys.customStatuses(org),
+    queryFn: () => inboxService.customStatuses(),
     enabled: Boolean(org) && canRead,
     staleTime: 60_000,
   });
@@ -275,6 +288,42 @@ export function useSendMessage(uuid: string) {
   });
 }
 
+/**
+ * Edits the caller's own reply (CF-248). The answer (and the realtime
+ * message.updated) replaces the cached message; lists refetch for the
+ * preview.
+ */
+export function useEditMessage(uuid: string) {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  return useAppMutation({
+    mutationFn: ({ message, content }: { message: string; content: string }) =>
+      inboxService.editMessage(uuid, message, content),
+    onSuccess: (out) => {
+      upsertMessage(qc, inboxKeys.messages(org, uuid), out.message);
+      void qc.invalidateQueries({
+        queryKey: [...inboxKeys.all(org), "edits", uuid, out.message.uuid],
+      });
+      void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+    },
+  });
+}
+
+/** Edit history of a message, loaded when the agent opens it. */
+export function useMessageEdits(
+  uuid: string,
+  message: string,
+  enabled: boolean,
+) {
+  const { org } = useInboxScope();
+  return useQuery({
+    queryKey: [...inboxKeys.all(org), "edits", uuid, message],
+    queryFn: () => inboxService.messageEdits(uuid, message),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useRetryMessage(uuid: string) {
   return useAppMutation({
     mutationFn: (message: string) => inboxService.retry(uuid, message),
@@ -295,6 +344,7 @@ export function useUpdateConversation(uuid: string) {
           ...prev,
           ...(body.status ? { status: body.status } : {}),
           ...(body.priority ? { priority: body.priority } : {}),
+          ...(body.custom_status === null ? { custom_status: null } : {}),
         });
       }
       return { prev };
@@ -356,6 +406,56 @@ export function useMarkRead(uuid: string | null) {
 }
 
 /**
+ * Marks conversations read or unread by hand (CF-247): the list row and
+ * the badges change at once, then refetch.
+ */
+export function useReadState() {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  const patch = useCallback(
+    (uuid: string, unread: boolean) =>
+      qc.setQueriesData<InfiniteData<ConversationPage>>(
+        { queryKey: inboxKeys.lists(org) },
+        (data) =>
+          data && {
+            ...data,
+            pages: data.pages.map((p) => ({
+              ...p,
+              items: p.items.map((c) =>
+                c.uuid === uuid
+                  ? {
+                      ...c,
+                      unread_count: unread ? Math.max(c.unread_count, 1) : 0,
+                    }
+                  : c,
+              ),
+            })),
+          },
+      ),
+    [org, qc],
+  );
+  const settle = useCallback(
+    (uuid: string) => {
+      void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.detail(org, uuid) });
+    },
+    [org, qc],
+  );
+  const markUnread = useAppMutation({
+    mutationFn: (uuid: string) => inboxService.markUnread(uuid),
+    onMutate: (uuid) => patch(uuid, true),
+    onSettled: (_d, _e, uuid) => settle(uuid),
+  });
+  const markRead = useAppMutation({
+    mutationFn: (uuid: string) => inboxService.markRead(uuid),
+    onMutate: (uuid) => patch(uuid, false),
+    onSettled: (_d, _e, uuid) => settle(uuid),
+  });
+  return { markRead, markUnread };
+}
+
+/**
  * Subscribes to the inbox channel: messages land in the open conversation
  * instantly; lists and badges refetch (debounced). Members with read_all
  * listen on the organization channel, the others on their own channel,
@@ -409,6 +509,13 @@ export function useInboxLive(
         void qc.invalidateQueries({
           queryKey: inboxKeys.aiJobs(org, ev.conversation_uuid),
         });
+        return;
+      }
+      // Read markers are per member (CF-247): only the member who marked
+      // read / unread refetches (its other tabs and devices). The open
+      // detail stays, or opening it would mark it read again.
+      if (ev.type === "conversation.read_state") {
+        if (ev.actor_uuid && ev.actor_uuid === userUuid) refreshLists();
         return;
       }
       if (ev.type === "conversation.viewers") {
