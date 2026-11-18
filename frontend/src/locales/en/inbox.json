@@ -251,6 +251,7 @@
   "reminders.presets.tomorrow": "Remind me tomorrow morning",
   "reminders.presets.no_reply_3d": "Reopen and remind me if no reply in 3 days",
   "shortcuts.select": "Add to / remove from selection",
+  "shortcuts.unread": "Mark as unread",
   "views.teams": "My teams",
   "header.team": "Team",
   "header.search_team": "Search teams…",
@@ -414,5 +415,8 @@
   "events.remote_support_mode_control": "control requested",
   "events.remote_support_duration": "duration {{minutes}}:{{seconds}}",
   "events.remote_support_control_given": "control approved",
-  "events.remote_support_recorded": "recorded"
+  "events.remote_support_recorded": "recorded",
+  "read_state.mark_unread": "Mark as unread",
+  "read_state.mark_unread_short": "Unread",
+  "read_state.mark_read": "Mark as read"
 }

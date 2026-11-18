@@ -171,6 +171,7 @@
   "message.show_more": "Show more",
   "message.show_less": "Show less",
   "row.read": "Mark as read",
+  "row.unread_action": "Mark as unread",
   "row.done_read": "{{name}} marked as read",
   "events.updated": "Conversation updated",
   "events.repeated": "{{event}} ({{count}} times)",

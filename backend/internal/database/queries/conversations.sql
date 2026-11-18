@@ -466,6 +466,31 @@ ON CONFLICT (conversation_id, user_id) DO UPDATE SET
     last_read_message_id = GREATEST(conversation_reads.last_read_message_id, EXCLUDED.last_read_message_id),
     last_read_at = NOW();
 
+-- name: GetConversationReadMarker :one
+-- The viewer's read marker (0 when it never opened the conversation).
+SELECT COALESCE((SELECT r.last_read_message_id FROM conversation_reads r
+                 WHERE r.organization_id = $1 AND r.conversation_id = $2 AND r.user_id = $3), 0)::bigint;
+
+-- name: UnreadTargetMessageID :one
+-- CF-247: the read marker that leaves the latest customer message unread
+-- (without one, the latest message the viewer did not write); 0 when
+-- the conversation has no such message.
+SELECT GREATEST(COALESCE(
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction = 'in' AND m.deleted_at IS NULL),
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction <> 'internal' AND m.deleted_at IS NULL
+       AND (m.sender_user_id IS NULL OR m.sender_user_id <> sqlc.arg(viewer_id)::bigint)),
+    1) - 1, 0)::bigint;
+
+-- name: SetConversationReadMarker :exec
+-- CF-247: puts the marker exactly at message_id (mark unread, undo).
+INSERT INTO conversation_reads (organization_id, conversation_id, user_id, last_read_message_id, last_read_at)
+VALUES ($1, $2, $3, sqlc.arg(message_id), NOW())
+ON CONFLICT (conversation_id, user_id) DO UPDATE SET
+    last_read_message_id = EXCLUDED.last_read_message_id,
+    last_read_at = NOW();
+
 -- name: InsertMessageMention :execrows
 INSERT INTO message_mentions (organization_id, message_id, user_id) VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING;

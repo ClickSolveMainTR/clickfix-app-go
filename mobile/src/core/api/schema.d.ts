@@ -6603,6 +6603,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenant/conversations/{uuid}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark the conversation unread for the caller
+         * @description Requires `tenant.conversations.read`. Moves the caller's read marker back so the latest customer message (without one, the latest message the caller did not write) counts as unread again; other members' markers stay. The marker never moves forward here. The caller's inbox channel receives `conversation.read_state` with `actor_uuid`, so its other tabs refetch.
+         */
+        post: operations["markTenantConversationUnread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenant/conversations/{uuid}/tags": {
         parameters: {
             query?: never;
@@ -15422,7 +15442,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one action to many conversations
-         * @description Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`). Up to 200 conversations; each change lands on its timeline. The response operation can be undone for 24 hours.
+         * @description Requires `tenant.conversations.manage` (assign: `tenant.conversations.assign`; read / unread only `tenant.conversations.read`, they move the caller's own read marker). Up to 200 conversations; each change lands on its timeline (read / unread do not). The response operation can be undone for 24 hours; a read / unread operation only by the member who ran it.
          */
         post: operations["bulkTenantConversations"];
         delete?: never;
@@ -25598,6 +25618,15 @@ export interface components {
             };
             meta: components["schemas"]["ResponseMeta"];
         };
+        EnvelopeUnread: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                /** @enum {boolean} */
+                unread: true;
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
         EnvelopeDeleted: {
             /** @enum {boolean} */
             success: true;
@@ -29315,8 +29344,8 @@ export interface components {
         ConversationBulkInput: {
             conversations: string[];
             /** @enum {string} */
-            action: "assign" | "status" | "priority" | "snooze" | "tag" | "untag";
-            /** @description assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name */
+            action: "assign" | "status" | "priority" | "snooze" | "tag" | "untag" | "read" | "unread";
+            /** @description assign: me / agent uuid / empty; status; priority; snooze: RFC3339 time; tag name; read / unread: unused */
             value?: string;
         };
         ConversationBulkResult: {
@@ -45484,6 +45513,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvelopeRead"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    markTenantConversationUnread: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeUnread"];
                 };
             };
             401: components["responses"]["Unauthenticated"];
