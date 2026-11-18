@@ -6554,9 +6554,32 @@ export interface paths {
          *     delivered → read, or failed). `client_id` makes a retried send
          *     idempotent (`200` with the stored message). `attachments` are the
          *     caller's own unattached uploads. `mentions` (agent uuids) notify on
-         *     private notes.
+         *     private notes. `closing_text` (CF-250) is a closing text uuid or
+         *     `none`; left out, the caller's last pick (else the default) is
+         *     appended to replies. An explicit value is remembered as the caller's
+         *     pick. Template messages and notes never get one.
          */
         post: operations["postTenantConversationMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversations/{uuid}/closing-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closing texts usable on a conversation
+         * @description CF-250. Requires `tenant.conversations.read`. Organization-wide texts plus the conversation brand's, rendered for the conversation in the contact's language; `selected` is the composer's starting pick (the caller's last pick, else the default; null = none).
+         */
+        get: operations["listTenantConversationClosingTexts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15245,6 +15268,78 @@ export interface paths {
          * @description Requires `tenant.macros.read` and `tenant.conversations.read`. Fills the variables and counts the use; unknown variables become empty.
          */
         post: operations["renderTenantCannedResponse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/closing-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List closing texts
+         * @description CF-250. Requires `tenant.conversations.read`. Organization-wide texts first, then brand texts; with the organization setting and the variables a text may use.
+         */
+        get: operations["listTenantClosingTexts"];
+        put?: never;
+        /**
+         * Create a closing text
+         * @description Requires `tenant.macros.write`. At most 100 per organization. `is_default` replaces the previous default of the same organization/brand. Bodies may use {{agent.name}}, {{agent.first_name}}, {{agent.email}}, {{contact.name}}, {{contact.first_name}}, {{brand.name}}, {{organization.name}}, {{conversation.number}}, {{conversation.subject}}.
+         */
+        post: operations["createTenantClosingText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/closing-texts/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a closing text
+         * @description Requires `tenant.conversations.read`.
+         */
+        get: operations["getTenantClosingText"];
+        /**
+         * Replace a closing text
+         * @description Requires `tenant.macros.write`.
+         */
+        put: operations["updateTenantClosingText"];
+        post?: never;
+        /**
+         * Delete a closing text
+         * @description Requires `tenant.macros.write`. Agents who last picked it fall back to the default.
+         */
+        delete: operations["deleteTenantClosingText"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/closing-text-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save the closing text settings
+         * @description Requires `tenant.macros.write`. `apply_to_ai` appends the default closing text to autonomous AI replies (off by default).
+         */
+        put: operations["updateTenantClosingTextSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -25509,6 +25604,8 @@ export interface components {
             reply_to?: string;
             mentions?: string[];
             attachments?: string[];
+            /** @description closing text uuid or none */
+            closing_text?: string;
             template?: {
                 name: string;
                 language?: string;
@@ -29181,6 +29278,83 @@ export interface components {
             name: string;
             description?: string;
             actions: components["schemas"]["MacroAction"][];
+        };
+        ClosingTextInput: {
+            name: string;
+            body_tr: string;
+            /** @description empty falls back to body_tr */
+            body_en?: string;
+            is_default?: boolean;
+            position?: number;
+            /**
+             * Format: uuid
+             * @description null = organization-wide
+             */
+            brand_uuid?: string | null;
+        };
+        ClosingText: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            body_tr: string;
+            body_en: string;
+            is_default: boolean;
+            position: number;
+            /** Format: uuid */
+            brand_uuid: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ClosingTextSettings: {
+            apply_to_ai: boolean;
+        };
+        ClosingTextList: {
+            items: components["schemas"]["ClosingText"][];
+            settings: components["schemas"]["ClosingTextSettings"];
+            variables: string[];
+        };
+        ClosingTextOption: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            /** @description rendered for the conversation */
+            text: string;
+            is_default: boolean;
+            /** Format: uuid */
+            brand_uuid: string | null;
+        };
+        ClosingTextOptions: {
+            items: components["schemas"]["ClosingTextOption"][];
+            /** Format: uuid */
+            selected: string | null;
+            /** @enum {string} */
+            language: "tr" | "en";
+        };
+        EnvelopeClosingText: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingText"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextList: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextList"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextSettings: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextSettings"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeClosingTextOptions: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ClosingTextOptions"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         EnvelopeCanned: {
             /** @enum {boolean} */
@@ -45421,6 +45595,39 @@ export interface operations {
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationClosingTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextOptions"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -66380,6 +66587,209 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantClosingTexts: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingText"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantClosingText: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantClosingTextSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosingTextSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeClosingTextSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
             500: components["responses"]["InternalError"];
         };
     };

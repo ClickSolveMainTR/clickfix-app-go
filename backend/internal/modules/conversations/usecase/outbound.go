@@ -41,6 +41,8 @@ type PostInput struct {
 	Template         *channels.Template
 	// Attachments are files the author uploaded (ownerless) for this message.
 	Attachments []uuid.UUID
+	// Closing appends a closing text to a reply (CF-250); the zero value adds none.
+	Closing Closing
 }
 
 // Posted is the stored message of Post.
@@ -79,6 +81,16 @@ func (s *Service) Post(ctx context.Context, in PostInput) (Posted, error) {
 		}
 		replyTo = ref.ID
 	}
+	var closingAttrs map[string]any
+	if !in.Private && in.Template == nil {
+		in.Content, closingAttrs, err = s.applyClosing(ctx, conv, in.AuthorID, in.Closing, in.Content, nil)
+		if err != nil {
+			return Posted{}, err
+		}
+		if utf8.RuneCountInString(in.Content) > MaxMessageLength {
+			return Posted{}, fmt.Errorf("%w: message is too long with the closing text", ErrInvalid)
+		}
+	}
 	nm := repository.NewMessage{
 		OrganizationID: in.OrganizationID, ConversationID: conv.ID, SenderType: model.SenderAgent,
 		SenderUserID: in.AuthorID, Content: in.Content, ReplyToID: replyTo, At: s.now(),
@@ -101,6 +113,13 @@ func (s *Service) Post(ctx context.Context, in PostInput) (Posted, error) {
 				return Posted{}, err
 			}
 			nm.Attributes = attrs
+		}
+		if closingAttrs != nil {
+			raw, err := json.Marshal(closingAttrs)
+			if err != nil {
+				return Posted{}, err
+			}
+			nm.Attributes = raw
 		}
 	}
 	if in.EngineeringDelivery != uuid.Nil {
@@ -302,6 +321,17 @@ func (s *Service) Deliver(ctx context.Context, orgID, messageID int64, attempt D
 	if attrs, ok := decodeJSON(m.ContentAttributes).(map[string]any); ok {
 		out.Attributes = attrs
 		out.Template = templateFrom(attrs)
+	}
+	if m.Kind != model.KindTemplate {
+		if text, added := s.aiClosing(ctx, conv, m, out.Attributes, out.Text); added {
+			out.Text = text
+			attrs := make(map[string]any, len(out.Attributes)+1)
+			for k, v := range out.Attributes {
+				attrs[k] = v
+			}
+			attrs[AttrClosingText] = true
+			out.Attributes = attrs
+		}
 	}
 	inboundReceivedAt := time.Time{}
 	if m.ReplyToID.Valid {
