@@ -363,7 +363,7 @@ jobs:
       - name: Dart visitor client analyzes and tests
         working-directory: sdks/flutter/clickfix_visitor
         run: |
-          dart pub get
+          dart pub get --no-example   # example/ is a Flutter app; the flutter job builds it
           dart analyze --fatal-infos
           dart test
       # Integration guide samples (CF-199): the code embedded in the guide

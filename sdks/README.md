@@ -67,5 +67,5 @@ pnpm test                                           # build, type tests, Node te
 (cd php && composer install && composer check)      # php-cs-fixer, PHPStan level 8, PHPUnit
 (cd laravel && composer install && vendor/bin/phpunit)
 (cd flutter/clickfix_webview && flutter test)
-(cd flutter/clickfix_visitor && dart pub get && dart analyze && dart test)
+(cd flutter/clickfix_visitor && dart pub get --no-example && dart analyze && dart test)
 ```
