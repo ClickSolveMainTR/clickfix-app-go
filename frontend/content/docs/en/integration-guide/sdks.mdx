@@ -297,6 +297,8 @@ With `CLICKFIX_WEBHOOK_QUEUE=true` (or a queue name) the events fire from the `P
 
 Mobile apps show the widget in a secure webview that carries the session; for Flutter the ready-made [`clickfix_webview`](https://pub.dev/packages/clickfix_webview) package implements the bridge contract as `ClickFixController` + `ClickFixWebView`. Installation, the method table and samples: [Mobile: webview and Flutter](/docs/integration-guide/mobile?lang=en#flutter). Example app: [`clickfix-examples/flutter-webview`](https://github.com/ClickSolveMainTR/clickfix-examples/tree/main/flutter-webview).
 
+For native screens instead of a webview, [`clickfix_visitor`](https://pub.dev/packages/clickfix_visitor) is the Dart visitor client generated from the OpenAPI contract (app key, session, identify, conversations, messages, polling; no UI): [Mobile: Flutter native client](/docs/integration-guide/mobile?lang=en#flutter-native).
+
 ## Shared behaviour [#common]
 
 ### Pagination [#pagination]

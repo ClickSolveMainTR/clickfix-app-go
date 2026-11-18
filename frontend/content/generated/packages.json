@@ -8,5 +8,6 @@
   "go": "0.3.0",
   "php": "0.2.0",
   "laravel": "0.2.0",
-  "flutter": "0.1.2"
+  "flutter": "0.1.2",
+  "flutterVisitor": "0.1.0"
 }
