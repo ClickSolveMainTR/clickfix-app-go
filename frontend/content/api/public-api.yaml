@@ -3306,6 +3306,16 @@ components:
         changed_at:
           type: string
           format: date-time
+        custom_status:
+          description: "The organization's own status on top of to (for example İşleniyor with to: open); null when none. A change of only the custom status is sent with from equal to to."
+          oneOf:
+            - $ref: "#/components/schemas/ConversationCustomStatusRef"
+            - type: "null"
+        from_custom_status:
+          description: The custom status before the change; null when none.
+          oneOf:
+            - $ref: "#/components/schemas/ConversationCustomStatusRef"
+            - type: "null"
     CompanyEvent:
       type: object
       required:
@@ -3656,6 +3666,21 @@ components:
           type: string
           maxLength: 200
           description: The customer's own user id; empty clears it. 409 EXTERNAL_ID_EXISTS when another contact has it.
+    ConversationCustomStatusRef:
+      type: object
+      description: An organization's own conversation status.
+      required:
+        - uuid
+        - name
+        - color
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          type: string
     ConversationPriority:
       type: string
       enum:
@@ -3693,6 +3718,12 @@ components:
             - "null"
           format: uuid
           description: Team uuid; null removes the team (tenant.conversations.assign)
+        custom_status:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
         snoozed_until:
           type: string
           format: date-time

@@ -21,6 +21,8 @@ type StatusEvent struct {
 	ConversationID int64
 	From, To       string
 	At             time.Time
+	// FromCustom / ToCustom: the custom statuses (CF-249); nil when none.
+	FromCustom, ToCustom *channels.CustomStatus
 }
 
 // NotifyStatus tells the conversation's channel about a status change when
@@ -53,6 +55,7 @@ func (s *Service) NotifyStatus(ctx context.Context, ev StatusEvent) error {
 	change := channels.StatusChange{
 		EventID: ev.EventID, ConversationUUID: conv.Uuid, ThreadID: conv.ExternalThreadID.String,
 		From: statusName(ev.From), To: ev.To, At: ev.At,
+		FromCustomStatus: ev.FromCustom, CustomStatus: ev.ToCustom,
 	}
 	if name, until, ok := strings.Cut(ev.To, "|"); ok {
 		change.To = name

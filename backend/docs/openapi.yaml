@@ -13186,8 +13186,10 @@ paths:
       operationId: updateTenantConversation
       summary: Change status, priority, subject or assignee
       description: |
-        Status, priority, subject and snooze require `tenant.conversations.manage`;
+        Status, priority, subject, snooze and `custom_status` require `tenant.conversations.manage`;
         `assignee` requires `tenant.conversations.assign` (or manage). `assignee: null` unassigns.
+        `custom_status` sets one of the organization's own statuses (CF-249); the
+        base `status` becomes its category. Other changes keep it.
         `status: snoozed` needs a future `snoozed_until`. Each change is
         written to the timeline as a system event and published as a domain
         event (`conversations.assigned|resolved|reopened|updated`).
@@ -21825,6 +21827,106 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/TenantForbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/conversation-statuses:
+    get:
+      tags: [Tenant]
+      operationId: listTenantConversationStatuses
+      summary: List custom conversation statuses
+      description: |
+        Requires `tenant.conversations.read`. The organization's own statuses
+        (CF-249) in display order, with the number of conversations using
+        each. Every organization starts with "İşleniyor" (category open).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      responses:
+        "200":
+          description: Custom statuses
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeConversationCustomStatusList" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      tags: [Tenant]
+      operationId: createTenantConversationStatus
+      summary: Create a custom conversation status
+      description: Requires `tenant.conversations.manage`. Category is open, pending or resolved; a used name (case-insensitive) is 409 STATUS_EXISTS.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationCustomStatusInput" }
+      responses:
+        "201":
+          description: Custom status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeConversationCustomStatus" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /v1/tenant/conversation-statuses/{uuid}:
+    patch:
+      tags: [Tenant]
+      operationId: updateTenantConversationStatus
+      summary: Change a custom conversation status
+      description: |
+        Requires `tenant.conversations.manage`. Moving it to another category
+        removes it from conversations whose status no longer matches; their
+        status stays.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConversationCustomStatusInput" }
+      responses:
+        "200":
+          description: Custom status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeConversationCustomStatus" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      tags: [Tenant]
+      operationId: deleteTenantConversationStatus
+      summary: Delete a custom conversation status
+      description: Requires `tenant.conversations.manage`. Conversations using it keep their status.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XOrganization"
+        - $ref: "#/components/parameters/ResourceUUID"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnvelopeDeleted" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/TenantForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /v1/tenant/tags:
@@ -56989,6 +57091,12 @@ components:
         to: { type: string, enum: [open, pending, snoozed, resolved, closed] }
         snoozed_until: { type: string, format: date-time, description: Only when to is snoozed }
         changed_at: { type: string, format: date-time }
+        custom_status:
+          description: "The organization's own status on top of to (for example İşleniyor with to: open); null when none. A change of only the custom status is sent with from equal to to."
+          oneOf: [{ $ref: "#/components/schemas/ConversationCustomStatusRef" }, { type: "null" }]
+        from_custom_status:
+          description: The custom status before the change; null when none.
+          oneOf: [{ $ref: "#/components/schemas/ConversationCustomStatusRef" }, { type: "null" }]
     APIChannelReply:
       type: object
       description: JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key.
@@ -57866,6 +57974,64 @@ components:
         uuid: { type: string, format: uuid }
         name: { type: string }
 
+    ConversationCustomStatusRef:
+      type: object
+      description: "An organization's own conversation status (CF-249)."
+      required: [uuid, name, color]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+
+    ConversationCustomStatusCategory:
+      type: string
+      description: Base status a custom status maps onto.
+      enum: [open, pending, resolved]
+
+    ConversationCustomStatus:
+      type: object
+      required: [uuid, name, slug, color, category, sort_order, usage_count, created_at, updated_at]
+      properties:
+        uuid: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        color: { type: string }
+        category: { $ref: "#/components/schemas/ConversationCustomStatusCategory" }
+        sort_order: { type: integer, format: int32 }
+        usage_count: { type: integer, format: int64, description: Conversations using it (0 in create and update answers) }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ConversationCustomStatusInput:
+      type: object
+      additionalProperties: false
+      description: name and category are required on create; omitted fields stay on update.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        color: { type: string, maxLength: 32 }
+        category: { $ref: "#/components/schemas/ConversationCustomStatusCategory" }
+        sort_order: { type: integer, format: int32 }
+
+    EnvelopeConversationCustomStatus:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: "#/components/schemas/ConversationCustomStatus" }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
+    EnvelopeConversationCustomStatusList:
+      type: object
+      required: [success, data, meta]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data:
+          type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/ConversationCustomStatus" } }
+        meta: { $ref: "#/components/schemas/ResponseMeta" }
+
     ConversationContact:
       type: object
       required: [uuid, name, email, phone, external_id, identity_state, verified_at]
@@ -57908,7 +58074,7 @@ components:
         company: { oneOf: [{ $ref: "#/components/schemas/ConversationCompany" }, { type: "null" }] }
         subject: { type: string }
         status: { $ref: "#/components/schemas/ConversationStatus" }
-        custom_status: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
+        custom_status: { oneOf: [{ $ref: "#/components/schemas/ConversationCustomStatusRef" }, { type: "null" }], description: "The organization's own status on top of status (CF-249), e.g. İşleniyor; null when none" }
         priority: { $ref: "#/components/schemas/ConversationPriority" }
         source: { type: string, enum: [inbound, outbound] }
         assignee: { oneOf: [{ $ref: "#/components/schemas/InboxRef" }, { type: "null" }] }
@@ -58133,6 +58299,7 @@ components:
         subject: { type: string, maxLength: 500 }
         assignee: { type: [string, "null"], format: uuid }
         team: { type: [string, "null"], format: uuid, description: "Team uuid; null removes the team (tenant.conversations.assign)" }
+        custom_status: { type: [string, "null"], format: uuid, description: "Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status." }
         snoozed_until: { type: string, format: date-time }
 
     ConversationCounts:

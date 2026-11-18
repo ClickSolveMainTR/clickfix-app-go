@@ -119,6 +119,13 @@ func Capabilities() []*capability.Capability {
 			Run:         capability.Endpoint{Method: http.MethodGet, Path: conversationsPath + "/agents"}.Do(),
 		},
 		{
+			Name: "conversation_statuses.list", Module: "conversations", Kind: capability.Read,
+			Permission: rbac.PermTenantConversationsRead, Surfaces: surfaces, Routes: inboxRoutes,
+			Title:       title("Özel konuşma durumları", "Custom conversation statuses"),
+			Description: "The organization's own statuses (uuid, name, color, category: open, pending or resolved), e.g. \"İşleniyor\"; pass the uuid to set_status as custom_status_uuid.",
+			Run:         capability.Endpoint{Method: http.MethodGet, Path: "/v1/tenant/conversation-statuses"}.Do(),
+		},
+		{
 			Name: "tags.list", Module: "tags", Kind: capability.Read,
 			Permission: rbac.PermTenantConversationsRead, Surfaces: surfaces, Routes: inboxRoutes,
 			Title:       title("Etiketler", "Tags"),
@@ -186,17 +193,23 @@ func Capabilities() []*capability.Capability {
 			Name: "conversations.set_status", MCPName: "set_status", Module: "conversations", Kind: capability.Write,
 			Permission: rbac.PermTenantConversationsManage, Surfaces: surfaces, Routes: inboxRoutes,
 			Title:       title("Konuşma durumunu değiştir", "Change conversation status"),
-			Description: "Set open, pending, snoozed (needs snoozed_until, RFC3339), resolved or closed.",
-			Input: object([]string{"conversation_uuid", "status"}, map[string]any{"conversation_uuid": conv,
-				"status": capability.Enum("open", "pending", "snoozed", "resolved", "closed"), "snoozed_until": capability.Text(40, "RFC3339")}),
+			Description: "Set open, pending, snoozed (needs snoozed_until, RFC3339), resolved or closed, or one of the organization's own statuses with custom_status_uuid (from conversation_statuses_list; its category becomes the status). A plain status drops the custom status.",
+			Input: object([]string{"conversation_uuid"}, map[string]any{"conversation_uuid": conv,
+				"status": capability.Enum("open", "pending", "snoozed", "resolved", "closed"), "snoozed_until": capability.Text(40, "RFC3339"),
+				"custom_status_uuid": uuidField}),
 			Validate: func(p capability.Params) error {
+				if text(p, "status") == "" && text(p, "custom_status_uuid") == "" {
+					return capability.Invalid("status or custom_status_uuid is required")
+				}
 				if text(p, "status") == "snoozed" && text(p, "snoozed_until") == "" {
 					return capability.Invalid("snoozed_until is required to snooze: ask the user until when")
 				}
-				return checkUUIDs(p, "conversation_uuid")
+				return checkUUIDs(p, "conversation_uuid", "custom_status_uuid")
 			},
+			// A plain status sends custom_status: null (drops the custom one).
 			Apply: capability.Endpoint{Method: http.MethodPatch, Path: conversationsPath + "/{conversation_uuid}",
-				Body: []string{"status", "snoozed_until"}, Route: "/inbox"}.Do(),
+				Body: []string{"status", "snoozed_until", "custom_status_uuid"}, Rename: map[string]string{"custom_status_uuid": "custom_status"},
+				Fixed: map[string]any{"custom_status": nil}, Route: "/inbox"}.Do(),
 		},
 		{
 			Name: "conversations.set_priority", Module: "conversations", Kind: capability.Write,
