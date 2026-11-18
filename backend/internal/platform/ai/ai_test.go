@@ -189,19 +189,28 @@ func TestAgentToolLoopUsageAndApprovalBoundary(t *testing.T) {
 	if err != nil || count != 1 || result.InputTokens != 20 || result.OutputTokens != 4 || !result.FinalUsage {
 		t.Fatalf("result=%+v calls=%d err=%v", result, count, err)
 	}
+	// CF-251: the denied call is an error result for the model, which still
+	// answers; the runner never sees it.
 	provider = &loopProvider{}
-	_, err = Chat(context.Background(), provider, Request{Tools: []Tool{{Name: "lookup", RequiresApproval: true}}}, 3, func(context.Context, ToolCall) (ToolResult, error) {
+	result, err = Chat(context.Background(), provider, Request{Tools: []Tool{{Name: "lookup", RequiresApproval: true}}}, 3, func(context.Context, ToolCall) (ToolResult, error) {
 		t.Fatal("approval bypass")
 		return ToolResult{}, nil
 	})
-	if err == nil {
-		t.Fatal("approval tool accepted")
+	if err != nil || result.Text != "answer" || len(result.Calls) != 0 {
+		t.Fatalf("approval-only call must be refused without failing the reply: %+v %v", result, err)
+	}
+	if last := provider.seen[1].Turns[len(provider.seen[1].Turns)-1]; last.Role != "tool" || !last.ToolError || last.Text != toolErrApproval {
+		t.Fatalf("model was not told the action did not run: %+v", last)
 	}
 }
 
-type loopProvider struct{ count int }
+type loopProvider struct {
+	count int
+	seen  []Request
+}
 
-func (p *loopProvider) Generate(context.Context, Request) (Result, error) {
+func (p *loopProvider) Generate(_ context.Context, req Request) (Result, error) {
+	p.seen = append(p.seen, req)
 	p.count++
 	r := Result{InputTokens: 10, OutputTokens: 2, FinalUsage: true, Text: "answer"}
 	if p.count == 1 {

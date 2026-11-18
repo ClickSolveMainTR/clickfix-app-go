@@ -10,6 +10,7 @@ services:
   backend: *backend-build
   worker: *backend-build
   worker-sync: *backend-build
+  ai-reply: *backend-build
   frontend:
     build:
       context: ./frontend

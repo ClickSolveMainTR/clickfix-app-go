@@ -149,10 +149,10 @@ func TestAutoRepliesReachTheVisitor(t *testing.T) {
 	if _, err := auto.Put(ctx, e.org, custom); err != nil {
 		t.Fatal(err)
 	}
-	if sent, err := auto.NotifyHandoff(ctx, e.org, conv.ID); err != nil || !sent {
+	if sent, err := auto.NotifyHandoff(ctx, e.org, conv.ID, ""); err != nil || !sent {
 		t.Fatalf("first handoff notice: sent=%v err=%v", sent, err)
 	}
-	if sent, err := auto.NotifyHandoff(ctx, e.org, conv.ID); err != nil || sent {
+	if sent, err := auto.NotifyHandoff(ctx, e.org, conv.ID, ""); err != nil || sent {
 		t.Fatalf("second handoff notice must not be sent: sent=%v err=%v", sent, err)
 	}
 	bots = botMessages()

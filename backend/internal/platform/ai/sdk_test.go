@@ -80,8 +80,10 @@ func TestAnthropicSDKWire(t *testing.T) {
 	if wire[0].(map[string]any)["cache_control"] == nil || wire[1].(map[string]any)["cache_control"] != nil {
 		t.Errorf("tool breakpoint: %v", wire)
 	}
-	if body["thinking"] != nil {
-		t.Error("thinking must stay off while tools are offered")
+	// CF-251: leaving the field out means adaptive thinking on Sonnet 5.5;
+	// between_tools is what keeps a tool loop from thinking on every turn.
+	if fmt.Sprint(body["thinking"]) != "map[type:between_tools]" {
+		t.Errorf("thinking while tools are offered=%v", body["thinking"])
 	}
 	req.Tools, req.ToolChoice, req.Turns = nil, "", req.Turns[:1]
 	if _, err := p.Generate(context.Background(), req); err != nil {
@@ -89,6 +91,56 @@ func TestAnthropicSDKWire(t *testing.T) {
 	}
 	if fmt.Sprint(body["thinking"]) != "map[type:between_tools]" {
 		t.Errorf("thinking=%v", body["thinking"])
+	}
+}
+
+// CF-251: fast tasks never run with the model's default (adaptive) thinking;
+// a slow task keeps it. A 400 on the override falls back to the default once.
+func TestFastTasksTurnThinkingOff(t *testing.T) {
+	turns := []Turn{{Role: "user", Text: "q"}}
+	for _, tc := range []struct{ model, effort, want string }{
+		{"claude-haiku-5-5", "low", "map[type:disabled]"},
+		{"claude-sonnet-5-5", "low", "map[type:between_tools]"},
+		{"claude-sonnet-5-5", "medium", "map[type:between_tools]"},
+		{"claude-sonnet-5-5", "", "<nil>"},
+		{"claude-opus-5-5", "low", "<nil>"},
+		{"claude-opus-5-5", "", "<nil>"},
+	} {
+		_, body := (&HTTPProvider{Kind: ProviderAnthropic}).body(Request{Model: tc.model, Effort: tc.effort, Turns: turns}, false)
+		if got := fmt.Sprint(body["thinking"]); got != tc.want {
+			t.Errorf("%s effort=%q thinking=%s want %s", tc.model, tc.effort, got, tc.want)
+		}
+	}
+	var seen []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		seen = append(seen, fmt.Sprint(body["thinking"]))
+		if body["thinking"] != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"thinking.type is not supported for this model"}}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"model":"claude-haiku-5-5","stop_reason":"end_turn","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":4,"output_tokens":1}}`)
+	}))
+	defer server.Close()
+	p := NewAnthropic("fake")
+	p.BaseURL = server.URL
+	out, err := p.Generate(context.Background(), Request{Model: "claude-haiku-5-5", Effort: "low", Turns: turns})
+	if err != nil || out.Text != "ok" || len(seen) != 2 || seen[0] != "map[type:disabled]" || seen[1] != "<nil>" {
+		t.Fatalf("refused override must be retried with the default: %+v %v %v", out, err, seen)
+	}
+	// A 400 about anything else is not replayed.
+	calls := 0
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long"}}`)
+	}))
+	defer other.Close()
+	p.BaseURL = other.URL
+	if _, err = p.Generate(context.Background(), Request{Model: "claude-haiku-5-5", Effort: "low", Turns: turns}); !NotAccepted(err) || calls != 1 {
+		t.Fatalf("unrelated rejection replayed: err=%v calls=%d", err, calls)
 	}
 }
 

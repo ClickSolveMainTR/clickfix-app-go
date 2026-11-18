@@ -313,3 +313,59 @@ func TestCopilotRunHasDistinctTraceTask(t *testing.T) {
 		t.Fatalf("copilot trace task=%s err=%v", trace.Task, err)
 	}
 }
+
+// CF-251: a live run waits for a free slot of the organization's concurrency
+// limit instead of failing at once (a failed customer reply is a handoff).
+// A batch run still fails at once, and the wait is bounded.
+func TestLiveRunWaitsForAConcurrencySlot(t *testing.T) {
+	svc, fake, org, actor := aiFixture(t)
+	svc.ConcurrencyWait = 5 * time.Second
+	ctx := context.Background()
+	fake.started = make(chan struct{})
+	fake.release = make(chan struct{})
+	first := make(chan error, 1)
+	go func() {
+		_, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "first"})
+		first <- err
+	}()
+	select {
+	case <-fake.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("provider did not start")
+	}
+	if _, err := svc.Run(ai.WithBatch(ctx), org, actor, model.RunInput{Task: "reply", Input: "batch"}); !errors.Is(err, model.ErrConcurrency) {
+		t.Fatalf("a batch run must not wait: %v", err)
+	}
+	fake.started = nil
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		close(fake.release)
+	}()
+	started := time.Now()
+	if _, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "second"}); err != nil {
+		t.Fatalf("the second run must get the freed slot: %v", err)
+	}
+	if waited := time.Since(started); waited < 250*time.Millisecond || waited > 4*time.Second {
+		t.Fatalf("waited %s", waited)
+	}
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	// Bounded: with the slot held past the wait the run fails as before.
+	svc.ConcurrencyWait = 200 * time.Millisecond
+	fake.started = make(chan struct{})
+	fake.release = make(chan struct{})
+	go func() {
+		_, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "third"})
+		first <- err
+	}()
+	<-fake.started
+	fake.started = nil
+	if _, err := svc.Run(ctx, org, actor, model.RunInput{Task: "reply", Input: "fourth"}); !errors.Is(err, model.ErrConcurrency) {
+		t.Fatalf("the wait must be bounded: %v", err)
+	}
+	close(fake.release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+}

@@ -27,6 +27,12 @@ const (
 	QueueSearch             = "search"
 	QueueMaintenance        = "maintenance"
 	QueueEvents             = "events"
+	// QueueAI is the customer-facing AI lane (CF-251): the ai.conversation
+	// event consumer and the delivery of the messages it posts. It has its
+	// own queue so a busy events/maintenance backlog never delays an answer,
+	// and its own worker service (compose "ai-reply") that serves nothing
+	// else. The general worker also serves it as a fallback.
+	QueueAI = "ai"
 )
 
 // PingPayload is the body for the sample ping job.

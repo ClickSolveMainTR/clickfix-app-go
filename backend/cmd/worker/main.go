@@ -192,6 +192,7 @@ func main() {
 	agentSvc.Memory = aiCore.Memory
 	autoReplySvc := autoreply.New(queries, nil, slaSvc, slaSvc, log)
 	agentSvc.Notices = autoReplySvc
+	agentSvc.ReplyTimeout = aisystem.ReplyTimeout()
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(pool, queries), Resolver: orguc.New(orgrepo.NewPostgres(pool, queries), nil), Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
 	// Channels is set once the inbox is composed below.

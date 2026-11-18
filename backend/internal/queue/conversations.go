@@ -50,6 +50,17 @@ func ConversationSendOptions(delay time.Duration) []asynq.Option {
 	return opts
 }
 
+// EnqueueConversationSendPriority queues the delivery of an AI or automatic
+// message on the AI lane, so it does not wait behind bulk sends (CF-251).
+func (c *Client) EnqueueConversationSendPriority(ctx context.Context, orgID, messageID int64) error {
+	task, err := NewConversationSendTask(orgID, messageID)
+	if err != nil {
+		return err
+	}
+	_, err = c.EnqueueContext(ctx, task, append(ConversationSendOptions(0), asynq.Queue(QueueAI))...)
+	return err
+}
+
 // EnqueueConversationSend queues the delivery of a message.
 func (c *Client) EnqueueConversationSend(ctx context.Context, orgID, messageID int64, delay time.Duration) error {
 	task, err := NewConversationSendTask(orgID, messageID)

@@ -296,6 +296,9 @@ type QueueConfig struct {
 	WorkerInProcess  bool
 	Queues           string
 	SchedulerEnabled bool
+	// TaskCheckInterval is how often an idle worker polls Redis for new
+	// tasks: the worst-case pickup delay of a job (CF-251).
+	TaskCheckInterval time.Duration
 }
 
 // BulkConfig controls bulk action engine thresholds.
@@ -381,11 +384,12 @@ func Load() (Config, error) {
 			SendTimeout:  getDuration("SMTP_SEND_TIMEOUT", 30*time.Second),
 		},
 		Queue: QueueConfig{
-			Enabled:          getBool("QUEUE_ENABLED", true),
-			Queues:           getEnv("QUEUE_QUEUES", ""),
-			SchedulerEnabled: getBool("QUEUE_SCHEDULER_ENABLED", true),
-			Concurrency:      getInt("QUEUE_CONCURRENCY", 10),
-			WorkerInProcess:  getBool("QUEUE_WORKER_INPROCESS", true),
+			Enabled:           getBool("QUEUE_ENABLED", true),
+			Queues:            getEnv("QUEUE_QUEUES", ""),
+			SchedulerEnabled:  getBool("QUEUE_SCHEDULER_ENABLED", true),
+			Concurrency:       getInt("QUEUE_CONCURRENCY", 10),
+			WorkerInProcess:   getBool("QUEUE_WORKER_INPROCESS", true),
+			TaskCheckInterval: getDuration("QUEUE_TASK_CHECK_INTERVAL", 200*time.Millisecond),
 		},
 		Bulk: BulkConfig{
 			SyncMax:       getInt("BULK_SYNC_MAX", 50),

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -198,7 +199,8 @@ func (p *HTTPProvider) Generate(ctx context.Context, req Request) (Result, error
 		// A later rejection does not make an earlier accepted attempt free.
 		retryErr = fmt.Errorf("ai: repair rejected after accepted response")
 	}
-	slog.InfoContext(ctx, "ai_structured_retry", "provider", p.Kind, "model", req.Model, "reason", retryReason(err), "total_ms", time.Since(started).Milliseconds())
+	slog.InfoContext(ctx, "ai_structured_retry", "provider", p.Kind, "model", req.Model, "run_uuid", req.TraceID, "reason", retryReason(err),
+		"detail", InvalidReason(err), "retry_failed", retryErr != nil, "retry_detail", InvalidReason(retryErr), "total_ms", time.Since(started).Milliseconds())
 	return next, retryErr
 }
 
@@ -256,6 +258,129 @@ func removeNulls(schema, value, root any, depth int) {
 			removeNulls(node["items"], child, root, depth+1)
 		}
 	}
+}
+
+// conformJSON enforces the constraints the provider never sees (structuredSchema
+// moves them into descriptions): a string longer than maxLength is cut, a
+// number outside minimum/maximum is clamped and an array longer than maxItems
+// is shortened. A summary a few characters too long used to fail the whole
+// run (CF-251). Anything else that does not match is left for validateJSON.
+// The text is returned unchanged when nothing had to change.
+func conformJSON(schema map[string]any, text string) string {
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		return text
+	}
+	var root any
+	if json.Unmarshal(raw, &root) != nil {
+		return text
+	}
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil || decoder.More() {
+		return text
+	}
+	changed := false
+	value = conform(root, value, root, 0, &changed)
+	if !changed {
+		return text
+	}
+	out, err := json.Marshal(value)
+	if err != nil {
+		return text
+	}
+	return string(out)
+}
+
+func conform(schema, value, root any, depth int, changed *bool) any {
+	node, ok := schema.(map[string]any)
+	if !ok || depth > 64 {
+		return value
+	}
+	if ref, ok := node["$ref"].(string); ok && strings.HasPrefix(ref, "#/") {
+		target := root
+		for _, part := range strings.Split(ref[2:], "/") {
+			m, ok := target.(map[string]any)
+			if !ok {
+				return value
+			}
+			target = m[strings.ReplaceAll(strings.ReplaceAll(part, "~1", "/"), "~0", "~")]
+		}
+		return conform(target, value, root, depth+1, changed)
+	}
+	// A nullable field is anyOf[<schema>, null]: conform against the branch
+	// of the value's own JSON type.
+	for _, key := range []string{"anyOf", "oneOf"} {
+		branches, _ := node[key].([]any)
+		for _, branch := range branches {
+			if b, ok := branch.(map[string]any); ok && jsonTypeMatches(b["type"], value) {
+				value = conform(b, value, root, depth+1, changed)
+				break
+			}
+		}
+	}
+	switch data := value.(type) {
+	case string:
+		if limit, ok := node["maxLength"].(float64); ok && limit >= 0 {
+			if r := []rune(data); len(r) > int(limit) {
+				*changed = true
+				return string(r[:int(limit)])
+			}
+		}
+	case json.Number:
+		n, err := data.Float64()
+		if err != nil {
+			return value
+		}
+		if low, ok := node["minimum"].(float64); ok && n < low {
+			*changed = true
+			return jsonNumber(low)
+		}
+		if high, ok := node["maximum"].(float64); ok && n > high {
+			*changed = true
+			return jsonNumber(high)
+		}
+	case []any:
+		if limit, ok := node["maxItems"].(float64); ok && limit >= 0 && len(data) > int(limit) {
+			*changed = true
+			data = data[:int(limit)]
+		}
+		for i := range data {
+			data[i] = conform(node["items"], data[i], root, depth+1, changed)
+		}
+		return data
+	case map[string]any:
+		props, _ := node["properties"].(map[string]any)
+		for key, child := range data {
+			data[key] = conform(props[key], child, root, depth+1, changed)
+		}
+	}
+	return value
+}
+
+func jsonNumber(v float64) json.Number {
+	return json.Number(strconv.FormatFloat(v, 'f', -1, 64))
+}
+
+// jsonTypeMatches reports whether value has the JSON type a schema names.
+func jsonTypeMatches(schemaType, value any) bool {
+	name, _ := schemaType.(string)
+	switch value.(type) {
+	case string:
+		return name == "string"
+	case json.Number:
+		return name == "number" || name == "integer"
+	case []any:
+		return name == "array"
+	case map[string]any:
+		return name == "object"
+	case bool:
+		return name == "boolean"
+	case nil:
+		return name == "null"
+	}
+	return false
 }
 
 // A local wire-shape rejection proves no billable provider request was made.
