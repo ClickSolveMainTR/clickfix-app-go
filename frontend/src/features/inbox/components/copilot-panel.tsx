@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Replace,
   Sparkles,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -379,6 +380,12 @@ function Result({
       )}
 
       {sources.length > 0 && <Sources sources={sources} />}
+      {entry.origin === "agent" && entry.unsourced && (
+        <p className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="size-3" />
+          {t("inbox.copilot.agent_draft_unsourced_hint")}
+        </p>
+      )}
       {entry.op === "suggest_reply" &&
         entry.origin === "copilot" &&
         sources.length === 0 && (

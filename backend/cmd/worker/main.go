@@ -8,6 +8,7 @@ import (
 	categoriesusecase "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/categories/usecase"
 
 	"context"
+	channelsmodule "github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/channels"
 	"github.com/furkanmeclis/clickfix-app-go/backend/internal/modules/widget/retention"
 	"log/slog"
 	"os"
@@ -193,8 +194,11 @@ func main() {
 	agentSvc.Notices = autoReplySvc
 	oncallSvc := oncall.New(oncallrepo.New(pool, queries), notifSvc)
 	reportsSvc := &reportsuc.Service{Repo: reportsrepo.New(pool, queries), Resolver: orguc.New(orgrepo.NewPostgres(pool, queries), nil), Notifier: notifSvc, BaseURL: cfg.Auth.FrontendURL, Secret: cfg.Encryption.Key}
+	// Channels is set once the inbox is composed below.
+	channelStatus := &channelsmodule.StatusNotifier{}
 	consumerReg, err := eventconsumers.New(eventconsumers.Deps{
 		Oncall: oncallSvc, Reports: reportsSvc,
+		ChannelStatus:       channelStatus,
 		Routing:             routingSvc,
 		Notifications:       notifSvc,
 		NotificationsLookup: notifmodule.DBLookup{Q: queries},
@@ -280,6 +284,7 @@ func main() {
 		os.Exit(1)
 	}
 	inboxCore.RecordingCompleted = transcriptSvc.Sweep
+	channelStatus.Channels = inboxCore.Channels
 	// Appointment reminders (CF-138); booking runs in the API server.
 	appointmentsSvc := appointmentsusecase.New(appointmentsusecase.Deps{
 		Pool: pool, Queries: queries, Notifier: notifSvc, Timeline: inboxCore.Conversations, Video: videoSvc, Activity: activityRec,
@@ -293,6 +298,8 @@ func main() {
 
 	supportoperations.RegisterEvents(eventBus, aiBilling, aiCore.AI, inboxCore.Conversations, notifSvc, publisher)
 	agentSvc.Sender = inboxCore.Conversations
+	// AI job outcomes reach open composers live (CF-246).
+	agentSvc.Live = inboxCore.Conversations
 	// Departments (CF-215): AI routing of first messages and transfers.
 	departmentsSvc := departmentsusecase.New(pool, queries)
 	departmentsSvc.Conversations, departmentsSvc.SLA, departmentsSvc.Log = inboxCore.Conversations, slaSvc, log

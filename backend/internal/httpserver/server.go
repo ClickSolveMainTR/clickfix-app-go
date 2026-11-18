@@ -1002,6 +1002,7 @@ func New(cfg config.Config, log *slog.Logger, deps Deps) (*Server, error) {
 	entitlementService.RegisterMetering(reliableBus)
 	consumerReg, err := eventconsumers.New(eventconsumers.Deps{
 		Oncall: oncallSvc, Reports: reportsSvc,
+		ChannelStatus:       &channelsmodule.StatusNotifier{Channels: inboxCore.Channels},
 		Notifications:       notifSvc,
 		NotificationsLookup: notifmodule.DBLookup{Q: deps.Queries},
 		SLA:                 slaSvc,

@@ -334,7 +334,7 @@ func (h *Handler) SharedWebhook(w http.ResponseWriter, r *http.Request) {
 			response.InternalErr(w, r, err, "")
 			return
 		}
-		if !h.process(w, r, inst, a, body) {
+		if _, ok := h.process(w, r, inst, a, body); !ok {
 			return
 		}
 	}
@@ -347,49 +347,64 @@ func (h *Handler) deliver(w http.ResponseWriter, r *http.Request, inst channels.
 			return
 		}
 	}
-	if h.process(w, r, inst, adapter, body) {
-		if ack, ok := adapter.(channels.WebhookAcknowledger); ok {
-			contentType, answer := ack.AcknowledgeWebhook(r, body, inst)
-			w.Header().Set("Content-Type", contentType)
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, answer)
-			return
-		}
-		response.JSON(w, r, http.StatusOK, map[string]any{"received": true})
+	res, ok := h.process(w, r, inst, adapter, body)
+	if !ok {
+		return
 	}
+	if ack, ok := adapter.(channels.WebhookAcknowledger); ok {
+		contentType, answer := ack.AcknowledgeWebhook(r, body, inst)
+		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, answer)
+		return
+	}
+	out := map[string]any{"received": true}
+	if inst.Type == channels.TypeAPI && len(res.Messages) == 1 {
+		// The REST API channel answers with the conversation the message
+		// joined (CF-245), so the application can store it with its thread.
+		// A paused instance stores nothing and answers without it.
+		ref, err := h.svc.MessageRef(r.Context(), inst, res.Messages[0].ExternalID)
+		if err != nil {
+			h.log.Warn("channel_webhook_ref_failed", "type", inst.Type, "instance", inst.UUID, "error", err)
+		} else if ref.ConversationUUID != uuid.Nil {
+			out["conversation_uuid"] = ref.ConversationUUID
+			out["message_uuid"] = ref.MessageUUID
+		}
+	}
+	response.JSON(w, r, http.StatusOK, out)
 }
 
 // process verifies, parses and stores one body for one instance; it writes
 // the error response and returns false on failure.
-func (h *Handler) process(w http.ResponseWriter, r *http.Request, inst channels.Instance, adapter channels.Adapter, body []byte) bool {
+func (h *Handler) process(w http.ResponseWriter, r *http.Request, inst channels.Instance, adapter channels.Adapter, body []byte) (channels.WebhookResult, bool) {
 	if err := adapter.VerifyWebhook(r, body, inst); err != nil {
 		h.log.Warn("channel_webhook_rejected", "type", inst.Type, "instance", inst.UUID, "error", err)
 		response.Unauthorized(w, r, "Webhook signature invalid")
-		return false
+		return channels.WebhookResult{}, false
 	}
 	h.svc.TouchWebhook(r.Context(), inst.OrganizationID, inst.ID)
 	if inst.Status == usecase.StatusPaused || inst.Status == usecase.StatusDisconnected {
 		// Acknowledge so the provider does not retry; a paused inbox drops traffic.
-		return true
+		return channels.WebhookResult{}, true
 	}
 	res, err := adapter.ParseWebhook(r.Context(), r, body, inst)
 	if err != nil {
 		h.log.Warn("channel_webhook_unreadable", "type", inst.Type, "instance", inst.UUID, "error", err)
 		if inst.Type == channels.TypeVoice && inst.Credentials["provider"] == "netgsm" {
-			return true
+			return channels.WebhookResult{}, true
 		}
 		response.BadRequest(w, r, response.CodeValidationError, "Unreadable webhook")
-		return false
+		return channels.WebhookResult{}, false
 	}
 	if err := h.receiver(r.Context(), inst, res); err != nil {
 		if inst.Type == channels.TypeVoice && inst.Credentials["provider"] == "netgsm" {
 			h.log.Error("netgsm_webhook_apply_failed", "instance", inst.UUID)
-			return true
+			return channels.WebhookResult{}, true
 		}
 		response.InternalErr(w, r, err, "")
-		return false
+		return channels.WebhookResult{}, false
 	}
-	return true
+	return res, true
 }
 
 func (h *Handler) webhookInstance(w http.ResponseWriter, r *http.Request) (channels.Instance, channels.Adapter, bool) {

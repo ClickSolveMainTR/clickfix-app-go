@@ -65,6 +65,9 @@ type Conversation struct {
 	SLABreachedAt        *time.Time  `json:"sla_breached_at"`
 	SnoozedUntil         *time.Time  `json:"snoozed_until"`
 	ResolvedAt           *time.Time  `json:"resolved_at"`
+	// ExternalThreadID is the channel's thread id (the REST API channel's
+	// thread_id, CF-245); null when the channel has none.
+	ExternalThreadID *string `json:"external_thread_id"`
 	// WindowOpen: a free-form reply is allowed now (channels with a reply
 	// window, e.g. 24 hours on WhatsApp); WindowEndsAt when it closes.
 	WindowOpen   bool       `json:"window_open"`
@@ -129,6 +132,10 @@ const (
 	EventMessageUpdated      = "message.updated"
 	// EventConversationViewers: who views / types in a conversation (CF-49).
 	EventConversationViewers = "conversation.viewers"
+	// EventAIJobFinished: an AI agent job of the conversation finished
+	// (draft, handoff or automatic reply); the composer refetches the job
+	// list to show a draft (CF-246).
+	EventAIJobFinished = "ai.job_finished"
 )
 
 // LiveEvent is one realtime inbox event. Message is set for message events

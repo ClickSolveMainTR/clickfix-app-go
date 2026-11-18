@@ -180,6 +180,7 @@ paths:
                       assignee:
                         uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                         name: Mehmet Kaya
+                      external_thread_id: null
                       created_at: 2026-11-11T09:15:00Z
                       updated_at: 2026-11-11T09:15:00Z
                   total: 134
@@ -193,7 +194,7 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
-      description: "Scope: `conversations:read`. Paged list (`limit`, `offset`), limited to the conversations the member who created the key can see."
+      description: "Scope: `conversations:read`. Paged list (`limit`, `offset`), limited to the conversations the member who created the key can see. `external_thread_id` returns the API channel conversations of one of your threads (the `thread_id` you sent); every conversation carries `external_thread_id`."
       parameters:
         - name: limit
           in: query
@@ -208,6 +209,12 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - name: external_thread_id
+          in: query
+          description: Exact channel thread id (the REST API channel's thread_id).
+          schema:
+            type: string
+            maxLength: 255
       x-codeSamples:
         - lang: bash
           label: curl
@@ -434,6 +441,7 @@ paths:
                   assignee:
                     uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                     name: Mehmet Kaya
+                  external_thread_id: null
                   created_at: 2026-11-11T09:15:00Z
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
@@ -531,6 +539,7 @@ paths:
                   assignee:
                     uuid: 5d6e7f80-9a1b-4c2d-8e3f-4a5b6c7d8e9f
                     name: Mehmet Kaya
+                  external_thread_id: null
                   created_at: 2026-11-11T09:15:00Z
                   updated_at: 2026-11-11T09:15:00Z
                 meta:
@@ -2429,6 +2438,7 @@ paths:
                     - id: 2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f
                       event: conversation.created
                       entity_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                      conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
                       occurred_at: 2026-11-11T09:15:00Z
                   next_cursor: 1762852500000:2c3d4e5f
                   has_more: false
@@ -2937,6 +2947,8 @@ paths:
         Sends a customer message to the API channel. The channel is set up under **Channels → Add channel → API**; the setup gives you the inbound URL (`{instance}`), the signing secret and a field for the URL agent replies are sent to.
 
         The request is verified with the channel's signing secret, not an API key: `X-ClickFix-Timestamp` (Unix seconds) and `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(secret, timestamp + "." + raw_body)). Requests whose timestamp is older than 5 minutes are rejected. A message with the same `id` is stored once. Retry on `5xx`.
+
+        The answer carries `conversation_uuid` (the conversation the message joined) and `message_uuid`; a repeated `id` answers with the same conversation. Store `conversation_uuid` with your `thread_id`: agent replies and status changes (`status_changed`) refer to it as `conversation_id`.
       security:
         - apiChannelSignature: []
       parameters:
@@ -2976,6 +2988,7 @@ paths:
                 data:
                   received: true
                   conversation_uuid: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+                  message_uuid: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
                 meta:
                   request_id: 01JCK9ZQ3M8R2W7X5E4T1N0PAB
         "400":
@@ -3130,6 +3143,68 @@ webhooks:
           description: Rate limit, retried with backoff
         "500":
           description: Temporary receiver failure, retried with backoff
+  apiChannelStatusChanged:
+    post:
+      tags:
+        - API channel
+      operationId: deliverAPIChannelStatusChanged
+      summary: Conversation status changed (API channel)
+      description: |
+        When an agent, a rule or a merge changes the status of a conversation on the API channel (resolved, closed, reopened, pending, snoozed), ClickFix sends a `POST` with this body to the URL configured on the channel. The request carries `X-ClickFix-Event: status_changed`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (the signing method above) and `Idempotency-Key` (the event `id`, the same on every retry); process every key only once. `conversation_id` is the `conversation_uuid` from the message answer and `thread_id` is the thread you sent. Agent replies carry no `X-ClickFix-Event` header, so one endpoint can tell the two apart. Temporary failures are retried with increasing delays; `4xx` responses other than `408` and `429` count as permanent failures.
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - status_changed
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            description: Unix seconds
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            description: sha256= followed by hex HMAC-SHA256
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/APIChannelStatusChanged"
+            example:
+              id: 9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a
+              type: status_changed
+              conversation_id: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+              thread_id: order-991
+              from: open
+              to: resolved
+              changed_at: 2026-11-11T10:02:00Z
+      responses:
+        "200":
+          description: Durably accepted, including duplicate id
+        "204":
+          description: Durably accepted, including duplicate id
+        "400":
+          description: Permanent content rejection
+        "401":
+          description: Permanent authentication rejection
+        "429":
+          description: Rate limit, retried with backoff
+        "500":
+          description: Temporary receiver failure, retried with backoff
 components:
   schemas:
     APIChannelMessage:
@@ -3187,6 +3262,50 @@ components:
           type: string
         reply_to:
           type: string
+    APIChannelStatusChanged:
+      type: object
+      description: A conversation status change posted to the organization's webhook URL.
+      required:
+        - id
+        - type
+        - conversation_id
+        - thread_id
+        - from
+        - to
+        - changed_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Event id; equals Idempotency-Key
+        type:
+          type: string
+          enum:
+            - status_changed
+        conversation_id:
+          type: string
+          format: uuid
+        thread_id:
+          type: string
+          description: The thread_id of the customer's messages; empty when none was sent
+        from:
+          type: string
+          description: Previous status
+        to:
+          type: string
+          enum:
+            - open
+            - pending
+            - snoozed
+            - resolved
+            - closed
+        snoozed_until:
+          type: string
+          format: date-time
+          description: Only when to is snoozed
+        changed_at:
+          type: string
+          format: date-time
     CompanyEvent:
       type: object
       required:
@@ -3675,6 +3794,14 @@ components:
               type: boolean
               enum:
                 - true
+            conversation_uuid:
+              type: string
+              format: uuid
+              description: "API channel only: the conversation the message joined. Absent when the instance is paused."
+            message_uuid:
+              type: string
+              format: uuid
+              description: "API channel only: the stored message."
         meta:
           $ref: "#/components/schemas/ResponseMeta"
     Error:
@@ -3848,6 +3975,10 @@ components:
             - string
             - "null"
           format: uuid
+        conversation_uuid:
+          type: string
+          format: uuid
+          description: Conversation events only; equals entity_uuid.
         occurred_at:
           type: string
           format: date-time

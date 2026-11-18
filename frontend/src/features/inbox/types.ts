@@ -73,7 +73,8 @@ export type InboxLiveEvent = {
     | "conversation.updated"
     | "message.created"
     | "message.updated"
-    | "conversation.viewers";
+    | "conversation.viewers"
+    | "ai.job_finished";
   conversation_uuid: string;
   message?: Message;
   viewers?: Viewer[];

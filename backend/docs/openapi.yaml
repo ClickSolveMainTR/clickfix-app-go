@@ -10323,6 +10323,10 @@ paths:
         webhook_url with the same signature headers and Idempotency-Key=message UUID.
         Return 2xx only after durable acceptance; 4xx other than 408/429 is permanent.
         No attachment URLs or provider credentials are included.
+        The answer carries `conversation_uuid` and `message_uuid` (CF-245; a
+        redelivered id answers with the same conversation). Status changes made
+        in ClickFix POST APIChannelStatusChanged to webhook_url (header
+        `X-ClickFix-Event: status_changed`, Idempotency-Key = event id).
 
         Slack uses X-Slack-Signature and X-Slack-Request-Timestamp; POST URL verification
         echoes text/plain. Teams uses Bot Framework RS256 JWT (issuer, app audience,
@@ -13096,6 +13100,7 @@ paths:
         - { name: contact, in: query, schema: { type: string, format: uuid } }
         - { name: company, in: query, schema: { type: string, format: uuid } }
         - { name: identity, in: query, description: "CF-195: the contact's identity state.", schema: { $ref: "#/components/schemas/ContactIdentityState" } }
+        - { name: external_thread_id, in: query, description: "CF-245: exact channel thread id (the REST API channel's thread_id).", schema: { type: string, maxLength: 255 } }
         - { name: mentioned, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: unread, in: query, schema: { type: string, enum: ["1", "true"] } }
         - { name: sla_breached, in: query, schema: { type: string, enum: ["1", "true", "0", "false"] } }
@@ -34645,6 +34650,7 @@ paths:
       ],
       "operationId": "listConversationAIJobs",
       "summary": "Inspect triage, drafts and human handoff history",
+      "description": "Requires `tenant.conversations.read`. When a job finishes (draft, handoff or automatic reply) the conversation's inbox channel receives `ai.job_finished` with the conversation uuid; refetch this list then.",
       "security": [
         {
           "bearerAuth": []
@@ -38665,6 +38671,15 @@ paths:
             "type": "integer",
             "minimum": 0,
             "default": 0
+          }
+        },
+        {
+          "name": "external_thread_id",
+          "in": "query",
+          "description": "CF-245: exact channel thread id (the REST API channel's thread_id).",
+          "schema": {
+            "type": "string",
+            "maxLength": 255
           }
         }
       ]
@@ -44041,6 +44056,43 @@ webhooks:
         "401": { description: Permanent authentication rejection }
         "429": { description: "Rate limit, retried with backoff" }
         "500": { description: "Temporary receiver failure, retried with backoff" }
+  apiChannelStatusChanged:
+    post:
+      tags: [Tenant]
+      operationId: deliverAPIChannelStatusChanged
+      x-public: true
+      summary: Tell an organization's custom channel that a conversation's status changed
+      description: "CF-245. Sent when an agent, a rule or a merge changes the status of an API channel conversation (resolved, closed, reopened, pending, snoozed). Same signature headers as the reply, plus X-ClickFix-Event: status_changed. Idempotency-Key is the event id and stays the same on retries; process each only once. Temporary failures are retried with backoff; 4xx except 408/429 is permanent."
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema: { type: string, enum: [status_changed] }
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema: { type: string, description: Unix seconds }
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema: { type: string, description: "sha256= followed by hex HMAC-SHA256" }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/APIChannelStatusChanged" }
+      responses:
+        "200": { description: "Durably accepted, including duplicate id" }
+        "204": { description: "Durably accepted, including duplicate id" }
+        "400": { description: Permanent content rejection }
+        "401": { description: Permanent authentication rejection }
+        "429": { description: "Rate limit, retried with backoff" }
+        "500": { description: "Temporary receiver failure, retried with backoff" }
 
   /v1/tenant/history/imports:
     get:
@@ -44685,7 +44737,7 @@ components:
     UptimeResult: {"type": "object", "properties": {"uuid": {"type": "string", "format": "uuid"}, "up": {"type": "boolean"}, "status_code": {"type": "integer"}, "latency_ms": {"type": "integer"}, "checked_at": {"type": "string", "format": "date-time"}}, "required": ["uuid", "up", "status_code", "latency_ms", "checked_at"], "additionalProperties": false}
     IntegrationCreateConversation: {"type": "object", "description": "Name the contact by contact_uuid or contact_external_id (CF-195, the customer's own user id), not both. On a widget inbox a contact with an external id gets its widget identity, so the agent can write first and the signed-in user finds the conversation on the site.", "properties": {"contact_uuid": {"type": "string", "format": "uuid"}, "contact_external_id": {"type": "string", "maxLength": 200}, "inbox_uuid": {"type": "string", "format": "uuid"}, "subject": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["inbox_uuid", "subject"], "additionalProperties": false}
     IntegrationSubscription: {"type": "object", "properties": {"name": {"type": "string"}, "url": {"type": "string", "format": "uri"}, "events": {"type": "array", "items": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "minItems": 1}, "enabled": {"type": "boolean"}}, "required": ["name", "url", "events", "enabled"], "additionalProperties": false}
-    IntegrationTrigger: {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "event": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "entity_uuid": {"type": ["string", "null"], "format": "uuid"}, "occurred_at": {"type": "string", "format": "date-time"}}, "required": ["id", "event", "entity_uuid", "occurred_at"], "additionalProperties": false}
+    IntegrationTrigger: {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "event": {"type": "string", "enum": ["conversation.created", "conversation.resolved", "contact.created", "csat.submitted", "conversation.tag_added"]}, "entity_uuid": {"type": ["string", "null"], "format": "uuid"}, "conversation_uuid": {"type": "string", "format": "uuid", "description": "CF-245: conversation events only; equals entity_uuid."}, "occurred_at": {"type": "string", "format": "date-time"}}, "required": ["id", "event", "entity_uuid", "occurred_at"], "additionalProperties": false}
     IntegrationTriggerPage: {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/IntegrationTrigger"}}, "next_cursor": {"type": "string"}, "has_more": {"type": "boolean"}, "retention_days": {"type": "integer"}}, "required": ["items", "next_cursor", "has_more", "retention_days"], "additionalProperties": false}
     IntegrationContactUpdate: {"type": "object", "properties": {"name": {"type": "string"}, "email": {"type": "string"}, "phone": {"type": "string"}, "notes": {"type": "string"}}, "additionalProperties": false}
     "RetentionPolicy": {"type": "object", "additionalProperties": false, "properties": {"conversation_days": {"type": "integer", "minimum": 0, "maximum": 36500}, "attachment_days": {"type": "integer", "minimum": 0, "maximum": 36500}, "ai_log_days": {"type": "integer", "minimum": 0, "maximum": 36500}, "action": {"type": "string", "enum": ["anonymize", "delete"]}}, "required": ["conversation_days", "attachment_days", "ai_log_days", "action"]}
@@ -56737,6 +56789,19 @@ components:
         thread_id: { type: string, maxLength: 255 }
         reply_to: { type: string }
         at: { type: string, format: date-time }
+    APIChannelStatusChanged:
+      type: object
+      description: "CF-245: a conversation status change posted to the organization's webhook URL."
+      required: [id, type, conversation_id, thread_id, from, to, changed_at]
+      properties:
+        id: { type: string, format: uuid, description: Event id; equals Idempotency-Key }
+        type: { type: string, enum: [status_changed] }
+        conversation_id: { type: string, format: uuid }
+        thread_id: { type: string, description: "The thread_id of the customer's messages; empty when none was sent" }
+        from: { type: string, description: Previous status }
+        to: { type: string, enum: [open, pending, snoozed, resolved, closed] }
+        snoozed_until: { type: string, format: date-time, description: Only when to is snoozed }
+        changed_at: { type: string, format: date-time }
     APIChannelReply:
       type: object
       description: JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key.
@@ -57603,6 +57668,8 @@ components:
           required: [received]
           properties:
             received: { type: boolean, enum: [true] }
+            conversation_uuid: { type: string, format: uuid, description: "API channel only (CF-245): the conversation the message joined. Absent when the instance is paused." }
+            message_uuid: { type: string, format: uuid, description: "API channel only (CF-245): the stored message." }
         meta: { $ref: "#/components/schemas/ResponseMeta" }
 
     InboxRef:
@@ -57675,6 +57742,7 @@ components:
         sla_breached_at: { type: [string, "null"], format: date-time }
         snoozed_until: { type: [string, "null"], format: date-time }
         resolved_at: { type: [string, "null"], format: date-time }
+        external_thread_id: { type: [string, "null"], description: "CF-245: the channel's thread id (the REST API channel's thread_id); null when the channel has none." }
         window_open: { type: boolean, description: A free-form reply is allowed now (channel reply window) }
         window_ends_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }

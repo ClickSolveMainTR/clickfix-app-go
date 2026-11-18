@@ -141,6 +141,8 @@ WHERE c.organization_id = sqlc.arg(organization_id)
        OR (sqlc.narg(identity_state)::text = 'verified' AND ct.verified_at IS NOT NULL)
        OR (sqlc.narg(identity_state)::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
        OR (sqlc.narg(identity_state)::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
+  -- CF-245: the REST API channel's own thread id.
+  AND (sqlc.narg(external_thread_id)::text IS NULL OR c.external_thread_id = sqlc.narg(external_thread_id)::text)
   AND (sqlc.narg(sla_due_before)::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
         AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= sqlc.narg(sla_due_before)::timestamptz))
@@ -215,6 +217,8 @@ WHERE c.organization_id = sqlc.arg(organization_id)
        OR (sqlc.narg(identity_state)::text = 'verified' AND ct.verified_at IS NOT NULL)
        OR (sqlc.narg(identity_state)::text = 'anonymous' AND ct.verified_at IS NULL AND ct.name = '' AND ct.email IS NULL AND ct.phone IS NULL)
        OR (sqlc.narg(identity_state)::text = 'self_named' AND ct.verified_at IS NULL AND (ct.name <> '' OR ct.email IS NOT NULL OR ct.phone IS NOT NULL)))
+  -- CF-245: the REST API channel's own thread id.
+  AND (sqlc.narg(external_thread_id)::text IS NULL OR c.external_thread_id = sqlc.narg(external_thread_id)::text)
   AND (sqlc.narg(sla_due_before)::timestamptz IS NULL OR (
         c.sla_breached_at IS NULL AND c.status IN ('open', 'pending')
         AND LEAST(c.first_response_due_at, c.next_response_due_at, c.resolution_due_at) <= sqlc.narg(sla_due_before)::timestamptz))
