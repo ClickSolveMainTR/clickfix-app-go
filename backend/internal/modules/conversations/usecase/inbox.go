@@ -459,19 +459,88 @@ func (s *Service) messageExtras(ctx context.Context, orgID int64, ids []int64, u
 
 // MarkRead moves viewer's read marker to the newest message.
 func (s *Service) MarkRead(ctx context.Context, orgID, viewerID int64, convID uuid.UUID) error {
+	_, err := s.markRead(ctx, orgID, viewerID, convID)
+	return err
+}
+
+// markRead moves the marker to the newest message and returns the
+// previous one (bulk undo).
+func (s *Service) markRead(ctx context.Context, orgID, viewerID int64, convID uuid.UUID) (int64, error) {
 	q := s.store.Q()
-	conv, err := q.GetConversationByUUID(ctx, db.GetConversationByUUIDParams{OrganizationID: orgID, Uuid: convID})
+	conv, err := s.visibleConversation(ctx, orgID, convID)
 	if err != nil {
-		return notFound(err)
+		return 0, err
 	}
-	if err := s.mustSee(ctx, orgID, conv.ID); err != nil {
-		return err
+	prev, err := q.GetConversationReadMarker(ctx, db.GetConversationReadMarkerParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID})
+	if err != nil {
+		return 0, err
 	}
 	last, err := q.LatestMessageID(ctx, db.LatestMessageIDParams{OrganizationID: orgID, ConversationID: conv.ID})
 	if err != nil {
+		return 0, err
+	}
+	return prev, q.MarkConversationRead(ctx, db.MarkConversationReadParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID, MessageID: last})
+}
+
+// MarkUnread moves viewer's read marker back so the latest customer
+// message (without one, the latest message viewer did not write) counts
+// as unread again (CF-247). The marker never moves forward here; a
+// conversation without such a message stays as it is.
+func (s *Service) MarkUnread(ctx context.Context, orgID int64, viewer Actor, convID uuid.UUID) error {
+	if _, err := s.markUnread(ctx, orgID, viewer.ID, convID); err != nil {
 		return err
 	}
-	return q.MarkConversationRead(ctx, db.MarkConversationReadParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID, MessageID: last})
+	s.notifyReadState(ctx, orgID, viewer, convID)
+	return nil
+}
+
+// markUnread returns the previous marker (bulk undo).
+func (s *Service) markUnread(ctx context.Context, orgID, viewerID int64, convID uuid.UUID) (int64, error) {
+	q := s.store.Q()
+	conv, err := s.visibleConversation(ctx, orgID, convID)
+	if err != nil {
+		return 0, err
+	}
+	prev, err := q.GetConversationReadMarker(ctx, db.GetConversationReadMarkerParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID})
+	if err != nil {
+		return 0, err
+	}
+	target, err := q.UnreadTargetMessageID(ctx, db.UnreadTargetMessageIDParams{OrganizationID: orgID, ConversationID: conv.ID, ViewerID: viewerID})
+	if err != nil {
+		return 0, err
+	}
+	if target >= prev {
+		return prev, nil
+	}
+	return prev, q.SetConversationReadMarker(ctx, db.SetConversationReadMarkerParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID, MessageID: target})
+}
+
+// restoreReadMarker puts viewer's marker back where a bulk read / unread
+// found it.
+func (s *Service) restoreReadMarker(ctx context.Context, orgID, viewerID int64, convID uuid.UUID, marker int64) error {
+	conv, err := s.visibleConversation(ctx, orgID, convID)
+	if err != nil {
+		return err
+	}
+	return s.store.Q().SetConversationReadMarker(ctx, db.SetConversationReadMarkerParams{OrganizationID: orgID, ConversationID: conv.ID, UserID: viewerID, MessageID: marker})
+}
+
+func (s *Service) visibleConversation(ctx context.Context, orgID int64, convID uuid.UUID) (db.Conversation, error) {
+	conv, err := s.store.Q().GetConversationByUUID(ctx, db.GetConversationByUUIDParams{OrganizationID: orgID, Uuid: convID})
+	if err != nil {
+		return db.Conversation{}, notFound(err)
+	}
+	if err := s.mustSee(ctx, orgID, conv.ID); err != nil {
+		return db.Conversation{}, err
+	}
+	return conv, nil
+}
+
+// notifyReadState tells viewer's other tabs and devices that its read
+// marker of a conversation changed by hand (CF-247).
+func (s *Service) notifyReadState(ctx context.Context, orgID int64, viewer Actor, convID uuid.UUID) {
+	actor := viewer.UUID
+	s.notify(ctx, orgID, model.LiveEvent{Type: model.EventReadState, ConversationUUID: convID, ActorUUID: &actor})
 }
 
 // Counts are the inbox badges of viewer.

@@ -1135,6 +1135,8 @@ type Querier interface {
 	GetConversationOrganization(ctx context.Context, argUuid uuid.UUID) (GetConversationOrganizationRow, error)
 	GetConversationParentID(ctx context.Context, arg GetConversationParentIDParams) (int64, error)
 	GetConversationRating(ctx context.Context, arg GetConversationRatingParams) (ConversationRating, error)
+	// The viewer's read marker (0 when it never opened the conversation).
+	GetConversationReadMarker(ctx context.Context, arg GetConversationReadMarkerParams) (int64, error)
 	GetConversationStatusByUUID(ctx context.Context, arg GetConversationStatusByUUIDParams) (ConversationStatus, error)
 	GetConversationView(ctx context.Context, arg GetConversationViewParams) (GetConversationViewRow, error)
 	GetConversationView2(ctx context.Context, arg GetConversationView2Params) (ConversationView, error)
@@ -2327,6 +2329,8 @@ type Querier interface {
 	SetConversationDepartment(ctx context.Context, arg SetConversationDepartmentParams) (int64, error)
 	// Writes a form submission onto the conversation it started.
 	SetConversationFormData(ctx context.Context, arg SetConversationFormDataParams) error
+	// CF-247: puts the marker exactly at message_id (mark unread, undo).
+	SetConversationReadMarker(ctx context.Context, arg SetConversationReadMarkerParams) error
 	SetConversationSLA(ctx context.Context, arg SetConversationSLAParams) error
 	SetConversationTeam(ctx context.Context, arg SetConversationTeamParams) error
 	SetCustomFieldDefinitionArchived(ctx context.Context, arg SetCustomFieldDefinitionArchivedParams) (CustomFieldDefinition, error)
@@ -2437,6 +2441,10 @@ type Querier interface {
 	TranscriptVoiceSource(ctx context.Context, arg TranscriptVoiceSourceParams) (TranscriptVoiceSourceRow, error)
 	// Transaction-scoped platform worker lock, key derived from the instance id.
 	TryEmailIMAPLock(ctx context.Context, lockKey int64) (bool, error)
+	// CF-247: the read marker that leaves the latest customer message unread
+	// (without one, the latest message the viewer did not write); 0 when
+	// the conversation has no such message.
+	UnreadTargetMessageID(ctx context.Context, arg UnreadTargetMessageIDParams) (int64, error)
 	UpdateAppSettings(ctx context.Context, arg UpdateAppSettingsParams) (AppSetting, error)
 	UpdateAuthSettings(ctx context.Context, arg UpdateAuthSettingsParams) (AuthSetting, error)
 	UpdateAutomationRule(ctx context.Context, arg UpdateAutomationRuleParams) (AutomationRule, error)

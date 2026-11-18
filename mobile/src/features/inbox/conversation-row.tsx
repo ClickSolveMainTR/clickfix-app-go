@@ -21,11 +21,11 @@ import { ActionMenu } from '@/ui/menu';
 import type { MenuOption } from '@/ui/menu.types';
 import { Text } from '@/ui/text';
 
-import { type Conversation, useMarkRead } from './api';
+import { type Conversation, useMarkRead, useMarkUnread } from './api';
 import { contactLabel, initials, SNOOZE_PRESETS, snoozeUntil, type SnoozePreset } from './helpers';
 import { SlaBadge } from './sla-badge';
 
-export type RowAction = 'resolve' | 'reopen' | 'snooze' | 'take' | 'read' | 'open';
+export type RowAction = 'resolve' | 'reopen' | 'snooze' | 'take' | 'read' | 'unread' | 'open';
 type SwipeActionName = Exclude<RowAction, 'open'>;
 
 export function rowActions(
@@ -36,7 +36,7 @@ export function rowActions(
   const closed = c.status === 'resolved' || c.status === 'closed';
   const out: RowAction[] = [];
   if (can.assign && me && c.assignee?.uuid !== me) out.push('take');
-  if (c.unread_count > 0) out.push('read');
+  out.push(c.unread_count > 0 ? 'read' : 'unread');
   if (can.manage) out.push(closed ? 'reopen' : 'resolve');
   if (can.manage && !closed && c.status !== 'snoozed') out.push('snooze');
   return out;
@@ -45,6 +45,7 @@ export function rowActions(
 const ACTION_STYLE: Record<SwipeActionName, { icon: IconName; bg: string; fg: string }> = {
   take: { icon: 'personAdd', bg: 'bg-signal', fg: 'text-signal-foreground' },
   read: { icon: 'confirm', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
+  unread: { icon: 'mail', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
   snooze: { icon: 'clock', bg: 'bg-warning/15', fg: 'text-foreground' },
   resolve: { icon: 'check', bg: 'bg-primary', fg: 'text-primary-foreground' },
   reopen: { icon: 'history', bg: 'bg-primary', fg: 'text-primary-foreground' },
@@ -57,13 +58,15 @@ export function useActionLabel() {
       ? t('shortcuts.take')
       : a === 'read'
         ? t('conversation:row.read')
-        : a === 'snooze'
-          ? t('header.snooze')
-          : a === 'resolve'
-            ? t('header.resolve')
-            : a === 'reopen'
-              ? t('header.reopen')
-              : t('conversation:row.open');
+        : a === 'unread'
+          ? t('conversation:row.unread_action')
+          : a === 'snooze'
+            ? t('header.snooze')
+            : a === 'resolve'
+              ? t('header.resolve')
+              : a === 'reopen'
+                ? t('header.reopen')
+                : t('conversation:row.open');
 }
 
 const ACTION_WIDTH = 84;
@@ -94,7 +97,7 @@ function SwipeAction({
             ? 'signal-foreground'
             : action === 'snooze'
               ? 'warning'
-              : action === 'read'
+              : action === 'read' || action === 'unread'
                 ? 'secondary-foreground'
                 : 'primary-foreground'
         }
@@ -182,6 +185,7 @@ export function ConversationRow({
     onSelect?.();
   };
   const markRead = useMarkRead(c.uuid);
+  const markUnread = useMarkUnread(c.uuid);
   const [height, setHeight] = useState(100);
   const unread = c.unread_count > 0;
   const name = contactLabel(c);
@@ -193,11 +197,12 @@ export function ConversationRow({
   const meta = [channel, c.assignee?.name ?? t('list.unassigned'), urgent ? t(`priority.${c.priority}`) : null]
     .filter(Boolean)
     .join(' · ');
-  const left = actions.filter((a): a is SwipeActionName => a === 'take' || a === 'read');
+  const left = actions.filter((a): a is SwipeActionName => a === 'take' || a === 'read' || a === 'unread');
   const right = actions.filter((a): a is SwipeActionName => a === 'snooze' || a === 'resolve' || a === 'reopen');
   const run = (a: RowAction) => {
     swipe.current?.close();
     if (a === 'read') markRead();
+    else if (a === 'unread') markUnread();
     else onAction(a);
   };
   const accessibleSnooze = (start = 0) => {

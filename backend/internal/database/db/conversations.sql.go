@@ -1004,6 +1004,25 @@ func (q *Queries) GetConversationExternalRefs(ctx context.Context, arg GetConver
 	return i, err
 }
 
+const getConversationReadMarker = `-- name: GetConversationReadMarker :one
+SELECT COALESCE((SELECT r.last_read_message_id FROM conversation_reads r
+                 WHERE r.organization_id = $1 AND r.conversation_id = $2 AND r.user_id = $3), 0)::bigint
+`
+
+type GetConversationReadMarkerParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	UserID         int64 `json:"user_id"`
+}
+
+// The viewer's read marker (0 when it never opened the conversation).
+func (q *Queries) GetConversationReadMarker(ctx context.Context, arg GetConversationReadMarkerParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getConversationReadMarker, arg.OrganizationID, arg.ConversationID, arg.UserID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getConversationStatusByUUID = `-- name: GetConversationStatusByUUID :one
 SELECT id, uuid, organization_id, name, slug, category, color, sort_order, is_default, created_at, updated_at FROM conversation_statuses WHERE organization_id = $1 AND uuid = $2
 `
@@ -2938,6 +2957,32 @@ func (q *Queries) RemoveConversationTag(ctx context.Context, arg RemoveConversat
 	return result.RowsAffected(), nil
 }
 
+const setConversationReadMarker = `-- name: SetConversationReadMarker :exec
+INSERT INTO conversation_reads (organization_id, conversation_id, user_id, last_read_message_id, last_read_at)
+VALUES ($1, $2, $3, $4, NOW())
+ON CONFLICT (conversation_id, user_id) DO UPDATE SET
+    last_read_message_id = EXCLUDED.last_read_message_id,
+    last_read_at = NOW()
+`
+
+type SetConversationReadMarkerParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	UserID         int64 `json:"user_id"`
+	MessageID      int64 `json:"message_id"`
+}
+
+// CF-247: puts the marker exactly at message_id (mark unread, undo).
+func (q *Queries) SetConversationReadMarker(ctx context.Context, arg SetConversationReadMarkerParams) error {
+	_, err := q.db.Exec(ctx, setConversationReadMarker,
+		arg.OrganizationID,
+		arg.ConversationID,
+		arg.UserID,
+		arg.MessageID,
+	)
+	return err
+}
+
 const setConversationSLA = `-- name: SetConversationSLA :exec
 UPDATE conversations SET
     sla_policy_id = $1,
@@ -3076,6 +3121,32 @@ func (q *Queries) SoftDeleteMessage(ctx context.Context, arg SoftDeleteMessagePa
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const unreadTargetMessageID = `-- name: UnreadTargetMessageID :one
+SELECT GREATEST(COALESCE(
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction = 'in' AND m.deleted_at IS NULL),
+    (SELECT MAX(m.id) FROM messages m
+     WHERE m.organization_id = $1 AND m.conversation_id = $2 AND m.direction <> 'internal' AND m.deleted_at IS NULL
+       AND (m.sender_user_id IS NULL OR m.sender_user_id <> $3::bigint)),
+    1) - 1, 0)::bigint
+`
+
+type UnreadTargetMessageIDParams struct {
+	OrganizationID int64 `json:"organization_id"`
+	ConversationID int64 `json:"conversation_id"`
+	ViewerID       int64 `json:"viewer_id"`
+}
+
+// CF-247: the read marker that leaves the latest customer message unread
+// (without one, the latest message the viewer did not write); 0 when
+// the conversation has no such message.
+func (q *Queries) UnreadTargetMessageID(ctx context.Context, arg UnreadTargetMessageIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, unreadTargetMessageID, arg.OrganizationID, arg.ConversationID, arg.ViewerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const updateConversationState = `-- name: UpdateConversationState :one

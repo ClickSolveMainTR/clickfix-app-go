@@ -251,6 +251,7 @@
   "reminders.presets.tomorrow": "Yarın sabah hatırlat",
   "reminders.presets.no_reply_3d": "3 gün yanıt gelmezse aç ve hatırlat",
   "shortcuts.select": "Toplu seçime ekle/çıkar",
+  "shortcuts.unread": "Okunmadı olarak işaretle",
   "views.teams": "Ekiplerim",
   "header.team": "Ekip",
   "header.search_team": "Ekip ara…",
@@ -414,5 +415,8 @@
   "events.remote_support_mode_control": "kontrol isteği",
   "events.remote_support_duration": "süre {{minutes}}:{{seconds}}",
   "events.remote_support_control_given": "kontrol onayı verildi",
-  "events.remote_support_recorded": "kaydedildi"
+  "events.remote_support_recorded": "kaydedildi",
+  "read_state.mark_unread": "Okunmadı olarak işaretle",
+  "read_state.mark_unread_short": "Okunmadı",
+  "read_state.mark_read": "Okundu olarak işaretle"
 }

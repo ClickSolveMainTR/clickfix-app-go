@@ -69,6 +69,7 @@ var cf211Cases = map[string]cf211Case{
 	"conversations.apply_macro":  {`{"conversation_uuid":"` + u1 + `","macro_uuid":"` + u2 + `"}`, "POST /v1/tenant/conversations/" + u1 + "/macros/" + u2, nil},
 	"conversations.remind":       {`{"conversation_uuid":"` + u1 + `","due_at":"2030-01-01T09:00:00Z"}`, "POST /v1/tenant/conversations/" + u1 + "/reminders", map[string]any{"due_at": "2030-01-01T09:00:00Z"}},
 	"tags.create":                {`{"name":"VIP"}`, "POST /v1/tenant/tags", map[string]any{"name": "VIP"}},
+	"conversations.mark_unread":  {`{"conversation_uuid":"` + u1 + `"}`, "POST /v1/tenant/conversations/" + u1 + "/unread", nil},
 	// Contacts and companies.
 	"contacts.list":      {`{"q":"ayşe","limit":10}`, "GET /v1/tenant/contacts?limit=10&q=ay%C5%9Fe", nil},
 	"contacts.get":       {`{"contact_uuid":"` + u1 + `"}`, "GET /v1/tenant/contacts/" + u1, nil},

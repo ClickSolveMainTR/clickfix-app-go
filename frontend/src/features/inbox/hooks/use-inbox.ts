@@ -356,6 +356,56 @@ export function useMarkRead(uuid: string | null) {
 }
 
 /**
+ * Marks conversations read or unread by hand (CF-247): the list row and
+ * the badges change at once, then refetch.
+ */
+export function useReadState() {
+  const { org } = useInboxScope();
+  const qc = useQueryClient();
+  const patch = useCallback(
+    (uuid: string, unread: boolean) =>
+      qc.setQueriesData<InfiniteData<ConversationPage>>(
+        { queryKey: inboxKeys.lists(org) },
+        (data) =>
+          data && {
+            ...data,
+            pages: data.pages.map((p) => ({
+              ...p,
+              items: p.items.map((c) =>
+                c.uuid === uuid
+                  ? {
+                      ...c,
+                      unread_count: unread ? Math.max(c.unread_count, 1) : 0,
+                    }
+                  : c,
+              ),
+            })),
+          },
+      ),
+    [org, qc],
+  );
+  const settle = useCallback(
+    (uuid: string) => {
+      void qc.invalidateQueries({ queryKey: inboxKeys.lists(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.counts(org) });
+      void qc.invalidateQueries({ queryKey: inboxKeys.detail(org, uuid) });
+    },
+    [org, qc],
+  );
+  const markUnread = useAppMutation({
+    mutationFn: (uuid: string) => inboxService.markUnread(uuid),
+    onMutate: (uuid) => patch(uuid, true),
+    onSettled: (_d, _e, uuid) => settle(uuid),
+  });
+  const markRead = useAppMutation({
+    mutationFn: (uuid: string) => inboxService.markRead(uuid),
+    onMutate: (uuid) => patch(uuid, false),
+    onSettled: (_d, _e, uuid) => settle(uuid),
+  });
+  return { markRead, markUnread };
+}
+
+/**
  * Subscribes to the inbox channel: messages land in the open conversation
  * instantly; lists and badges refetch (debounced). Members with read_all
  * listen on the organization channel, the others on their own channel,
@@ -409,6 +459,13 @@ export function useInboxLive(
         void qc.invalidateQueries({
           queryKey: inboxKeys.aiJobs(org, ev.conversation_uuid),
         });
+        return;
+      }
+      // Read markers are per member (CF-247): only the member who marked
+      // read / unread refetches (its other tabs and devices). The open
+      // detail stays, or opening it would mark it read again.
+      if (ev.type === "conversation.read_state") {
+        if (ev.actor_uuid && ev.actor_uuid === userUuid) refreshLists();
         return;
       }
       if (ev.type === "conversation.viewers") {
