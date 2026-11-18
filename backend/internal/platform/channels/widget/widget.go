@@ -45,8 +45,11 @@ type Publisher interface {
 // Event types published on a visitor channel.
 const (
 	EventMessageCreated = "message.created"
-	EventTyping         = "typing"
-	EventConversation   = "conversation.updated"
+	// EventMessageEdited: an agent corrected a reply (CF-248); Text is the
+	// new text and the widget replaces the shown one.
+	EventMessageEdited = "message.edited"
+	EventTyping        = "typing"
+	EventConversation  = "conversation.updated"
 )
 
 // Event is one visitor channel event (docs/widget/04: one envelope).
@@ -57,6 +60,7 @@ type Event struct {
 	Text             string     `json:"text,omitempty"`
 	Typing           *bool      `json:"typing,omitempty"`
 	Status           string     `json:"status,omitempty"`
+	EditedAt         *time.Time `json:"edited_at,omitempty"`
 	OccurredAt       time.Time  `json:"occurred_at"`
 }
 
@@ -124,6 +128,19 @@ func (a *Adapter) Send(ctx context.Context, inst channels.Instance, msg channels
 		Type: EventMessageCreated, ConversationUUID: &conv, MessageUUID: &id, Text: msg.Text, OccurredAt: a.now(),
 	})
 	return channels.SendResult{ExternalID: ExternalMessageID(id)}, nil
+}
+
+// EditMessage implements channels.MessageEditor: the visitor's open widgets
+// replace the reply's text; closed ones read it on their next load.
+func (a *Adapter) EditMessage(ctx context.Context, inst channels.Instance, e channels.MessageEdit) error {
+	if strings.TrimSpace(e.To.ExternalID) == "" {
+		return channels.Permanent("no_visitor", errors.New("widget: recipient has no visitor id"))
+	}
+	conv, id, at := e.ConversationUUID, e.MessageUUID, e.EditedAt.UTC()
+	a.publish(ctx, inst, e.To.ExternalID, Event{
+		Type: EventMessageEdited, ConversationUUID: &conv, MessageUUID: &id, Text: e.Text, EditedAt: &at, OccurredAt: a.now(),
+	})
+	return nil
 }
 
 // SendTyping implements channels.Typer.

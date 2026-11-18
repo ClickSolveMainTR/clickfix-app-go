@@ -119,6 +119,7 @@ const tr = {
   privacy: "Gizlilik bildirimi",
   quickReplies: "Sık sorulanlar",
   newMessage: "Yeni mesaj",
+  edited: "düzenlendi",
   dismiss: "Kapat",
   openChat: "Sohbeti aç",
 } as const;
@@ -245,6 +246,7 @@ const en: Record<StringKey, string> = {
   privacy: "Privacy notice",
   quickReplies: "Common questions",
   newMessage: "New message",
+  edited: "edited",
   dismiss: "Dismiss",
   openChat: "Open chat",
 };

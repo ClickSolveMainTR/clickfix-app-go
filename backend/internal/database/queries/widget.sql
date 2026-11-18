@@ -30,7 +30,7 @@ WHERE organization_id = sqlc.arg(organization_id)
 -- What the contact may see: their own messages and agent replies the
 -- channel delivered; never private notes or system events.
 SELECT m.id, m.uuid, m.direction, m.sender_type, m.kind, m.content, m.status, m.client_id,
-       m.created_at, m.read_at, u.name AS sender_user_name
+       m.created_at, m.read_at, m.edited_at, u.name AS sender_user_name
 FROM messages m
 LEFT JOIN users u ON u.id = m.sender_user_id
 WHERE m.organization_id = sqlc.arg(organization_id)

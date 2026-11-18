@@ -753,7 +753,7 @@ func (q *Queries) ListWidgetInstalls(ctx context.Context, arg ListWidgetInstalls
 
 const listWidgetMessages = `-- name: ListWidgetMessages :many
 SELECT m.id, m.uuid, m.direction, m.sender_type, m.kind, m.content, m.status, m.client_id,
-       m.created_at, m.read_at, u.name AS sender_user_name
+       m.created_at, m.read_at, m.edited_at, u.name AS sender_user_name
 FROM messages m
 LEFT JOIN users u ON u.id = m.sender_user_id
 WHERE m.organization_id = $1
@@ -786,6 +786,7 @@ type ListWidgetMessagesRow struct {
 	ClientID       pgtype.UUID        `json:"client_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	ReadAt         pgtype.Timestamptz `json:"read_at"`
+	EditedAt       pgtype.Timestamptz `json:"edited_at"`
 	SenderUserName pgtype.Text        `json:"sender_user_name"`
 }
 
@@ -817,6 +818,7 @@ func (q *Queries) ListWidgetMessages(ctx context.Context, arg ListWidgetMessages
 			&i.ClientID,
 			&i.CreatedAt,
 			&i.ReadAt,
+			&i.EditedAt,
 			&i.SenderUserName,
 		); err != nil {
 			return nil, err

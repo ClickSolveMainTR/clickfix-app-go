@@ -11,16 +11,32 @@ import {
   FileText,
   Loader2,
   Lock,
+  MoreHorizontal,
+  Pencil,
   RotateCw,
   Split,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, fileSize } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
 import { useLocale } from "@/providers/locale-provider";
 
+import { useMessageEdits } from "../hooks/use-inbox";
 import { initials } from "../lib/format";
+import { canEditMessage } from "../lib/message-edit";
 import { inboxService } from "../services/inbox.service";
 import type { OptimisticMessage } from "../types";
 import { MessageContent } from "./message-content";
@@ -35,6 +51,8 @@ type Props = {
   onRetry: (message: string) => void;
   /** Splits a message off into a new conversation (CF-98); omitted without permission. */
   onSplit?: (message: OptimisticMessage) => void;
+  /** Edits the agent's own reply (CF-248); omitted without reply permission. */
+  onEdit?: (message: OptimisticMessage) => void;
 };
 
 const NEAR_BOTTOM_PX = 120;
@@ -53,8 +71,10 @@ export function MessageTimeline({
   onLoadOlder,
   onRetry,
   onSplit,
+  onEdit,
 }: Props) {
   const { t } = useLocale();
+  const { user } = useAuth();
   const parentRef = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const [unseen, setUnseen] = useState(0);
@@ -170,6 +190,9 @@ export function MessageTimeline({
                   grouped={grouped && !dayBreak}
                   onRetry={onRetry}
                   onSplit={onSplit}
+                  onEdit={
+                    onEdit && canEditMessage(m, user?.uuid) ? onEdit : undefined
+                  }
                 />
               </div>
             );
@@ -217,11 +240,13 @@ const MessageItem = memo(function MessageItem({
   grouped,
   onRetry,
   onSplit,
+  onEdit,
 }: {
   message: OptimisticMessage;
   grouped: boolean;
   onRetry: (message: string) => void;
   onSplit?: (message: OptimisticMessage) => void;
+  onEdit?: (message: OptimisticMessage) => void;
 }) {
   const { t, locale } = useLocale();
   if (m.kind === "event") return <TimelineEvent message={m} />;
@@ -321,23 +346,102 @@ const MessageItem = memo(function MessageItem({
             </div>
           )}
         </div>
-        {mine && <DeliveryState message={m} onRetry={onRetry} />}
+        {(mine || m.edited_at) && (
+          <div className="flex items-center gap-1.5">
+            {m.edited_at && <EditedLabel message={m} />}
+            {mine && <DeliveryState message={m} onRetry={onRetry} />}
+          </div>
+        )}
       </div>
-      {onSplit && !m.optimistic && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground size-6 self-center opacity-0 group-hover/msg:opacity-100 focus:opacity-100"
-          title={t("inbox.split.action")}
-          aria-label={t("inbox.split.action")}
-          onClick={() => onSplit(m)}
-        >
-          <Split className="size-3.5" />
-        </Button>
+      {(onSplit || onEdit) && !m.optimistic && (
+        // Not modal: the item opens a dialog, which then owns focus.
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground size-6 self-center opacity-0 group-hover/msg:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
+              title={t("inbox.message_menu")}
+              aria-label={t("inbox.message_menu")}
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={mine || note ? "end" : "start"}>
+            {onEdit && (
+              <DropdownMenuItem onSelect={() => onEdit(m)}>
+                <Pencil className="size-3.5" />
+                {t("inbox.edit.action")}
+              </DropdownMenuItem>
+            )}
+            {onSplit && (
+              <DropdownMenuItem onSelect={() => onSplit(m)}>
+                <Split className="size-3.5" />
+                {t("inbox.split.action")}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
 });
+
+/**
+ * "düzenlendi" under an edited message (CF-248); opens the earlier
+ * versions, loaded on demand.
+ */
+function EditedLabel({ message: m }: { message: OptimisticMessage }) {
+  const { t, locale } = useLocale();
+  const [open, setOpen] = useState(false);
+  const history = useMessageEdits(m.conversation_uuid, m.uuid, open);
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString(locale === "tr" ? "tr-TR" : "en-US", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground px-1 text-[11px] italic underline-offset-2 hover:underline"
+          title={m.edited_at ? fmt(m.edited_at) : undefined}
+        >
+          {t("inbox.edit.edited")}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 text-sm" align="end">
+        <div className="mb-2 font-medium">{t("inbox.edit.history")}</div>
+        {history.isLoading ? (
+          <Loader2 className="text-muted-foreground size-4 animate-spin" />
+        ) : (
+          <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+            {(history.data?.items ?? []).map((e, i) => (
+              <li key={e.uuid} className="flex flex-col gap-0.5">
+                <span className="text-muted-foreground text-[11px]">
+                  {i === 0
+                    ? t("inbox.edit.original")
+                    : t("inbox.edit.version", { n: i + 1 })}{" "}
+                  ·{" "}
+                  {t("inbox.edit.replaced", {
+                    name: e.editor?.name ?? "—",
+                    time: fmt(e.edited_at),
+                  })}
+                </span>
+                <span className="bg-muted/50 rounded-md px-2 py-1 text-xs break-words whitespace-pre-wrap">
+                  {e.previous_content}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function DeliveryState({
   message: m,

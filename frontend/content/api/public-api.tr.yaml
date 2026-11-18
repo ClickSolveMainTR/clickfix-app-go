@@ -2948,7 +2948,7 @@ paths:
 
         İstek API anahtarıyla değil kanalın imza anahtarıyla doğrulanır: `X-ClickFix-Timestamp` (Unix saniye) ve `X-ClickFix-Signature: sha256=` + hex(HMAC-SHA256(imza_anahtarı, timestamp + "." + ham_gövde)). Zaman damgası 5 dakikadan eskiyse istek reddedilir. Aynı `id` ile gelen mesaj bir kez kaydedilir. `5xx` yanıtında tekrar deneyin.
 
-        Yanıt, mesajın girdiği konuşmayı (`conversation_uuid`) ve `message_uuid` değerini taşır; tekrarlanan `id` aynı konuşmayla yanıtlanır. `conversation_uuid` değerini kendi `thread_id` değerinizle saklayın: temsilci yanıtları ve durum değişiklikleri (`status_changed`) ona `conversation_id` olarak başvurur.
+        Yanıt, mesajın girdiği konuşmayı (`conversation_uuid`) ve `message_uuid` değerini taşır; tekrarlanan `id` aynı konuşmayla yanıtlanır. `conversation_uuid` değerini kendi `thread_id` değerinizle saklayın: temsilci yanıtları, yanıt düzenlemeleri (`message_edited`) ve durum değişiklikleri (`status_changed`) ona `conversation_id` olarak başvurur.
       security:
         - apiChannelSignature: []
       parameters:
@@ -3205,6 +3205,69 @@ webhooks:
           description: Hız sınırı; artan aralıklarla tekrar denenir
         "500":
           description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
+  apiChannelMessageEdited:
+    post:
+      tags:
+        - API channel
+      operationId: deliverAPIChannelMessageEdited
+      summary: Temsilci yanıtı düzenlendi (API kanalı)
+      description: |
+        Bir temsilci uç noktanıza zaten iletilmiş bir yanıtı düzelttiğinde (gönderimden sonraki 15 dakika içinde) ClickFix, kanalda tanımladığınız adrese bu gövdeyle `POST` gönderir. İstek `X-ClickFix-Event: message_edited`, `X-ClickFix-Timestamp`, `X-ClickFix-Signature` (yukarıdaki imza yöntemi) ve `Idempotency-Key` (olay `id` değeri; her tekrarda aynıdır) başlıklarını taşır; her anahtarı yalnızca bir kez işleyin. `message_id`, düzenlenen yanıtın `id` değeridir (yanıtın geldiği `Idempotency-Key`); `text` yeni metnin tamamıdır: yanıtın metnini onunla değiştirip düzenlendi olarak işaretleyin. Bir yanıtın birden çok düzenlemesi ayrı olaylar olarak gelir; `edited_at` değeri en yeni olan geçerlidir. Geçici hatalar artan aralıklarla tekrar denenir; `408` ve `429` dışındaki `4xx` yanıtları kalıcı hata sayılır.
+      security: []
+      parameters:
+        - name: X-ClickFix-Event
+          in: header
+          required: true
+          schema:
+            type: string
+            enum:
+              - message_edited
+        - name: X-ClickFix-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            description: Unix saniye
+        - name: X-ClickFix-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            description: "`sha256=` ve onaltılık HMAC-SHA256"
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/APIChannelMessageEdited"
+            example:
+              id: 6b5a4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d
+              type: message_edited
+              message_id: 3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f
+              conversation_id: 8f0e5c2a-6b1d-4f3a-9c7e-2d4b6a8c0e1f
+              recipient_id: customer-42
+              thread_id: order-991
+              text: Your order ships tomorrow.
+              edited_at: 2026-11-11T10:05:00Z
+      responses:
+        "200":
+          description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
+        "204":
+          description: Kalıcı olarak kabul edildi (tekrarlanan id dahil)
+        "400":
+          description: Kalıcı içerik reddi
+        "401":
+          description: Kalıcı kimlik doğrulama reddi
+        "429":
+          description: Hız sınırı; artan aralıklarla tekrar denenir
+        "500":
+          description: Alıcıda geçici hata; artan aralıklarla tekrar denenir
 components:
   schemas:
     APIChannelMessage:
@@ -3235,6 +3298,45 @@ components:
         reply_to:
           type: string
         at:
+          type: string
+          format: date-time
+    APIChannelMessageEdited:
+      type: object
+      description: Bir temsilcinin yanıtta yaptığı düzeltme; organizasyonun webhook adresine gönderilir.
+      required:
+        - id
+        - type
+        - message_id
+        - conversation_id
+        - recipient_id
+        - thread_id
+        - text
+        - edited_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Olay kimliği; Idempotency-Key ile aynıdır
+        type:
+          type: string
+          enum:
+            - message_edited
+        message_id:
+          type: string
+          format: uuid
+          description: Düzenlenen yanıtın kimliği (yanıtın Idempotency-Key değeri)
+        conversation_id:
+          type: string
+          format: uuid
+        recipient_id:
+          type: string
+        thread_id:
+          type: string
+          description: Müşteri mesajlarının thread_id değeri; gönderilmediyse boş
+        text:
+          type: string
+          description: Yeni metnin tamamı; yanıtın metnini bununla değiştirin
+        edited_at:
           type: string
           format: date-time
     APIChannelReply:

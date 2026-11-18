@@ -1409,6 +1409,9 @@ export class Widget {
       conversation_uuid?: string;
       typing?: boolean;
       session?: ReplaySession;
+      message_uuid?: string;
+      text?: string;
+      edited_at?: string;
     };
     if (
       ev.type === "cobrowse.requested" &&
@@ -1437,6 +1440,20 @@ export class Widget {
           8000,
         );
       this.render();
+      return;
+    }
+    // An agent corrected a reply (CF-248): incremental polling only reads
+    // newer messages, so the shown text is replaced here.
+    if (ev.type === "message.edited") {
+      const i = this.messages.findIndex((m) => m.uuid === ev.message_uuid);
+      if (i >= 0 && typeof ev.text === "string") {
+        this.messages[i] = {
+          ...this.messages[i]!,
+          content: ev.text,
+          edited_at: ev.edited_at ?? new Date().toISOString(),
+        };
+        this.render();
+      }
       return;
     }
     if (ev.type === "message.created" || ev.type === "conversation.updated") {
@@ -2815,6 +2832,7 @@ export class Widget {
       let meta = `${who} · ${this.time(m.created_at)}`;
       if (m.failed) meta = this.t("failed");
       else if (m.queued) meta = this.t("queued");
+      else if (m.edited_at) meta += ` · ${this.t("edited")}`;
       else if (m === lastIn && s.features.read_receipts)
         meta += ` · ${m.read_at || m.status === "read" ? this.t("read") : this.t("delivered")}`;
       msgs.append(el("div", { class: `meta ${m.direction}`, text: meta }));

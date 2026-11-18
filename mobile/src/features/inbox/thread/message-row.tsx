@@ -121,13 +121,14 @@ export function MessageRow({
   const body = m.kind === 'unsupported' ? t('timeline.unsupported') : m.content;
   const failedNote = failed && m.optimistic && m.error && m.error !== 'not_sent' ? errorMessage(m.error) : null;
   const runEnd = mark?.runEnd ?? true;
-  const showMeta = runEnd || failed || m.queued;
+  const showMeta = runEnd || failed || m.queued || Boolean(m.edited_at);
   const sender = inbound || (m.sender.uuid && m.sender.uuid !== me) ? m.sender.name : null;
   const a11y = [
     note ? t('timeline.private_note') : sender || t('list.you'),
     body,
     m.attachments.length ? t('conversation:timeline.attachments', { count: m.attachments.length }) : null,
     formatShort(m.created_at),
+    m.edited_at ? t('edit.edited') : null,
     !inbound && !note ? (m.queued ? t('conversation:queued') : t(`delivery.${m.status}`)) : null,
     failedNote,
   ]
@@ -211,7 +212,7 @@ export function MessageRow({
         {showMeta ? (
           <View className={cn('flex-row items-center gap-1 px-1 pb-0.5', inbound ? 'self-start' : 'self-end')}>
             <Text variant="caption" uppercase={false} tone="muted" className="shrink leading-[15px] tabular-nums">
-              {[sender, formatMessageTime(m.created_at)].filter(Boolean).join(' · ')}
+              {[sender, formatMessageTime(m.created_at), m.edited_at ? t('edit.edited') : null].filter(Boolean).join(' · ')}
             </Text>
             {failed ? (
               <MessageMenu

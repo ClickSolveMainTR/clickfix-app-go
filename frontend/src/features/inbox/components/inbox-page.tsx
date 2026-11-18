@@ -68,6 +68,7 @@ import { ConversationList } from "./conversation-list";
 import { MessageTimeline } from "./message-timeline";
 import { BulkBar } from "./bulk-bar";
 import { SplitDialog } from "./split-dialog";
+import { EditMessageDialog } from "./edit-message-dialog";
 import { ShortcutsDialog } from "./shortcuts-dialog";
 import { ViewersBar } from "./viewers-bar";
 
@@ -110,6 +111,7 @@ export function InboxPage() {
   const params = useSearchParams();
   const scope = useInboxScope();
   const [splitting, setSplitting] = useState<OptimisticMessage | null>(null);
+  const [editing, setEditing] = useState<OptimisticMessage | null>(null);
 
   const view = asView(params.get("view"));
   const status = asStatus(params.get("status"));
@@ -755,7 +757,15 @@ export function InboxPage() {
               onLoadOlder={() => void messages.fetchNextPage()}
               onRetry={(m) => retry.mutate(m)}
               onSplit={scope.canManage ? setSplitting : undefined}
+              onEdit={scope.canReply ? setEditing : undefined}
             />
+            {editing && (
+              <EditMessageDialog
+                conversation={detail.data}
+                message={editing}
+                onClose={() => setEditing(null)}
+              />
+            )}
             <ViewersBar viewers={viewers} />
             {splitting && (
               <SplitDialog
