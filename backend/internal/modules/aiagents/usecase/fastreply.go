@@ -42,8 +42,10 @@ func (s *Service) replyNeedsTriage(ctx context.Context, org int64, cfg model.Con
 	if len(cfg.Categories) > 0 {
 		return true
 	}
-	procedures, err := s.Repo.Q.AIProcedures(ctx, db.AIProceduresParams{OrganizationID: org, Limit: 200})
-	if err != nil {
+	const page = 200
+	procedures, err := s.Repo.Q.AIProcedures(ctx, db.AIProceduresParams{OrganizationID: org, Limit: page})
+	if err != nil || len(procedures) == page {
+		// Unknown, or more procedures than one page shows: keep triage first.
 		return true
 	}
 	for _, p := range procedures {

@@ -130,6 +130,18 @@ func TestFastTasksTurnThinkingOff(t *testing.T) {
 	if err != nil || out.Text != "ok" || len(seen) != 2 || seen[0] != "map[type:disabled]" || seen[1] != "<nil>" {
 		t.Fatalf("refused override must be retried with the default: %+v %v %v", out, err, seen)
 	}
+	// A 400 about anything else is not replayed.
+	calls := 0
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long"}}`)
+	}))
+	defer other.Close()
+	p.BaseURL = other.URL
+	if _, err = p.Generate(context.Background(), Request{Model: "claude-haiku-5-5", Effort: "low", Turns: turns}); !NotAccepted(err) || calls != 1 {
+		t.Fatalf("unrelated rejection replayed: err=%v calls=%d", err, calls)
+	}
 }
 
 // A transport failure is never replayed (the request may be billable), an

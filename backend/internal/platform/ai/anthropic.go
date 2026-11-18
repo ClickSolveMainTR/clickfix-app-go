@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -103,12 +104,14 @@ func fastThinking(req Request) anthropic.ThinkingConfigParamUnion {
 }
 
 // thinkingRefused reports a request the provider refused before running it
-// (HTTP 400) while it carried our thinking override. Such a request is sent
-// once more with the model's default thinking: a slower answer is better
-// than none if a model stops accepting the override.
+// (HTTP 400 that names the thinking field) while it carried our thinking
+// override. Such a request is sent once more with the model's default
+// thinking: a slower answer is better than none if a model stops accepting
+// the override. Any other 400 is not replayed.
 func thinkingRefused(params anthropic.MessageNewParams, err error) bool {
 	var rejected *Rejected
 	return errors.As(err, &rejected) && rejected.Status == http.StatusBadRequest &&
+		strings.Contains(strings.ToLower(rejected.Detail), "thinking") &&
 		(params.Thinking.OfBetweenTools != nil || params.Thinking.OfDisabled != nil)
 }
 
