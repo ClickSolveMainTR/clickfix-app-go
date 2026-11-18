@@ -41,6 +41,8 @@ export const inboxKeys = {
   aiAvailability: (org: string) =>
     [...inboxKeys.all(org), "ai-availability"] as const,
   tags: (org: string) => [...inboxKeys.all(org), "tags"] as const,
+  customStatuses: (org: string) =>
+    [...inboxKeys.all(org), "custom-statuses"] as const,
   detail: (org: string, uuid: string) =>
     [...inboxKeys.all(org), "detail", uuid] as const,
   messages: (org: string, uuid: string) =>
@@ -126,6 +128,17 @@ export function useInboxTags() {
   return useQuery({
     queryKey: inboxKeys.tags(org),
     queryFn: () => inboxService.tags(),
+    enabled: Boolean(org) && canRead,
+    staleTime: 60_000,
+  });
+}
+
+/** Custom statuses for the status picker (CF-249). */
+export function useInboxCustomStatuses() {
+  const { org, canRead } = useInboxScope();
+  return useQuery({
+    queryKey: inboxKeys.customStatuses(org),
+    queryFn: () => inboxService.customStatuses(),
     enabled: Boolean(org) && canRead,
     staleTime: 60_000,
   });
@@ -295,6 +308,7 @@ export function useUpdateConversation(uuid: string) {
           ...prev,
           ...(body.status ? { status: body.status } : {}),
           ...(body.priority ? { priority: body.priority } : {}),
+          ...(body.custom_status === null ? { custom_status: null } : {}),
         });
       }
       return { prev };

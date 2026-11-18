@@ -247,6 +247,7 @@ func (s *Service) List(ctx context.Context, orgID, viewerID int64, f ListFilter)
 		c.Inbox = ref(r.ChannelInstanceUuid, r.ChannelInstanceName.String)
 		c.Assignee = ref(r.AssigneeUuid, fullName(r.AssigneeName, r.AssigneeSurname))
 		c.Team = ref(r.TeamUuid, r.TeamName.String)
+		c.CustomStatus = customStatusRef(r.StatusUuid, r.StatusName, r.StatusColor)
 		if m, ok := matches[c.UUID]; ok && m.Snippet != "" {
 			c.SearchMatch = &model.SearchMatch{Snippet: m.Snippet, Private: m.Private}
 		}
@@ -326,7 +327,7 @@ func (s *Service) Get(ctx context.Context, orgID, viewerID int64, id uuid.UUID) 
 	c.Inbox = ref(r.ChannelInstanceUuid, r.ChannelInstanceName.String)
 	c.Assignee = ref(r.AssigneeUuid, fullName(r.AssigneeName, r.AssigneeSurname))
 	c.Team = ref(r.TeamUuid, r.TeamName.String)
-	c.CustomStatus = ref(r.StatusUuid, r.StatusName.String)
+	c.CustomStatus = customStatusRef(r.StatusUuid, r.StatusName, r.StatusColor)
 	d := Detail{Conversation: c, Tags: []Tag{}, Participants: []Participant{}}
 	tags, err := q.ListConversationTags(ctx, db.ListConversationTagsParams{OrganizationID: orgID, ConversationID: r.Conversation.ID})
 	if err != nil {
@@ -626,7 +627,12 @@ type UpdateInput struct {
 	// Assignee: set to change; a nil inner pointer unassigns.
 	Assignee **uuid.UUID
 	// Team: set to change; a nil inner pointer removes the team.
-	Team         **uuid.UUID
+	Team **uuid.UUID
+	// CustomStatus: set to change the organization's own status (CF-249); a
+	// nil inner pointer removes it. A custom status sets the base status to
+	// its category; without one a base status change drops the custom
+	// status only when the category changes.
+	CustomStatus **uuid.UUID
 	SnoozedUntil *time.Time
 }
 
@@ -653,6 +659,19 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (db.Conversation, 
 	}
 	if in.Status != nil && !model.Valid(*in.Status, model.Statuses) {
 		return db.Conversation{}, fmt.Errorf("%w: unknown status", ErrInvalid)
+	}
+	var custom *db.ConversationStatus
+	if in.CustomStatus != nil && *in.CustomStatus != nil {
+		st, err := s.store.Q().GetConversationStatusByUUID(ctx, db.GetConversationStatusByUUIDParams{OrganizationID: in.OrganizationID, Uuid: **in.CustomStatus})
+		if err != nil {
+			return db.Conversation{}, fmt.Errorf("%w: custom status not found", ErrInvalid)
+		}
+		if in.Status != nil && *in.Status != st.Category {
+			return db.Conversation{}, fmt.Errorf("%w: custom status %q belongs to status %s", ErrInvalid, st.Name, st.Category)
+		}
+		custom = &st
+		category := st.Category
+		in.Status = &category
 	}
 	if in.Priority != nil && !model.Valid(*in.Priority, model.Priorities) {
 		return db.Conversation{}, fmt.Errorf("%w: unknown priority", ErrInvalid)
@@ -694,6 +713,7 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (db.Conversation, 
 		type change struct {
 			event, from, to string
 			name            string
+			extra           map[string]any
 		}
 		var changes []change
 		if in.Subject != nil && strings.TrimSpace(*in.Subject) != cur.Subject {
@@ -704,9 +724,21 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (db.Conversation, 
 			next.Priority = *in.Priority
 			changes = append(changes, change{event: "priority_changed", from: cur.Priority, to: *in.Priority, name: events.ConversationsUpdated})
 		}
-		if in.Status != nil && (*in.Status != cur.Status || *in.Status == model.StatusSnoozed) {
+		baseChange := in.Status != nil && (*in.Status != cur.Status || *in.Status == model.StatusSnoozed)
+		switch {
+		case custom != nil:
+			next.StatusID = pgInt8(custom.ID)
+		case in.CustomStatus != nil:
+			next.StatusID = pgtype.Int8{}
+		case baseChange && *in.Status != cur.Status:
+			// Another category: the custom status no longer describes it.
+			next.StatusID = pgtype.Int8{}
+		}
+		customChange := next.StatusID != cur.StatusID
+		statusEvent := events.ConversationsUpdated
+		if baseChange {
 			now := s.now()
-			next.Status, next.StatusID = *in.Status, pgtype.Int8{}
+			next.Status = *in.Status
 			next.SnoozedUntil = pgtype.Timestamptz{}
 			switch *in.Status {
 			case model.StatusSnoozed:
@@ -728,18 +760,30 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (db.Conversation, 
 					return fmt.Errorf("%w: %s", ErrInvalid, err.Error())
 				}
 			}
-			name := events.ConversationsUpdated
 			switch {
 			case done:
-				name = events.ConversationsResolved
+				statusEvent = events.ConversationsResolved
 			case cur.Status == model.StatusResolved || cur.Status == model.StatusClosed:
-				name = events.ConversationsReopened
+				statusEvent = events.ConversationsReopened
 			}
-			to := *in.Status
-			if *in.Status == model.StatusSnoozed {
-				to = *in.Status + "|" + in.SnoozedUntil.UTC().Format(time.RFC3339)
+		}
+		if baseChange || customChange {
+			to := next.Status
+			if next.Status == model.StatusSnoozed && in.SnoozedUntil != nil {
+				to = next.Status + "|" + in.SnoozedUntil.UTC().Format(time.RFC3339)
 			}
-			changes = append(changes, change{event: "status_changed", from: cur.Status, to: to, name: name})
+			fromCustom, err := statusRef(ctx, tx, in.OrganizationID, cur.StatusID)
+			if err != nil {
+				return err
+			}
+			var toCustom *model.CustomStatusRef
+			if custom != nil {
+				toCustom = &model.CustomStatusRef{UUID: custom.Uuid, Name: custom.Name, Color: custom.Color}
+			} else if !customChange {
+				toCustom = fromCustom
+			}
+			changes = append(changes, change{event: "status_changed", from: cur.Status, to: to, name: statusEvent,
+				extra: map[string]any{"from_custom_status": fromCustom, "to_custom_status": toCustom}})
 		}
 		if in.Assignee != nil {
 			var target pgtype.Int8
@@ -780,14 +824,16 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (db.Conversation, 
 			return err
 		}
 		for _, ch := range changes {
-			msg, err := s.timelineEvent(ctx, tx, in.OrganizationID, out.ID, in.Actor, ch.event, ch.from, ch.to)
+			msg, err := s.timelineEvent(ctx, tx, in.OrganizationID, out.ID, in.Actor, ch.event, ch.from, ch.to, timelineExtra(ch.extra))
 			if err != nil {
 				return err
 			}
 			timeline = append(timeline, msg)
-			if err := s.emit(ctx, tx, ch.name, in.OrganizationID, in.Actor.ID, out, map[string]any{
-				"change": ch.event, "from": ch.from, "to": ch.to,
-			}); err != nil {
+			payload := map[string]any{"change": ch.event, "from": ch.from, "to": ch.to}
+			for k, v := range ch.extra {
+				payload[k] = v
+			}
+			if err := s.emit(ctx, tx, ch.name, in.OrganizationID, in.Actor.ID, out, payload); err != nil {
 				return err
 			}
 		}
@@ -818,8 +864,16 @@ func (s *Service) agentName(ctx context.Context, tx *repository.Tx, id pgtype.In
 }
 
 // timelineEvent writes a system event message (never sent, never unread).
-func (s *Service) timelineEvent(ctx context.Context, tx *repository.Tx, orgID, convID int64, actor Actor, event, from, to string) (db.Message, error) {
-	attrs, err := json.Marshal(map[string]any{"event": event, "from": from, "to": to, "actor_uuid": actor.UUID, "actor_name": actor.Name})
+// extra adds keys to the attributes (custom status names of a status
+// change, CF-249).
+func (s *Service) timelineEvent(ctx context.Context, tx *repository.Tx, orgID, convID int64, actor Actor, event, from, to string, extra ...map[string]any) (db.Message, error) {
+	fields := map[string]any{"event": event, "from": from, "to": to, "actor_uuid": actor.UUID, "actor_name": actor.Name}
+	for _, e := range extra {
+		for k, v := range e {
+			fields[k] = v
+		}
+	}
+	attrs, err := json.Marshal(fields)
 	if err != nil {
 		return db.Message{}, err
 	}

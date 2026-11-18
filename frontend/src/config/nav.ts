@@ -5,6 +5,7 @@ import {
   Workflow,
   BarChart3,
   BookOpen,
+  CircleDot,
   FolderTree,
   CalendarCog,
   CalendarDays,
@@ -685,6 +686,13 @@ export const cmsNav = defineNav({
           href: routes.cms.settings.categories,
           icon: FolderTree,
           permission: permissions.tenant.categories.read,
+        },
+        {
+          id: "settings-conversation-statuses",
+          titleKey: "layout.nav_conversation_statuses",
+          href: routes.cms.settings.conversationStatuses,
+          icon: CircleDot,
+          permission: permissions.tenant.conversations.manage,
         },
         {
           id: "settings-billing",

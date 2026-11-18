@@ -6504,8 +6504,10 @@ export interface paths {
         head?: never;
         /**
          * Change status, priority, subject or assignee
-         * @description Status, priority, subject and snooze require `tenant.conversations.manage`;
+         * @description Status, priority, subject, snooze and `custom_status` require `tenant.conversations.manage`;
          *     `assignee` requires `tenant.conversations.assign` (or manage). `assignee: null` unassigns.
+         *     `custom_status` sets one of the organization's own statuses (CF-249); the
+         *     base `status` becomes its category. Other changes keep it.
          *     `status: snoozed` needs a future `snoozed_until`. Each change is
          *     written to the timeline as a system event and published as a domain
          *     event (`conversations.assigned|resolved|reopened|updated`).
@@ -8543,6 +8545,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversation-statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom conversation statuses
+         * @description Requires `tenant.conversations.read`. The organization's own statuses
+         *     (CF-249) in display order, with the number of conversations using
+         *     each. Every organization starts with "İşleniyor" (category open).
+         */
+        get: operations["listTenantConversationStatuses"];
+        put?: never;
+        /**
+         * Create a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Category is open, pending or resolved; a used name (case-insensitive) is 409 STATUS_EXISTS.
+         */
+        post: operations["createTenantConversationStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenant/conversation-statuses/{uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Conversations using it keep their status.
+         */
+        delete: operations["deleteTenantConversationStatus"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a custom conversation status
+         * @description Requires `tenant.conversations.manage`. Moving it to another category
+         *     removes it from conversations whose status no longer matches; their
+         *     status stays.
+         */
+        patch: operations["updateTenantConversationStatus"];
         trace?: never;
     };
     "/v1/tenant/tags": {
@@ -24559,6 +24613,10 @@ export interface components {
             snoozed_until?: string;
             /** Format: date-time */
             changed_at: string;
+            /** @description The organization's own status on top of to (for example İşleniyor with to: open); null when none. A change of only the custom status is sent with from equal to to. */
+            custom_status?: components["schemas"]["ConversationCustomStatusRef"] | null;
+            /** @description The custom status before the change; null when none. */
+            from_custom_status?: components["schemas"]["ConversationCustomStatusRef"] | null;
         };
         /** @description JSON posted to the organization's public webhook URL with timestamped HMAC and Idempotency-Key. */
         APIChannelReply: {
@@ -25201,6 +25259,59 @@ export interface components {
             uuid: string;
             name: string;
         };
+        /** @description An organization's own conversation status (CF-249). */
+        ConversationCustomStatusRef: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            color: string;
+        };
+        /**
+         * @description Base status a custom status maps onto.
+         * @enum {string}
+         */
+        ConversationCustomStatusCategory: "open" | "pending" | "resolved";
+        ConversationCustomStatus: {
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            slug: string;
+            color: string;
+            category: components["schemas"]["ConversationCustomStatusCategory"];
+            /** Format: int32 */
+            sort_order: number;
+            /**
+             * Format: int64
+             * @description Conversations using it (0 in create and update answers)
+             */
+            usage_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description name and category are required on create; omitted fields stay on update. */
+        ConversationCustomStatusInput: {
+            name?: string;
+            color?: string;
+            category?: components["schemas"]["ConversationCustomStatusCategory"];
+            /** Format: int32 */
+            sort_order?: number;
+        };
+        EnvelopeConversationCustomStatus: {
+            /** @enum {boolean} */
+            success: true;
+            data: components["schemas"]["ConversationCustomStatus"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EnvelopeConversationCustomStatusList: {
+            /** @enum {boolean} */
+            success: true;
+            data: {
+                items: components["schemas"]["ConversationCustomStatus"][];
+            };
+            meta: components["schemas"]["ResponseMeta"];
+        };
         ConversationContact: {
             /** Format: uuid */
             uuid: string;
@@ -25237,7 +25348,8 @@ export interface components {
             company: components["schemas"]["ConversationCompany"] | null;
             subject: string;
             status: components["schemas"]["ConversationStatus"];
-            custom_status: components["schemas"]["InboxRef"] | null;
+            /** @description The organization's own status on top of status (CF-249), e.g. İşleniyor; null when none */
+            custom_status: components["schemas"]["ConversationCustomStatusRef"] | null;
             priority: components["schemas"]["ConversationPriority"];
             /** @enum {string} */
             source: "inbound" | "outbound";
@@ -25445,6 +25557,11 @@ export interface components {
              * @description Team uuid; null removes the team (tenant.conversations.assign)
              */
             team?: string | null;
+            /**
+             * Format: uuid
+             * @description Custom status uuid (tenant.conversations.manage); status becomes its category and must match when sent. null removes it. Without it a status change to another category removes the custom status.
+             */
+            custom_status?: string | null;
             /** Format: date-time */
             snoozed_until?: string;
         };
@@ -50169,6 +50286,142 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["TenantForbidden"];
             422: components["responses"]["ValidationError"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTenantConversationStatuses: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom statuses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatusList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCustomStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Custom status */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeDeleted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTenantConversationStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Organization of a `/v1/tenant/*` request: its slug (preferred, readable
+                 *     in logs) or uuid. The BFF forwards it on `/api/v1/tenant/*` only.
+                 */
+                "X-Organization": components["parameters"]["XOrganization"];
+            };
+            path: {
+                /** @description Resource UUID */
+                uuid: components["parameters"]["ResourceUUID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCustomStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Custom status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeConversationCustomStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["TenantForbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

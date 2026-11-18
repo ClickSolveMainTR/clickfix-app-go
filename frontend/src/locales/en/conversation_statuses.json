@@ -1,0 +1,23 @@
+{
+  "title": "Conversation statuses",
+  "description": "Your own status names on top of the base statuses (Open, Pending, Resolved), for example \"In progress\". Agents set them from the status picker in the conversation header.",
+  "forbidden": "You do not have permission to view conversation statuses.",
+  "load_failed": "Statuses could not be loaded. Refresh the page and try again.",
+  "empty_title": "No custom statuses",
+  "empty_description": "Add a status such as \"In progress\" to show which stage a conversation is at.",
+  "usage": "Used by {{count}} conversations",
+  "actions.create": "Add status",
+  "actions.edit": "Edit",
+  "actions.delete": "Delete",
+  "form.create_title": "New status",
+  "form.edit_title": "Edit status",
+  "form.description": "Agents see the name and color; the base category drives reports, SLA and automations.",
+  "form.name": "Name",
+  "form.name_placeholder": "In progress",
+  "form.category": "Base category",
+  "form.category_help": "Conversations with this status count as this base status. Changing the category removes the custom status from conversations that no longer match.",
+  "form.color": "Color",
+  "toast.created": "Status added",
+  "toast.updated": "Status updated",
+  "toast.deleted": "Status deleted"
+}

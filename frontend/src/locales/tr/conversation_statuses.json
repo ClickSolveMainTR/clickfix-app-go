@@ -1,0 +1,23 @@
+{
+  "title": "Konuşma durumları",
+  "description": "Ana durumların (Açık, Beklemede, Çözüldü) üzerine kendi durum adlarınız; örneğin \"İşleniyor\". Temsilciler bunları konuşma başlığındaki durum seçiciden atar.",
+  "forbidden": "Konuşma durumlarını görüntüleme yetkiniz yok.",
+  "load_failed": "Durumlar yüklenemedi. Sayfayı yenileyip tekrar deneyin.",
+  "empty_title": "Özel durum yok",
+  "empty_description": "\"İşleniyor\" gibi bir durum ekleyerek konuşmaların hangi aşamada olduğunu gösterin.",
+  "usage": "{{count}} konuşmada kullanılıyor",
+  "actions.create": "Durum ekle",
+  "actions.edit": "Düzenle",
+  "actions.delete": "Sil",
+  "form.create_title": "Yeni durum",
+  "form.edit_title": "Durumu düzenle",
+  "form.description": "Ad ve renk temsilcilere görünür; ana kategori raporları, SLA'yı ve otomasyonları belirler.",
+  "form.name": "Ad",
+  "form.name_placeholder": "İşleniyor",
+  "form.category": "Ana kategori",
+  "form.category_help": "Bu durumdaki konuşmalar bu ana durumda sayılır. Kategori değişirse, uymayan konuşmalardan özel durum kaldırılır.",
+  "form.color": "Renk",
+  "toast.created": "Durum eklendi",
+  "toast.updated": "Durum güncellendi",
+  "toast.deleted": "Durum silindi"
+}

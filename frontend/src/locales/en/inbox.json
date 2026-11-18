@@ -46,6 +46,8 @@
   "header.tags": "Tags",
   "header.search_tag": "Search or create a tag…",
   "header.create_tag": "Create tag “{{name}}”",
+  "header.status": "Status",
+  "header.custom_statuses": "Custom statuses",
   "header.snooze": "Snooze",
   "header.resolve": "Resolve",
   "header.reopen": "Reopen",
